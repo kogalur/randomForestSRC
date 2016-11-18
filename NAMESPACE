@@ -1,0 +1,53 @@
+useDynLib(randomForestSRC)
+
+importFrom("parallel", mclapply)
+importFrom("graphics", "abline", "axis", "box", "boxplot", "legend",
+           "lines", "matlines", "matplot", "mtext", "par", "plot",
+           "plot.new", "plot.window", "points", "rug", "segments",
+           "strwidth", "text", "title")
+importFrom("stats", "as.formula", "dlnorm", "formula", "lowess",
+           "median", "na.omit", "optim", "pgamma", "plnorm", "predict",
+           "quantile", "runif", "sd", "supsmu", "var")
+importFrom("utils", "installed.packages", "write.table")
+
+export(find.interaction,
+       find.interaction.rfsrc,
+       impute,       
+       impute.rfsrc,
+       max.subtree,
+       max.subtree.rfsrc,
+       partial.rfsrc,
+       plot.competing.risk,
+       plot.competing.risk.rfsrc,
+       plot.survival,
+       plot.survival.rfsrc,
+       plot.rfsrc,
+       plot.variable,
+       plot.variable.rfsrc,
+       predict.rfsrc,
+       print.rfsrc,
+       rfsrc,
+       rfsrc.news,
+       rf2rfz,
+       rfsrcSyn,
+       rfsrcSyn.rfsrc,
+       stat.split,
+       stat.split.rfsrc,
+       var.select,
+       var.select.rfsrc,
+       vimp,
+       vimp.rfsrc)
+
+
+S3method(print, rfsrc)
+S3method(plot, rfsrc)
+S3method(predict, rfsrc)
+S3method(max, subtree)
+S3method(max, subtree.rfsrc)
+S3method(plot, competing.risk)
+S3method(plot, competing.risk.rfsrc)
+S3method(plot, variable)
+S3method(plot, variable.rfsrc)
+S3method(plot, survival)
+S3method(plot, survival.rfsrc)
+
