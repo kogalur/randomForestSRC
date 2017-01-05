@@ -8,7 +8,11 @@
 }
 \usage{\method{impute}{rfsrc}(formula, data, ntree = 500, mtry = NULL,
   xvar.wt = NULL, nodesize = 1, splitrule = NULL, nsplit = 1,
-  na.action = "na.impute", nimpute = 2, mf.q, blocks,
+  
+  na.action = c("na.impute"),
+  
+  
+  nimpute = 2, mf.q, blocks,
   always.use = NULL, max.iter = 10, eps = 0.01, verbose = TRUE,
   do.trace = FALSE, ...)
 }

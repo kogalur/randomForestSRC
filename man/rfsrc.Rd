@@ -37,7 +37,10 @@ rfsrc(formula, data, ntree = 1000,
   split.null = FALSE,
   importance = c(FALSE, TRUE, "none", "permute", "random", "anti", 
                  "permute.ensemble", "random.ensemble",  "anti.ensemble"),
+  
   na.action = c("na.omit", "na.impute"),
+  
+  
   nimpute = 1,
   ntime,
   cause,

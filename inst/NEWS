@@ -1,9 +1,8 @@
 Package: randomForestSRC
-Version: 2.4.1.5
-BUILD: bld20161118
+Version: 2.4.1.12 (bld20170105)
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 2.4.1.5
+CHANGES TO RELEASE 2.4.1.12
 ---------------------------------------------------------------------------------
 Fix to typedef that breaks Linux.  Sorry about that.
   

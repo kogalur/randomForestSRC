@@ -1,6 +1,6 @@
 Package: randomForestSRC
-Version: 2.4.1.5
-Date: 2016-11-18
+Version: 2.4.1.12
+Date: 2017-01-05
 Title: Random Forests for Survival, Regression and Classification (RF-SRC)
 Author: Hemant Ishwaran <hemant.ishwaran@gmail.com>, Udaya B. Kogalur <ubk@kogalur.com>
 Maintainer: Udaya B. Kogalur <ubk@kogalur.com>

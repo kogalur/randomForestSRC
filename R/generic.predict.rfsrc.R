@@ -1,63 +1,63 @@
-####**********************************************************************
-####**********************************************************************
-####
-####  RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-####  Version 2.4.1.5 (_PROJECT_BUILD_ID_)
-####
-####  Copyright 2016, University of Miami
-####
-####  This program is free software; you can redistribute it and/or
-####  modify it under the terms of the GNU General Public License
-####  as published by the Free Software Foundation; either version 3
-####  of the License, or (at your option) any later version.
-####
-####  This program is distributed in the hope that it will be useful,
-####  but WITHOUT ANY WARRANTY; without even the implied warranty of
-####  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-####  GNU General Public License for more details.
-####
-####  You should have received a copy of the GNU General Public
-####  License along with this program; if not, write to the Free
-####  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-####  Boston, MA  02110-1301, USA.
-####
-####  ----------------------------------------------------------------
-####  Project Partially Funded By: 
-####  ----------------------------------------------------------------
-####  Dr. Ishwaran's work was funded in part by DMS grant 1148991 from the
-####  National Science Foundation and grant R01 CA163739 from the National
-####  Cancer Institute.
-####
-####  Dr. Kogalur's work was funded in part by grant R01 CA163739 from the 
-####  National Cancer Institute.
-####  ----------------------------------------------------------------
-####  Written by:
-####  ----------------------------------------------------------------
-####    Hemant Ishwaran, Ph.D.
-####    Director of Statistical Methodology
-####    Professor, Division of Biostatistics
-####    Clinical Research Building, Room 1058
-####    1120 NW 14th Street
-####    University of Miami, Miami FL 33136
-####
-####    email:  hemant.ishwaran@gmail.com
-####    URL:    http://web.ccs.miami.edu/~hishwaran
-####    --------------------------------------------------------------
-####    Udaya B. Kogalur, Ph.D.
-####    Adjunct Staff
-####    Department of Quantitative Health Sciences
-####    Cleveland Clinic Foundation
-####    
-####    Kogalur & Company, Inc.
-####    5425 Nestleway Drive, Suite L1
-####    Clemmons, NC 27012
-####
-####    email:  ubk@kogalur.com
-####    URL:    http://www.kogalur.com
-####    --------------------------------------------------------------
-####
-####**********************************************************************
-####**********************************************************************
+##  **********************************************************************
+##  **********************************************************************
+##  
+##    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
+##    Version 2.4.1.12 (bld20170105)
+##  
+##    Copyright 2016, University of Miami
+##  
+##    This program is free software; you can redistribute it and/or
+##    modify it under the terms of the GNU General Public License
+##    as published by the Free Software Foundation; either version 3
+##    of the License, or (at your option) any later version.
+##  
+##    This program is distributed in the hope that it will be useful,
+##    but WITHOUT ANY WARRANTY; without even the implied warranty of
+##    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+##    GNU General Public License for more details.
+##  
+##    You should have received a copy of the GNU General Public
+##    License along with this program; if not, write to the Free
+##    Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+##    Boston, MA  02110-1301, USA.
+##  
+##    ----------------------------------------------------------------
+##    Project Partially Funded By: 
+##    ----------------------------------------------------------------
+##    Dr. Ishwaran's work was funded in part by DMS grant 1148991 from the
+##    National Science Foundation and grant R01 CA163739 from the National
+##    Cancer Institute.
+##  
+##    Dr. Kogalur's work was funded in part by grant R01 CA163739 from the 
+##    National Cancer Institute.
+##    ----------------------------------------------------------------
+##    Written by:
+##    ----------------------------------------------------------------
+##      Hemant Ishwaran, Ph.D.
+##      Director of Statistical Methodology
+##      Professor, Division of Biostatistics
+##      Clinical Research Building, Room 1058
+##      1120 NW 14th Street
+##      University of Miami, Miami FL 33136
+##  
+##      email:  hemant.ishwaran@gmail.com
+##      URL:    http://web.ccs.miami.edu/~hishwaran
+##      --------------------------------------------------------------
+##      Udaya B. Kogalur, Ph.D.
+##      Adjunct Staff
+##      Department of Quantitative Health Sciences
+##      Cleveland Clinic Foundation
+##      
+##      Kogalur & Company, Inc.
+##      5425 Nestleway Drive, Suite L1
+##      Clemmons, NC 27012
+##  
+##      email:  ubk@kogalur.com
+##      URL:    http://www.kogalur.com
+##      --------------------------------------------------------------
+##  
+##  **********************************************************************
+##  **********************************************************************
 
 
 generic.predict.rfsrc <-
@@ -151,7 +151,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("2.4.1.5", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("2.4.1.12", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
@@ -484,8 +484,8 @@ generic.predict.rfsrc <-
         inbag.out <- NULL
       }
     if (ptn.count > 0) {
-      ptn.membership.out <- matrix(nativeOutput$ptnMembership, c(n.observed, ntree))
-      nativeOutput$ptnMembership <- NULL
+      ptn.membership.out <- matrix(nativeOutput$pstnMembership, c(n.observed, ntree))
+      nativeOutput$pstnMembership <- NULL
     }
       else {
         ptn.membership.out <- NULL
@@ -595,56 +595,56 @@ generic.predict.rfsrc <-
         vimp.names <- list(paste("event.", 1:length(event.info$event.type), sep = ""),
                            if(vimp.joint) "joint" else importance.xvar)
       }
-    chf <- (if (!is.null(nativeOutput$fullEnsbSrvg))
-              adrop3d.last(array(nativeOutput$fullEnsbSrvg,
+    chf <- (if (!is.null(nativeOutput$allEnsbCHF))
+              adrop3d.last(array(nativeOutput$allEnsbCHF,
                                  c(n.observed, length(event.info$time.interest), length(event.info$event.type)),
                                  dimnames=ens.names), length(event.info$event.type)) else NULL)
-    nativeOutput$fullEnsbSrvg <- NULL
+    nativeOutput$allEnsbCHF <- NULL
     survOutput <- list(chf = chf)
     remove(chf)
-    chf.oob <- (if (!is.null(nativeOutput$oobEnsbSrvg))
-                  adrop3d.last(array(nativeOutput$oobEnsbSrvg,
+    chf.oob <- (if (!is.null(nativeOutput$oobEnsbCHF))
+                  adrop3d.last(array(nativeOutput$oobEnsbCHF,
                                      c(n.observed, length(event.info$time.interest), length(event.info$event.type)),
                                      dimnames=ens.names), length(event.info$event.type)) else NULL)
-    nativeOutput$oobEnsbSrvg <- NULL
+    nativeOutput$oobEnsbCHF <- NULL
     survOutput = c(survOutput, chf.oob = list(chf.oob))
     remove(chf.oob)
-    predicted <- (if (!is.null(nativeOutput$fullMortality))
-                    adrop2d.last(array(nativeOutput$fullMortality,
+    predicted <- (if (!is.null(nativeOutput$allEnsbMRT))
+                    adrop2d.last(array(nativeOutput$allEnsbMRT,
                                        c(n.observed, length(event.info$event.type)), dimnames=mortality.names), coerced.event.count) else NULL)
-    nativeOutput$fullMortality <- NULL
+    nativeOutput$allEnsbMRT <- NULL
     survOutput = c(survOutput, predicted = list(predicted))
     remove(predicted)
-    predicted.oob <- (if (!is.null(nativeOutput$oobMortality))
-                        adrop2d.last(array(nativeOutput$oobMortality,
+    predicted.oob <- (if (!is.null(nativeOutput$oobEnsbMRT))
+                        adrop2d.last(array(nativeOutput$oobEnsbMRT,
                                            c(n.observed, length(event.info$event.type)), dimnames=mortality.names), coerced.event.count) else NULL)
-    nativeOutput$oobMortality <- NULL
+    nativeOutput$oobEnsbMRT <- NULL
     survOutput <- c(survOutput, predicted.oob = list(predicted.oob))
     remove(predicted.oob)
-    survival <-  (if (!is.null(nativeOutput$fullSurvival))
-                    matrix(nativeOutput$fullSurvival,
+    survival <-  (if (!is.null(nativeOutput$allEnsbSRV))
+                    matrix(nativeOutput$allEnsbSRV,
                            c(n.observed, length(event.info$time.interest))) else NULL)
-    nativeOutput$fullSurvival <- NULL
+    nativeOutput$allEnsbSRV <- NULL
     survOutput <- c(survOutput, survival = list(survival))
     remove(survival)
-    survival.oob <-  (if (!is.null(nativeOutput$oobSurvival))
-                        matrix(nativeOutput$oobSurvival,
+    survival.oob <-  (if (!is.null(nativeOutput$oobEnsbSRV))
+                        matrix(nativeOutput$oobEnsbSRV,
                                c(n.observed, length(event.info$time.interest))) else NULL)
-    nativeOutput$oobSurvival <- NULL
+    nativeOutput$oobEnsbSRV <- NULL
     survOutput <- c(survOutput, survival.oob = list(survival.oob))
     remove(survival.oob)
-    cif <- (if (!is.null(nativeOutput$fullCIF))
-              array(nativeOutput$fullCIF,
+    cif <- (if (!is.null(nativeOutput$allEnsbCIF))
+              array(nativeOutput$allEnsbCIF,
                     c(n.observed, length(event.info$time.interest), length(event.info$event.type)),
                     dimnames=cif.names) else NULL)
-    nativeOutput$fullCIF <- NULL
+    nativeOutput$allEnsbCIF <- NULL
     survOutput <- c(survOutput, cif = list(cif))
     remove(cif)
-    cif.oob <- (if (!is.null(nativeOutput$oobCIF))
-                  array(nativeOutput$oobCIF,
+    cif.oob <- (if (!is.null(nativeOutput$oobEnsbCIF))
+                  array(nativeOutput$oobEnsbCIF,
                         c(n.observed, length(event.info$time.interest), length(event.info$event.type)),
                         dimnames=cif.names) else NULL)
-    nativeOutput$oobCIF <- NULL
+    nativeOutput$oobEnsbCIF <- NULL
     survOutput = c(survOutput, cif.oob = list(cif.oob))
     remove(cif.oob)
     if (!is.null(nativeOutput$perfSurv)) {      
@@ -735,16 +735,16 @@ generic.predict.rfsrc <-
             ens.names <- list(NULL, levels.names[[target.idx]])
             err.names <- c("all", levels.names[[target.idx]])
             vimp.names <- list(c("all", levels.names[[target.idx]]), if(vimp.joint) "joint" else importance.xvar)
-            predicted <- (if (!is.null(nativeOutput$fullEnsbClas))
-                            array(nativeOutput$fullEnsbClas[(iter.ensb.start + 1):iter.ensb.end],
+            predicted <- (if (!is.null(nativeOutput$allEnsbCLS))
+                            array(nativeOutput$allEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                   c(n.observed, levels.count[target.idx]), dimnames=ens.names) else NULL)
             classOutput[[target.idx]] <- list(predicted = predicted)
             response <- (if (!is.null(predicted)) bayes.rule(predicted) else NULL)
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], class = list(response))
             remove(predicted)
             remove(response)
-            predicted.oob <- (if (!is.null(nativeOutput$oobEnsbClas))
-                                array(nativeOutput$oobEnsbClas[(iter.ensb.start + 1):iter.ensb.end],
+            predicted.oob <- (if (!is.null(nativeOutput$oobEnsbCLS))
+                                array(nativeOutput$oobEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                       c(n.observed, levels.count[target.idx]), dimnames=ens.names) else NULL)
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], predicted.oob = list(predicted.oob))
             response.oob <- (if (!is.null(predicted.oob)) bayes.rule(predicted.oob) else NULL)
@@ -772,8 +772,8 @@ generic.predict.rfsrc <-
             }
           }
         }
-        nativeOutput$fullEnsbClas <- NULL
-        nativeOutput$oobEnsbClas <- NULL
+        nativeOutput$allEnsbCLS <- NULL
+        nativeOutput$oobEnsbCLS <- NULL
         nativeOutput$perfClas <- NULL
         nativeOutput$vimpClas <- NULL
         if(univariate.nomenclature) {
@@ -810,12 +810,12 @@ generic.predict.rfsrc <-
             iter.ensb.start <- iter.ensb.end
             iter.ensb.end <- iter.ensb.end + n.observed
             vimp.names <- if(vimp.joint) "joint" else importance.xvar
-            predicted <- (if (!is.null(nativeOutput$fullEnsbRegr))
-                            array(nativeOutput$fullEnsbRegr[(iter.ensb.start + 1):iter.ensb.end], n.observed) else NULL)
+            predicted <- (if (!is.null(nativeOutput$allEnsbRGR))
+                            array(nativeOutput$allEnsbRGR[(iter.ensb.start + 1):iter.ensb.end], n.observed) else NULL)
             regrOutput[[target.idx]] <- list(predicted = predicted)
             remove(predicted)
-            predicted.oob <- (if (!is.null(nativeOutput$oobEnsbRegr))
-                                array(nativeOutput$oobEnsbRegr[(iter.ensb.start + 1):iter.ensb.end], n.observed) else NULL)
+            predicted.oob <- (if (!is.null(nativeOutput$oobEnsbRGR))
+                                array(nativeOutput$oobEnsbRGR[(iter.ensb.start + 1):iter.ensb.end], n.observed) else NULL)
             regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], predicted.oob = list(predicted.oob))
             remove(predicted.oob)
             if (!is.null(nativeOutput$perfRegr)) {
@@ -833,8 +833,8 @@ generic.predict.rfsrc <-
             }
           }
         }
-        nativeOutput$fullEnsbRegr <- NULL
-        nativeOutput$oobEnsbRegr <- NULL
+        nativeOutput$allEnsbRGR <- NULL
+        nativeOutput$oobEnsbRGR <- NULL
         nativeOutput$perfRegr <- NULL
         nativeOutput$vimpRegr <- NULL
         if(univariate.nomenclature) {

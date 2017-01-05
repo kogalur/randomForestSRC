@@ -1,63 +1,63 @@
-////**********************************************************************
-////**********************************************************************
-////
-////  RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-////  Version 2.4.1.5 (bld20161118)
-////
-////  Copyright 2016, University of Miami
-////
-////  This program is free software; you can redistribute it and/or
-////  modify it under the terms of the GNU General Public License
-////  as published by the Free Software Foundation; either version 3
-////  of the License, or (at your option) any later version.
-////
-////  This program is distributed in the hope that it will be useful,
-////  but WITHOUT ANY WARRANTY; without even the implied warranty of
-////  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-////  GNU General Public License for more details.
-////
-////  You should have received a copy of the GNU General Public
-////  License along with this program; if not, write to the Free
-////  Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
-////  Boston, MA  02110-1301, USA.
-////
-////  ----------------------------------------------------------------
-////  Project Partially Funded By: 
-////  ----------------------------------------------------------------
-////  Dr. Ishwaran's work was funded in part by DMS grant 1148991 from the
-////  National Science Foundation and grant R01 CA163739 from the National
-////  Cancer Institute.
-////
-////  Dr. Kogalur's work was funded in part by grant R01 CA163739 from the 
-////  National Cancer Institute.
-////  ----------------------------------------------------------------
-////  Written by:
-////  ----------------------------------------------------------------
-////    Hemant Ishwaran, Ph.D.
-////    Director of Statistical Methodology
-////    Professor, Division of Biostatistics
-////    Clinical Research Building, Room 1058
-////    1120 NW 14th Street
-////    University of Miami, Miami FL 33136
-////
-////    email:  hemant.ishwaran@gmail.com
-////    URL:    http://web.ccs.miami.edu/~hishwaran
-////    --------------------------------------------------------------
-////    Udaya B. Kogalur, Ph.D.
-////    Adjunct Staff
-////    Department of Quantitative Health Sciences
-////    Cleveland Clinic Foundation
-////    
-////    Kogalur & Company, Inc.
-////    5425 Nestleway Drive, Suite L1
-////    Clemmons, NC 27012
-////
-////    email:  ubk@kogalur.com
-////    URL:    http://www.kogalur.com
-////    --------------------------------------------------------------
-////
-////**********************************************************************
-////**********************************************************************
+//  **********************************************************************
+//  **********************************************************************
+//  
+//    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
+//    Version 2.4.1.12 (bld20170105)
+//  
+//    Copyright 2016, University of Miami
+//  
+//    This program is free software; you can redistribute it and/or
+//    modify it under the terms of the GNU General Public License
+//    as published by the Free Software Foundation; either version 3
+//    of the License, or (at your option) any later version.
+//  
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//  
+//    You should have received a copy of the GNU General Public
+//    License along with this program; if not, write to the Free
+//    Software Foundation, Inc., 51 Franklin Street, Fifth Floor,
+//    Boston, MA  02110-1301, USA.
+//  
+//    ----------------------------------------------------------------
+//    Project Partially Funded By: 
+//    ----------------------------------------------------------------
+//    Dr. Ishwaran's work was funded in part by DMS grant 1148991 from the
+//    National Science Foundation and grant R01 CA163739 from the National
+//    Cancer Institute.
+//  
+//    Dr. Kogalur's work was funded in part by grant R01 CA163739 from the 
+//    National Cancer Institute.
+//    ----------------------------------------------------------------
+//    Written by:
+//    ----------------------------------------------------------------
+//      Hemant Ishwaran, Ph.D.
+//      Director of Statistical Methodology
+//      Professor, Division of Biostatistics
+//      Clinical Research Building, Room 1058
+//      1120 NW 14th Street
+//      University of Miami, Miami FL 33136
+//  
+//      email:  hemant.ishwaran@gmail.com
+//      URL:    http://web.ccs.miami.edu/~hishwaran
+//      --------------------------------------------------------------
+//      Udaya B. Kogalur, Ph.D.
+//      Adjunct Staff
+//      Department of Quantitative Health Sciences
+//      Cleveland Clinic Foundation
+//      
+//      Kogalur & Company, Inc.
+//      5425 Nestleway Drive, Suite L1
+//      Clemmons, NC 27012
+//  
+//      email:  ubk@kogalur.com
+//      URL:    http://www.kogalur.com
+//      --------------------------------------------------------------
+//  
+//  **********************************************************************
+//  **********************************************************************
 
 
 #include <R_ext/Print.h>
@@ -84,17 +84,17 @@ typedef unsigned int  uint;
 typedef unsigned long ulong;
 #define RF_OUTP_ID   0  
 #define RF_STRG_ID   1  
-#define RF_FSRG_ID   2  
+#define RF_ASRG_ID   2  
 #define RF_OSRG_ID   3  
-#define RF_FCIF_ID   4  
+#define RF_ACIF_ID   4  
 #define RF_OCIF_ID   5  
-#define RF_FSRV_ID   6  
+#define RF_ASRV_ID   6  
 #define RF_OSRV_ID   7  
-#define RF_FMRT_ID   8  
+#define RF_AMRT_ID   8  
 #define RF_OMRT_ID   9  
-#define RF_FCLS_ID  10  
+#define RF_ACLS_ID  10  
 #define RF_OCLS_ID  11  
-#define RF_FRGR_ID  12  
+#define RF_ARGR_ID  12  
 #define RF_ORGR_ID  13  
 #define RF_ER_SURV  14  
 #define RF_ER_CLAS  15  
@@ -144,31 +144,31 @@ typedef unsigned long ulong;
 #define SEXP_TYPE_NUMERIC   0
 #define SEXP_TYPE_INTEGER   1
 #define SEXP_TYPE_CHARACTER 2
-#define OPT_FENS        0x000001 
-#define OPT_OENS        0x000002 
-#define OPT_PERF        0x000004 
-#define OPT_PERF_CALB   0x000008 
-#define OPT_LEAF        0x000010 
-#define OPT_TREE        0x000020 
-#define OPT_SEED        0x000040 
-#define OPT_MISS        0x000080 
-#define OPT_VIMP_TYP1   0x000100 
-#define OPT_VIMP_TYP2   0x000200 
-#define OPT_VIMP_JOIN   0x000400 
-#define OPT_USPV_STAT   0x000800 
-#define OPT_VUSE_TYPE   0x001000 
-#define OPT_VUSE        0x002000 
-#define OPT_IMPU_ONLY   0x010000 
-#define OPT_OUTC_TYPE   0x020000 
-#define OPT_SPLT_NULL   0x040000 
-#define OPT_BOOT_TYP1   0x080000 
-#define OPT_BOOT_TYP2   0x100000 
-#define OPT_COMP_RISK   0x200000 
-#define OPT_SPLDPTH_F   0x400000 
-#define OPT_SPLDPTH_T   0x800000 
-#define OPT_VIMP_LEOB  0x1000000 
-#define OPT_VIMP       0x2000000 
-#define OPT_NODE_STAT  0x8000000 
+#define OPT_FENS      0x00000001 
+#define OPT_OENS      0x00000002 
+#define OPT_PERF      0x00000004 
+#define OPT_PERF_CALB 0x00000008 
+#define OPT_LEAF      0x00000010 
+#define OPT_TREE      0x00000020 
+#define OPT_SEED      0x00000040 
+#define OPT_MISS      0x00000080 
+#define OPT_VIMP_TYP1 0x00000100 
+#define OPT_VIMP_TYP2 0x00000200 
+#define OPT_VIMP_JOIN 0x00000400 
+#define OPT_USPV_STAT 0x00000800 
+#define OPT_VARUSED_F 0x00001000 
+#define OPT_VARUSED_T 0x00002000 
+#define OPT_IMPU_ONLY 0x00010000 
+#define OPT_OUTC_TYPE 0x00020000 
+#define OPT_SPLT_NULL 0x00040000 
+#define OPT_BOOT_TYP1 0x00080000 
+#define OPT_BOOT_TYP2 0x00100000 
+#define OPT_COMP_RISK 0x00200000 
+#define OPT_SPLDPTH_F 0x00400000 
+#define OPT_SPLDPTH_T 0x00800000 
+#define OPT_VIMP_LEOB 0x01000000 
+#define OPT_VIMP      0x02000000 
+#define OPT_NODE_STAT 0x08000000 
 #define OPT_PROX      0x10000000 
 #define OPT_PROX_IBG  0x20000000 
 #define OPT_PROX_OOB  0x40000000 
@@ -176,9 +176,11 @@ typedef unsigned long ulong;
 #define OPT_WGHT      0x00000001 
 #define OPT_WGHT_TYP1 0x00000002 
 #define OPT_WGHT_TYP2 0x00000004 
+#define OPT_MISS_MIA  0x00000008 
 #define OPT_MISS_SKIP 0x00000010 
 #define OPT_MEMB_PRUN 0x00000020 
 #define OPT_MEMB_USER 0x00000040 
+#define OPT_MISS_MIAH 0x00000080 
 #define OPT_SPLT_CUST 0x00000F00 
 #define OPT_BOOT_SWOR 0x00001000 
 #define OPT_TREE_ERR  0x00002000 
@@ -222,6 +224,10 @@ typedef unsigned long ulong;
 #define MVCL_SPLIT  14 
 #define CUST_SPLIT  15
 #define MAXM_SPLIT  15 
+#define SPLIT_MIA_NONE  0  
+#define SPLIT_MIA_LEFT  1  
+#define SPLIT_MIA_RGHT  2  
+#define SPLIT_MIA_UNIT  3  
 #define CLAS_FAM     0
 #define REGR_FAM     1
 #define SURV_FAM     2
@@ -820,6 +826,7 @@ char getBestSplit(uint    treeID,
                   uint  **splitValueMaxFactPtr,
                   double *splitStatistic,
                   char  **splitIndicator,
+                  char   *splitMIA,
                   char    multImpFlag);
 char randomSplit(uint    treeID,
                  Node   *parent,
@@ -833,6 +840,7 @@ char randomSplit(uint    treeID,
                  uint  **splitValueMaxFactPtr,
                  double *splitStatistic,
                  char  **splitIndicator,
+                 char   *splitMIA,
                  char    multImpFlag);
 typedef double (*customFunction) (uint    n,
                                   char   *membership,
@@ -861,6 +869,7 @@ char classificationXwghtSplit(uint    treeID,
                               uint  **splitValueMaxFactPtr,
                               double *splitStatistic,
                               char  **splitIndicator,
+                              char   *splitMIA,
                               char    multImpFlag);
 char regressionXwghtSplit(uint    treeID,
                           Node   *parent,
@@ -874,6 +883,7 @@ char regressionXwghtSplit(uint    treeID,
                           uint  **splitValueMaxFactPtr,
                           double *splitStatistic,
                           char  **splitIndicator,
+                          char   *splitMIA,
                           char    multImpFlag);
 char logRankNCR(uint    treeID,
                 Node   *parent,
@@ -887,6 +897,7 @@ char logRankNCR(uint    treeID,
                 uint  **splitValueMaxFactPtr,
                 double *splitStatistic,
                 char  **splitIndicator,
+                char   *splitMIA,
                 char    multImpFlag);
 char logRankCR (uint    treeID,
                 Node   *parent,
@@ -900,6 +911,7 @@ char logRankCR (uint    treeID,
                 uint  **splitValueMaxFactPtr,
                 double *splitStatistic,
                 char  **splitIndicator,
+                char   *splitMIA,
                 char    multImpFlag);
 void getMembrCountOnly (uint       treeID,
                         Terminal  *parent,
@@ -920,6 +932,7 @@ char unsupervisedSplit(uint    treeID,
                        uint  **splitValueMaxFactPtr,
                        double *splitStatistic,
                        char  **splitIndicator,
+                       char   *splitMIA,
                        char    multImpFlag);
 char multivariateSplit (uint    treeID,
                         Node   *parent,
@@ -933,6 +946,7 @@ char multivariateSplit (uint    treeID,
                         uint  **splitValueMaxFactPtr,
                         double *splitStatistic,
                         char  **splitIndicator,
+                        char   *splitMIA,
                         char    multImpFlag);
 char customMultivariateSplit (uint    treeID,
                               Node   *parent,
@@ -946,6 +960,7 @@ char customMultivariateSplit (uint    treeID,
                               uint  **splitValueMaxFactPtr,
                               double *splitStatistic,
                               char  **splitIndicator,
+                              char   *splitMIA,
                               char    multImpFlag);
 char customSurvivalSplit (uint    treeID,
                          Node   *parent,
@@ -959,6 +974,7 @@ char customSurvivalSplit (uint    treeID,
                          uint  **splitValueMaxFactPtr,
                          double *splitStatistic,
                          char  **splitIndicator,
+                          char   *splitMIA,
                          char    multImpFlag);
 char customCompetingRiskSplit (uint    treeID,
                                Node   *parent,
@@ -972,6 +988,7 @@ char customCompetingRiskSplit (uint    treeID,
                                uint  **splitValueMaxFactPtr,
                                double *splitStatistic,
                                char  **splitIndicator,
+                               char   *splitMIA,
                                char    multImpFlag);
 void stackSplitIndicator(uint   nodeSize,
                          char **localSplitIndicator);
@@ -1105,6 +1122,40 @@ void unselectRandomCovariates(uint      treeID,
                               uint      nonMissMembrSizeStatic,
                               uint     *nonMissMembrIndx,
                               char      multImpFlag);
+char selectRandomCovariatesNew(uint     treeID,
+                            Node     *parent,
+                            uint     *repMembrIndx,
+                            uint      repMembrSize,
+                            uint     *covariateIndex,
+                            uint     *uniformCovariateSize,
+                            uint     *uniformCovariateIndex,
+                            double   *cdf,
+                            uint     *cdfSize,
+                            uint     *cdfSort,
+                            uint     *density,
+                            uint     *densitySize,
+                            uint    **densitySwap,
+                            uint     *covariate,
+                            uint     *actualCovariateCount,
+                            uint     *candidateCovariateCount,
+                            double   *splitVector,
+                            uint     *splitVectorSize,
+                            uint    **indxx,
+                            uint      nonMissMembrSizeStatic,
+                            uint     *nonMissMembrIndxStatic,
+                            uint     *nonMissMembrSize,
+                            uint    **nonMissMembrIndx,
+                            uint     *missMembrSize,
+                            uint    **missMembrIndx,
+                            char      multImpFlag);
+void unselectRandomCovariatesNew(uint      treeID,
+                              Node     *parent,
+                              uint      repMembrSize,
+                              uint     *indxx,
+                              uint      nonMissMembrSizeStatic,
+                              uint     *nonMissMembrIndx,
+                                 uint     *missMembrIndx,
+                              char      multImpFlag);
 uint virtuallySplitNode(uint  treeID,
                            char  factorFlag,
                            uint  mwcpSizeAbsolute,
@@ -1154,12 +1205,31 @@ char getPreSplitResult (uint      treeID,
                         double   *preSplitMean,
                         char      multImpFlag,
                         char      multVarFlag);
+char getPreSplitResultNew (uint      treeID,
+                           Node     *parent,
+                           uint      repMembrSize,
+                           uint     *repMembrIndx,
+                           uint     *nonMissMembrSize,
+                           uint    **nonMissMembrIndx,
+                           uint     *miaVectorLength,
+                           char    **miaVectorType,
+                           double  **splitVector,
+                           double   *preSplitMean,
+                           char      multImpFlag,
+                           char      multVarFlag);
 void unstackPreSplit (char      preliminaryResult,
                       char      multImpFlag,
                       char      multVarFlag,
                       uint      repMembrSize,
                       double   *splitVector,
                       uint     *nonMissMembrIndx);
+void unstackPreSplitNew (char      preliminaryResult,
+                         char      multImpFlag,
+                         char      multVarFlag,
+                         uint      repMembrSize,
+                         double   *splitVector,
+                         uint     *nonMissMembrIndx,
+                         char     *miaVectorType);
 char updateMaximumSplit(uint    treeID,
                         Node   *parent,
                         double  delta,
@@ -1177,6 +1247,25 @@ char updateMaximumSplit(uint    treeID,
                         uint  **splitValueMaxFactPtr,
                         void   *splitVectorPtr,
                         char  **splitIndicator);
+char updateMaximumSplitNew(uint    treeID,
+                           Node   *parent,
+                           double  delta,
+                           uint    candidateCovariateCount,
+                           uint    covariate,
+                           uint    index,
+                           char    factorFlag,
+                           uint    mwcpSizeAbsolute,
+                           uint    repMembrSize,
+                           char   *localSplitIndicator,
+                           char    miaType,
+                           double *deltaMax,
+                           uint   *splitParameterMax,
+                           double *splitValueMaxCont,
+                           uint   *splitValueMaxFactSize,
+                           uint  **splitValueMaxFactPtr,
+                           void   *splitVectorPtr,
+                           char  **splitIndicator,
+                           char  *splitMIA);
 void updateNodeStatistics(Node *parent, double delta, uint candidateCovariateCount, uint covariate);
 void getMeanResponseNew(uint       treeID,
                         Terminal  *parent,
@@ -1408,6 +1497,7 @@ char forkAndUpdate(uint    treeID,
                    uint   *splitValueMaxFactPtr,
                    double  splitStatistic,
                    char   *localSplitIndicator,
+                   char    splitMIA,
                    char    multImpFlag,
                    char   *membershipIndicator,
                    uint   *leftDaughterSize,

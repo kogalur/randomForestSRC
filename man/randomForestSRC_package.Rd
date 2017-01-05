@@ -29,30 +29,31 @@
   default installation will only execute serially.  To utilize OpenMP,
   the target architecture and operating system must support it.
 
-  If this is the case, there are THREE strategies for installing the
-  OpenMP capable version of the CRAN package.  Method 1 relies on having
-  full package development prerequisites, the build environment
-  necessary for creating R packages from source.  Method 2 relies on
-  having partial package development prerequisites. Method 3 obviates
-  the need for package development prerequisites.  Method 1 is the
-  preferred and comprehensive way to guarantee natively compiled,
-  compatible and optimized binaries for your system.  Method 2 makes
-  some assumptions about your system, that are not entirely platform
-  independent, but will usually work.  Method 3 relies on pre-built
-  binaries, and is intended for users not interested in investing the
-  time necessary to have the capability to natively build packages.  We do not
-  recommend this method as it does not guarantee OpenMP execution, nor
-  does it guarantee that our binaries will even be compatible with your
-  system.  However, we are providing them as a convenience in the hope
-  that some users will find them usable.
+  There are THREE strategies for installing the OpenMP capable version
+  of the CRAN package.  \bold{Method 1} relies on having full package
+  development prerequisites, the build environment necessary for
+  creating R packages from source.  This is the preferred and
+  comprehensive way to guarantee natively compiled, compatible and
+  optimized binaries for your system.  \bold{Method 2} relies on having
+  partial package development prerequisites.  This makes some
+  assumptions about your system, that are not entirely platform
+  independent, but will usually work.  \bold{Method 3} is the easiest
+  and does not require package development prerequisites.  Method 3
+  relies on pre-built binaries, and is intended for users not interested
+  in investing the time necessary to have the capability to natively
+  build packages. We do not recommend this method as it does not
+  guarantee OpenMP execution, nor does it guarantee that our binaries
+  will even be compatible with your system.  However, we are providing
+  them as a convenience.
   
   \tabular{cccc}{
     \command{\bold{METHOD |}} \tab \command{\bold{| R Development Toolset |}} 
     \tab \command{\bold{| Difficulty |}} 
     \tab \command{\bold{| OpenMP Execution}} \cr
     \command{1} \tab \command{Full} \tab \command{High} \tab \command{Guaranteed} \cr
-    \command{2} \tab \command{Partial} \tab \command{Medium} \tab \command{Probable} \cr
-    \command{3} \tab \command{None} \tab \command{Low} \tab \command{Maybe} \cr
+    \command{2} \tab \command{Partial} \tab \command{Medium} \tab
+    \command{Good Success} \cr
+    \command{3} \tab \command{None} \tab \command{Low} \tab \command{Moderate Success} \cr
   }
 
 }
@@ -124,7 +125,7 @@
 
     \item Download the Makevars file containing the custom compiler
     directives from
-    \url{http://www.ccs.miami.edu/~hishwaran/insert.link.here.html}.  Copy it
+    \url{http://www.ccs.miami.edu/~hishwaran/rfsrc/Makevars}.  Copy it
     into the directory \command{randomForestSRC/src}. On Windows
     systems, take the additional step of renaming it to
     \command{Makevars.win}.
@@ -140,25 +141,24 @@
 }
 
 \section{OpenMP Parallel Processing -- Method 3}{
-  The third and worst way to install the OpenMP version of the package
-  is to download our pre-compiled binaries and attempt to use them on
-  your system. Successful execution is not, by any means, guaranteed.
-  The instruction for this method follow:
+  The easiest but least recommended way to install the OpenMP version of
+  the package is to download our pre-compiled binaries and attempt to
+  use them on your system. Successful execution is not always
+  guaranteed.  The instruction for this method follow:
   
   \enumerate{
-    \item Download the platform specific binary file \command{randomForestSRC_X.x.x.<extension>} from
-    \url{http://www.ccs.miami.edu/~hishwaran/insert.link.here.html}.  The
-    X's indicate the version posted, and <extension> will be <tgz> <zip>
-    depending on your platform. 
+    \item Download the platform specific binary file
+    \command{randomForestSRC_X.x.x.<extension>} from
+    \url{http://www.ccs.miami.edu/~hishwaran/rfsrc.html}.
     
-    \item If you are not using the R GUI, navigate to the directory
-    where you downloaded the compressed binary file and execute the command
+    \item From the R GUI, navigate to "Install Packages" (or similar)
+    and select "From Local Archive" (or similar).  Then navigate to the
+    downloaded binary and click "Install".  If you are not using the R
+    GUI, navigate to the directory where you downloaded the compressed
+    binary file and execute the command
 
     \code{R CMD INSTALL randomForestSRC_X.x.x.zip}
 
-    If you are using the R GUI, follow the steps specific to your
-    version of the R GUI to navigate to the compressed binary file and
-    install it.
   }
 }
 
