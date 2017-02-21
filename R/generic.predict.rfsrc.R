@@ -2,7 +2,7 @@
 ##  **********************************************************************
 ##  
 ##    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-##    Version 2.4.1.12 (bld20170105)
+##    Version 2.4.1.15 (bld20170221)
 ##  
 ##    Copyright 2016, University of Miami
 ##  
@@ -151,7 +151,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("2.4.1.12", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("2.4.1.15", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
@@ -402,6 +402,8 @@ generic.predict.rfsrc <-
                                   as.integer(0),
                                   as.integer(0),
                                   as.double(NULL),
+                                  as.integer(0),
+                                  as.double(0),
                                   as.integer(n.newdata),
                                   as.integer(r.dim.newdata),
                                   as.double(if (outcome != "test") yvar.newdata else NULL),
@@ -575,7 +577,9 @@ generic.predict.rfsrc <-
       vimp.count <- length(importance.xvar)
     }
   if (grepl("surv", family)) {
-    if ((length(event.info$event.type) > 1) & (splitrule != "logrankscore")) {
+      if ((length(event.info$event.type) > 1) &&
+          (splitrule != "l2.impute") &&
+          (splitrule != "logrankscore")) {
       coerced.event.count <- length(event.info$event.type)
     }
       else {
@@ -708,16 +712,16 @@ generic.predict.rfsrc <-
               levels.names[[counter]] <- yfactor$order.levels[[which(yfactor$order == yvar.names[i])]]
             }
         }
-        tree.offset <- rep(1, ntree)
+        tree.offset <- array(1, ntree)
         levels.total <- 0 
         if (ntree > 1) {
           for (i in 1:length(outcome.target.idx)) {
             target.idx <- which (class.index == outcome.target.idx[i])
             if (length(target.idx) > 0) {
-              levels.total <- levels.total + levels.count[target.idx]
+              levels.total <- levels.total + 1 + levels.count[target.idx]
             }
           }
-          tree.offset[2:ntree] <- 1 + levels.total
+          tree.offset[2:ntree] <- levels.total
         }
         tree.offset <-  cumsum(tree.offset)
         vimp.offset <- array(1, vimp.count)

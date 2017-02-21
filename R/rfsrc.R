@@ -2,7 +2,7 @@
 ##  **********************************************************************
 ##  
 ##    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-##    Version 2.4.1.12 (bld20170105)
+##    Version 2.4.1.15 (bld20170221)
 ##  
 ##    Copyright 2016, University of Miami
 ##  
@@ -528,7 +528,7 @@ rfsrc <- function(formula,
                        terminal.qualts = terminal.qualts,
                        terminal.quants = terminal.quants,
                        nativeArrayTNDS = nativeArrayTNDS,
-                       version = "2.4.1.12",
+                       version = "2.4.1.15",
                        na.action = na.action,
                        coerce.factor = coerce.factor)
     if (grepl("surv", family)) {
@@ -656,7 +656,9 @@ rfsrc <- function(formula,
   regrOutput <- NULL
   if (!impute.only) {
     if (grepl("surv", family)) {
-      if ((length(event.info$event.type) > 1) & (splitinfo$name != "logrankscore")) {
+        if ((length(event.info$event.type) > 1) &&
+            (splitinfo$name != "l2.impute") &&
+            (splitinfo$name != "logrankscore")) {
         coerced.event.count <- length(event.info$event.type)
       }
         else {

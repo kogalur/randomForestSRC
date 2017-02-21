@@ -7,6 +7,7 @@
 \usage{
 partial.rfsrc(object, outcome.target = NULL,
   partial.type = NULL, partial.xvar = NULL, partial.values = NULL,
+  partial.xvar2 = NULL, partial.value2 = NULL,
   partial.time = NULL, oob = TRUE, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
@@ -19,6 +20,10 @@ partial.rfsrc(object, outcome.target = NULL,
   \item{partial.xvar}{Character value specifying the x-variable to be
     used.}
   \item{partial.values}{Values for x-variable on which the partial
+    values are to be calculated.}
+  \item{partial.xvar2}{Character value specifying the second order x-variable to be
+    used.}
+  \item{partial.value2}{Value for second order x-variable on which the partial
     values are to be calculated.}
   \item{partial.time}{For survival families, the time at which the predicted
     survival value is evaluated at (depends on \code{partial.type}).}

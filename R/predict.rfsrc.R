@@ -2,7 +2,7 @@
 ##  **********************************************************************
 ##  
 ##    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-##    Version 2.4.1.12 (bld20170105)
+##    Version 2.4.1.15 (bld20170221)
 ##  
 ##    Copyright 2016, University of Miami
 ##  

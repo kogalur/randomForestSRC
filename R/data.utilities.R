@@ -2,7 +2,7 @@
 ##  **********************************************************************
 ##  
 ##    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-##    Version 2.4.1.12 (bld20170105)
+##    Version 2.4.1.15 (bld20170221)
 ##  
 ##    Copyright 2016, University of Miami
 ##  
@@ -368,7 +368,9 @@ get.coerced.survival.fmly <- function(fmly, event.type, splitrule = NULL) {
   if (grepl("surv", fmly)) {
     coerced.fmly <- "surv"
     if (!is.null(splitrule)) {
-      if ((length(event.type) > 1) & (splitrule != "logrankscore")) {
+        if ((length(event.type) > 1) &&
+            (splitrule != "l2.impute") &&
+            (splitrule != "logrankscore")) {
         coerced.fmly <- "surv-CR"
       }
     }
@@ -424,7 +426,7 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
     if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
       stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
     }
-    if (need.deaths & (all(na.omit(cens) == 0))) {
+    if (need.deaths && (all(na.omit(cens) == 0))) {
       stop("no deaths in data!")
     }
     if (!all(na.omit(time) >= 0)) {
@@ -484,7 +486,8 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
                        "unsupv",               
                        "mv.mse",               
                        "mv.gini",              
-                       "custom")               
+                       "custom",               
+                       "l2.impute")            
   fmly <- formula.detail$family
   nsplit <- round(nsplit)
   if (nsplit < 0) {

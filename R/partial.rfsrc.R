@@ -2,7 +2,7 @@
 ##  **********************************************************************
 ##  
 ##    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-##    Version 2.4.1.12 (bld20170105)
+##    Version 2.4.1.15 (bld20170221)
 ##  
 ##    Copyright 2016, University of Miami
 ##  
@@ -66,6 +66,8 @@ partial.rfsrc <- function(
   partial.type = NULL,
   partial.xvar = NULL,
   partial.values = NULL,
+  partial.xvar2 = NULL,
+  partial.value2 = NULL,
   partial.time = NULL,
   oob = TRUE,
   seed = NULL,
@@ -96,6 +98,15 @@ partial.rfsrc <- function(
   yvar.names <- object$yvar.names
   if (length(which(xvar.names == partial.xvar)) != 1) {
     stop("x-variable specified incorrectly:  ", partial.xvar)
+  }
+  if (!is.null(partial.xvar2)) {   
+      if (length(which(xvar.names == partial.xvar2)) != 1) {
+          stop("x-variable 2 specified incorrectly:  ", partial.xvar2)
+      }
+  }
+  else {
+      partial.xvar2 = 0
+      partial.xvalue2 = 0
   }
   object$yvar <- as.data.frame(object$yvar)
   colnames(object$yvar) <- yvar.names
@@ -175,6 +186,8 @@ partial.rfsrc <- function(
                                   as.integer(which(xvar.names == partial.xvar)),
                                   as.integer(length(partial.values)),
                                   as.double(partial.values),
+                                  as.integer(partial.xvar2),
+                                  as.double(partial.value2),
                                   as.integer(0),
                                   as.integer(0),
                                   as.double(NULL),
