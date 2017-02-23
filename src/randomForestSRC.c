@@ -4,9 +4,6 @@
 //  **********************************************************************
 //  
 //    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-//    Version 2.4.1.15 (bld20170221)
-//  
-//    Copyright 2016, University of Miami
 //  
 //    This program is free software; you can redistribute it and/or
 //    modify it under the terms of the GNU General Public License
@@ -245,8 +242,9 @@ uint      RF_partialType;
 uint      RF_partialXvar;
 uint      RF_partialLength;
 double   *RF_partialValue;
-uint      RF_partialXvar2;
-double    RF_partialValue2;
+uint      RF_partialLength2;
+uint     *RF_partialXvar2;
+double   *RF_partialValue2;
 uint      RF_partialTimeLength;
 double   *RF_partialTime;
 uint      RF_xWeightType;
@@ -2759,6 +2757,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP partialXvar,
                   SEXP partialLength,
                   SEXP partialValue,
+                  SEXP partialLength2,
                   SEXP partialXvar2,
                   SEXP partialValue2,
                   SEXP fobservationSize,
@@ -2815,8 +2814,9 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_partialXvar          = INTEGER(partialXvar)[0];
   RF_partialLength        = INTEGER(partialLength)[0];
   RF_partialValue         = REAL(partialValue); RF_partialValue --;
-  RF_partialXvar2         = INTEGER(partialXvar2)[0];
-  RF_partialValue2        = REAL(partialValue)[0];
+  RF_partialLength2       = INTEGER(partialLength2)[0];
+  RF_partialXvar2         = (uint *) INTEGER(partialXvar2); RF_partialXvar2 --;
+  RF_partialValue2        = REAL(partialValue2); RF_partialValue2 --;
   RF_fobservationSize     = INTEGER(fobservationSize)[0];
   RF_frSize               = INTEGER(frSize)[0];
   RF_frData               = REAL(frData);
@@ -2848,7 +2848,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
     RF_sobservationSize = 0;
     RF_opt = RF_opt & (~OPT_OUTC_TYPE);
     RF_optHigh = RF_optHigh & (~OPT_PART_PLOT);
-    RF_partialLength = 0;
+    RF_partialLength = RF_partialLength2 = 0;
     RF_opt = RF_opt & (~OPT_OENS);
     RF_opt = RF_opt | OPT_FENS;
     if (RF_rSize == 0) {
@@ -2872,14 +2872,14 @@ SEXP rfsrcPredict(SEXP traceFlag,
     if (RF_sobservationSize > 0) {
       RF_opt = RF_opt & (~OPT_OUTC_TYPE);
       RF_optHigh = RF_optHigh & (~OPT_PART_PLOT);
-      RF_partialLength = 0;
+      RF_partialLength = RF_partialLength2 = 0;
       RF_opt = RF_opt | OPT_OENS;
       RF_opt = RF_opt | OPT_FENS;
     }
     else if (RF_opt & OPT_OUTC_TYPE) {
       RF_sobservationSize = 0;
       RF_optHigh = RF_optHigh & (~OPT_PART_PLOT);
-      RF_partialLength = 0;
+      RF_partialLength = RF_partialLength2 = 0;
       RF_optHigh = RF_optHigh & (~OPT_MEMB_INCG);
       RF_optHigh = RF_optHigh & (~OPT_TERM_INCG);
       RF_opt = RF_opt | OPT_OENS;
@@ -6028,11 +6028,25 @@ uint stackDefinedOutputObjects(char      mode,
       RFprintf("\nRF-SRC:  Partial x-variable is out of range:  %10d ", RF_partialXvar);
       error("\nRF-SRC:  The application will now exit.\n");
     }
-    if (RF_partialXvar2 != 0) {
-      if ((RF_partialXvar2 < 1) || (RF_partialXvar2 > RF_xSize)) {
-        RFprintf("\nRF-SRC:  *** ERROR *** ");
-        RFprintf("\nRF-SRC:  Partial x-variable 2 is out of range:  %10d ", RF_partialXvar2);
-        error("\nRF-SRC:  The application will now exit.\n");
+    if (RF_partialLength2 > 0) {
+      for (i = 1; i <= RF_partialLength2; i++) {
+        if ((RF_partialXvar2[i] < 1) || (RF_partialXvar2[i] > RF_xSize)) {
+          RFprintf("\nRF-SRC:  *** ERROR *** ");
+          RFprintf("\nRF-SRC:  Second order partial x-variable is out of range:  idx = %10d, val =  %10d ", i, RF_partialXvar2[i]);
+          error("\nRF-SRC:  The application will now exit.\n");
+        }
+        if (RF_partialXvar2[i] == RF_partialXvar) {
+          RFprintf("\nRF-SRC:  *** ERROR *** ");
+          RFprintf("\nRF-SRC:  First and Second order partial x-variables are identical:  idx = %10d, val =  %10d ", i, RF_partialXvar2[i]);
+          error("\nRF-SRC:  The application will now exit.\n");
+        }
+        for (j = i + 1; j <= RF_partialLength2; j++) {
+          if (RF_partialXvar2[i] == RF_partialXvar2[j]) {
+            RFprintf("\nRF-SRC:  *** ERROR *** ");
+            RFprintf("\nRF-SRC:  Second order partial x-variables are not unique:  idx = %10d, idx =  %10d, val = %10d", i, j, RF_partialXvar2[i]);
+            error("\nRF-SRC:  The application will now exit.\n");
+          }
+        }
       }
     }
     RF_partMembership = (Terminal ***) new_vvector(1, RF_forestSize, NRUTIL_TPTR2);
@@ -16158,7 +16172,8 @@ char getPartialNodeMembership(char       rootFlag,
   char factorFlag;
   char daughterFlag;
   uint obsSize;
-  uint i;
+  uint primaryPartialIndex, secondaryPartialIndex;
+  uint i, k;
   factorFlag = FALSE; 
   terminalFlag = TRUE;
   obsSize = RF_observationSize;
@@ -16175,40 +16190,39 @@ char getPartialNodeMembership(char       rootFlag,
       if (strcmp(RF_xType[parent -> splitParameter], "C") == 0) {
         factorFlag = TRUE;
       }
+      primaryPartialIndex = secondaryPartialIndex = k = 0;
+      if (parent -> splitParameter ==  RF_partialXvar) {
+        primaryPartialIndex = RF_partialXvar;
+      }
+      else {
+        for (k = 1; k <= RF_partialLength2; k++) {
+          if (parent -> splitParameter ==  RF_partialXvar2[k]) {
+            secondaryPartialIndex = k;
+          }
+        }
+      }
       for (i = 1; i <= allMembrSize; i++) {
         daughterFlag = RIGHT;
         if (factorFlag == TRUE) {
-          if (parent -> splitParameter ==  RF_partialXvar) {
+          if (primaryPartialIndex > 0) { 
             daughterFlag = splitOnFactor((uint) RF_partialValue[partialIndex], parent -> splitValueFactPtr);
           }
-          else if (RF_partialXvar2 != 0) {
-            if (parent -> splitParameter ==  RF_partialXvar2) {
-              daughterFlag = splitOnFactor((uint) RF_partialValue2, parent -> splitValueFactPtr);
-            }
-            else {
-              daughterFlag = splitOnFactor((uint) observationPtr[parent -> splitParameter][allMembrIndx[i]], parent -> splitValueFactPtr);
-            }
+          else if (secondaryPartialIndex > 0) {
+            daughterFlag = splitOnFactor((uint) RF_partialValue2[secondaryPartialIndex], parent -> splitValueFactPtr);
           }
           else {
             daughterFlag = splitOnFactor((uint) observationPtr[parent -> splitParameter][allMembrIndx[i]], parent -> splitValueFactPtr);
           }
         }
         else {
-          if (parent -> splitParameter ==  RF_partialXvar) {
+          if (primaryPartialIndex > 0) { 
             if (((parent -> splitValueCont) - RF_partialValue[partialIndex]) >= 0.0) {
               daughterFlag = LEFT;
             }
           }
-          else if (RF_partialXvar2 != 0) {
-            if (parent -> splitParameter ==  RF_partialXvar2) {
-              if (((parent -> splitValueCont) - RF_partialValue2) >= 0.0) {
-                daughterFlag = LEFT;
-              }
-            }
-            else {
-              if (((parent -> splitValueCont) - observationPtr[parent -> splitParameter][allMembrIndx[i]]) >= 0.0) {
-                daughterFlag = LEFT;
-              }
+          else if (secondaryPartialIndex > 0) {
+            if (((parent -> splitValueCont) - RF_partialValue2[secondaryPartialIndex]) >= 0.0) {
+              daughterFlag = LEFT;
             }
           }
           else {
@@ -16529,7 +16543,7 @@ void acquireTree(char mode, uint r, uint b) {
           stackVimpMembership(mode, & RF_vimpMembership[intrIndex][b]);
           getVimpMembership(mode, b, RF_vimpMembership[intrIndex][b], pp);
 #ifdef _OPENMP
-#pragma omp critical (_update_gve)
+#pragma omp critical (_update_vc)
 #endif
           { 
             updateVimpCalculations(mode, b, intrIndex, RF_vimpMembership[intrIndex][b]);
@@ -16548,7 +16562,12 @@ void acquireTree(char mode, uint r, uint b) {
                                    RF_observationSize,
                                    RF_observation[b],
                                    membership);
-          updatePartialCalculations(b, i, membership);
+#ifdef _OPENMP
+#pragma omp critical (_update_pc)
+#endif
+          { 
+            updatePartialCalculations(b, i, membership);
+          } 
         }
         free_new_vvector(membership, 1, RF_observationSize, NRUTIL_TPTR);
       }

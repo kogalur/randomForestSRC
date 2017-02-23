@@ -2,9 +2,6 @@
 ##  **********************************************************************
 ##  
 ##    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-##    Version 2.4.1.15 (bld20170221)
-##  
-##    Copyright 2016, University of Miami
 ##  
 ##    This program is free software; you can redistribute it and/or
 ##    modify it under the terms of the GNU General Public License
@@ -67,7 +64,7 @@ partial.rfsrc <- function(
   partial.xvar = NULL,
   partial.values = NULL,
   partial.xvar2 = NULL,
-  partial.value2 = NULL,
+  partial.values2 = NULL,
   partial.time = NULL,
   oob = TRUE,
   seed = NULL,
@@ -100,13 +97,14 @@ partial.rfsrc <- function(
     stop("x-variable specified incorrectly:  ", partial.xvar)
   }
   if (!is.null(partial.xvar2)) {   
-      if (length(which(xvar.names == partial.xvar2)) != 1) {
-          stop("x-variable 2 specified incorrectly:  ", partial.xvar2)
+      if (length(partial.xvar2) != length(partial.values2)) {
+          stop("second order x-variable and value vectors not of same length:  ", length(partial.xvar2), "vs", length(partial.values2))
       }
-  }
-  else {
-      partial.xvar2 = 0
-      partial.xvalue2 = 0
+      for (i in 1:length(partial.xvar2)) {
+          if (length(which(xvar.names == partial.xvar2[i])) != 1) {
+              stop("second order x-variable element", i, "specified incorrectly:  ", partial.xvar2[i])
+          }
+      }
   }
   object$yvar <- as.data.frame(object$yvar)
   colnames(object$yvar) <- yvar.names
@@ -186,8 +184,9 @@ partial.rfsrc <- function(
                                   as.integer(which(xvar.names == partial.xvar)),
                                   as.integer(length(partial.values)),
                                   as.double(partial.values),
-                                  as.integer(partial.xvar2),
-                                  as.double(partial.value2),
+                                  as.integer(length(partial.xvar2)),
+                                  as.integer(match(partial.xvar2, xvar.names)),
+                                  as.double(partial.values2),
                                   as.integer(0),
                                   as.integer(0),
                                   as.double(NULL),

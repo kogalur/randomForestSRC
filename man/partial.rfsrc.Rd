@@ -7,7 +7,7 @@
 \usage{
 partial.rfsrc(object, outcome.target = NULL,
   partial.type = NULL, partial.xvar = NULL, partial.values = NULL,
-  partial.xvar2 = NULL, partial.value2 = NULL,
+  partial.xvar2 = NULL, partial.values2 = NULL,
   partial.time = NULL, oob = TRUE, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
@@ -17,14 +17,18 @@ partial.rfsrc(object, outcome.target = NULL,
     first coordinate.}
   \item{partial.type}{Character value of the type of predicted value.
     See details below.}
-  \item{partial.xvar}{Character value specifying the x-variable to be
+  \item{partial.xvar}{Character value specifying the single primary
+    partial x-variable to be used.}
+  \item{partial.values}{Vector of values that the primary partialy
+    x-variable will assume.}
+  \item{partial.xvar2}{Vector of character values specifying the second order x-variables to be
     used.}
-  \item{partial.values}{Values for x-variable on which the partial
-    values are to be calculated.}
-  \item{partial.xvar2}{Character value specifying the second order x-variable to be
-    used.}
-  \item{partial.value2}{Value for second order x-variable on which the partial
-    values are to be calculated.}
+  \item{partial.values2}{Vector of values that the second order
+    x-variables will assume.  Each second order x-variable can only
+    assume a single value.  This the length of \code{partial.xvar2} and
+    \code{partial.values2} will be the same.  In addition, the user must
+    do the appropriate conversion for factors, and represent a value as
+    a numeric element.}
   \item{partial.time}{For survival families, the time at which the predicted
     survival value is evaluated at (depends on \code{partial.type}).}
   \item{oob}{OOB (TRUE)  or in-bag (FALSE) predicted values.}

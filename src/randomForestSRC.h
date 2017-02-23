@@ -2,9 +2,6 @@
 //  **********************************************************************
 //  
 //    RANDOM FORESTS FOR SURVIVAL, REGRESSION, AND CLASSIFICATION (RF-SRC)
-//    Version 2.4.1.15 (bld20170221)
-//  
-//    Copyright 2016, University of Miami
 //  
 //    This program is free software; you can redistribute it and/or
 //    modify it under the terms of the GNU General Public License
@@ -631,6 +628,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP partialXvar,
                   SEXP partialLength,
                   SEXP partialValue,
+                  SEXP partialLength2,
                   SEXP partialXvar2,
                   SEXP partialValue2,
                   SEXP fobservationSize,
