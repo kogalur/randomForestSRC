@@ -118,10 +118,7 @@ rfsrc(formula, data, ntree = 1000,
   \item{nimpute}{Number of iterations of the missing data algorithm.
 	  Performance measures such as out-of-bag (OOB) error rates tend
 	  to become optimistic if \code{nimpute} is greater than 1.}
-  \item{ntime}{(It is recommended that the use of this option be
-    avoided.  The effect of discretizing the time values compromises the
-    ensembles. For best results, all event times must be used.  This is
-    the default behaviour.)  Integer value used for survival families to
+  \item{ntime}{Integer value used for survival families to
     constrain ensemble calculations to a grid of time values of no more
     than \code{ntime} time points.  Alternatively if a vector of values
     of length greater than one is supplied, it is assumed these are the

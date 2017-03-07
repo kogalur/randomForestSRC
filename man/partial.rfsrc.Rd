@@ -137,6 +137,15 @@ mtcars.mix <- rfsrc(Multivar(carb, mpg, cyl) ~ ., data = mtcars2)
 partial.obj <- partial.rfsrc(mtcars.mix,
   partial.xvar = "disp",
   partial.values = mtcars.mix$xvar[, "disp"])
+
+## second order variable specification
+mtcars.obj <- rfsrc(mpg ~., data = mtcars)
+partial.obj <- partial.rfsrc(mtcars.obj,
+  partial.xvar = "cyl",
+  partial.values = c(4, 8),
+  partial.xvar2 = c("gear", "disp", "carb"),
+  partial.values2 = c(4, 200, 3))
+
 }
 }
 \keyword{partial}

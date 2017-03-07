@@ -1,8 +1,20 @@
 Package: randomForestSRC
-Version: 2.4.1.17 (bld20170223)
+Version: 2.4.2 (bld20170307)
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 2.4.1.17
+FOR BETA BUILDS PLEASE SEE:  https://github.com/kogalur/randomForestSRC
+---------------------------------------------------------------------------------
+
+---------------------------------------------------------------------------------
+CHANGES TO RELEASE 2.4.2
+---------------------------------------------------------------------------------
+Bug fixes to partial.rfsrc() on R and C side.  Allowance of second
+order variable specification in this analysis.  Conditional importance
+values in classification adjusted by a factor of exp(1).  Bug fix to unsafe
+threading in LB-VIMP calculations.
+
+---------------------------------------------------------------------------------
+RELEASE 2.4.1
 ---------------------------------------------------------------------------------
 Fix to typedef that breaks Linux.  Sorry about that.
   

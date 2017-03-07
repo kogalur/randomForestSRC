@@ -50,7 +50,7 @@
 ##      Clemmons, NC 27012
 ##  
 ##      email:  ubk@kogalur.com
-##      URL:    http://www.kogalur.com
+##      URL:    https://github.com/kogalur/randomForestSRC
 ##      --------------------------------------------------------------
 ##  
 ##  **********************************************************************

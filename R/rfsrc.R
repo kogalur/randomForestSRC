@@ -50,7 +50,7 @@
 ##      Clemmons, NC 27012
 ##  
 ##      email:  ubk@kogalur.com
-##      URL:    http://www.kogalur.com
+##      URL:    https://github.com/kogalur/randomForestSRC
 ##      --------------------------------------------------------------
 ##  
 ##  **********************************************************************
@@ -525,7 +525,7 @@ rfsrc <- function(formula,
                        terminal.qualts = terminal.qualts,
                        terminal.quants = terminal.quants,
                        nativeArrayTNDS = nativeArrayTNDS,
-                       version = "2.4.1.17",
+                       version = "2.4.2",
                        na.action = na.action,
                        coerce.factor = coerce.factor)
     if (grepl("surv", family)) {

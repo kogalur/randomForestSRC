@@ -50,7 +50,7 @@
 ##      Clemmons, NC 27012
 ##  
 ##      email:  ubk@kogalur.com
-##      URL:    http://www.kogalur.com
+##      URL:    https://github.com/kogalur/randomForestSRC
 ##      --------------------------------------------------------------
 ##  
 ##  **********************************************************************
@@ -148,7 +148,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("2.4.1.17", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("2.4.2", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)

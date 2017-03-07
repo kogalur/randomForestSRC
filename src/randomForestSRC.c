@@ -52,7 +52,7 @@
 //      Clemmons, NC 27012
 //  
 //      email:  ubk@kogalur.com
-//      URL:    http://www.kogalur.com
+//      URL:    https://github.com/kogalur/randomForestSRC
 //      --------------------------------------------------------------
 //  
 //  **********************************************************************
@@ -19041,7 +19041,12 @@ void finalizeVimpPerformance(char       mode,
                 }
               }
               if (cumDenomCount != 0) {
-                RF_vimpCLSptr[p][j][k] = result / (double) cumDenomCount;
+                if ( k > 1) {
+                  RF_vimpCLSptr[p][j][k] = M_E * result / (double) cumDenomCount;
+                }
+                else {
+                  RF_vimpCLSptr[p][j][k] = result / (double) cumDenomCount;
+                }
               }
               else {
                 RF_vimpCLSptr[p][j][k] = NA_REAL;
