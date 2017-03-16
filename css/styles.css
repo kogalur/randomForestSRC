@@ -1,0 +1,81 @@
+h1 {
+	text-align: center;
+}
+
+a {
+    text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+div#toc a {
+	text-decoration: none;
+}
+
+
+div#toc a:hover {
+	text-decoration: underline;
+}
+
+div#toc ul {
+	list-style-type: none;
+	margin-left: 1.5em;
+	padding-left: 0;
+}
+
+ul.references {
+	list-style-type: none;
+	margin-left: 0.5in;
+	padding-left: 0;
+	text-indent: -0.5in;
+}
+
+ul.references li {
+	margin: 1em 0;
+}
+
+.centerText {
+	text-align: center;
+}
+.scaled {
+    display: block;
+    width: 75%;
+    margin-left: auto;
+    margin-right: auto 
+}
+
+div.content {
+    width: 960px;
+    margin: auto;
+}
+
+figure.frame{
+    border: 1px solid #000000; /*outside border*/
+    padding: 12px; /* creates whitespace between border & content */
+}
+
+
+table {
+    width:75%;
+}
+table, th, td {
+    border: 1px solid black;
+    border-collapse: collapse;
+}
+th, td {
+    padding: 10px;
+    text-align: left;
+}
+th {
+    background-color: black;
+    color: white;
+}
+
+pre code {
+  background-color: #eee;
+  border: 1px solid #999;
+  display: block;
+  padding: 20px;
+}
