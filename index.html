@@ -51,7 +51,7 @@ MathJax.Hub.Config({ TeX: { equationNumbers: {autoNumber: "AMS"} } });
   <h1>A Parallel Package for a General Implemention of Breiman's Random Forests</h1>
 
   <p class="centerText">Udaya Kogalur & Hemant Ishwaran</p>
-  <p  class="centerText">Updated March 10, 2017</p>
+  <p  class="centerText">Updated July 1, 2017</p>
   
 <h2 id="Ztable_of_contents">Table of Contents</h2>
 <div id="toc"></div>
@@ -198,7 +198,7 @@ function GROW(
              $splitrule$, // Split rule and formula. 
              $mtry$,      // Size of the random subset of $\{1,...,P\}$.
              $xvar.wt$,   // Probabilities of selecting an x-var as an $mtry$ candidate. 
-             $nodesize$,  // Minimum node size.
+             $nodesize$,  // Average node size over the forest.
              $nodedepth$, // Maximum node depth.
              $nsplit$,    // Size of random split points for each $mtry$ candidate. 
          )
@@ -437,13 +437,16 @@ there are three conditions necessary for splitting a node:
 
 <ol>
   <li>The current node depth must be less than the maximum node depth allowed.</li>
-  <li>The current node size must be at least 2 times the minimum node size specified.</li>
+  <li>The current node size must be at least 2 times the node size specified.</li>
   <li>The current node must be impure.</li>
 </ol>
 
-Condition (2) assures us that if a split occurs, the average node size of
-any pair of daughters will be at least <code>nodesize</code>.  This includes
-terminal nodes and thus results in the specified forest-averaged node size.
+Condition (2) assures us that if a split occurs on a node with 2 times
+the node size specified, the average node size of the pair of daughters will be
+<code>nodesize</code>.   If one daughter is less than
+<code>nodesize</code>, the other daughter will be greater than
+<code>nodesize</code>.  But such terminal nodes will average to
+<code>nodesize</code> over the forest.
 
 
 <h3>Model Overview</h3>
@@ -2180,10 +2183,6 @@ There is no prediction error implemented in this scenario.
 
 <p w3-include-html="compilation.html"></p>
 
-<script>
-w3IncludeHTML();
-</script>
-
 <a id="Zsupplementary_code"></a><h2>Supplementary Code</h2>
 
 <p> Generalized code for simulating the spheres used in [<a
@@ -2200,13 +2199,19 @@ and elsewhere:
 <p> The primary harness used in [<a href="#Ypegasus">Benchmark of Hybrid
 Parallel Processinge</a>]:
 </p>
-<pre><code  class="R" w3-include-html="code/master.R"></code></pre>
+
+
+<pre ><code class="R"><p w3-include-html="code/master.R"></p></code></pre>
+
 
 <p> The replica harness used in
 [<a href="#Ypegasus">Benchmark of Hybrid Parallel Processinge</a>]:
 </p>
-<pre><code class="R" w3-include-html="code/slave.R" ></code></pre>
+<pre><code class="R" w3-include-html="code/slave.R"></code></pre>
 
+<script>
+w3IncludeHTML();
+</script>
 
 <h2>References</h2>
 
