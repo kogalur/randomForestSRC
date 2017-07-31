@@ -1,3 +1,7 @@
+body {
+    font-family: Helvetica;
+}
+
 h1 {
 	text-align: center;
 }
@@ -41,7 +45,7 @@ ul.references li {
 }
 .scaled {
     display: block;
-    width: 75%;
+    width: 50%;
     margin-left: auto;
     margin-right: auto 
 }
@@ -79,3 +83,5 @@ pre code {
   display: block;
   padding: 20px;
 }
+
+

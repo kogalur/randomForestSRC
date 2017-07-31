@@ -1,0 +1,2218 @@
+<!DOCTYPE html">
+<html lang="en-US">
+<head>
+<title>Random Forests for Survival, Regression and Classification</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+<!-- Primary stylesheet: -->
+<link rel="stylesheet" href="css/styles.css" type="text/css">
+
+<!-- Include jQuery: -->
+<script type="text/javascript" src="js/jquery-3.1.1.min.js"></script>
+
+<!-- Include MathJax: --> 
+<script type="text/javascript" src="https://cdn.mathjax.org/mathjax/latest/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+<script type="text/x-mathjax-config">
+MathJax.Hub.Config({
+tex2jax: {inlineMath: [['$','$'], ['\\(','\\)']]}
+});
+MathJax.Hub.Config({ TeX: { equationNumbers: {autoNumber: "AMS"} } });
+</script>
+
+<!-- Include jQuery Pseudocode: -->
+<script type="text/javascript" src="js/jquery-pseudocode.js"></script>
+<link rel="stylesheet" href="css/jquery-pseudocode.css" type="text/css"/>
+
+<!-- Include highlight: -->
+<link rel="stylesheet" href="css/highlight/ir-black.css">
+<script type="text/javascript" src="js/highlight.pack.js"></script>
+<script>hljs.initHighlightingOnLoad();</script>
+
+<!-- Include Table of Contents: -->
+<script type="text/javascript" src="js/toc.js"></script>
+
+<!-- Include HTML Content From Other Files: -->
+<!-- Currently NOT Working -->
+<script type="text/javascript" src="js/w3data.js"></script>
+
+</head>
+
+<body onload="generateTOC('toc_id', document.getElementById('toc'));">
+
+<div id="toc_id" class="content" >
+
+  <h1>Random Forests for Survival, Regression & Classification</h1>
+  <h1>A Parallel Package for a General Implemention of Breiman's Random Forests</h1>
+
+  <p class="centerText">Udaya Kogalur & Hemant Ishwaran</p>
+  <p  class="centerText">(Updated July 31, 2017)</p>
+  
+<h2 id="Ztable_of_contents">Table of Contents</h2>
+<div id="toc"></div>
+
+<a id="Zintroduction"a></a><h2>Introduction</h2>
+
+<p>Random Forests for Survival, Regression and Classification
+(RF-SRC) is an ensemble tree method for the analysis of data sets
+using a variety of models. As is well known, constructing ensembles
+from base learners such as trees can significantly improve learning
+performance. It was shown by [<a href="#Xbreiman2001">Breiman,
+2001</a>] that ensemble learning can be further improved by
+injecting randomization into the base learning process --- a method
+called Random Forests. RF-SRC extends Breiman's Random Forests
+method and provides a unified treatment of the methodology for
+models including right censored survival (single and multiple event
+competing risk), multivariate regression or classification, and
+mixed outcome (more than one continuous, discrete, and/or
+categorical outcome).  When one continuous or categorical outcome is
+present, the model reduces to univariate regression or
+classification respectively.  When no outcome is present, the model
+implements unsupervised learning.  The [<a href="#Yallowable_models">Five Models</a>]
+figure summarizes the situation.
+</p>
+
+<figure id="Yallowable_models" class="frame"> <img class="scaled" src="images/five_models.png" alt="Five Models Implemented in RF-SRC"/> <figcaption class="centerText">Five Models Implemented in RF-SRC </figcaption> </figure>
+
+<p>RF-SRC introduces new split rules for each model and gives the
+user the ability to define and code custom split
+rules. Deterministic or random splitting is available for all
+models. Variable predictiveness can be assessed using variable
+importance measures [<a href="#Xishwaran2007variable">Ishwaran et
+al., 2007</a>] for single as well as grouped variables. Variable
+selection is implemented using minimal depth [<a
+href="#Xishwaran2010high">Ishwaran et al., 2010</a>]. Missing data
+(for x-variables and y-outcomes) can be imputed on both training and
+test data. The package supports shared memory parallel processing on
+desktop computers via OpenMPl. The package also supports
+hybrid parallel processing via OpenMP & Open MPI on
+clusters that implement distributed memory. Execution time is
+reduced almost linearly with respect to the cores available.
+</p>
+
+<p> An overview of this document follows: In the [<a
+href="#Zpackage_overview">package overview</a>]
+we describe the Random Forests algorithm highlighting the recursivity
+that is at its core. The formulas, split rules, terminal node
+estimators, and prediction errors used in the five models are
+described briefly. In the section on [<a
+href="#Zvariable_selection">Variable Selection</a>] the primary approaches for variable
+predictiveness, variable selection and identifying interactions
+between variables are discussed. In the section on [<a href="#Zimputation">Imputation</a>]
+the approach to handle missingness is discussed. In the section on
+[<a href="#Zprediction">Prediction</a>] a brief discussion of training,
+restoration, test data, and pruning is given. In the section
+on [<a href="#Zhybrid_parallel_processing">Hybrid Parallel Processing</a>]
+we demonstrate that the package is capable of hybrid parallel
+computation in a non-trivial and massive way, and provide details
+of how this can be achieved. In the [<a href="#Ztheory_and_specifications">Theory and
+Specifications</a>] section we provide the mathematics for the split rules,
+terminal node estimators, and prediction error for each family.
+Finally, in the section on [<a
+href="#Zcompilation_and_execution">Compilation and Execution</a>] we
+provide instructions on how to aquire and compile the source code to
+enable OpenMP parallel processing.
+</p>  
+
+<a id="Zpackage_overview"></a><h2>Package Overview</h2>
+
+
+<p>Building a Random Forests model involves growing a binary tree [<a
+href="#Xbreiman2001">Breiman, 2001</a>] using user supplied training
+data and parameters. As is shown in the [<a href="#Yallowable_models">Five Models</a>]
+figure, data types must be real valued,
+discrete or categorical. The response can be right-censored time and
+censoring information, or any combination of real, discrete or
+categorical information. The response can also be absent entirely. The
+resulting forest contains many useful values which can be directly
+extracted by the user and parsed using additional functions. The basic
+algorithm for growing a forest is provided in this [<a
+href="#Yrfsrc_recursive">Recursive Algorithm</a>]. The process iterates over
+<code>ntree</code>, the number of trees that are to be grown. In
+practice, the iteration is actually parallelized and trees are grown
+concurrently, not iteratively. This is explained in more detail in
+the section on [<a href="#Zhybrid_parallel_processing">Hybrid Parallel Processing</a>]. The
+recursive nature of the algorithm is reflected in the repeated calls
+to split a node until conditions determine that a node is
+terminal. Another key aspect of the algorithm is the injection of
+randomization during model creation. Randomization reduces
+variation. Bootstrapping [<a href="#Xbreiman1996bagging">Breiman,
+1996</a>] at the root node reduces variation. Feature selection is
+also randomized with the use of the parameter <code>mtry</code>.  In
+the [<a href="#Yrfsrc_recursive">Recursive Algorithm</a>] <code>N</code> is defined as the
+number of records in the data set, and <code>P</code> as the number of
+x-variables in the data set. The parameter <code>mtry</code> is such
+that <code> 1 &#x003C;= mtry &#x003C;= P</code>. At each node, the
+algorithm selects <code> mtry </code> random x-variables according to
+a probability vector <code> xvar.wt</code>. The resulting subset of
+x-variables are examined for best splits according to a <code>
+splitrule</code>. The parameter <code>nsplit</code> also allows one to
+specify the number of random split points at which an x-variable is
+tested. The depth of trees can be controlled using the parameters
+<code>nodesize</code> and <code>nodedepth</code>. The parameter
+<code>nodesize </code> ensures that the average nodesize across the
+forest will be at least <code>nodesize</code>.  The parameter
+<code>nodedepth</code> forces the termination of splitting when the depth of a node
+reaches the value specified.  Node depth is zero-based from the root
+node onward. Reasonable models can be formed with the judicious
+selection of <code>mtry</code>, <code>nsplit</code>,
+<code>nodesize</code>, and <code>nodedepth </code> without exhaustive
+and deterministic splitting.
+</p>
+
+<figure id="Yrfsrc_recursive" class="frame">
+
+<script type="text/javascript">
+$(document).ready(function() {
+$('#Yrfsrc_recursive_pseudocode').pseudocode({
+keywords: {
+'if': '#000066',
+'for': '#000066',
+'each': '#000066',
+'recurse': '#000066',
+'until': '#000066',
+'function': '#000066'
+}
+});
+});
+</script>
+
+<pre id="Yrfsrc_recursive_pseudocode">
+// The result of this algorithm is a forest of binary trees, each of
+// which partitions the covariate space into hyper-cubes, yields 
+// ensemble statistics for each individual based on terminal node
+// membership across the forest, and allows model recovery for
+// prediction, proximity, importance and much more.
+
+function GROW(
+
+             data$,  // Data containing y-outcomes and x-variables.
+             $N$,     // Number of records in data.
+             $P$,     // Number of x-variables in data.
+             $ntree$, // Number of trees in the forest.
+             $splitrule$, // Split rule and formula. 
+             $mtry$,      // Size of the random subset of $\{1,...,P\}$.
+             $xvar.wt$,   // Probabilities of selecting an x-var as an $mtry$ candidate. 
+             $nodesize$,  // Average node size over the forest.
+             $nodedepth$, // Maximum node depth.
+             $nsplit$,    // Size of random split points for each $mtry$ candidate. 
+         )
+
+for ($i = 1$ to $ntree$)
+{
+    Bootstrap the $data$, creating an in-bag, and an out-of-bag
+    subset.  Make the root node, and tag all individuals as
+    members of this node.
+
+    recurse until node fails to split
+    {
+        if ((size of node $\ge 2 \times nodesize$) and
+        (depth of node $\ge nodedepth$) and (node is impure))
+        {
+            Select $mtry$ covariates according to weight vector $xvar.wt$.
+
+            for each $mtry$ covariate
+            {
+                Conduct deterministic or random splitting according to $nsplit$.
+                {
+                    Use the specified splitrule to determine the
+                    split statistic.  Save the covariate and split
+                    point when the split statistic is better than
+                    those proceeding it.
+                }
+            }
+            if a best split exists
+            {
+                Split the node at the best split point into a left
+                and right daughter.  Tag all individuals according
+                to their daughter membership.
+            }
+        }            
+        if the node was split 
+        {
+            recurse using the left daughter
+            recurse using the right daughter                     
+        }     
+    }
+    Save terminal node information.
+    for each out-of-bag individual
+    {
+        Update the ensemble using the terminal node statistics.
+    }
+    Update performance measures, proximity and importance statistics.
+}
+Normalize out-of-bag ensemble outputs.  Save forest topology, and
+terminal node membership to allow prediction.
+
+</pre>
+
+
+<figcaption class="centerText"><br>Recursive Grow Algorithm</figcaption> 
+
+</figure>
+
+<p>A simulated classification training data set is shown on the left
+of the figure labeled [<a href="#Yclass_single_decision">Tree Decision Boundary</a>]. The data set has two real valued
+features, $x_1$ and $x_2$.
+The response is a class label that can take on four values. The class sizes are equal. Each
+class covers a circular area. The circles touch at a single point &#8211; the origin. At this point, four data points
+with all four class labels exist. On the right of the figure is a tree produced from the training data
+with associated split points labeled. The tree was grown using bootstrapping [<a 
+href="#Xbreiman1996bagging">Breiman, 1996</a>].
+Bootstrapping results in well-defined subsets. The bootstrap, some of which are duplicates,
+are members of the in-bag (IB) subset. The remaining individuals define the out-of-bag (OOB)
+subset for the tree. See [<a 
+href="#Xbreiman1996bagging">Breiman, 1996</a>] for a detailed description of these concepts. Only the
+bootstrap is used to train the model and to define terminal node statistics. In this model,
+the terminal node statistic is the resulting frequency distribution of the class labels in a terminal node. This
+distribution is shown under each terminal node in the right of the figure. The decision boundary on $x_1$
+and $x_2$ formed by the tree is superimposed on the data space along with the six terminal node
+labels.
+</p>
+
+<figure id="Yclass_single_decision" class="frame"> <img class="scaled"
+src="images/class_single_decision.png" alt="Tree Decision Boundary"/>
+<figcaption class="centerText"><br>Tree Decision Boundary</figcaption> </figure>
+
+<p>The OOB subset for a tree does not play a role in determining its topology. Each individual in the OOB
+subset for a tree is passive and assigned a unique terminal node membership and terminal node
+statistic. An OOB ensemble statistic for each individual is formed by combining the terminal
+node statistics from all trees in which an individual is an OOB member. The class with the
+maximum frequency in the OOB ensemble statistic serves as the predicted class label for the
+member.  In the figure labeled [<a
+href="#Yclass_forest_decision">Forest Decision Boundary</a>] a
+single test data point centered at the origin is sent into the previously grown forest for
+prediction. Each tree provides a unique terminal node membership and statistic for this test
+individual. The resulting forest ensemble statistic yields a class with the maximum frequency as
+the predicted class label for this test data point. We note that the probability of all classes are
+roughly equal. This is because the training data set has one case in each class at the origin. The
+maximum class frequency for this example is yellow, though we can ascribe this to Monte Carlo
+effects. When the x-variable space is densely covered with test data points, the predicted values
+for the data space reveal the forest decision boundary. The boundary
+is also shown in the lower half of the figure.
+</p>
+
+<figure id="Yclass_forest_decision" class="frame"> <img class="scaled"
+src="images/class_forest_decision.png" alt="Forest Decision Boundary"/>
+<figcaption class="centerText"><br>Forest Decision Boundary</figcaption> </figure>
+
+<a id="Zsplitting_and_node_size"a></a><h3>Splitting and Node Size</h3>
+
+<p> It is important to understand how splitting and node size affect the topology of a tree. To aid in this,
+some notation is introduced first. Assume $h$ is the node of a tree, and that the task is to split $h$ into
+two daughter nodes. Assume there are <code>n</code> cases in the node $h$. Some of these may be replicates if
+bootstrapping is in effect. At the root node, <code>n = N</code>. Let
+there be <code>P</code> x-variables
+in the data set. These
+can be real valued, discrete, or categorical. Let ${\bf X}_i$ be the
+<code>P</code>-dimensional
+feature for a case $i$ such
+that  ${\bf X}_i = (X_{i1}, \ldots, X_{i {\tt P}})$. Let $x$ be
+the observed value for the $p^{th}$ feature in the data set, where
+$p \in \{1,\ldots, {\tt P}\}$.
+</p>
+
+<a id="Zreal_versus_categorical_splitting"></a><h4>Real versus categorical splitting</h4>
+<p>
+If $x$ is continuous or discrete, a proposed split of $h$ on $x$ is
+always of the form $x \le c$ and $x > c$.  Such a split defines left
+and right daughter membership according to an individual's value
+$X_{ip}$.  A deterministic split on $x$ requires considering all
+unique values of $x$ in the node $h$.
+</p>
+<p>
+If $x$ is categorical, denoting the split is more complex.  For
+computational coherence, categorical x-variables (and y-outcomes for that matter)
+are treated as factors with an immutable 1:1 mapping of categories
+to integers. Thus, an x-variable with $f$ categories (or levels) is
+uniquely mapped to $f$ integers $\{1, \ldots, f\}$.  A split on a
+factor with $f$ levels in the node $h$ requires dividing the levels
+into two complementary subsets.  Left and right daughter membership is
+determined according to an individual's level $X_{ip}$ and to which of
+the two complementary subsets it belongs.  A deterministic split on a
+factor requires considering all possible complementary pairing of
+levels.  For example, a factor with six levels in a node has
+\[ C(6, 1) + C(6, 2) + C(6, 3) \] possible splits.  These
+possibilities can be considered to be composed of three groups.  The
+first group has one level going left, and five levels going right.
+There are $C(6, 1)$ such splits.  The second group has two levels
+going left and four levels going right.  There are $C(6, 2)$ such
+splits.  The third group has three levels going left and three levels
+going right.  There are $C(6, 3)$ such splits.  These three groups
+comprise the cardinal group count.  In general, there are
+$floor(f/2)$ cardinal groups. The total number
+of possible splits (complementary pairings) is $2^{f-1} - 1 $.
+<p>
+Deterministic splitting on factors becomes problematic because of
+the large number of permutations as the number of levels rise.  There
+is a practical limit on the number of levels a factor can have, within
+our implementation.  It is imposed by
+<code>UNIT_MAX</code> in <code>limits.h</code> on the operating system in question.  A
+typical value for this is $ 2^{32} - 1 $ on most machines.  Overrides are in
+place to avoid deterministic splitting on large factors.  The nature
+of the override is dependent on whether the user has specified
+<code>splitrule = "random"</code> and/or <code>nsplit > 0</code>.  In general, we
+try to limit the number of split attempts to be less than the node
+size.  By definition, this is always case when considering continuous
+x-variables. That is, if a
+node has $n'$ bootstrap cases, there will be at most $n'$ values on which to
+split.  To
+encourage good splits, the algorithm attempts to emulate the same action on factors.  In some
+cases this will result in deterministic splitting.  In others, it will
+involve sampling from the $2^{f-1} - 1$ complementary pairings.
+Whether factor or continuous x-variable, the
+sampling is never greater than the nodesize regardless of what
+value of <code>nsplit</code> has been set.
+</p>
+
+<p>
+Formulas for splits on continuous x-variables are more easily conveyed
+to the reader because left and right daughter splits depend
+on a simple inequality.  For this reason, the split rules described in
+the [<a href="#Ztheory_and_specifications">Theory and Specifications</a>] section on discrete and continuous
+x-variables. However, the methodology is exactly applicable to factor
+x-variables.  In addition, for clarity the formulas described are for
+splits at the root node, where $n = N$.
+</p>
+
+<h4>Deterministic versus random splitting</h4>
+
+<p>
+In contrast to deterministic splitting, a random version of any split rule
+may be invoked using the parameter <code>nsplit</code>.  When
+<code>nsplit = 0</code>, deterministic splitting occurs and all possible split
+points for each of the <code>mtry</code> variables are considered. If <code>nsplit</code> is set to a
+non-zero positive integer, then a maximum of <code>nsplit</code> split points are
+randomly chosen for each of the <code>mtry</code> variables within a node.  The 
+split rule is applied to the randomly chosen split points, and the node is split
+on that x-variable and split value yielding the best split
+statistic as measured by the split rule. Pure random splitting can be invoked by setting
+<code>splitrule="random"</code>.  In this case, for each node, a variable is randomly
+selected and the node is split using one randomly chosen split point.  
+See [<a href="#Xcutler2001pert">Cutler and Zhao, 2001</a>] and [<a
+href="#Xlin2006random">Lin and Jeon, 2006</a>] for more details.
+</p>
+
+<p>
+Trees tend to favor splits on continuous variables
+[<a href="#Xloh1997split">Loh and Shih, 1997</a>], so it is good practice to use the <code>nsplit</code>
+option when the data contains a mix of continuous and discrete
+variables.  Using a reasonably small value mitigates bias and may not
+compromise accuracy. The value of <code>nsplit</code> has a significant impact on the time
+taken to grow a forest.  When non-random splitting is in effect,
+i.e. <code>nsplit = 0</code>,
+iterating over each split point can be
+CPU intensive.  However, when <code>nsplit > 0</code>, or when pure random
+splitting is in effect, CPU times are drastically reduced.
+</p>
+
+
+
+<a id="Znode_depth_and_node_size"></a><h4>Node depth and node size</h4>
+
+Node size and node depth are the most explicit means of controlling
+the growth of a tree.  The parameter <code>nodedepth</code> is defined
+as the number of connections between the node and the root node.  It
+is zero-based, thus defining the root node as having depth zero.
+Setting <code>nodedepth</code> limits the maximum depth to which a
+tree can be grown.  The default behaviour is to ignore this parameter
+and not limit the depth of a tree.  In contrast, <code>nodesize</code>
+is always respected and is crucial to achieving a good model.  When
+<code>nodesize</code> is set too large, the forest will be under-grow
+and model accuracy will be compromised.  When it is set too small, the
+potential to split on noisy x-variables increases, the forest is
+over-grown and model accuracy can actually deteriorate past a certain
+threshold value for <code>nodesize</code>.  We define
+<code>nodesize</code> as the average number of bootstrap cases that
+will be found in a terminal node in a tree in the forest.  Splitting
+can terminate well before this condition is reached if node purity is
+detected before attempting to split a node. From the [<a
+href="#Yrfsrc_recursive">Recursive Algorithm</a>] it can be seen that
+there are three conditions necessary for splitting a node:
+
+<ol>
+  <li>The current node depth must be less than the maximum node depth allowed.</li>
+  <li>The current node size must be at least 2 times the node size specified.</li>
+  <li>The current node must be impure.</li>
+</ol>
+
+Condition (2) assures us that if a split occurs on a node with 2 times
+the node size specified, the average node size of the pair of daughters will be
+<code>nodesize</code>.   If one daughter is less than
+<code>nodesize</code>, the other daughter will be greater than
+<code>nodesize</code>.  But such terminal nodes will average to
+<code>nodesize</code> over the forest.
+
+
+<h3>Model Overview</h3>
+
+<p>This section is intended as
+an overview to orient the reader to more high-level package details
+concerning the [<a href="#Yallowable_models">Five Models</a>] produced
+by the package.  Each model requires a slightly different formula
+specification, and uses model-specific split rules.  This results in model-specific terminal node statistics,
+ensembles, and a model-specific prediction error
+algorithm. For completeness and rigour, the
+mathematical details of all models are given in the [<a
+href="#Ztheory_and_specifications">Theory and Specifications</a>] section.  Survival, Competing Risk, Regression,
+Classification, Multivariate and Unsupervised split rules are
+described, along with the terminal node estimators, and the prediction error for these
+families.  In addition, a short code example for each model is given.
+</p>
+
+<p>In the [<a href="#Ycall_models">Formula Specification</a>] table,
+example grow calls for the five models are listed.  The data sets used in
+the two Survival function calls are available in
+<code>randomForestSRC</code>. The data sets used in the remaining
+function calls are available from the base R installation. Survival
+settings require a time and censoring variable which need to be
+identified in the formula as the response using the standard
+<code>Surv</code> formula specification.  Regression and
+Classification settings emulate the formula specifications of the
+<code>randomForest</code> package.  In the Multivariate and
+Unsupervised case, there are variants for the formula, depending on
+how many y-outcomes are to be specified as the response.  These
+variants are given in more detail in this section.
+</p>
+
+<table id="Ycall_models" align="center">
+  <tr>
+    <th>Family</th>
+    <th>Example Grow Call with Formula Specification</th>
+  </tr>
+  <tr">
+    <td>Survival</td>
+    <td><code>rfsrc(Surv(time, status) ~ ., data=veteran)</code></td>
+  </tr>
+  <tr>
+    <td>Competing Risk</td>
+    <td><code>rfsrc(Surv(time, status) ~ ., data=wihs)</code></td>
+  </tr>
+  <tr style="background-color:#e6e6e6">
+    <td>Regression</td>
+    <td><code>rfsrc(Ozone ~., data=airquality)</code></td>
+  </tr>
+  <tr style="background-color:#e6e6e6">
+    <td>Classification</td>
+    <td><code>rfsrc(Species ~., data=iris)</code></td>
+  </tr>
+  <tr style="background-color:#cccccc">
+    <td>Multivariate</td>
+    <td><code>rfsrc(Multivar(mpg, cyl) ~., data=mtcars)</code></td>
+  </tr>
+  <tr style="background-color:#cccccc">
+    <td>Unsupervised</td>
+    <td><code>rfsrc(Unsupervised() ~., data=mtcars)</code></td>
+  </tr>
+</table>
+
+<p>In the [<a href="#Ysplit_models">Split Rules</a>] table, the rule in <i>italics</i> denotes the default
+split rule for each model.  The default split rule is
+applied when the user does not specify a split rule.  The package uses
+the data set and formula specification to determine the model.
+Survival and Competing Risk both have two split
+rules.  Regression has three flavours of split rules based on mean-squared
+error.  Classification also has three flavours of split rules  based on the
+Gini index.  The Multivariate and Unsupervised split rules are a composite rule
+based on Regression and Classification.  Each component of the composite is normalized
+so that the magnitude of any one y-outcome does not influence the
+statistic.  See the [<a
+href="#Ztheory_and_specifications">Theory and Specifications</a>] section for more details on the
+mathematics of the split for each family.
+</p>
+
+<table id="Ysplit_models" align="center"> 
+  <tr>
+    <th>Family</th>
+    <th>Split Rules</th>
+  </tr>
+  
+  <tr>
+    <td rowspan="2">Survival</td>
+    <td><i>log-rank</i> \eqref{eqn:survival.logrank} </td>
+  </tr>
+  <tr>
+    <td>log-rank score \eqref{eqn:survival.logrank.score} </td>
+  </tr>
+  
+  <tr>
+    <td rowspan="2">Competing Risk</td>
+    <td><i>log-rank modified weighted</i> \eqref{eqn:cr.modified.logrank} </td>
+  </tr>
+
+  <tr>
+    <td>log-rank \eqref{eqn:cr.logrank} </td>
+  </tr>
+
+  <tr style="background-color:#e6e6e6">
+    <td rowspan="3">Regression</td>
+    <td><i>mean-squared error weighted</i> \eqref{eqn:regression.weighted}</td>
+  </tr>
+
+  <tr style="background-color:#e6e6e6">
+    <td>mean-squared error unweighted \eqref{eqn:regression.unweighted}</td>
+  </tr>
+
+  <tr style="background-color:#e6e6e6">
+    <td>mean-squared error heavy weighted \eqref{eqn:regression.heavy.weighted}</td>
+  </tr>
+
+
+  <tr style="background-color:#e6e6e6">
+    <td rowspan="3">Classification</td>
+    <td><i>Gini index weighted</i> \eqref{eqn:classification.weighted}</td>
+  </tr>
+
+  <tr style="background-color:#e6e6e6">
+    <td>Gini index unweighted \eqref{eqn:classification.unweighted}</td>
+  </tr>
+
+  <tr style="background-color:#e6e6e6">
+    <td>Gini index heavy weighted \eqref{eqn:classification.heavy.weighted}</td>
+  </tr>
+
+  
+  <tr style="background-color:#cccccc">
+    <td rowspan="2">Multivariate</td>
+    <td>Composite mean-squared error</td>
+  </tr>
+  
+  <tr style="background-color:#cccccc">
+    <td>Composite Gini index</td>
+  </tr>
+
+  <tr style="background-color:#cccccc">
+    <td rowspan="2">Unsupervised</td>
+    <td>Composite mean-squared error</td>
+  </tr>
+  
+  <tr style="background-color:#cccccc">
+    <td>Composite Gini index</td>
+  </tr>
+  
+</table>
+
+
+<p>All models also allow the user to define a custom split rule
+statistic.  Some basic C-programming skills are required.  Examples
+for all the families reside in the C source code directory of
+the package in the file <code>splitCustom.c</code>.  Note that
+recompiling and re-installing the package is necessary after modifying
+the source code.
+</p>
+
+<p> In the table [<a href="#Yterminal_models">Terminal Node
+Statistics</a>] (TNS), 
+the terminal node estimators produced by the five models are summarized.  For Survival, the TNS is
+the Kaplan-Meier estimator at the time points of interest specified by
+the user, or as determined by the package if not specified.  
+Competing Risk has two TNS's:
+the cause-specific cumulative hazard estimate, and the cause-specific
+cumulative incidence function.  Regression and Classification TNS's are
+the mean and class proportions respectively. For a Multivariate model,
+there are TNS's for each response, whether it is real valued, discrete or
+categorical.  The Unsupervised model has no TNS, as the analysis is
+responseless.  See the [<a
+href="#Ztheory_and_specifications">Theory and Specifications</a>]
+section for more details on the
+mathematics of the TNS for each family.</p>
+
+<table id="Yterminal_models" align="center"> 
+  <tr>
+    <th>Family</th>
+    <th>Terminal Node Statistics</th>
+  </tr>
+  
+  <tr>
+    <td rowspan="1">Survival</td>
+    <td>Kaplan-Meier \eqref{eqn:kaplan.meier} </td>
+  </tr>
+  
+  <tr>
+    <td rowspan="2">Competing Risk</td>
+    <td>cause-specific cumulative hazard \eqref{eqn:cause.specific.chf} </td>
+  </tr>
+
+  <tr>
+    <td>cause-specific incidence \eqref{eqn:cause.specific.cif} </td>
+  </tr>
+
+  <tr style="background-color:#e6e6e6">
+    <td rowspan="1">Regression</td>
+    <td>mean \eqref{eqn:mean}</td>
+  </tr>
+
+  <tr style="background-color:#e6e6e6">
+    <td rowspan="1">Classification</td>
+    <td>class proportions \eqref{eqn:class.proportions}</td>
+  </tr>
+
+  <tr style="background-color:#cccccc">
+    <td rowspan="2">Multivariate</td>
+    <td>mean per response \eqref{eqn:mean}</td>
+  </tr>
+
+  <tr style="background-color:#cccccc">
+    <td>class proportions per response \eqref{eqn:class.proportions}</td>
+  </tr>
+
+  <tr style="background-color:#cccccc">
+    <td rowspan="1">Unsupervised</td>
+    <td>none</td>
+  </tr>
+
+</table>
+
+
+<p> In the table [<a href="#Yerror_models">Prediction Error</a>],
+the error rate calculation for the five
+models is summarized.  For Survival, it is based on Harrell's concordance-index using the
+cumulative hazard estimate as the values for comparison.  For
+Competing Risk, Harrell's concordance-index uses the cause-specific
+cumulative-hazard estimate.  For Regression, performance is based on
+mean-squared error.  For classification, performance is based on the
+conditional and over-all misclassification rate.  For the Multivariate
+and Unsupervised case, there is no prediction error implemented.
+See the [<a
+href="#Ztheory_and_specifications">Theory and Specifications</a>]
+section for more details on the
+mathematics of the prediction error for each model.
+</p>
+
+<table id="Ysplit_models" align="center"> 
+  <tr>
+    <th>Family</th>
+    <th>Prediction Error</th>
+  </tr>
+  
+  <tr>
+    <td rowspan="1">Survival</td>
+    <td>Harrell's C-index using cum-haz \eqref{eqn:survival.mortality} and \eqref{eqn:concordance}  </td>
+  </tr>
+    
+  <tr>
+    <td rowspan="1">Competing Risk</td>
+    <td>Harrell's C-index using cause-specific cum-haz \eqref{eqn:cause.specific.mortality} and
+    \eqref{eqn:concordance}
+    </td>
+  </tr>
+    
+  <tr style="background-color:#e6e6e6">
+    <td rowspan="1">Regression</td>
+    <td>mean-squared error \eqref{eqn:mean.squared.error}</td>
+  </tr>
+    
+  <tr style="background-color:#e6e6e6">
+    <td rowspan="1">Classification</td>
+    <td>conditional and over-all misclassification rate 
+      \eqref{eqn:misclassification.rate} and
+    \eqref{eqn:conditional.misclassification.rate}
+    </td>
+  </tr>
+    
+  <tr style="background-color:#cccccc">
+    <td rowspan="1">Multivariate</td>
+    <td>none</td>
+  </tr>
+  
+  <tr style="background-color:#cccccc">
+    <td rowspan="1">Unsupervised</td>
+    <td>none</td>
+  </tr>
+</table>
+
+<p>
+We conclude this section by giving examples of a mixed multivariate
+model, and an unsupervised model.  The data set 
+<code>mtcars</code>, available in the base distribution of R is
+used.  The usual outcome for the data set is <code>mpg</code> (miles per
+gallon).  First, we modify the data set to force <code>carb</code> (number
+of carburetors) and <code>cyl</code> (number of cylinders) to be categorical
+values.  We produce a mixed model where all three of these variable
+are considered as outcomes.  The code is given below:
+</p>
+
+<pre><code class="R">
+# Multivariate mixed outcome: Motor Trend Car Road Tests.  Miles per
+# gallon is the usual response, but the data set is modified to
+# introduce categorical and ordinal variables.
+mtcars.mod <- mtcars
+mtcars.mod$cyl <- factor(mtcars.mod$cyl)
+mtcars.mod$carb <- factor(mtcars.mod$carb, ordered=TRUE)
+mtcars.mix <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.mod)
+
+</code></pre>
+
+
+<p>
+We also show various ways to implement an unsupervised model in the code
+below.  It is possible to choose one, or more pseudo-responses at each
+split via the formula specification.  
+</p>
+
+<pre><code class="R">
+# Motor Trend Car Road Tests.  Miles per gallon is the usual response,
+# but it is ignored below and the data set is taken to be responseless.
+mtcars.unspv <- rfsrc(Unsupervised() ~., data = mtcars)
+# The above is the equivalent of:
+mtcars.unspv <- rfsrc(Unsupervised(1) ~., data = mtcars)
+# Alternatively and equivalently:
+mtcars.unspv <- rfsrc(data = mtcars)
+# Choose two pseudo responses:
+mtcars.unspv <- rfsrc(Unsupervised(2) ~., data = mtcars)
+
+</code></pre>
+
+
+<a id="Zvariable_selection"></a><h2>Variable Selection</h2>
+The package has two primary approaches for variable selection and
+identifying interactions between variables.  The function
+<code>max.subtree()</code> extracts maximal subtree information from a
+forest [<a href="#Xishwaran2010high">Ishwaran et al., 2010</a>],
+[<a href="#Xishwaran2011random">Ishwaran et al., 2011</a>].  The
+function <code>vimp()</code> extracts variable importance information from a
+forest [<a href="#Xishwaran2007variable">Ishwaran et
+al., 2007</a>].
+
+
+<h3>Minimal Depth and Maximal Subtrees</h3>
+
+<p>
+Minimal depth is a dimensionless order statistic that measures the
+predictiveness of a variable in a tree. It can be used to select
+variables in high-dimensional problems.  It assesses the predictiveness of a variable
+by a depth calculation relative to the root node of a tree. 
+A maximal subtree for an x-variable $x$ is the largest subtree
+whose root node splits on $x$ (i.e. all the parent nodes of
+$x's$ maximal subtree have nodes that split on variables other
+than $x$).  There can be more than one maximal subtree for a
+variable. A maximal subtree will not exist if there are no splits
+on the variable.  The shortest
+distance from the root of the tree to the root of the closest
+maximal subtree of $x$ is the minimal depth of $x$. A smaller
+value corresponds to a more predictive variable. The mean of the minimal depth distribution is used as the
+threshold value for deciding whether an x-variable's minimal depth value
+is small enough for the x-variable to be classified as strong. An
+important fact of minimal depth is that it does not depend on a
+comparison of error rates, as does variable importance (described
+later), but is only dependent on the topology of the forest.
+See [<a href="#Xishwaran2010high">Ishwaran et al., 2010</a>] and
+[<a href="#Xishwaran2011random">Ishwaran et al., 2011</a>] for more details. 
+The maximal subtrees for $x_1$ and the tree shown in the figure
+labeled [<a href="#Yclass_single_decision">Tree Decision Boundary</a>] are
+highlighted in blue in the figure labeled [<a 
+href="#Ymaximal_subtrees">Maximal Subtrees for $x_1$</a>].  There are exactly two of them.
+The minimal depth for $x_1$ is equal to one.  
+</p>
+
+<figure id="Ymaximal_subtrees" class="frame"> <img class="scaled"
+src="images/maximal_subtrees.png" alt="Maximal Subtrees for x_1"/>
+<figcaption class="centerText"><br>Maximal Subtrees for $x_1$</figcaption> </figure>
+
+<p>Examples of minimal depth and maximal subtrees follow: </p>
+
+<pre><code class="R">
+# Survival Analysis with first and second order depths for all variables.
+data(veteran, package = "randomForestSRC")
+v.obj <- rfsrc(Surv(time, status) ~ . , data = veteran)
+v.max <- max.subtree(v.obj)
+
+# First and second order depths.
+print(round(v.max$order, 3))
+
+# The minimal depth is the first order depth.
+print(round(v.max$order[, 1], 3))
+
+# Strong variables have minimal depth less that or equal to the threshold.
+print(v.max$threshold)
+
+# This corresponds to the top set of variables above the threshold.
+print(v.max$topvars)
+
+</code></pre>
+
+
+<h3>Variable Importance</h3>
+<p>
+The function <code>vimp()</code> extracts variable importance (VIMP) information
+[<a href="#Xishwaran2007variable">Ishwaran et
+al., 2007</a>] from a forest for a single x-variable
+or group of x-variables. By default, VIMP is calculated for the
+training data, but the user can
+specify new test data for the VIMP calculation using the 
+parameter <code>newdata</code>.
+</p>
+<p>
+Action on the training data is as follows: The parameter 
+<code>importance</code> allows four distinct ways to calculate VIMP.  The
+default value of <code>importance="permute"</code> returns the Breiman-Cutler permutation VIMP as
+described in [<a href="#Xbreiman2001">Breiman, 2001</a>].  For each tree, the prediction error on
+the OOB data is recorded.  Then for a given x-variable
+$x$, OOB cases are randomly permuted in $x$ and the
+prediction error is recorded.  The VIMP for $x$ for a tree is defined as the
+difference between the perturbed and unperturbed error rate for that
+tree.  This is then averaged
+over all trees.  If <code>importance="random"</code> is used, then OOB
+cases are assigned a daughter node randomly
+whenever a split on $x$ is encountered in the tree.  Again, the VIMP for $x$ is defined as the
+difference between the perturbed and unperturbed error rate averaged
+over all trees.   If the options <code>permute.ensemble</code> or
+<code>random.ensemble</code> are used, then VIMP is calculated by comparing
+the error rate for the perturbed OOB forest ensemble to the
+unperturbed OOB forest ensemble.  Unlike the Breiman-Cutler
+measure, these last two VIMP ensembles do not measure the tree average
+effect of perturbing
+$x$, but rather the overall forest effect.  See [<a href="#Xishwaran2008random">Ishwaran et
+al., 2008</a>] for further details.
+</p>
+<p>
+Joint VIMP is requested using <code>joint=TRUE</code>.  The joint VIMP is the
+importance for a group of variables when the group is perturbed
+simultaneously.
+</p>
+<p>
+VIMP is completely dependent on prediction error.  Although tempting, it is incorrect to
+assume VIMP measures the change in prediction error for a forest grown with and without
+a variable. For example, if two variables are highly correlated and both predictive,
+each can have large VIMP values. Removing one variable and regrowing
+the forest may affect the VIMP for the other variable (its value might get larger),
+but prediction error will likely remain unchanged. VIMP measures the change in
+prediction error on a fresh test case if $x$ were not available, given that the original
+forest was grown using $x$. In practice, this often equals change in prediction
+error for a forest grown with and without $x$, but conceptually the two quantities
+are different.  Examples follow:
+</p>
+
+<pre><code class="R">
+# Classification example showcasing different vimp measures.
+iris.obj <- rfsrc(Species ~ ., data = iris)
+
+# Breiman-Cutler permutation vimp.
+print(vimp(iris.obj)$importance)
+
+# Breiman-Cutler random daughter vimp.
+print(vimp(iris.obj, importance = "random")$importance)
+
+# Breiman-Cutler joint permutation vimp.
+print(vimp(iris.obj, joint = TRUE)$importance)
+
+# Breiman-Cuter paired vimp.
+print(vimp(iris.obj, c("Petal.Length", "Petal.Width"), joint=TRUE)$importance)
+print(vimp(iris.obj, c("Sepal.Length", "Petal.Width"), joint=TRUE)$importance)
+
+</code></pre>
+
+<a id="Zimputation"></a><h2>Imputation</h2>
+
+<p>
+To handle data sets with missing data, the package provides
+two interfaces to impute missing values.  If a predictive model is desired,
+then the user can create a forest  with a call to <code>rfsrc()</code>.  If all
+that is desired is a data set containing imputed values, without the
+need for a model, then a call to <code>impute()</code> will suffice.  If no
+formula is specified, unsupervised splitting is
+implemented. The number of impute iterations is specified via the parameter <code>nimpute</code>.  
+The number of impute iterations
+corresponds to the number of forests grown.
+When a predictive model is desired, only the final forest is retained.
+Note that two impute iterations were found to be the minimum necessary to produce
+reasonable imputed values.  
+</p>
+
+<p> On the first impute iteration, imputation is conducted in each internal
+node as the tree is grown.  This in-node imputation is used to determine left
+and right daughter membership during the grow process.  Note that
+imputed values are never used in split statistics on the first impute
+iteration.  On the second, and subsequent
+impute iterations, in-node imputation is absent.  Instead, the forest
+is grow as if there was no missing data, with missingness holes in the data
+plugged by the imputed values determined by the previous impute
+iteration.  Imputation on the second and subsequent iteration only
+occurs in the terminal nodes, after the forest has been grown.
+The default setting for <code>rfsrc()</code> is
+<code>nimpute = 1</code>.  The default setting for
+<code>impute()</code> is <code>nimpute = 2</code>.
+</p>
+
+<p>
+Once a model has been created using <code>rfsrc()</code>, test data with or
+without missingness can be used with <code>predict.rfsrc()</code>.  Values in
+the test data set are imputed based on the non-missing values in the training data
+set. Internally, 
+both <code>rfsrc()</code> and <code>impute.rfsrc()</code> use variations of
+the missing data algorithm in [<a href="#Xishwaran2008random">Ishwaran et
+al., 2008</a>]. Setting
+<code>na.action = "na.impute"</code>
+imputes missing data (both x-variables and y-outcomes),
+while <code>na.action = "na.omit"</code> eliminates records with
+missingness and then grows the forest.  Examples follow:
+</p>
+
+<pre><code class="R">
+# Examples of survival imputation.
+
+# Create a model via imputation.
+data(pbc, package = "randomForestSRC")
+pbc.d <- rfsrc(Surv(days, status) ~ ., data = pbc)
+
+# Impute, using unsupervised splitting.
+pbc2.d <- impute.rfsrc(data = pbc, nodesize = 1, nsplit = 10)
+
+</code></pre>
+
+
+
+
+
+<a id="Zprediction"></a><h2>Prediction</h2>
+
+<p>
+Predicted values are obtained by dropping test data down the forest
+after the model has been created.  The overall error rate is
+returned if the test data contains a y-outcome.
+If no test data is provided, then the original training data is used
+and the code reverts to restoring the forest, associated terminal
+node statistics and ensembles.  This is useful in that it gives the user the
+ability to extract outputs from the forest that were not asked for
+during model creation. The figure [<a href="#Yclass_forest_decision">Forest
+Decision Boundary</a>] is an example of how prediction can be used to view the forest decision boundary imposed on
+the x-variables. Examples of traning, testing and restoration follow:
+</p>
+
+<p>Training/testing scenario:  </p>
+
+<pre><code class="R">
+data(veteran, package = "randomForestSRC")
+# Sample the data and create a training subset.
+train <- sample(1:nrow(veteran), round(nrow(veteran) * 0.80))
+# Train the model.
+veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ], ntree = 100)
+# Test the model.
+veteran.pred <- predict(veteran.grow, veteran[-train , ])
+# Compare the results.
+print(veteran.grow)
+print(veteran.pred)
+
+</code></pre>
+
+<p> Restoration scenario: </p>
+
+<pre><code class="R">
+# Train the model.
+airq.obj <- rfsrc(Ozone ~ ., data = airquality)
+# Restore the model and note identical results.
+predict(airq.obj)
+# Note that the two results are identical.
+print(airq.obj)
+# Retrieve an output that was not asked for in the original call.
+prox <- predict(airq.obj, proximity = TRUE)$proximity
+
+</code></pre>
+
+
+<h3>outcome = "test"</h3>
+<p>If <code>outcome = "test"</code>, the training data is not used to calculate the
+terminal nodes statistics.  Instead, the TNS are recalculated
+using the y-outcomes from the test set.  This yields a modified
+predictor in which the invariant topology of the forest is based on the
+training data, but where the ensembles and predicted
+values are based on the test data.  The
+terminal node statistics,
+ensembles and error rates are all calculated by bootstrapping the test
+data and using OOB individuals to ensure unbiased estimates. 
+</p>
+
+<p>
+Consider the the forest depicted previously in [<a href="#Yclass_forest_decision">Forest
+Decision Boundary</a>] and the associated forest ensemble for the single test
+point at the origin.  This original training data and ensemble are shown
+in the top left and top right of [<a
+href="#Yclass_outcome_test">outcome = "test"</a>].  New test data, formed by reducing
+the radii of the blue and yellow classes is shown in the
+bottom left of the figure.  The origin
+contains only two data points, namely one red and one green point.
+Using the new test data to populate terminal nodes, results in an ensemble that is missing the blue and yellow classes.
+This ensemble is shown in the bottom right of the figure. 
+</p>
+
+<figure id="Youtcome_equals_test" class="frame"> <img
+class="scaled" src="images/outcome_equals_test.png" alt="outcome =
+test"/> <figcaption class="centerText"><br>outcome =
+"test"</figcaption></figure>
+
+<p>
+The function for creating the spheres is
+given in the section [<a href="#Zsupplementary_code">Supplementary Code</a>], and the higher level code used to produce the [<a
+href="#Yclass_outcome_test">outcome = "test"</a>] figure follows: 
+</p>
+
+<pre><code class="R">
+## Four circular regions with equal class counts, touching at the origin.
+## We suppress the X3 dimension in order to get a circle from a sphere.
+circles <- get.spheres()[1, 2, 4]
+
+## Grow the forest.
+grow.result <- rfsrc(outcome ~ ., data = circles, importance = "none")
+
+## Get a new test data set by restricting yellow and blue at the origin.
+test.circles <- get.spheres(class.radius=c(1.0, 0.75, 1.0, 0.75))[1, 2, 4]
+
+## Predict using the training data for terminal node statistics.
+outcome.train <- predict(grow.result, newdata=test.circles)
+
+## The origin (first row) will have roughly equal classes.
+print(outcome.train$predicted[1, ])
+
+## Predict using the test data for terminal node statistics.
+outcome.train <- predict(grow.result, newdata=test.circles, outcome="test")
+
+## The origin (first row) will only have red and yellow classes.
+print(outcome.train$predicted[1, ])
+
+</code></pre>
+
+
+<a id="Zpruning"></a><h3>Pruning</h3>
+<p>
+There are a number of ways to limit the growth of trees in a model.
+The most obvious are the parameters <code>nodedepth</code> and
+<code>nodesize</code> discussed in the section [<a
+href="#Znode_depth_and_node_size">Node Depth and Node Size</a>.
+Decreasing <code>nodedepth</code> or increasing
+<code>nodesize</code> will result in shallower trees.  After a forest has been
+created, the user is 
+able to prune trees back using the
+parameter <code>ptn.count</code>.  This parameter represents the
+pseudo-terminal node count.  It allows us to specify the desired number of
+pseudo-terminal nodes after a tree has been grown.  This is not
+useful for Random Forests analysis per se, but it can be useful in
+other applications.  Trees are flexible and adaptive nonparametric
+estimators and, as such, they represent ideal weak learners for
+implementing gradient boosting
+[<a href="#Xfriedman2001greedy">Friedman, 2001</a>].  Boosted
+trees for regression and classification, where exactly J-terminal nodes
+(for any integer value of J) are needed, is easily accomplished using
+the parameter <code>ptn.count</code>.  This particular application of the
+<code>randomForestSRC</code> package is incorporated into the
+<code>boostmtree</code> package on CRAN
+[<a href="#Xishwaran2016boostmtree">Ishwaran and Kogalur, 2016</a>].  Pruning is accomplished by deleting
+terminal nodes from the maximum depth back toward the root until the desired
+pseudo-terminal node count is achieved.  Daughter nodes are deleted in
+pairs.  This results in a parent node becoming a pseudo-terminal node,
+after the daughter terminal nodes have been deleted at the current
+maximum depth.  
+</p>
+
+<a id="Zhybrid_parallel_processing"></a><h2>Hybrid Parallel Processing</h2>
+
+<p>
+This package has the capabilities of non-trivial parallel
+processing with massive scalability.  Growing a forest has a recursive
+component as was shown in the [<a
+href="#Yrfsrc_recursive">Recursive Algorithm</a>]. But it is also an
+iterative process that is repeated <code>ntree</code> times.  This fact is
+depicted in the figure [<a href="#Yiterative">Iterative Process</a>].  The entry point is a
+user-defined R script that initiates the grow call
+<code>rfsrc()</code>.  This function pre-processes the data set, and calls
+a grow function in the package's C library, which grows the
+forest.  The C function grows a single tree, adds the resulting
+tree-specific ensemble(s) to the forest ensemble(s), and continues this
+process for <code>ntree</code> iterations.  The C function then
+returns the forest ensemble(s) to the R function, which
+post-processes the results.  It is advantageous to parallelize this
+iterative process.  Such situations are often called "pleasingly
+parallel". The default pre-compiled binaries, available on CRAN,
+will execute only serially, but the package has been written to be
+easily compiled to accommodate
+parallel execution.   As a prerequisite, the host architecture,
+operating system, and installed compilers must support it.  OpenMP and
+Open MPI compilers must be available on the host
+system.  If this
+is the case, it is possible to install platform specific binaries of
+the packag or,
+alternatively, compile the source code to enable parallel processing.
+More details on this process is contained in the section
+[<a href="#Zcompilation_and_execution">Compilation and Execution</a>].
+</p>
+
+<figure id="Yiterative_process" class="frame"> <img
+class="scaled" src="images/iterative_process.png" alt="Forest Growth
+as an Iterative Process"/> <figcaption class="centerText"><br>Forest
+Growth as an Iterative Process</figcaption></figure>
+
+<p>
+A graphic
+showing one mode of parallel execution (OpenMP) on a typical desktop/laptop
+computer is shown in the figure [<a href="#Yshared_memory">Shared
+Memory Parallel Processing</a>].  In this example, the
+hardware on the left of the figure is a Macbook Pro (2015 model) with two quad-core CPUs,
+and 16GB of RAM.  This hardware
+allows eight threads to execute simultaneously.  The memory is
+shared among all cores, and this configuration is typical of symmetric
+multiprocessing (SMP) where two or more identical processors connect
+to a shared memory bank.  Most reasonably configured multi-core
+notebooks and desktops are ideal hosts for <code>randomForestSRC</code> and OpenMP parallel
+execution.  The right side of [<a href="#Yshared_memory">Shared
+Memory Parallel Processing</a>] shows the software
+implementation of the OpenMP model.  The R code reads the
+data set, pre-processes the data set, calls the
+C code and requests a forest of
+<code>ntree</code> trees.  When OpenMP parallel execution is in force, the
+C code grows trees simultaneously, rather than iteratively.
+Each core is tasked with growing a tree.  Once a core completes growing a tree, the
+forest ensemble values are incremented with the contribution of that tree,
+and the core is re-tasked with growing another tree.  This continues
+until the entire forest is grown.  Control is then returned to the
+R code which does post-processing of the results.  On the hardware
+shown in the figure, it is possible to
+grow eight trees at a time.  Under ideal conditions, 
+the elapsed time to grow a forest should decrease linearly and be
+close to a factor of eight.
+</p>
+
+<figure id="Yshared_memory" class="frame"> <img
+class="scaled" src="images/shared_memory.png" alt="OpenMP:  Shared
+Memory Parallel Processing"/>
+<figcaption class="centerText"><br>OpenMP:  Shared Memory Parallel Processing</figcaption></figure>
+
+<p>
+In order to give the user some flexibility, core usage can be
+controlled via R options.  First, the user needs to determine the number of cores on
+the machine.  This can be done within an R session by
+loading the <code>parallel</code> package and issuing the command
+<code>detectCores()</code>.  It is possible to set the numbers of cores
+accessed during OpenMP parallel execution at
+the start of every R session by issuing the command
+<code>options(rf.cores = x)</code>, where <code>x</code> is the number of
+cores.  If <code>x</code> is a negative number, the package will access
+the maximum number of cores on the machine.  The <code>options</code> command can
+also be placed in the users <code>.Rprofile</code> file for convenience.
+Alternatively, one can initialize the environment variable <code>RF_CORES</code>
+in the user's command shell environment.
+</p>
+
+<p>
+Gains in performance on a desktop (or a single SMP node) are limited by the number of cores
+available on the hardware.  The OpenMP parallel model shown in [<a href="#Yshared_memory">Shared
+Memory Parallel Processing</a>] that relies on an underlying
+iterative process
+was chosen for its suitability in
+accommodating shared memory systems and its ease of implementation.  Model
+creation is computationally intense and the OpenMP parallel processing
+model allows us to take full advantage of the hardware available.
+</p>
+<p>
+Message Passing Interface (MPI), an alternative model
+to OpenMP is suitable for distributed memory systems, in which the
+number of cores available can be much greater than that of a desktop
+computer.  It is possible to run
+<code>randomForestSRC</code> on appropriately designed and configured
+clusters, allowing for massive scalability.  An ideal
+cluster for the package is made up of tightly connected SMP nodes.  
+Each SMP node has its own memory, and does not share
+this memory with other nodes.  Nodes, however, do communicate with
+each other using MPI.
+</p>
+
+<figure id="Ydistributed_memory" class="frame"> <img
+class="scaled" src="images/distributed_memory.png" alt="Hybrid:  MPI/OpenMP Parallel Processing"/>
+<figcaption class="centerText"><br>Hybrid:  MPI/OpenMP Parallel Processing</figcaption></figure>
+
+<p>
+In the figure [<a href="#Ydistributed_memory">MPI/OpenMP Parallel Processing</a>], a generic cluster with four SMP nodes is
+depicted.  Each node can be considered to be similar to a desktop
+computer.  However, in a cluster setting, each node is tightly
+supervised and controlled by a top-level layer of cluster software
+that handles job scheduling, and resource management.  On the left of the
+figure, four nodes are connected via a network that facilitates MPI
+communications across nodes.  The right of the figure depicts the software
+implementation of hybrid parallel processing using the
+<code>randomForestSRC</code> package.  A primary/replica framework is chosen whereby a primary node on
+the cluster is tasked with growing the forest.  The primary node
+divides the forest into sub-forests.  If the size of the forest is
+<code>ntree</code>, then each replica in this example is tasked with growing a
+sub-forest of size <code>ntree/4</code>.  Hybrid parallel processing is
+dependent on the <code>Rmpi</code> package.  This package must be available.
+If it is not, it must compiled and installed from the source code available on CRAN.
+The <code>Rmpi</code> is a mature package and provides flexible low level
+functionality.  Other explicitly parallel general-use packages on CRAN such as <code>snow</code>,
+<code>snowfall</code>, and <code>foreach</code> provide higher level user friendly
+functions that, while potentially useful, were considered not as
+flexible and customizable in a cluster environment.  
+</p>
+
+<p>
+In the hybrid example
+that follows, <code>Rmpi</code> is loaded on
+the primary node, and MPI processes are then spawned on each
+replica.  Disregarding the fact that the replicas can communicate with the
+primary using MPI, each replica acts like an SMP node in [<a href="#Yshared_memory">Shared
+Memory Parallel Processing</a>].  A replica initiates concurrent OpenMP threads across it
+cores, and grows its sub-forest using shared memory OpenMP parallel
+processing.  It is possible to grow many more trees
+concurrently on a cluster, because the forest is spread among many more
+cores than are available on a single node, or desktop computer.  In
+[<a href="#Ydistributed_memory">MPI/OpenMP Parallel Processing</a>],
+the forest uses 32 cores concurrently. In an ideal
+environment, the elapsed time to grow the original forest will be
+reduced by a factor of 32.  After all replicas have completed growing their
+sub-forests, they return their data to the primary process, via MPI messages,
+and the replicas terminate.  On a single SMP node (equivalent to a desktop computer), a thread on a core
+starts, grows a tree, terminates, and repeats this process until all trees
+have been grown.  A core is either waiting for a task,
+working on a task, or has completed a task.  A task, in this case, is
+the growing of a tree. On a cluster, a replica node starts, grows a
+sub-forest, and terminates.  It repeats this process until all
+sub-forests requested by the primary node have been grown.  A replica is either waiting for a
+sub-forest, working on a sub-forest, or has completed a sub-forest.
+</p>
+
+<p>
+As proof of concept, and for benchmarking purposes we ran the package
+on two clusters available to us.  The first cluster was the Learner
+Research Institute High Performance Cluster (LRI-HPC) at the Cleveland
+Clinic.  This system runs Simple Linux Utility for Resource Management
+(SLURM) supervisor software.  It is a Linux-based cluster consisting
+of twenty nodes with ten cores per node.  Each node has 64GB of shared
+memory.  The second cluster was the 
+[<a href="http://ccs.miami.edu/pegasus">Pegasus 2</a>] installation at the High
+Performance Computing Group at the Center for Computational Science
+(HPC CCS) at the University of Miami.  This system has 10,000 cores
+spread across over 600 nodes.  The system also runs a flavour of Linux
+but uses Platform LSF as the job scheduler.  The different job schedulers
+for the two clusters required minor customization of the calling
+shell scripts.  For our benchmarks, we analyzed a simulated survival data
+set with <code>n=3000</code>, <code>p=30</code>, and <code>ntree=1024</code>, with the
+default value of <code>importance="permute"</code>.  We ran the package in
+serial mode and scaled up to 1024 cores across 64 nodes.  The results
+are shown in this <a id="#Ypegasus">figure</a>.  In serial mode, growing 1024
+trees iteratively (using one core) took about 330 minutes.  The red
+points all reflect OpenMP parallel processing, on one node.  These
+results would be similar to that of a desktop computer.  Pegasus 2 has
+16 cores per node.  When using all cores on one node were used,
+elapsed time decreased to about 25 minutes.  This reflects a decrease
+in a factor of 13 from the serial time.  The theoretical maximum
+decrease would be closer to a factor of 16.  The results would be
+similar to that of running the analysis on desktop computer with 16 cores.  Next,
+hybrid parallel processing using the primary/replica framework was
+implemented.  Two replica nodes were tasked, then three, and so on up to
+64 nodes.  At 64 nodes, total core usage was 1024.  At this number,
+the cluster was growing all 1024 trees simultaneously.  The
+data points reflecting hybrid parallel processing are in blue.  Linear
+decreases in elapsed time were observed.  This indicates that the
+package is capable of massive scalability.  The primary and replica
+code harnesses are given in the section [<a
+href="#Zsupplementary_code">Supplementary Code</a>].
+More details on installing an OpenMP enabled version of the package is contained in the section
+[<a href="#Zcompilation_and_execution">Compilation and Execution</a>].
+</p>
+
+<figure id="Ypegasus" class="frame"> <img
+class="scaled" src="images/pegasus.png" alt="Benchmark of Hybrid Parallel Processing"/>
+<figcaption class="centerText"><br>Benchmark of Hybrid Parallel Processing</figcaption></figure>
+
+<a id="Ztheory_and_specifications"></a><h2>Theory and Specifications</h2>
+
+<a id="Ztheory_and_specifications_survival"></a><h3>Survival</h3>
+
+<p>
+There are two split rules that can be used to grow survival trees.
+In this model, the response or y-outcome associated with individual \(i\) is a pair of
+values specifying a non-negative survival time and censoring
+information.  Denote the response for \(i\) by \(Y_i = (T_i,
+\delta_i)\).  The individual is said to be right censored at time \(T_i\)
+if \(\delta_i = 0\) and is said to have died at time \(T_i\) if \(\delta_i
+= 1\).  In the case of death, \(T_i\) will be referred to as an event
+time, and the death as an event.  An individual \(i\) who is right
+censored at \(T_i\) simply means that the individual is known to have been
+alive at \(T_i\), but the exact time of death is unknown.  
+</p>
+
+<h4>Log-rank splitting</h4>
+
+<p>
+The log-rank test for splitting survival trees is a well established
+concept [<a href="#Xsegal1988regression">Segal, 1988</a>].  It has been shown to be robust
+in both proportional and non-proportional hazard settings
+[<a href="#Xleblanc1993survival">Leblanc and Crowley, 1993</a>]
+Note that 
+a proposed split of \(h\) on a real value \(x\) is of the form \(x \le c\) and \(x >
+c\). Such a split defines left and right daughter membership.  The
+split that maximizes survival differences between the two daughter
+nodes is the best split.  Let \(t_1 < t_2 <\cdots < t_m\) be the
+distinct times of death in the parent node \(h\), and let \(d_{k,l}\) and
+\(Y_{k,l}\) equal the number of deaths and individuals at risk
+respectively at time
+\(t_k\) in the left daughter node for \(k \in \{1, \ldots, m\}\).  Similarly let \(d_{k,r}\) and
+\(Y_{k,r}\) refer to the right daughter node.  Note that \(Y_{k,s}\) is
+the number of individuals in daughter \(s \in \{l, r\}\) who are alive at
+time \(t_k\), or who have an event (death) at time \(t_k\).  More
+precisely,
+
+\begin{equation*}
+Y_{k,l}=\#\{i : T_i\ge t_k,\;x_i\le c\},\hskip10pt
+Y_{k,r}=\#\{i : T_i\ge t_k,\;x_i>c\},
+\end{equation*}
+
+where \(x_i\) is the value of \(x\) for individual \(i=1, \ldots, n\).
+Define \(Y_k=Y_{k,l}+Y_{k,r}\) and \(d_k=d_{k,l} + d_{k,r}\).  Let
+\(n_s\) be the total number of observations in daughter \(s\), Thus,
+\(n=n_l+n_r\), where \(n_l=\#\{i: x_i\le c\}\) and
+\(n_r=\#\{i: x_i> c\}\).
+
+The log-rank test for a split at the value \(c\) for an x-variable \(x\)
+is
+\begin{equation}
+L(x,c)=\frac{{\displaystyle\sum_{k=1}^m\left(d_{k,l}-Y_{k,l}\frac{d_k}{Y_k}\right)}}
+{\sqrt{{\displaystyle\sum_{k=1}^m\frac{Y_{k,l}}{Y_k}\left(1-\frac{Y_{k,l}}{Y_k}\right)
+\left(\frac{Y_k-d_k}{Y_k-1}\right)d_k}}}.
+\label{eqn:survival.logrank}
+\end{equation} 
+
+The value \(|L(x,c)|\) is a measure of node separation.  Larger
+values of \(|L(x,c)|\) imply a greater the difference between the two
+groups, and the better the split.  In particular, the best split at
+node \(h\) is determined by finding the x-variable \(x^*\) and split value
+\(c^*\) such that \(|L(x^*,c^*)|\ge |L(x,c)|\) for all \(x\) and \(c\).
+
+</p>
+
+<h4>Log-rank score splitting</h4>
+
+<p>
+The log-rank score test for splitting survival trees is described in
+[<a href="#Xhothorn2003exact">Hothorn and Lausen (2003)</a>].  In this rule, assume the x-variable
+\(x\) has been ordered so that \(x_1 \le x_2 \le \cdots \le x_n\).  Now,
+compute the ``ranks'' for each survival time \(T_j\) where \(j \in \{1,
+\ldots, n\}\).  Thus,
+
+\begin{equation*}
+a_j=\delta_j-\sum_{k=1}^{\Gamma_j}\frac{\delta_k}{n-\Gamma_k+1} ,
+\end{equation*}
+
+where \(\Gamma_k=\#\{t:T_t\le T_k\}\).  Note that \(\Gamma_k\) is the
+index of the order for \(T_k\). The log-rank score test is defined as
+
+\begin{equation}
+S(x,c)=\frac{\sum_{x_k\le c}\left(a_j-n_l\overline{a}\right)}
+{\sqrt{{\displaystyle n_l\left(1-\frac{n_l}{n}\right)s_a^2}}} ,
+\label{eqn:survival.logrank.score}
+\end{equation}
+
+where \(\overline{a}\) and \(s_a^2\) are the sample mean and sample variance of
+\(\{a_j: j=1, \ldots, n\}\).  Log-rank score splitting defines the measure
+of node separation by \(|S(x,c)|\).  Maximizing this value over \(x\)
+and \(c\) yields the best split.
+</p>
+
+<h4>Terminal node estimators</h4>
+<p>
+The survival estimate associated with a terminal node is provided by
+the Kaplan-Meier (KM) estimator [<a
+href="#Xkaplan1958nonparametric">Kaplan and Meier (1958)</a>]. 
+Again let \(t_1 < t_2 <\cdots < t_m\) be the distinct death times in the terminal node
+\(h\), and let \(d_k\) and \(Y_k\) equal the number of deaths and
+individuals at risk respectively at time \(t_k\) in \(h\).  Then the Kaplan-Meier estimator is 
+\begin{equation}
+\hat{S}(t) = \prod_{t_k \le t}{\left( 1 - \frac{d_k}{Y_k}
+\right)} .
+\label{eqn:kaplan.meier}
+\end{equation}
+
+The cumulative hazard estimate (CHE) associated with a terminal node is
+provided by the Nelson-Aalen estimator and is
+calculated as
+
+\begin{equation}
+\hat{H}(t) = \sum_{t_k \le t}{\frac{d_k}{Y_k}} .
+\label{eqn:chf.terminal}
+\end{equation}
+If there are H terminal nodes in a tree, there are H such estimates.
+Let individual \(i\) have feature \({\bf X}_i\) and reside in terminal
+node \(h\).  The CHE terminal node
+statistic will be denoted by
+\begin{equation*}
+\hat{H}(t| {\bf X}_i) = \hat{H}_h(t), \text{ if } \; {\bf X}_i \in h .
+\end{equation*}
+
+To produce the OOB ensemble for individual \(i\), the CHE terminal node
+statistic is averaged over all \(\tt ntree\) trees.
+Let \(\hat{H}_b (t|X)\) denote the CHE estimate for tree \(b \in \{1,\ldots,\tt ntree\}\).  Define
+\(I_{i,b}=1\) if individual \(i\) is an OOB individual for \(b\), otherwise set \(I_{i,b}=0\).
+The OOB ensemble CHE for individual \(i\) is
+
+\begin{equation*}
+\hat{H}_e^{*}(t|{\bf X}_i) = \frac{\sum_{b=1}^{\tt ntree}{I_{i,b} \hat{H}_b
+(t|{\bf X}_i)}}{\sum_{b=1}^{\tt ntree} I_{i,b}} .
+\end{equation*}
+
+Note that the OOB ensemble is obtained by averaging over only
+those bootstraps in which individual \(i\) is is OOB.
+</p>
+
+<p>
+An example of a survival forest follows:
+</p>
+
+<pre><code class="R">
+# Veteran's Administration Lung Cancer Trial. Randomized 
+# trial of two treatment regimens for lung cancer.
+data(veteran, package = "randomForestSRC")
+v.obj <- rfsrc(Surv(time, status) ~ ., data = veteran, ntree = 100)
+## Plot the error.
+plot(v.obj)
+## Plot the survival estimates.
+plot.survival(v.obj)
+
+</code></pre>
+
+<h4>Prediction error</h4>
+
+<p>
+Prediction error for survival models is measured by \(1-C\), where
+\(C\) is Harrell's [<a href="#Xharrell1982evaluating"></a>] concordance
+index.  Prediction error is between 0 and 1, and measures how well the
+predictor correctly ranks two random individuals in terms of survival.
+Unlike other measures of survival performance,
+Harrell's C-index does not depend on choosing a fixed time for
+evaluation of the model and specifically takes into account censoring
+of individuals [<a href="#Xmay2004development">May et al., (2004)</a>]
+The method has quickly become quite popular in the
+literature as a means for assessing prediction performance in survival
+analysis settings.  See [<a href="#Xkattan1998experiments">Kattan et
+al., 1988</a>] and references therein.
+</p>
+
+<p>
+To compute the concordance index, it is necessary to define what constitutes a
+worse predicted outcome.  Let
+\(t_1^*,\ldots,t_M^*\) denote all unique times in the data.
+Define the predicted outcome for individual \(i\) to be 
+
+\begin{equation}
+\mathcal{M}_i = \sum_{k=1}^{M}\hat{H}_e^*(t_k^*|{\bf X}_i).
+\label{eqn:survival.mortality}
+\end{equation}
+
+Individual \(i\) is said to have a worse predicted outcome than
+individual \(j\) if \(\mathcal{M}_i > \mathcal{M}_j\)
+
+The concordance error rate is computed as follows:
+
+<ol type="1">
+  <li>Form all possible pairs of observations over all the data.</li>
+
+  <li>Omit those pairs where the shorter event time is censored.
+  Also, omit pairs \((i, j)\) if \(T_i=T_j\) unless \((\delta_i=1, \delta_j=0)\) or
+  \((\delta_i=0, \delta_j=1)\) or \((\delta_i=1, \delta_j=1)\).  The last restriction
+  only allows ties in event times if at least one of the observations is a death.
+  Let the resulting pairs be denoted by \(\mathbb{S}\). Let \(permissible =
+  |\mathbb{S}|\).</li>
+
+  <li>If \(T_i \ne T_j\), count 1 for each \(s \in \mathbb{S}\) in which the shorter time
+  had the worse predicted outcome.
+  </li>
+
+  <li>If \(T_i \ne T_j\), count 0.5 for each \(s \in \mathbb{S}\) in which
+  \(\mathcal{M}_i = \mathcal{M}_j\).
+  </li>
+
+  <li>If \(T_i = T_j\), count 1 for each \(s \in \mathbb{S}\) in which 
+  \(\mathcal{M}_i = \mathcal{M}_j\).
+  </li>
+
+  <li>If \(T_i = T_j\), count 0.5 for each \(s \in \mathbb{S}\)
+  in which \(\mathcal{M}_i \ne \mathcal{M}_j\).
+  </li>
+
+  <li>Let \(concordance\) denote the resulting count over all
+  permissible pairs. Define the concordance index \(C\) as
+  \begin{equation}
+  C=\dfrac{concordance}{permissible}.
+  \label{eqn:concordance}
+  \end{equation}  
+  </li>
+
+  <li>The error rate is \(Err=1-C\).  Note that \(0 \le Err \le 1\) and that
+  \(Err=0.5\) corresponds to a procedure doing no better than random
+  guessing, whereas \(Err=0\) indicates perfect prediction.
+  </li>
+  
+</ol>
+
+</p>
+
+
+
+<a id="Ztheory_and_specifications_competing_risk"></a><h3>Competing Risk</h3>
+
+<p>
+Competing risks occur in survival analyses when the occurrence of one
+event precludes the occurrence of the remaining set of possible
+events. Individuals subject to competing risks are observed from study
+entry to the occurrence of the event of interest.  This is a competing event
+though often, before the individual can experience one of the events, that
+person is right censored.
+</p>
+
+<p>
+Formally, let \(T_i^o\) be the event time for
+the \(i^{th}\) subject, \(i=1,\ldots,N\), and let \(\delta_i^o\) be the event type,
+\(\delta_i^o\in\{1,\ldots,J\}\), where \(J \ge 1\). Let \(C_i^o\) denote the
+censoring time for individual \(i\) such that the actual time of event
+\(T_i^o\) is unobserved and one only observes \(T_i=\min(T_i^o,C_i^o)\)
+and the event indicator \(\delta_i=\delta_i^o I(T_i^o\le C_i^o)\).  When
+\(\delta_i=0\), the individual is said to be censored at \(T_i\), otherwise if
+\(\delta_i=j>0\), the individual is said to have an event of type \(j\) at
+time \(T_i\). Denote the observed response for \(i\) as \(Y_i = (T_i,\delta_i)\).
+The cause-specific hazard function (cs-H) for event \(j\) given
+a \(P\)-dimensional feature \({\bf X}_i\) is
+
+\begin{equation}
+\alpha_j(t|{\bf X}_i) = \lim_{\Delta t\rightarrow 0} \frac{\mathbb{P}\{t\le T^o \le t+\Delta t,
+\delta^o=j | T^o\ge t,{\bf X}_i\}}{\Delta t} = \frac{f_j(t|{\bf X}_i)}{S(t|{\bf X}_i)} .
+\label{eqn:csh}
+\end{equation}
+
+Here \(S(t|{\bf X}_i)=\mathbb{P}\{T^o\ge t|{\bf X}_i\}\) is the event-free survival
+probability function given \({\bf X}_i\).  The cs-H 
+describes the instantaneous risk of event \(j\) for subjects that
+currently are event-free.  The probability of an event is
+determined using the cause-specific cumulative incidence function (cs-CIF), defined as the
+probability of experiencing an event of type \(j\) by time \(t\);
+i.e. \(F_j(t|{\bf X}_i) = \mathbb{P}\{T^o \le t, \delta^o=j|{\bf X}_i\}\).  The cs-CIF and cs-H
+are related according to
+\begin{equation}
+F_j(t|{\bf X}_i) 
+=\int_0^t S(s-|{\bf X}_i)\alpha_j(s|{\bf X}_i)\, \mathrm d s
+= \int_0^t \exp\left(-\int_0^s \sum_{l=1}^J \alpha_l(u|{\bf X}_i)
+\mathrm d u\right) \alpha_j(s|{\bf X}_i)\, \mathrm d s .
+\label{eqn:cif}
+\end{equation}
+
+See [<a href="#Xgray1988class">Gray (1988)</a>] for an analysis of the cs-CIF.
+</p>
+
+<p>
+With these two equations, it is possible to describe the two split
+rules that can be used to grow competing risk trees.
+Again, for notational convenience these rules are described for the root node
+using the entire learning data, and for splits on real valued
+x-variables.  However, the algorithm
+extends to any tree node, to bootstrap data, and to splits
+on categorical x-variables.
+</p>
+
+<p>
+As before, let \((T_i,\delta_i)_{1\le i \le n}\) denote the pairs of survival times
+and event indicators. Let \(t_1<t_2<\cdots<t_m\) be the distinct
+non-censored event times. The proposed split for the root node will be of the
+form \(x \le c\) and \(x>c\) for a continuous x-variable \(x\).  Such a split forms
+two daughter nodes containing two new sets of competing risk data. The
+subscripts \(l\) and \(r\) refer to the left and
+right daughter node, respectively, and denote \(\alpha_{jl}(t)\) and
+\(\alpha_{jr}(t)\) for the cause-\(j\) specific hazard rate, given by
+\mref{eqn:csh}, in the left and
+the right daughter node. Similarly define \(F_{jl}(t)\) and \(F_{jr}(t)\)
+to be the cs-CIF, given by \mref{eqn:cif}, for the left and the right daughter node.
+</p>
+
+<p>
+The number of individuals at risk at time \(t\) in the left and right
+daughter nodes are \(Y_l(t)\) and \(Y_r(t)\), where
+
+\begin{equation*}
+Y_l(t)=\sum_{i=1}^n I(T_i\ge t,x_i\le c),\hskip10pt
+Y_r(t)=\sum_{i=1}^n I(T_i\ge t,x_i> c),
+\end{equation*}
+
+and \(x_i\) is the value the x-variable assumes for individual \(i=1,\ldots,n\).  
+The number of type \(j\) events at time \(t\) for
+the left and right daughters is
+
+\begin{equation*}
+d_{j,l}(t)=\sum_{i=1}^n I(T_i=t, \delta_i=j, x_i\le c),\hskip10pt
+d_{j,r}(t)=\sum_{i=1}^n I(T_i=t, \delta_i=j, x_i> c).
+\end{equation*}
+
+The total number of individuals who are risk at time \(t\), and
+the total number of type \(j\) events at time \(t\) in the parent node are
+given by
+
+\begin{eqnarray}
+Y(t)=Y_l(t)+Y_r(t), 
+\label{eqn:event.count} \\
+d_j(t)=d_{j,l}(t)+d_{j,r}(t).
+\label{eqn:at.risk}
+\end{eqnarray}
+
+Define also \(t_m,t_{m_l},t_{m_r}\) to be the largest time
+on study in the parent node and the two daughters, respectively.
+</p>
+
+<h4>Log-rank splitting</h4>
+<p>
+The first competing risk split rule is the log-rank test.  This is a test of the null hypothesis
+\(H_0:\alpha_{jl}(t)=\alpha_{jr}(t)\) for all \(t\le\tau\).
+The test is based on the weighted difference of the cause-specific
+Nelson-Aalen estimates in the two daughter nodes. Specifically, for a
+split at the value \(c\) for variable \(x\), the split rule is
+
+\begin{equation*}
+L^{\mathrm{LR}}_j(x,c)=\frac 1{\hat\sigma^{\mathrm{LR}}_{j}(x,c)}\sum_{k=1}^m
+W_j(t_k)\left(d_{j,l}(t_k)
+-\frac{d_j(t_k)Y_l(t_k)}{Y(t_k)}\right) ,
+\end{equation*}
+
+where the variance estimate is given by
+
+\begin{equation*}
+(\hat\sigma^{\mathrm{LR}}_{j}(x,c))^{2}= \sum_{k=1}^m W_j(t_k)^2 d_j(t_k)
+\frac{Y_l(t_k)}{Y(t_k)} \left(1-\frac{Y_l(t_k)}{Y(t_k)}\right)
+\left(\frac{Y(t_k)-d_j(t_k)}{Y(t_k)-1}\right) .
+\end{equation*}
+
+Time-dependent weights \(W_j(t)>0\) are used to make the test more
+sensitive to early or late differences between the cause-specific
+hazards. The choice \(W_j(t)=1\) corresponds to the standard log-rank
+test which has optimal power for detecting alternatives where the
+cause-specific hazards are proportional. In practice, \(W_j(t) =
+W_j\).  That is, the weights are constant and not time-dependent.
+Furthermore, the cause-specific split rules across the
+event types are combined to arrive at the composite log-rank competing split rule
+that is implemented in the package and given by
+
+\begin{equation}
+L^{\mathrm{LR}}(x,c) = \frac{\sum_{j=1}^J
+(\hat\sigma^{\mathrm{LR}}_j(x,c))^2
+L_j^{\mathrm{LR}}(x,c)}{\sqrt{\sum_{j=1}^J(\hat\sigma^{\mathrm{LR}}_j(x,c))^2}} .
+\label{eqn:cr.logrank}
+\end{equation}
+
+The best split is found by
+maximizing \(|L^{\mathrm{LR}}(x,c)|\) over \(x\) and \(c\). 
+</p>
+
+<h4>Modified log-rank splitting</h4>
+<p>
+The cause-\(j\) specific log-rank split rule \mref{eqn:cr.logrank} is
+useful if the main purpose is to detect variables that affect the
+cause-\(j\) specific hazard. It may not be optimal if the purpose is
+also prediction of cumulative event probabilities. In this case better
+results may be obtained with split rules that select variables
+based on their direct effect on the cumulative incidence.  For this
+reason the second split rule is modeled after Gray's
+test [<a href="#Xgray1988class">Gray (1988)</a>], which tests the null hypothesis
+\(H_0:F_{jl}(t)=F_{jr}(t)\) for all \(t\le \tau\).  
+See [<a href="#Xishwaran2014random">Ishwaran et al. (2014)</a>] for additional details in using the
+modified risk set defined by 
+
+\begin{equation*}
+Y^*_j(t) = \sum_{i=1}^n I\Bigl(T_i\ge t \cup \left(T_i< t \cap
+\delta_i\ne j \cap C_i^o> t\right)\Bigr) .
+\end{equation*}
+
+This equals the number of individuals who have not had an event prior
+to \(t\) in addition to those individuals who have experienced an event
+\(j^{'} \ne j\) prior to \(t\), but who are not censored. 
+The split rule based
+on the score statistic which uses the modified risk sets, is denoted
+\(L^{\mathrm{G}}_j(x,c)\) and given by substituting \(Y^*_j\) for \(Y_j\)
+and \(Y^*_{jl}\) for \(Y_l\) in \mref{eqn:cr.logrank}. Note that if the
+censoring time is not known for those cases that have an event before
+the end of follow-up, the largest observed time is used, and the
+statistic \(L^{\mathrm{G}}_j(x,c)\) is still a good (and computationally
+efficient) approximation of Gray's test statistic, see
+[<a href="#Xfine1999proportional">Section 3.2, Fine, Jason P and Gray,
+Robert J (1999)</a>].
+</p>
+
+<p>
+Thus the composite modified log-rank competing split rule is given by 
+
+\begin{equation}
+L^{\mathrm{G}}(x,c) = \frac{\sum_{j=1}^J
+(\hat\sigma^{\mathrm{G}}_j(x,c))^2
+L_j^{\mathrm{G}}(x,c)}{\sqrt{\sum_{j=1}^J(\hat\sigma^{\mathrm{G}}_j(x,c))^2}} .
+\label{eqn:cr.modified.logrank}
+\end{equation}
+
+The best split is found by
+maximizing \(|L^{\mathrm{G}}(x,c)|\) over \(x\) and \(c\). 
+</p>
+
+<h4>Terminal node estimators</h4>
+<p>
+Let \(t_1 < t_2 <\cdots < t_m\) be the distinct non-censored event times in the terminal node
+\(h\), and let \(d_j(t_k)\) equal the number of events of
+type \(j\) at time \(t_k\). Let \(Y(t_k)\) be the number of bootstrap cases at
+risk at time \(t_k\).  Both of these are is in \mref{eqn:event.count}
+and \mref{eqn:at.risk}.  Let individual \(i\) have feature \({\bf X}_i\) and reside in terminal
+node \(h\). Denote the number of events of type \(j\) in \([0, t_j]\) as
+
+\begin{equation*}
+N_{j}(t| {\bf X}_i)=\sum_{t_{k} \le t} d_j(t | {\bf X}_i) .
+\end{equation*}
+
+The cause-specific hazard for individual \(i\) in node \(h\) and event \(j\)
+is defined by \(\alpha_j(t|{\bf X}_i)\) and given by
+\mref{eqn:csh}.  The cause-specific cumulative hazard function
+(cs-CHF) is given by 
+
+\begin{equation*}
+H_j (t|{\bf X}_i) = \int_0^t \alpha_j(s | {\bf X}_i) ds = \int_0^t \frac{dN_j(s |
+{\bf X}_i)}{Y(t_k | {\bf X}_i)} .
+\end{equation*}
+
+The Nelson-Aalen estimate for the cs-CHF is given by
+
+\begin{equation}
+\hat{H}_j(t |{\bf X}_i) = \sum_{t_{k} < t}\hat{\alpha}_j(t_k | {\bf X}_i) = \sum_{t_{k} <
+t} \frac{d_j(t_k | {\bf X}_i)}{Y(t_k | {\bf X}_i)} .
+\label{eqn:cause.specific.chf}
+\end{equation}
+
+The cs-CIF is given by
+\mref{eqn:cif} and can be written as
+
+\begin{equation*}
+F_j(t|{\bf X}_i) 
+=\int_0^t S(s-|{\bf X}_i)\alpha_j(s|{\bf X}_i)\, \mathrm d s
+=\int_0^t S(s-|{\bf X}_i) \frac{dN_j(s | {\bf X}_i)}{Y(s | {\bf X}_i)}
+.
+\end{equation*}
+
+We have adopted the estimator for \(F_j(t)\) given in 
+[<a href="#Xgray1988class">Equation 2.3, Gray (1988)</a>].  Namely,
+
+\begin{equation}
+\hat{F}_j(t|{\bf X}_i) 
+=\sum_{t_{k} < t} \hat{S}(t_{k-1} | {\bf X}_i) \frac{d_j(t_k | {\bf X}_i)}{Y(t_k | {\bf X}_i)},
+\label{eqn:cause.specific.cif}
+\end{equation}
+
+where \(\hat{S}(t)\) is given by \mref{eqn:kaplan.meier}.
+
+
+The predicted value for event \(j\) is the integrated cs-CIF
+
+\begin{equation*}
+\mathcal{M}_j = \int_{0}^{\tau} F_j(s) ds .
+\end{equation*}
+
+Here \(\tau\) is a fixed time point.  We use \(\tau = t_M\), the maximum
+observed event time. The value \(\mathcal{M}_j\) can be interpreted as the
+{\it expected number of life years lost} and represents a measure of
+mortality.  This is also called the cause-{\it j} mortality, is
+denoted by \(\mathcal{M}_j\) and given by
+
+\begin{equation}
+\hat{\mathcal{M}}_j = \int_{0}^{\tau} \hat{F}_j(s) ds = \sum_{t_{k+1} \le
+\tau}\hat{F}_j(t_k)[t_{k+1} - t_k] .
+\label{eqn:cause.specific.mortality}
+\end{equation}
+
+</p>
+
+<h4>Prediction error</h4>
+<p>
+The cause-specific error rate for each event \(j\) is estimated using the
+concordance index protocol resulting in equation \eqref{eqn:concordance}.  Let
+\(\hat{\mathcal{M}}_{i,j}\) denote the cause-{\it j} mortality for case \(i\).  We
+say that case \(i\) has a higher risk of event \(j\) than case \(i^{'}\) if 
+\(\hat{\mathcal{M}}_{i,j} > \hat{\mathcal{M}}_{i^{'},j}\). Applying
+equation \eqref{eqn:concordance}
+results in a concordance index \(C_j\) and an error rate \(Err_j = 1 -
+C_j\).
+
+An example of a competing risk call follows:
+</p>
+
+<pre><code class="R">
+# Women's Interagency HIV Study (WIHS).  Competing risk 
+# data set involving AIDS in women.
+data(wihs, package = "randomForestSRC")
+wihs.obj <- rfsrc(Surv(time, status) ~ ., data=wihs, nsplit=3, ntree=100)
+#  Plot the ensemble cs-CIF, and cs-CHF.
+plot.competing.risk(wihs.obj)
+
+</code></pre>
+
+
+<a id="Ztheory_and_specifications_regression"></a><h3>Regression</h3>
+
+<p>
+There are three split rules that can be used to grow regression trees.
+In this model, the y-outcome associated with an individual \(i\) is a single real 
+value.  Denote the response for \(i\) by \(Y_i \in \mathbb{R}\).
+</p>
+
+<a id="Zweighted_variance_splitting"></a><h4>Weighted variance splitting</h4>
+
+<p>
+Suppose the proposed split for the root node is of the
+form \(x \le c\) and \(x>c\) for a continuous x-variable \(x\), and a split
+value of \(c\).  The split rule is
+
+\begin{equation}
+\theta(x,c) = \frac{n_l}{n} \times \frac{1}{n_l} \sum_{x_i \le c} (Y_i - \bar{Y}_l)^2 + \frac{n_r}{n} \times
+\frac{1}{n_r} \sum_{x_i > c} (Y_i - \bar{Y}_r)^2 ,
+\label{eqn:regression.weighted}
+\end{equation}
+
+where the subscripts \(l\) and \(r\) indicate left and right daughter
+node membership respectively.  Then
+
+\begin{equation*}
+\bar{Y}_l = \frac{1}{n_l} \sum_{x_i \le c} Y_i , \hskip10pt \bar{Y}_r = \frac{1}{n_r} \sum_{x_i > c} Y_i
+\end{equation*} 
+
+are the means within each of the daughters, and \(n_l\) and \(n_r\) are
+the number of cases in the left and right daughter respectively such that \((n = n_l + n_r).\) The goal is to
+find \(x\) and \(c\) to minimize \(\theta(x,c)\).  
+</p>
+
+<h4>Unweighted variance splitting</h4>
+<p>
+In this rule, it is necessary to minimize
+
+\begin{equation}
+\theta(x,c) = \frac{1}{n_l} \sum_{x_i \le c} (Y_i - \bar{Y}_l)^2 +
+\frac{1}{n_r} \sum_{x_i > c} (Y_i - \bar{Y}_r)^2 .
+\label{eqn:regression.unweighted}
+\end{equation}
+</p>
+
+<h4>Heavy weighted variance splitting</h4>
+<p>
+In this rule, it is necessary to minimize
+
+\begin{equation}
+\theta(x,c) = \left( \frac{n_l}{n} \right)^2 \times \frac{1}{n_l}
+\sum_{x_i \le c} (Y_i - \bar{Y}_l)^2 + \left( \frac{n_r}{n} \right)^2 \times
+\frac{1}{n_r} \sum_{x_i > c} (Y_i - \bar{Y}_r)^2 .
+\label{eqn:regression.heavy.weighted}
+\end{equation}
+</p>
+
+<h4>Terminal node estimators</h4>
+<p>
+The predicted value for a terminal node is the mean value of the cases
+within that node.  Let individual \(i\) have feature \({\bf X}_i\). and reside in terminal
+node \(h\).  The terminal node predicted value for a node \(h\) is given by
+
+\begin{equation}
+\hat{f}_h = \frac{1}{n_h} \sum_{{\bf X}_i \in h} Y_i .
+\label{eqn:mean}
+\end{equation}
+
+To produce the OOB predicted value for individual \(i\) this quantity is averaged
+over
+all \(\tt ntree\) trees.  Let \(\hat{f}_b({\bf X}_i)\) denote the predicted value
+for tree \(b \in \{1,\ldots,\tt tree\}\).
+As before, \(I_{i,b}=1\) if individual \(i\) is an
+OOB individual for \(b \in \{1, \ldots, \tt ntree \}\).  Otherwise set \(I_{i,b}=0\).
+The OOB predicted value for individual \(i\) is
+
+\begin{equation*}
+\hat{f}_e^{*}({\bf X}_i) = \frac{\sum_{b=1}^{\tt ntree}{I_{i,b} \hat{f}_b ({\bf X}_i)}}{\sum_{b=1}^{\tt ntree} I_{i,b}}.
+\end{equation*}
+
+</p>
+
+<h4>Prediction error</h4>
+<p>
+The estimated prediction error is given by
+
+\begin{equation}
+Err = \frac{1}{n} \sum_{i=1}^{N} (Y_i - \hat{f}_e^{*}({\bf X}_i))^2 .
+\label{eqn:mean.squared.error}
+\end{equation}
+
+An example of a regression forest follows:
+</p>
+
+<pre><code class="R">
+# New York air quality measurements. Mean ozone in parts per billion.
+airq.obj <- rfsrc(Ozone ~ ., data = airquality, na.action = "na.impute")
+# Partial plot of variables.
+plot.variable(airq.obj)
+
+</code></pre>
+
+
+<a id="Ztheory_and_specifications_classification"></a><h3>Classification</h3>
+<p>
+There are three split rules that can be used to grow classification trees.
+In this model, the y-outcome associated with an individual \(i\) is a
+single single categorical value.  Let \({\bf p} = (p_1, \ldots, p_J)\) be the class proportions
+for the classes \(1\) through \(J\) respectively, for the y-outcome in the node.
+</p>
+
+<a id="Zweighted_gini_splitting"></a><h4>Weighted Gini index splitting</h4>
+<p>
+Suppose the proposed split for the root node is of the
+form \(x \le c\) and \(x>c\) for a continuous x-variable \(x\), and a split
+value of \(c\).  The impurity of the node is defined as
+
+\begin{equation*}
+\phi({\bf p}) = \sum_{j = 1}^{J} p_j(1 - p_j) = 1 - \sum_{j = 1}^{J}
+p_j^2 .
+\end{equation*}
+
+The Gini index for a split \(c\) on \(x\) is
+
+\begin{equation*}
+\theta(x,c) = \frac{n_l}{n} \phi({\bf p}_l) + \frac{n_r}{n} \phi({\bf
+p}_r) ,
+\end{equation*}
+
+where, as before, the subscripts \(l\) and \(r\) indicate left and right daughter
+node membership respectively, and \(n_l\) and \(n_r\) are
+the number of cases in the daughters such that \((n = n_l + n_r).\) The goal is to find \(x\) and \(c\) to minimize
+
+\begin{equation}
+\theta(x,c)  = \frac{n_l}{n} \left( 1 - \sum_{j = 1}^{J}
+\left( \frac{n_{j,l}}{n_l} \right)^2 \right) + \frac{n_r}{n} \left( 1 - \sum_{j =
+1}^{J} \left( \frac{n_{j,r}}{n_r} \right)^2 \right) ,
+\end{equation}
+
+where \(n_{j,l}\) and \(n_{j,r}\) are
+the number of cases of class \(j\) in the left and right daughter,
+respectively, such that \((n_j = n_{j,l} + n_{j,r}).\)  This is
+equivalent to maximizing
+
+\begin{equation}
+\theta^*(x,c) = \frac{1}{n} \sum_{j = 1}^{J} \frac{n_{j,l}^2}{n_l} +
+\frac{1}{n} \sum_{j = 1}^{J} \frac{(n_j - n_{j,l})^2}{n - n_l}, 
+\label{eqn:classification.weighted}
+\end{equation}
+
+</p>
+
+<h4>Unweighted Gini index splitting</h4>
+<p>
+Unweighted Gini index splitting corresponds to
+
+\begin{equation*}
+\theta(x,c) = \phi({\bf p}_l) + \phi({\bf p}_r) .
+\end{equation*}
+
+The best split is found by minimizing
+
+\begin{equation*}
+\theta(x,c)  = \left( 1 - \sum_{j = 1}^{J} \left( \frac{n_{j,l}}{n_l} \right)^2 \right) 
++ \left( 1 - \sum_{j = 1}^{J} \left( \frac{n_{j,r}}{n_r}
+\right)^2 \right) .
+\end{equation*}
+
+This is equivalent to maximizing
+
+\begin{equation}
+\theta^*(x, c) = \sum_{j = 1}^{J} \left( \frac{n_{j,l}}{n_l} \right)^2 +
+\sum_{j = 1}^{J} \left( \frac{n_j - n_{j,l}}{n - n_l} \right)^2 .
+\label{eqn:classification.unweighted}
+\end{equation}
+
+</p>
+
+<h4>Heavy weighted Gini index splitting</h4>
+<p>
+Heavy weighted Gini index splitting corresponds to
+
+\begin{equation*}
+\theta(x,c) = \frac{n_l^2}{n^2} \phi({\bf p}_l) + \frac{n_r^2}{n^2}
+\phi({\bf p}_r) .
+\end{equation*}
+
+The best split is found by minimizing
+
+\begin{equation*}
+\theta(x,c) = \frac{n_l^2}{n^2} \left( 1 - \sum_{j = 1}^{J} \left( \frac{n_{j,l}}{n_l} \right)^2 \right) 
++ \frac{n_r^2}{n^2} \left( 1 - \sum_{j = 1}^{J} \left(
+\frac{n_{j,r}}{n_r} \right)^2 \right) .
+\end{equation*}
+
+This is equivalent to maximizing
+
+\begin{equation}
+\theta^*(x, c) = \frac{1}{n^2} \sum_{j = 1}^{J} n_{j,l}^2 +
+\frac{1}{n^2} \sum_{j = 1}^{J} (n_j - n_{j,l})^2 - \frac{n_l^2}{n^2} -
+\frac{n_r^2}{n^2} + 2 .
+\label{eqn:classification.heavy.weighted}
+\end{equation}
+
+Note that the above is non-negative due to the addition of the constant last term.
+</p>
+
+<h4>Terminal node estimators</h4>
+<p>
+The predicted value for a terminal node \(h\) are the class proportions
+in the node.
+Let individual \(i\) have feature \({\bf X}_i\). and reside in terminal
+node \(h\).  Let \(n_j\) equal the number of bootstrap cases of class \(j\) in
+the node.  Then the proportion for the \(j^{th}\) class is given by
+
+\begin{equation}
+\hat{p}_{j,h} = \frac{1}{n_h} \sum_{{\bf X}_i \in h} I \{Y_i = j \} .
+\label{eqn:class.proportions}
+\end{equation}
+
+
+To produce the OOB predicted value for individual \(i\) this is averaged
+over
+all \(\tt ntree\) trees. Let \(\hat{p}_{j,b}({\bf X}_i)\) denote the predicted value
+for the \(j^{th}\) proportion for tree \(b \in \{1,\ldots,\tt ntree\}\).
+As before, \(I_{i,b}=1\) if individual \(i\) is an
+OOB individual for \(b \in \{1, \ldots, \tt tree\}\), otherwise set \(I_{i,b}=0\).
+The OOB predicted value for the \(j^{th}\) proportion for individual \(i\) is
+
+\begin{equation*}
+\hat{p}_{e,j}^{*}({\bf X}_i) = \frac{\sum_{b=1}^{\tt ntree}{I_{i,b}
+\hat{p}_{j,b} ({\bf X}_i)}}{\sum_{b=1}^{\tt tree} I_{i,b}} .
+\end{equation*}
+
+</p>
+
+<h4>Prediction error</h4>
+<p>
+Consider \(\hat{\bf p}_{e}^{*} ({\bf X}_i) = (\hat{p}_{e,1}^{*}({\bf X}_i), \ldots,
+\hat{p}_{e,J}^{*}({\bf X}_i))\).  Let 
+
+\begin{equation*}
+\hat{p}_{e,max}^{*}({\bf X}_i) = \max_{1 \le j \le J}
+(\hat{p}_{e,j}^{*}({\bf X}_i)) ,
+\end{equation*}
+
+and let \(N_j^{*}\) equal the number of individuals with
+class equal to \(j\) in the data set.  The estimated conditional misclassification rate is given by
+
+\begin{equation}
+Err_j = \frac{1}{N_j^{*}} \sum_{i:Y_i = j} (Y_i \ne
+\hat{p}_{e,max}^{*}({\bf X}_i)) .
+\label{eqn:misclassification.rate}
+\end{equation}
+
+The estimated over all misclassification rate is given by
+
+\begin{equation}
+Err = \frac{1}{N} \sum_{i=1}^{N} (Y_i \ne  \hat{p}_{e,max}^{*}({\bf
+X}_i)) .
+\label{eqn:conditional.misclassification.rate}
+\end{equation}
+
+An example of a classification forest follows:
+</p>
+
+<pre><code class="R">
+# Edgar Anderson's iris data with morphologic variation of three
+# related species.
+iris.obj <- rfsrc(Species ~., data = iris, ntree=100)
+## Plot the results.
+plot(iris.obj)
+
+</code></pre>
+
+
+
+<a id="Ztheory_and_specifications_multivariate"></a><h3>Multivariate</h3>
+<p>
+In the multivariate and mixed model, the y-outcomes associated with an individual \(i\) can be
+denoted by \({\bf Y}_i = ((Y_{i,1}, \ldots, Y_{i,r})\) where \(Y_{i,j}\) is real
+or categorical for each \(j \in \{1, \ldots, r \}\). 
+
+When \(Y_{i,j}\) is real for all \(j \in \{1, \ldots, r \}\) the model is 
+a multivariate regression forest.  In this case the split rule statistic
+is a composite of \(r\) split rule statistics based on
+[<a href="#Zweighted_variance_splitting">Weighted Variance
+Splitting</a>].  The outcomes in the node are normalized to ensure that a particular
+\(j\)-specific statistic does not overwhelm the composite statistic.
+
+When \(Y_{i,j}\) is categorical for all \(j \in \{1, \ldots, r \}\) the
+model is a multivariate classification forest.  In this case the split rule statistic
+is a composite of \(r\) split rule statistics based on
+[<a href="#Zweighted_gini_splitting">Weighted Gini Index
+Splitting</a>].  No
+normalization is necessary since the \(j\)-specific statistics
+represent an impurity measure which is invariant with respect to scale.
+
+In the general case where \(Y_{i,j}\) is real or categorical for each \(j
+\in \{1, \ldots, r \}\) the model is a multivariate mixed forest.  In this case the split rule statistic
+is a composite of \(r\) split rule statistics based on
+[<a href="#Zweighted_variance_splitting">Weighted Variance
+Splitting</a>] and [<a href="#Zweighted_gini_splitting">Weighted Gini Index
+Splitting</a>].  Only those \(j\)-specific
+statistics representing real outcomes are normalized.
+
+</p>
+
+<h4>Terminal node estimators</h4>
+There are \(j\) sets of terminal node estimators specific to the real or categorical
+cases previously described.
+
+<h4>Prediction error</h4>
+There is no prediction error implemented in this scenario.
+
+
+<a id="Ztheory_and_specifications_unsupervised"></a><h3>Unsupervised</h3>
+<p>
+Unsupervised models are appropriate in settings where there is no
+y-outcome.  In the unsupervised split rule, a subset of the x-variables (the size of which is specified
+by the formula) is chosen as the pseudo
+y-outcomes at each node, and the multivariate split rule in the [<a
+href="#Ztheory_and_specifications_multivariate">Multivariate</a>] section is applied.  Thus, each \(\tt mtry\)
+attempt results in a multivariate mixed split rule. Note importantly
+that all terminal node statistics and error rates are turned off under
+unsupervised splitting.
+</p>
+
+<h4>Terminal node estimators</h4>
+There are no terminal node estimators implemented in this scenario.
+
+<h4>Prediction error</h4>
+There is no prediction error implemented in this scenario.
+
+
+
+<a id="Zcompilation_and_execution"></a><h2>Compilation and Execution</h2>
+
+<p w3-include-html="compilation.html"></p>
+
+<a id="Zsupplementary_code"></a><h2>Supplementary Code</h2>
+
+<p> Generalized code for simulating the spheres used in [<a
+href="#Yclass_single_decision">Tree Decision Boundary</a>]
+and elsewhere:
+</p>
+<pre><code class="R" w3-include-html="code/spheres.R"></code></pre>
+
+<p> Generalized code for simulating the survival data set used in 
+[<a href="#Ypegasus">Benchmark of Hybrid Parallel Processing</a>]:
+</p>
+<pre><code class="R" w3-include-html="code/simulation.R"></code></pre>
+
+<p> The primary harness used in [<a href="#Ypegasus">Benchmark of Hybrid
+Parallel Processinge</a>]:
+</p>
+
+
+<pre ><code class="R" w3-include-html="code/master.R"></code></pre>
+
+
+<p> The replica harness used in
+[<a href="#Ypegasus">Benchmark of Hybrid Parallel Processinge</a>]:
+</p>
+<pre><code class="R" w3-include-html="code/slave.R"></code></pre>
+
+<script>
+w3IncludeHTML();
+</script>
+
+<h2>References</h2>
+
+<p w3-include-html="references.html"></p>
+
+
+</div>
+
+</body>
+</html>
