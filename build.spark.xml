@@ -1,0 +1,193 @@
+<?xml version="1.0"?>
+
+<!-- ===================================================== -->
+<!-- RF-SRC SPARK Build File     Apache Ant version 1.10.0 -->
+<!-- ===================================================== -->
+
+<project name="RF-SRC SPARK" basedir="." >
+
+
+  <!--
+    ========================================================================
+      Internal Target:  Set the trace.
+    ========================================================================
+  -->
+
+  <!-- CAUTION:  These comments affect the public build.     -->
+  <!-- CAUTION   Uncomment them for diagnostic uses only.    -->
+  <target name="java-trace">
+
+    <!--property name="java.trace.token" value="//"/-->
+    <property name="java.trace.token" value=""/>
+
+  </target>
+
+  <!--
+    ========================================================================
+      SOURCE-SPARK target, Entry Point
+    ========================================================================
+  -->
+  <target name="source-spark" depends="init, java-trace">
+
+    <!--delete dir="target/spark"/-->
+
+    <mkdir dir="target/spark"/>
+    <mkdir dir="target/spark/src"/>
+    <mkdir dir="target/spark/src/main"/>
+    <mkdir dir="target/spark/src/main/java"/>
+    <mkdir dir="target/spark/src/main/c"/>
+    <mkdir dir="target/spark/src/main/resources"/>
+    <mkdir dir="target/spark/src/test"/>
+    <mkdir dir="target/spark/src/test/java"/>
+    <mkdir dir="target/spark/src/test/resources"/>
+    <mkdir dir="target/spark/src/test/resources/data"/>
+
+    <copy todir="target/spark">
+      <fileset dir="src/main/resources/spark">
+        <include name="pom.xml"/>
+      </fileset>
+
+      <filterchain>
+        <tokenfilter>
+          <replacestring from="@PROJECT_PACKAGE_NAME@" to="${project.pkg.name}"/>
+          <replacestring from="@PROJECT_VERSION@"      to="${project.version}"/>
+        </tokenfilter>
+      </filterchain>
+
+    </copy>
+    
+    <copy todir="target/spark/src/main/resources">
+      <fileset dir="src/main/resources/spark/">
+        <include name="log.properties"/>
+      </fileset>
+
+      <filterchain>
+        <tokenfilter>
+          <replacestring from="@PROJECT_PACKAGE_NAME@" to="${project.pkg.name}"/>
+          <replacestring from="@PROJECT_VERSION@"      to="${project.version}"/>
+        </tokenfilter>
+      </filterchain>
+
+    </copy>
+
+    <concat destfile="target/spark/src/main/c/randomForestSRC.h" append="false">
+      <fileset dir="src/main/c"
+               includes="randomForestSRC.h"/>
+      <fileset dir="src/main/c/spark"
+                includes="randomForestSRC.spark.h"/>
+
+      <filterchain>
+        <tokenfilter>
+          <replacestring from="@RF_CRANX_BEG@" to="/*"/>
+          <replacestring from="@RF_CRANX_END@" to="*/"/>
+
+          <replacestring from="@RF_JAVAX_BEG@" to=""/>
+          <replacestring from="@RF_JAVAX_END@" to=""/>
+        </tokenfilter>
+        
+        <stripjavacomments/>
+
+      </filterchain>
+    </concat>
+
+      
+    <concat destfile="target/spark/src/main/c/randomForestSRC.c" append="false">
+      <fileset dir="src/main/c"
+                includes="randomForestSRC.c"/>
+      <fileset dir="src/main/c/spark"
+                includes="randomForestSRC.spark.c"/>
+
+      <filterchain>
+        <tokenfilter>
+          <replacestring from="@RF_CRANX_BEG@" to="/*"/>
+          <replacestring from="@RF_CRANX_END@" to="*/"/>
+
+          <replacestring from="@RF_JAVAX_BEG@" to=""/>
+          <replacestring from="@RF_JAVAX_END@" to=""/>
+        </tokenfilter>
+
+        <stripjavacomments/>
+
+      </filterchain>
+    </concat>
+
+    <copy todir="target/spark/src/main/c">
+      <fileset dir="src/main/c">
+        <include name="splitCustom.*"/>
+      </fileset>
+    </copy>
+
+    
+    <copy todir="target/spark/src/main/java">
+      <fileset dir="src/main/java">
+        <include name="Trace.java"/>
+        <include name="Native.java"/>
+        <include name="RFLogger.java"/>
+        <include name="ModelArg.java"/>
+        <include name="RandomForest.java"/>
+        <include name="RandomForestModel.java"/>
+        <include name="EnsembleArg.java"/>
+        <include name="Ensemble.java"/>        
+        <include name="NativeOpt.java"/>
+      </fileset>
+
+      <filterchain>
+        <tokenfilter>
+          <!-- Targets Native.java -->
+          <replacestring from="@PROJECT_PACKAGE_NAME@" to="${project.pkg.name}"/>
+        </tokenfilter>
+      </filterchain>
+
+      <!-- Keep or remove the Java TRACE in target -->
+      <filterchain>
+        <tokenfilter>
+          <replacestring from="@RF_TRACE_OFF@" to="${java.trace.token}"/>
+        </tokenfilter>
+        <stripjavacomments/>
+      </filterchain>
+
+
+    </copy>
+
+    <copy todir="target/spark/src/test/java">
+      <fileset dir="src/test/java">
+        <include name="HelloRandomForestSRC.java"/>
+        <include name="Simulation.java"/>
+      </fileset>
+    </copy>
+
+    <copy todir="target/spark/src/test/resources/data">
+      <fileset dir="src/test/resources/data">
+        <include name="*"/>
+      </fileset>
+    </copy>
+    
+  </target>
+
+
+  <!--
+    ========================================================================
+      BUILD-SPARK target, Entry Point
+    ========================================================================
+  -->
+  <target name="build-spark" depends="init, source-spark, os-prep">
+
+    <exec dir="target/spark" executable="mvn" vmlauncher="FALSE" failonerror="TRUE">
+      <!--arg line="-q"/-->
+      <arg line="-e"/>
+      <arg line="package"/>
+    </exec>
+
+    <echo file="target/spark/target/hello${scriptExtension}" append="false">${scriptFileCommentLine}
+    spark-submit --class com.kogalur.randomforest.HelloRandomForestSRC --master local[*] --jars randomForestSRC.stealth-tests.jar randomForestSRC.stealth.jar
+    ${scriptFileExitLine}
+    </echo>
+
+    <chmod dir="target/spark/target" perm="u+rwx" includes="*${scriptExtension}" os="Linux,Mac OS X"/>
+    
+  </target>
+  
+</project>
+
+
+
