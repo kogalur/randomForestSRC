@@ -1,7 +1,7 @@
 <!DOCTYPE html">
 <html lang="en-US">
 <head>
-<title>Random Forests for Survival, Regression and Classification</title>
+<title>Random Forests for Survival, Regression, and Classification</title>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 
 <!-- Primary stylesheet: -->
@@ -32,27 +32,36 @@ MathJax.Hub.Config({ TeX: { equationNumbers: {autoNumber: "AMS"} } });
 <script type="text/javascript" src="js/toc.js"></script>
 
 <!-- Include HTML Content From Other Files: -->
-<!-- Currently NOT Working -->
-<script type="text/javascript" src="js/w3data.js"></script>
+<script src="https://www.w3schools.com/lib/w3.js"></script>
 
 </head>
 
 <body onload="generateTOC('toc_id', document.getElementById('toc'));">
 
+<div class="banner"> Random Forests for Survival, Regression, and Classification</div>
+<div class="navbar">
+  <li class="nav"><a href="index.html">Home</a></li>
+  <li class="nav"><a href="https://github.com/kogalur/randomForestSRC/">GitHub</a></li>
+  <li class="nav"><a href="theory.html">Theory & Specifications</a></li>
+  <li class="nav"><a href="building.html">Building for R and Apache Spark</a></li>
+  <li class="nav"><a href="javadoc/index.html">Java API</a></li>
+  <li class="nav"><a href="https://github.com/kogalur/randomForestSRC/issues">Bug Reporting</a></li>
+</div>
+
 <div id="toc_id" class="content" >
 
-  <h1>Random Forests for Survival, Regression & Classification</h1>
-  <h1>A Parallel Package for a General Implemention of Breiman's Random Forests</h1>
+  <h1>Random Forests for Survival, Regression, </br> and Classification</h1>
+  <h1>A Parallel Package for a General Implemention of </br> Breiman's Random Forests</h1>
+  <h1>Theory and Specifications</h1>
 
   <p class="centerText">Udaya Kogalur & Hemant Ishwaran</p>
-  <p  class="centerText">(Updated July 31, 2017)</p>
   
 <h2 id="Ztable_of_contents">Table of Contents</h2>
 <div id="toc"></div>
 
-<a id="Zintroduction"a></a><h2>Introduction</h2>
+<a id="Zintroduction"></a><h2>Introduction</h2>
 
-<p>Random Forests for Survival, Regression and Classification
+<p>Random Forests for Survival, Regression, and Classification
 (RF-SRC) is an ensemble tree method for the analysis of data sets
 using a variety of models. As is well known, constructing ensembles
 from base learners such as trees can significantly improve learning
@@ -83,7 +92,7 @@ selection is implemented using minimal depth [<a
 href="#Xishwaran2010high">Ishwaran et al., 2010</a>]. Missing data
 (for x-variables and y-outcomes) can be imputed on both training and
 test data. The package supports shared memory parallel processing on
-desktop computers via OpenMPl. The package also supports
+desktop computers via OpenMP. The package also supports
 hybrid parallel processing via OpenMP & Open MPI on
 clusters that implement distributed memory. Execution time is
 reduced almost linearly with respect to the cores available.
@@ -295,7 +304,7 @@ is also shown in the lower half of the figure.
 src="images/class_forest_decision.png" alt="Forest Decision Boundary"/>
 <figcaption class="centerText"><br>Forest Decision Boundary</figcaption> </figure>
 
-<a id="Zsplitting_and_node_size"a></a><h3>Splitting and Node Size</h3>
+<a id="Zsplitting_and_node_size"></a><h3>Splitting and Node Size</h3>
 
 <p> It is important to understand how splitting and node size affect the topology of a tree. To aid in this,
 some notation is introduced first. Assume $h$ is the node of a tree, and that the task is to split $h$ into
@@ -2171,12 +2180,6 @@ There are no terminal node estimators implemented in this scenario.
 <h4>Prediction error</h4>
 There is no prediction error implemented in this scenario.
 
-
-
-<a id="Zcompilation_and_execution"></a><h2>Compilation and Execution</h2>
-
-<p w3-include-html="compilation.html"></p>
-
 <a id="Zsupplementary_code"></a><h2>Supplementary Code</h2>
 
 <p> Generalized code for simulating the spheres used in [<a
@@ -2203,16 +2206,12 @@ Parallel Processinge</a>]:
 </p>
 <pre><code class="R" w3-include-html="code/slave.R"></code></pre>
 
-<script>
-w3IncludeHTML();
-</script>
+<script>w3IncludeHTML();</script>
 
 <h2>References</h2>
 
 <p w3-include-html="references.html"></p>
 
-
-</div>
 
 </body>
 </html>

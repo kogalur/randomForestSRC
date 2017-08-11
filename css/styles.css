@@ -85,3 +85,49 @@ pre code {
 }
 
 
+header {
+     position:fixed;
+     top: 0;
+     left: 0;
+     width: 100%;
+}
+
+.banner {
+  width: 100%;
+  height: 90px;
+  background-image: linear-gradient(to bottom right, #aeb6bf, #2e4053);
+  font-family: Helvetica;
+  font-weight: bold;
+  color: white;
+  font-size:  2em;
+  text-align: center;
+  vertical-align: middle;
+  line-height: 90px;
+}
+
+.navbar {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    overflow: auto;
+    background-color: #303030;
+
+}
+
+li.nav {
+    float: left;
+}
+
+li.nav a {
+    display: block;
+    color: white;
+    font-family: Helvetica;
+    font-size:  0.75em;
+    text-align: center;
+    padding: 14px 16px;
+    text-decoration: none;
+}
+
+li.nav a:hover {
+    background-color: Black;
+}
