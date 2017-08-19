@@ -86,6 +86,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP intrPredictor,
                   SEXP sobservationSize,
                   SEXP sobservationIndv,
+                                  
                   SEXP partialType,
                   SEXP partialXvar,
                   SEXP partialLength,

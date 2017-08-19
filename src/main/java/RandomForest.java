@@ -23,7 +23,7 @@ public class RandomForest {
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
         @RF_TRACE_OFF@  RFLogger.log(Level.INFO, "Family train:  " + modelArg.get_family());
         @RF_TRACE_OFF@  }
-        
+
         ArrayList ensembleArray = Native.getInstance().grow(
                                                             modelArg.get_trace(),
                                                             modelArg.get_seed(),
@@ -40,7 +40,7 @@ public class RandomForest {
                                                             modelArg.get_nodeSize(),
                                                             modelArg.get_nodeDepth(),
 
-                                                            modelArg.get_eventWeightSize(),
+                                                            modelArg.get_eventCount(),
                                                             modelArg.get_eventWeight(),
 
                                                             modelArg.get_ntree(),
@@ -58,7 +58,7 @@ public class RandomForest {
                                                             modelArg.get_sample(),
                                                             modelArg.get_caseWeight(),
 
-                                                            modelArg.get_xSplitStatWt(),
+                                                            modelArg.get_xStatisticalWeight(),
                                                             modelArg.get_yWeight(),
 
                                                             modelArg.get_xWeight(),
@@ -69,7 +69,7 @@ public class RandomForest {
                                                             modelArg.get_nImpute(),
                                                             modelArg.get_rfCores());
 
-
+            
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {        
         @RF_TRACE_OFF@  RFLogger.log(Level.INFO, "Native.grow() nominal exit.");
         @RF_TRACE_OFF@  }

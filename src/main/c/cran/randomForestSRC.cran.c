@@ -269,6 +269,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP intrPredictor,
                   SEXP sobservationSize,
                   SEXP sobservationIndv,
+                                  
                   SEXP partialType,
                   SEXP partialXvar,
                   SEXP partialLength,
@@ -327,6 +328,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_intrPredictor        = (uint *) INTEGER(intrPredictor);  RF_intrPredictor --;
   RF_sobservationSize     = INTEGER(sobservationSize)[0];
   RF_sobservationIndv     = (uint *) INTEGER(sobservationIndv);  RF_sobservationIndv --;
+   
   RF_partialType          = INTEGER(partialType)[0];
   RF_partialXvar          = INTEGER(partialXvar)[0];
   RF_partialLength        = INTEGER(partialLength)[0];

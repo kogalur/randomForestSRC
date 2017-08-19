@@ -20,26 +20,20 @@
 ## multivariate mixed forests
 ## lipids used as the multivariate y-responses
 ## ------------------------------------------------------------
-
 ## load the data
 data(nutrigenomic, package = "_PROJECT_PACKAGE_NAME_")
-
 ## nice wrapper for making multivariate formula
 mvrfsrc.f <- function(ynames, dat) {
   as.formula(paste("Multivar(", paste(ynames, collapse = ","),paste(") ~ ."), sep = ""))
 }
-
 ## multivariate mixed forest call
 mv.obj <- rfsrc(mvrfsrc.f(colnames(nutrigenomic$lipids)),
             data.frame(do.call(cbind, nutrigenomic)),
             importance=TRUE, nsplit = 10)
-
-
 ## ------------------------------------------------------------
 ## nice wrappers to extract standardized performance values
 ## works for all forests - including multivariate forests
 ## ------------------------------------------------------------
-
 ## pull the standardized error from a forest object
 get.error <- function(obj) {
   100 * c(sapply(obj$yvar.names, function(nn) {
@@ -52,7 +46,6 @@ get.error <- function(obj) {
     }
   }))
 }
-
 ## pull the standardized VIMP from a forest object
 get.vimp <- function(obj) {
   vimp <- 100 * do.call(cbind, lapply(obj$yvar.names, function(nn) {
@@ -67,22 +60,16 @@ get.vimp <- function(obj) {
   colnames(vimp) <- obj$yvar.names
   vimp
 }
-
 ## ------------------------------------------------------------
 ## plot the standarized performance and VIMP values
 ## ------------------------------------------------------------
-
 ## acquire the error rate for each of the 21-coordinates 
 ## standardize to allow for comparison across coordinates
 serr <- get.error(mv.obj)
-
 ## acquire standardized VIMP 
 svimp <- get.vimp(mv.obj)
-
 par(mfrow = c(1,2))
 plot(serr, xlab = "Lipids", ylab = "Standardized Performance")
 matplot(svimp, xlab = "Genes/Diet/Genotype", ylab = "Standardized VIMP")
-
-
 }}
 \keyword{datasets}

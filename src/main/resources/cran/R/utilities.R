@@ -1,4 +1,5 @@
 get.bootstrap <- function (bootstrap) {
+  
   if (bootstrap == "by.root") {
     bootstrap <- 0
   }
@@ -17,6 +18,7 @@ get.bootstrap <- function (bootstrap) {
   return (bootstrap)
 }
 get.samptype <- function (samptype) {
+  
   if (samptype == "swr") {
     bits <- 0
   }
@@ -37,17 +39,25 @@ get.cr.bits <- function (fmly) {
 }
 get.na.action <- function (na.action) {
   if (na.action == "na.omit") {
+    
     na.action <- 0
   }
     else if (na.action == "na.impute") {
+      
       na.action <- 2^4
+      
+      
+      
+      
     }
+      
     else {
         stop("Invalid choice for 'na.action' option:  ", na.action)
       }
   return (na.action)
 }
 get.forest <- function (forest) {
+  
   if (!is.null(forest)) {
     if (forest == TRUE) {
       forest <- 2^5
@@ -65,6 +75,7 @@ get.forest <- function (forest) {
   return (forest)
 }
 get.forest.wt <- function (grow.equivalent, bootstrap, weight) {
+  
   if (!is.null(weight)) {
     if (weight == FALSE) {
       weight <- 0
@@ -112,7 +123,9 @@ get.forest.wt <- function (grow.equivalent, bootstrap, weight) {
   return (weight)
 }
 get.importance <-  function (importance) {
+  
   if (!is.null(importance)) {
+    
     if (importance == TRUE) {
       importance <- "permute"
     }
@@ -181,6 +194,7 @@ get.impute.only <-  function (impute.only, nMiss) {
     }
 }
 get.outcome <- function (outcome) {
+  
   if (outcome == "train") {
     outcome <- 0
   }
@@ -193,6 +207,8 @@ get.outcome <- function (outcome) {
   return (outcome)
 }
 get.perf <-  function (perf, impute.only, family, perf.type) {
+    
+    
     if (impute.only == TRUE) {
         result = "none"
     }
@@ -220,6 +236,8 @@ get.perf <-  function (perf, impute.only, family, perf.type) {
         }
     }
     else {
+        
+        
         result = "none"
     }
     return (result)
@@ -242,6 +260,7 @@ get.perf.bits <- function (perf) {
     }
 }
 get.proximity <- function (grow.equivalent, proximity) {
+  
     if (!is.null(proximity)) {
       if (proximity == FALSE) {
         prox.bits <- 0
@@ -283,6 +302,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (prox.bits)
   }
+ 
   get.rf.cores <- function () {
     if (is.null(getOption("rf.cores"))) {
       if(!is.na(as.numeric(Sys.getenv("RF_CORES")))) {
@@ -299,6 +319,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (seed)
   }
   get.split.depth <- function (split.depth) {
+    
     if (!is.null(split.depth)) {
       if (split.depth == "all.trees") {
         split.depth <- 2^22
@@ -319,6 +340,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (split.depth)
   }
   get.split.null <- function (split.null) {
+    
     if (!is.null(split.null)) {
       if (split.null == TRUE) {
         split.null <- 2^18
@@ -336,8 +358,10 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (split.null)
   }
   get.split.cust <- function (split.cust) {
+    
     if (!is.null(split.cust)) {
       if ((split.cust >= 1) && (split.cust <= 16)) {
+        
         split.cust <- 256 * (split.cust - 1)
       }
         else {
@@ -350,6 +374,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (split.cust)
   }
   get.statistics <- function (statistics) {
+    
     if (!is.null(statistics)) {
       if (statistics == TRUE) {
         statistics <- 2^27
@@ -367,6 +392,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (statistics)
   }
   get.trace <- function (do.trace) {
+    
     if (!is.logical(do.trace)) {
       if (do.trace >= 1) {
         do.trace <- round(do.trace)
@@ -381,6 +407,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (do.trace)
   }
   get.var.used <- function (var.used) {
+    
     if (!is.null(var.used)) {
       if (var.used == "all.trees") {
         var.used <- 2^12
@@ -401,6 +428,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (var.used)
   }
   get.vimp.only <-  function (vimp.only) {
+    
     if (!is.null(vimp.only)) {
       if (vimp.only) {
         return (2^27)
@@ -417,6 +445,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   get.membership <- function (membership) {
+    
     bits <- 0
     if (!is.null(membership)) {
       if (membership == TRUE) {
@@ -432,8 +461,13 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (bits)
   }
   get.terminal.qualts <- function (terminal.qualts, incoming.flag) {
+    
+    
+    
     bits <- 0
     if (is.null(incoming.flag)) {
+      
+      
     }
       else if (incoming.flag) {
         bits <- bits + 2^17
@@ -452,8 +486,13 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (bits)
   }
   get.terminal.quants <- function (terminal.quants, incoming.flag) {
+    
+    
+    
     bits <- 0
     if (is.null(incoming.flag)) {
+      
+      
     }
       else if (incoming.flag) {
         bits <- bits + 2^19
@@ -472,6 +511,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (bits)
   }
   get.tree.err <- function (tree.err) {
+    
     if (!is.null(tree.err)) {
       if (tree.err == FALSE) {
         tree.err <- 2^13
@@ -488,6 +528,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (tree.err)
   }
+  
   is.hidden.impute.only <-  function (user.option) {
     if (is.null(user.option$impute.only)) {
       FALSE
@@ -497,6 +538,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   is.hidden.terminal.qualts <-  function (user.option) {
+    
     if (is.null(user.option$terminal.qualts)) {
       !FALSE
     }
@@ -505,6 +547,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   is.hidden.terminal.quants <-  function (user.option) {
+    
     if (is.null(user.option$terminal.quants)) {
       FALSE
     }
@@ -513,6 +556,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   is.hidden.perf.type <-  function (user.option) {
+    
     if (is.null(user.option$perf.type)) {
       NULL
     }
@@ -529,8 +573,16 @@ get.proximity <- function (grow.equivalent, proximity) {
     }
   }
   get.univariate.target <- function(x, outcome.target = NULL) {
+    
+    
+    
+    
+    
     if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
       if (is.null(outcome.target)) {
+        
+        
+        
         target <- match(c("regrOutput", "classOutput"), names(x))
         target <- target[!is.na(target)]
         if(length(target) > 0) {
@@ -538,7 +590,9 @@ get.proximity <- function (grow.equivalent, proximity) {
           for (i in target) {
             for (j in 1:length(x[[i]])) {
               if (length(x[[i]][[j]]) > 0) {
+                
                 outcome.target <- names(x[[i]][j])
+                
                 do.break <- TRUE
                 break
               }
@@ -549,13 +603,16 @@ get.proximity <- function (grow.equivalent, proximity) {
           }
         }
           else {
+            
             stop("No outcomes found in object.  Please contact technical support.")
           }
       }
       else {
+        
         if (sum(is.element(outcome.target, x$yvar.names)) != 1) {
           stop("User must specify one and only one outcome.target for multivariate families.")
         }
+        
         target <- match(c("regrOutput", "classOutput"), names(x))
         target <- target[!is.na(target)]
         found = FALSE
@@ -564,8 +621,10 @@ get.proximity <- function (grow.equivalent, proximity) {
           for (i in target) {
             for (j in 1:length(x[[i]])) {
               if (length(x[[i]][[j]]) > 0) {
+                
                 if (outcome.target == names(x[[i]][j])) {
                   found = TRUE
+                  
                   do.break <- TRUE
                   break
                 }
@@ -581,20 +640,31 @@ get.proximity <- function (grow.equivalent, proximity) {
         }
       }
     }
+    
+    
+    
     outcome.target
   }
   coerce.multivariate <- function(x, outcome.target) {
+    
+    
+    
+    
+    
     x$univariate <- TRUE
     if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
+      
       x.coerced <- unlist(list(x$classOutput, x$regrOutput), recursive = FALSE)[[outcome.target]]
       x$univariate <- FALSE
       x$yvar <- x$yvar[, outcome.target]
+      
       if (is.factor(x$yvar) || is.ordered(x$yvar)) {
         x$family <- "class"
       }
       else {
         x$family <- "regr"
       }
+      
       x$predicted <- x.coerced$predicted
       x$predicted.oob <- x.coerced$predicted.oob
       x$class <- x.coerced$class

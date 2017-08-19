@@ -1314,6 +1314,7 @@ void stackDefinedOutputObjects(char      mode,
                                Node   ***pRF_root,
                                uint    **pRF_tLeafCount_,
                                double  **pRF_proximity_,
+                                
                                double  **pRF_weight_,
                                int     **pRF_seed_,
                                double  **p_imputation_,
@@ -1561,6 +1562,7 @@ void   decreaseMemoryAllocation(size_t amount);
 void acquireTree(char mode, uint r, uint b);
 void updateWeight(char mode, uint b);
 void finalizeWeight(char mode);
+ 
 void updateProximity(char mode, uint b);
 void finalizeProximity(char mode);
 void updateSplitDepth(uint treeID, Node *rootPtr, uint maxDepth);

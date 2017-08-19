@@ -40,7 +40,6 @@
   subtree for a variable. A maximal subtree may also not exist if
   there are no splits on the variable.  See Ishwaran et al. (2010,
   2011) for details.
-  
   The minimal depth of a maximal subtree (the first order depth)
   measures predictiveness of a variable \emph{x}.  It equals the
   shortest distance (the depth) from the root node to the parent node
@@ -49,14 +48,12 @@
   prediction. The mean of the minimal depth distribution is used as
   the threshold value for deciding whether a variable's minimal depth
   value is small enough for the variable to be classified as strong.
-  
   The second order depth is the distance from the root node to the
   second closest maximal subtree of \emph{x}.  To specify the target
   order depth, use the \code{max.order} option (e.g., setting
   \option{max.order=2} returns the first and second order depths).
   Setting \option{max.order=0} returns the first order depth for each
   variable for each tree.
-  
   Set \option{sub.order=TRUE} to obtain the minimal depth of a
   variable relative to another variable.  This returns a
   \code{p}x\code{p} matrix, where \code{p} is the number of variables,
@@ -68,7 +65,6 @@
   columns) and identifies interrelationship between variables.  Small
   [i][j] entries indicate interactions.  See
   \command{find.interaction} for related details.
-  
   For competing risk data, maximal subtree analyses are unconditional
   (i.e., they are non-event specific).
 }
@@ -102,7 +98,6 @@
   Ishwaran H., Kogalur U.B., Gorodeski E.Z, Minn A.J. and 
   Lauer M.S. (2010).  High-dimensional variable selection for survival
   data.  \emph{J. Amer. Statist. Assoc.}, 105:205-217.
-  
   Ishwaran H., Kogalur U.B., Chen X. and Minn A.J. (2011).  Random
   survival forests for high-dimensional data. \emph{Statist. Anal. Data
     Mining}, 4:115-132.
@@ -118,29 +113,22 @@
 ## survival analysis
 ## first and second order depths for all variables
 ## ------------------------------------------------------------
-
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 v.obj <- rfsrc(Surv(time, status) ~ . , data = veteran)
 v.max <- max.subtree(v.obj)
-
 # first and second order depths
 print(round(v.max$order, 3))
-
 # the minimal depth is the first order depth
 print(round(v.max$order[, 1], 3))
-
 # strong variables have minimal depth less than or equal
 # to the following threshold
 print(v.max$threshold)
-
 # this corresponds to the set of variables
 print(v.max$topvars)
-
 ## ------------------------------------------------------------
 ## regression analysis
 ## try different levels of conservativeness
 ## ------------------------------------------------------------
-
 mtcars.obj <- rfsrc(mpg ~ ., data = mtcars)
 max.subtree(mtcars.obj)$topvars
 max.subtree(mtcars.obj, conservative = TRUE)$topvars

@@ -92,9 +92,16 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
 }
 void exit2J() {
   jstring jbuffer;
+  if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+    jthrowable flag =  (*RF_java_env) -> ExceptionOccurred(RF_java_env);
+    (*RF_java_env) -> ExceptionDescribe(RF_java_env);
+    (*RF_java_env) -> ThrowNew(RF_java_env, RF_java_except_cls, "Thrown from Native Code.");
+    (*RF_java_env) -> ExceptionClear(RF_java_env);
+  }
   jbuffer = (*RF_java_env) -> NewStringUTF(RF_java_env, "\nRF-SRC:  The application will now exit.\n");
   (*RF_java_env) -> CallStaticVoidMethod(RF_java_env, RF_java_cls, RF_java_mid_logError, jbuffer);
-  exit(1);
+  (*RF_java_env) -> DeleteLocalRef(RF_java_env, jbuffer);
+  (*RF_java_env) -> CallStaticVoidMethod(RF_java_env, RF_java_cls, RF_java_mid_logExit);
 }
 void errorJ(char *format, ...) {
   char *buffer;
@@ -105,6 +112,7 @@ void errorJ(char *format, ...) {
   va_end(aptr);
   jstring jbuffer = (*RF_java_env) -> NewStringUTF(RF_java_env, (const char*) buffer);
   (*RF_java_env) -> CallStaticVoidMethod(RF_java_env, RF_java_cls, RF_java_mid_logError, jbuffer);
+  (*RF_java_env) -> DeleteLocalRef(RF_java_env, jbuffer);
   free((char *) buffer);
 }
 void printJ(char *format, ...) {
@@ -116,23 +124,24 @@ void printJ(char *format, ...) {
   va_end(aptr);
   jstring jbuffer = (*RF_java_env) -> NewStringUTF(RF_java_env, (const char*) buffer);
   (*RF_java_env) -> CallStaticVoidMethod(RF_java_env, RF_java_cls, RF_java_mid_log, jbuffer);
+  (*RF_java_env) -> DeleteLocalRef(RF_java_env, jbuffer);  
   free((char *) buffer);
-}
-jint throwRuntimeException(char *message) {
-    jclass exClass;
-    char *className = "java/lang/RuntimeException";
-    exClass = (*RF_java_env)->FindClass(RF_java_env, className);
-    if (exClass == NULL) {
-      printf("\nRF-SRC:  Unable to instantiate java/lang/RuntimeException.\n");
-      printf("\nRF-SRC:  The application will now exit.\n");
-      exit(1);
-    }
-    return (*RF_java_env)->ThrowNew(RF_java_env, exClass, message);
 }
 void setNativeGlobalEnv(JNIEnv *env, jobject obj) {
   RF_java_env = env;
   RF_java_obj = obj;
   RF_java_cls = (*RF_java_env) -> GetObjectClass(RF_java_env, RF_java_obj);
+  if (RF_java_cls == NULL) {
+    printf("\nRF-SRC:  Unable to access calling class com/kogalur/randomforest/Native.\n");
+    printf("\nRF-SRC:  The application will now exit.\n");
+    exit(1);
+  }
+  RF_java_except_cls = (*RF_java_env) -> FindClass(RF_java_env, "java/lang/RuntimeException");
+  if (RF_java_except_cls == NULL) {
+    printf("\nRF-SRC:  Unable to access exception class java/lang/RuntimeException.\n");
+    printf("\nRF-SRC:  The application will now exit.\n");
+    exit(1);
+  }
   RF_java_mid_log = (*RF_java_env) -> GetStaticMethodID(RF_java_env, RF_java_cls, "log", "(Ljava/lang/String;)V");
   if (RF_java_mid_log == NULL) {
     printf("\nRF-SRC:  Unable to access static method com/kogalur/randomforest/Native::log().\n");
@@ -142,6 +151,12 @@ void setNativeGlobalEnv(JNIEnv *env, jobject obj) {
   RF_java_mid_logError = (*RF_java_env) -> GetStaticMethodID(RF_java_env, RF_java_cls, "logError", "(Ljava/lang/String;)V");
   if (RF_java_mid_logError == NULL) {
     printf("\nRF-SRC:  Unable to access static method com/kogalur/randomforest/Native::log().\n");
+    printf("\nRF-SRC:  The application will now exit.\n");
+    exit(1);
+  }
+  RF_java_mid_logExit = (*RF_java_env) -> GetStaticMethodID(RF_java_env, RF_java_cls, "logExit", "()V");
+  if (RF_java_mid_logExit == NULL) {
+    printf("\nRF-SRC:  Unable to access static method com/kogalur/randomforest/Native::logExit().\n");
     printf("\nRF-SRC:  The application will now exit.\n");
     exit(1);
   }
@@ -253,41 +268,65 @@ void *copy1DObject(jarray arr, char type, uint *index) {
   if (! (*RF_java_env) -> IsSameObject(RF_java_env, arr, NULL)) {
     RF_jni1DInfoList[*index] = incomingInfo = (JNI1DInfo*) gblock((size_t) sizeof(JNI1DInfo));
     len = (*RF_java_env) -> GetArrayLength(RF_java_env, arr);
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     (incomingInfo -> len) = len;
     (incomingInfo -> type) = type;
     switch (type) {
     case NATIVE_TYPE_NUMERIC:
       (incomingInfo -> array) = dcopy = dvector(1, len);
       dbuffer =  (*RF_java_env) -> GetDoubleArrayElements(RF_java_env, arr, &isCopy);
+      if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+        RF_nativeExit();
+      }
       for (i = 0; i < len; i++) {
         dcopy[i+1] = (double) dbuffer[i];
       }
       if (isCopy == JNI_TRUE) {
         (*RF_java_env) -> ReleaseDoubleArrayElements(RF_java_env, arr, (jdouble*) dbuffer, JNI_ABORT);
+        if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+          RF_nativeExit();
+        }
       }
       copy = dcopy;
+      (*RF_java_env) -> DeleteLocalRef(RF_java_env, arr);
       break;
     case NATIVE_TYPE_INTEGER:
       (incomingInfo -> array) = icopy = ivector(1, len);
       ibuffer =  (*RF_java_env) -> GetIntArrayElements(RF_java_env, arr, &isCopy);
+      if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+        RF_nativeExit();
+      }
       for (i = 0; i < len; i++) {
         icopy[i+1] = (int) ibuffer[i];
       }
       if (isCopy == JNI_TRUE) {
         (*RF_java_env) -> ReleaseIntArrayElements(RF_java_env, arr, (jint*) ibuffer, JNI_ABORT);
+        if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+          RF_nativeExit();
+        }
       }
       copy = icopy;
+      (*RF_java_env) -> DeleteLocalRef(RF_java_env, arr);
       break;
     case NATIVE_TYPE_CHARACTER:
       (incomingInfo -> array) = ccopy = cvector(1, len);
       cbuffer =  (*RF_java_env) -> GetCharArrayElements(RF_java_env, arr, &isCopy);
+      if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+        RF_nativeExit();
+      }
       for (i = 0; i < len; i++) {
         ccopy[i+1] = (char) cbuffer[i];
       }
       if (isCopy == JNI_TRUE) {
         (*RF_java_env) -> ReleaseCharArrayElements(RF_java_env, arr, (jchar*) cbuffer, JNI_ABORT);
+        if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+          RF_nativeExit();
+        }
       }
       copy = ccopy;
+      (*RF_java_env) -> DeleteLocalRef(RF_java_env, arr);
       break;
     }
     (*index) ++;
@@ -319,6 +358,9 @@ void *copy2DObject(jobject obj, char type, uint *index) {
   if (! (*RF_java_env) -> IsSameObject(RF_java_env, obj, NULL)) {
     RF_jni2DInfoList[*index] = incomingInfo = (JNI2DInfo*) gblock((size_t) sizeof(JNI2DInfo));
     outLen = (*RF_java_env) -> GetArrayLength(RF_java_env, obj);
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     switch (type) {
     case NATIVE_TYPE_NUMERIC:
       (incomingInfo -> outerPtr) = (double **) new_vvector(1, outLen, NRUTIL_DPTR);
@@ -334,13 +376,25 @@ void *copy2DObject(jobject obj, char type, uint *index) {
     (incomingInfo -> innLen)   = uivector(1, outLen);
     for(uint i = 0; i < outLen; ++i) {
       (incomingInfo -> innerPtr)[i+1] = (*RF_java_env) -> GetObjectArrayElement(RF_java_env, obj, i);
+      if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+        RF_nativeExit();
+      }
       (incomingInfo -> innLen)[i+1] = (*RF_java_env) -> GetArrayLength(RF_java_env, (incomingInfo -> innerPtr)[i+1]);
+      if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+        RF_nativeExit();
+      }
       switch (type) {
       case NATIVE_TYPE_NUMERIC:
         ((double **) (incomingInfo -> outerPtr))[i+1] = (double *) (((*RF_java_env) ->GetDoubleArrayElements(RF_java_env, (incomingInfo -> innerPtr)[i+1], &isCopy)) - 1);
+        if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+          RF_nativeExit();
+        }
         break;
       case NATIVE_TYPE_INTEGER:
         ((uint **) (incomingInfo -> outerPtr))[i+1] = (uint *) (((*RF_java_env) ->GetIntArrayElements(RF_java_env, (incomingInfo -> innerPtr)[i+1], &isCopy)) - 1 );
+        if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+          RF_nativeExit();
+        }
         break;
       }
       (incomingInfo -> isCopy)[i+1] = isCopy;
@@ -358,12 +412,18 @@ void free_jni2DList(uint size) {
       case NATIVE_TYPE_NUMERIC:
         if ((incomingInfo -> isCopy)[j+1] == JNI_TRUE) {
           (*RF_java_env) -> ReleaseDoubleArrayElements(RF_java_env, (incomingInfo -> innerPtr)[j+1],  ((jdouble **) (incomingInfo -> outerPtr))[j+1] + 1, 0);
+          if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+            RF_nativeExit();
+          }
         }
         (*RF_java_env) -> DeleteLocalRef(RF_java_env, (incomingInfo -> innerPtr)[j+1]);
         break;
       case NATIVE_TYPE_INTEGER:
         if ((incomingInfo -> isCopy)[j+1] == JNI_TRUE) {
           (*RF_java_env) -> ReleaseIntArrayElements(RF_java_env, (incomingInfo -> innerPtr)[j+1],  ((jint **) (incomingInfo -> outerPtr))[j+1] + 1, 0);
+          if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+            RF_nativeExit();
+          }
         }
         (*RF_java_env) -> DeleteLocalRef(RF_java_env, (incomingInfo -> innerPtr)[j+1]);
         break;
@@ -429,11 +489,23 @@ void *stackAndProtect(uint  *index,
   switch (type) {
   case NATIVE_TYPE_NUMERIC:
     thisArray = (jdoubleArray) (*RF_java_env) -> NewDoubleArray(RF_java_env, size);
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     thisArrayPtr = (jdoubleArray *) (*RF_java_env) -> GetDoubleArrayElements(RF_java_env, thisArray, &isCopy);
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     break;
   case NATIVE_TYPE_INTEGER:
     thisArray = (jintArray) (*RF_java_env) -> NewIntArray(RF_java_env, size);
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     thisArrayPtr = (jintArray *) (*RF_java_env) -> GetIntArrayElements(RF_java_env, thisArray, &isCopy);
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     break;
   }
   ensembleInfo -> isCopy = isCopy;
@@ -458,12 +530,18 @@ void put_jniEnsembleInfoList(uint size) {
     ensembleInfo = RF_jniEnsembleInfoList[i];
     auxInfoPtr = RF_snpAuxiliaryInfoList[ensembleInfo -> identity];
     name = (*RF_java_env) -> NewStringUTF(RF_java_env, RF_sexpString[ensembleInfo -> identity]);
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     switch (ensembleInfo -> type) {
     case NATIVE_TYPE_NUMERIC:
       if (ensembleInfo -> isCopy == JNI_TRUE) {
         (*RF_java_env) -> ReleaseDoubleArrayElements(RF_java_env,
                                                      ensembleInfo -> array,
                                                      (jdouble *) (ensembleInfo -> arrayPtr), 0);
+        if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+          RF_nativeExit();
+        }
       }
       break;
     case NATIVE_TYPE_INTEGER:
@@ -471,6 +549,9 @@ void put_jniEnsembleInfoList(uint size) {
         (*RF_java_env) -> ReleaseIntArrayElements(RF_java_env,
                                                   ensembleInfo -> array,
                                                   (jint *) (ensembleInfo -> arrayPtr), 0);
+        if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+          RF_nativeExit();
+        }
       }
       break;
     }
@@ -479,11 +560,17 @@ void put_jniEnsembleInfoList(uint size) {
                                                       (jchar) ensembleInfo -> type,
                                                       (jint) ensembleInfo -> identity,
                                                       (jlong) ensembleInfo -> size,
-                                                      (jboolean) ((auxInfoPtr -> auxiliaryPtr) == NULL) ? JNI_TRUE : JNI_FALSE,
+                                                      (jboolean) (((auxInfoPtr -> auxiliaryPtr) == NULL) && (auxInfoPtr -> dimSize > 1)) ? JNI_TRUE : JNI_FALSE,
                                                       (jint) (auxInfoPtr -> dimSize),
                                                       (jintArray) (auxInfoPtr -> dim),
                                                       (jobject) (ensembleInfo -> array));
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     (*RF_java_env) -> CallObjectMethod(RF_java_env, RF_java_arrlst_obj, RF_java_arrlst_add, ensembleObj);
+    if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
+      RF_nativeExit();
+    }
     if (FALSE) {
       RF_nativePrint("\nRF-SRC:  Unable to add ensemble object to java/util/ArrayList.\n");
       RF_nativePrint("\nRF-SRC:  The application will now exit.\n");

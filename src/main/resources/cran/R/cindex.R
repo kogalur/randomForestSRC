@@ -14,6 +14,7 @@ cindex <- function (time,
   if (nmiss == size) {
     stop("no valid pairs found, too much missing data")
   }
+  
   denom <- sapply(miss, function(x) if (x) 0 else 1)
   nativeOutput <- .Call("rfsrcCIndex",
                         as.integer(do.trace),
@@ -22,6 +23,7 @@ cindex <- function (time,
                         as.double(censoring),
                         as.double(predicted),
                         as.integer(denom))
+  
   if (is.null(nativeOutput)) {
     stop("An error has occurred in rfsrcCIndex.  Please turn trace on for further analysis.")
   }

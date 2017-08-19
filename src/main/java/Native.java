@@ -77,7 +77,7 @@ class Native {
                                  int          nodeSize,
                                  int          nodeDepth,
 
-                                 int          eventWeightSize,
+                                 int          eventCount,
                                  double[]     eventWeight,
                             
                                  int          ntree,
@@ -91,11 +91,11 @@ class Native {
                                  char[]       xType,
                                  int[]        xLevel,
 
-                                 int          sampleize,
+                                 int          sampleSize,
                                  int[][]      sample,
                                  double[]     caseWeight,
 
-                                 double[]     xSplitStatWt,
+                                 double[]     xStatisticalWeight,
                                  double[]     yWeight,
 
                                  double[]     xWeight,
@@ -117,12 +117,15 @@ class Native {
     }
 
 
-    static void log(String msg) {
+    private static void log(String msg) {
         RFLogger.log(Level.INFO, msg);
     }
 
-    static void logError(String msg) {
+    private static void logError(String msg) {
         RFLogger.log(Level.SEVERE, msg);
     }
-    
+
+    private static void logExit() {
+        System.exit(1);
+    }
 }

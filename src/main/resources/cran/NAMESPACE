@@ -1,5 +1,4 @@
 useDynLib(_PROJECT_PACKAGE_NAME_, .registration = TRUE)
-
 importFrom("parallel", mclapply)
 importFrom("graphics", "abline", "axis", "box", "boxplot", "legend",
            "lines", "matlines", "matplot", "mtext", "par", "plot",
@@ -12,28 +11,27 @@ importFrom("stats", "as.formula", "dlnorm", "formula", "lowess",
 importFrom("utils", "installed.packages", "write.table",
            "txtProgressBar", "setTxtProgressBar")
 importFrom("grDevices", "gray")
-
 export(cindex,
-       
+        
        find.interaction,
        find.interaction.rfsrc,
        get.mv.error,
        get.mv.predicted,
        get.mv.vimp,
-       
+        
        impute,       
        impute.rfsrc,
        max.subtree,
        max.subtree.rfsrc,
        partial,
        partial.rfsrc,
-       
+        
        plot.competing.risk,
        plot.competing.risk.rfsrc,
        plot.survival,
        plot.survival.rfsrc,
        plot.rfsrc,
-       
+        
        plot.variable,
        plot.variable.rfsrc,       
        predict.rfsrc,
@@ -44,17 +42,15 @@ export(cindex,
        rfsrc.news,
        rfsrcSyn,
        rfsrcSyn.rfsrc,
-       
+        
        stat.split,
        stat.split.rfsrc,
        var.select,
        var.select.rfsrc,
        vimp,
        vimp.rfsrc)
-
-
 S3method(print, rfsrc)
-
+ 
 S3method(plot, rfsrc)
 S3method(predict, rfsrc)
 S3method(max, subtree)
@@ -65,4 +61,3 @@ S3method(plot, variable)
 S3method(plot, variable.rfsrc)
 S3method(plot, survival)
 S3method(plot, survival.rfsrc)
-

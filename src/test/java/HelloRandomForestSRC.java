@@ -21,7 +21,7 @@ public class HelloRandomForestSRC {
             .config("spark.master", "local")
             .getOrCreate();
 
-        
+        // Suppress the Spark logger for all but fatal errors.
         org.apache.log4j.LogManager.getRootLogger().setLevel(org.apache.log4j.Level.FATAL);
         
         runExample();
@@ -42,7 +42,7 @@ public class HelloRandomForestSRC {
         
         String formulaU = new String(" Unsupervised () ~ .");
 
-        
+        // Java-side trace.
         Trace.set(15);
         
         if (true) {
@@ -54,8 +54,8 @@ public class HelloRandomForestSRC {
                 .format("csv")
                 .load("./test-classes/data/iris.csv");
 
-            
-            
+            // mtcarsDF.printSchema();
+            // mtcarsDF.show();
 
             modelArg = new ModelArg(formulaC, irisDF);
 
@@ -71,8 +71,8 @@ public class HelloRandomForestSRC {
                 .format("csv")
                 .load("./test-classes/data/mtcars.csv");
 
-            
-            
+            // mtcarsDF.printSchema();
+            // mtcarsDF.show();
 
             modelArg = new ModelArg(formulaR, mtcarsDF);
 
@@ -88,8 +88,8 @@ public class HelloRandomForestSRC {
                 .format("csv")
                 .load("/Users/kogalur/Dropbox/working/rfsrc/scala/wihs.csv");
 
-            
-            
+            // wihsDF.printSchema();
+            // wihsDF.show();
 
             modelArg = new ModelArg(formulaS, wihsDF);
 
@@ -117,30 +117,24 @@ public class HelloRandomForestSRC {
             
         }
 
-        modelArg.set_ensembleArg("error", "per.tree");
+        modelArg.set_ensembleArg("error", "every.tree");
 
-        
+        // Serial or parallel.
         modelArg.set_rfCores(1);
 
-        
+        // Repeatability.
         modelArg.set_seed(-1);
 
-        
+        // We set ntree here.
         modelArg.set_bootstrap(2, "auto", "swr", 0, null);
             
-        
-        modelArg.set_trace(15 + (1<<13));
-        modelArg.set_trace(15);
-        modelArg.set_trace(0);
-
-        
-        
-
+        // Native-code trace.
+        // modelArg.set_trace(15 + (1<<13));
        
         RandomForestModel growModel = RandomForest.train(modelArg);
         RandomForestModel restModel = RandomForest.predict(modelArg);
         
-        RFLogger.log(Level.SEVERE, "\n\nHelloRandomForestSRC() nominal exit.\n\n");                
+        RFLogger.log(Level.WARNING, "\n\nHelloRandomForestSRC() nominal exit.\n\n");                
         
     }
 

@@ -14,18 +14,25 @@ distance <- function (x,
             stop("rowI and rowJ identifiers must have the same length")
         }
     }
+    
     method.names <- c("euclidean", 
                       "canberra",  
                       "maximum")   
+    
     if(is.null(method)) {
         method.idx <- which(method.names == "euclidean")
     }
     else {
         method.idx <- which(method.names == method)
     }
+    
     if (length(method.idx) != 1) {
         stop("distance metric invalid")
     }
+    
+    
+    
+    
     nativeOutput <- .Call("rfsrcDistance",
                           as.integer(method.idx),
                           as.integer(n),
@@ -36,13 +43,16 @@ distance <- function (x,
                           as.integer(rowJ),
                           as.integer(get.rf.cores()),
                           as.integer(do.trace))
+    
     if (is.null(nativeOutput)) {
         stop("An error has occurred in rfsrcDistance.  Please turn trace on for further analysis.")
     }
     if (length(rowI) > 0) {
+        
         result <- list(rowI = rowI, rowJ = rowJ, distance = nativeOutput$distance)
     }
     else {
+        
         result <- matrix(0, n, n)
         count <- 0
         for (k in 2:n) {

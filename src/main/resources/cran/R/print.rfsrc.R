@@ -1,4 +1,5 @@
 print.rfsrc <- function(x, outcome.target = NULL, ...) {
+  
   if (sum(inherits(x, c("rfsrc", "forest"), TRUE) == c(1, 2)) == 2) {
     print.default(x)
     return()
@@ -12,6 +13,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     return()
   }
   sf.flag <- FALSE
+  
   if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
     if (sum(inherits(x, c("rfsrc", "synthetic", "oob"), TRUE) == c(1, 2, 3)) != 3) {
       sf.flag <- TRUE
@@ -19,20 +21,26 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     }
     x <- x$rfSyn
   }
+   
+  
   if (sum(inherits(x, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2 &
       sum(inherits(x, c("rfsrc", "predict"), TRUE) == c(1, 2)) != 2) {
     stop("This function only works for objects of class `(rfsrc, grow)' or '(rfsrc, predict)'.")
   }
+  
   if (sum(inherits(x, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     grow.mode <- TRUE
   }
     else {
       grow.mode <- FALSE
     }
+  
   family.org <- x$family
   yvar.dim <- ncol(x$yvar)
+  
   outcome.target <- get.univariate.target(x, outcome.target)
   x <- coerce.multivariate(x, outcome.target)
+  
   if (grepl("surv", x$family)) {
     event <- get.event.info(x)$event
     n.event <- 1
@@ -46,6 +54,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         }
     }
   }
+  
   if (x$family == "class") {
     if (!is.null(x$yvar)) {
       event.freq <- paste(tapply(x$yvar, x$yvar, length), collapse = ", ")
@@ -58,7 +67,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       conf.matx <- cbind(conf.matx,  class.error = round(1 - diag(conf.matx)/rowSums(conf.matx, na.rm = TRUE), 4))
       names(dimnames(conf.matx)) <- c("  observed", "predicted")
       brierS <- brier(x$yvar, if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
+      
       if (!is.null(x$perf.type) && (x$perf.type == "g.mean" || x$perf.type == "g.mean.rfq")) {
+        
         gmeanS <- round(gmean(x$yvar, if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted, x$perf.type), 2)
         iratio <- round(max(x$pi.hat, na.rm  = TRUE) / min(x$pi.hat, na.rm  = TRUE), 2)
       }
@@ -70,6 +81,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       conf.matx <- brierS <- gmeanS <- NULL
     }
   }
+  
   if (!is.null(x$err.rate)) {
     err.rate <- cbind(x$err.rate)    
     if (grepl("surv", x$family)) {
@@ -78,6 +90,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       else if (x$family == "class") {
         overall.err.rate <- paste(round(100 * err.rate[nrow(err.rate), 1], 2), "%", sep = "")
         brierS <- round(100 * brierS, 2)
+        
         if (!is.null(gmeanS)) {
           err.rate <- round(err.rate[nrow(err.rate), 1], 2)          
         }
@@ -96,9 +109,15 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     else {
       err.rate <- NULL
     }
+  
   if (is.null(x$nsplit)) {
     x$nsplit <- 0
   }
+
+  
+  
+  
+
   if (grow.mode) {
     cat("                         Sample size: ", x$n,                 "\n", sep="")
     if (grepl("surv", x$family)) {
@@ -164,7 +183,13 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       }
     }
   }
+
+  
+  
+  
+
     else {
+      
       cat("  Sample size of test (predict) data: ", x$n,  "\n", sep="")
       if (grepl(x$family, "surv") && !is.null(event)) {
         if (n.event > 1) {
@@ -217,6 +242,11 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         }
       }
     }
+
+  
+  
+  
+
   if (sf.flag) {
     message(sf.message)
   }

@@ -5,9 +5,9 @@ import com.kogalur.randomforest.RFLogger;
 import java.util.logging.Level;
 
 import java.util.List;
-
-
-
+//import java.util.Iterator;
+//import java.util.Arrays;
+//import java.util.ArrayList;
 
 class EnsembleArg {
 
@@ -31,7 +31,7 @@ class EnsembleArg {
         ensembleList = new java.util.HashMap <String, NativeOpt> (16);
         
 
-        
+        // Always output "forest" in grow mode. Always. 
         if (mode.equals("grow")) {
             ensembleArg.put("forest", "yes");
             ensembleList.put("forest",
@@ -40,7 +40,7 @@ class EnsembleArg {
                                            new int[] {(1 << 5)}));
         }
         else {
-            
+            // Never output "forest" in !grow mode. Never. 
             ensembleArg.put("forest", "no");
             ensembleList.put("forest",
                              new NativeOpt("forest",
@@ -50,7 +50,7 @@ class EnsembleArg {
             
         if (mode.equals("grow") || mode.equals("rest")) {
 
-            
+             
 
             ensembleArg.put("weight", "no");
             ensembleList.put("weight",
@@ -74,7 +74,7 @@ class EnsembleArg {
         }
         else {
 
-            
+             
                 
             ensembleArg.put("weight", "no");
             ensembleList.put("weight",
@@ -115,19 +115,19 @@ class EnsembleArg {
         ensembleArg.put("error", "last.tree");
         ensembleList.put("error",
                           new NativeOpt("error",
-                                        new String[] {"last.tree", "per.tree"},
+                                        new String[] {"last.tree", "every.tree"},
                                         new int[] {0, (1 << 13)}));
 
         ensembleArg.put("varUsed", "no");
         ensembleList.put("varUsed",
                           new NativeOpt("varUsed",
-                                        new String[] {"no", "per.tree", "sum.tree"},
+                                        new String[] {"no", "every.tree", "sum.tree"},
                                         new int[] {0, (1 << 13), (1 << 12)}));
 
         ensembleArg.put("splitDepth", "no");
         ensembleList.put("splitDepth",
                           new NativeOpt("splitDepth",
-                                        new String[] {"no", "per.tree", "sum.tree"},
+                                        new String[] {"no", "every.tree", "sum.tree"},
                                         new int[] {0, (1 << 23), (1 << 22)}));
 
         if (mode.equals("grow")) {
@@ -138,7 +138,7 @@ class EnsembleArg {
                                                new int[] {0, (1 << 16)}));
         }
 
-        
+        // Note that RF-M+ also supports this option on the native-side, but it not curretly enabled from the Java-side. 
         if (family.equals("RF-C") || family.equals("RF-C+")) {
                 ensembleArg.put("errorType", "default");
                 ensembleList.put("errorType",
@@ -159,13 +159,22 @@ class EnsembleArg {
     void set(String key, String value) {
         if (ensembleList.containsKey(key)) {
 
-            java.util.HashMap nativeOptMap = ensembleList.get(key).option;
-            if (nativeOptMap.containsKey(value)) {
-                ensembleArg.put(key, value);
+            // The following keys cannot be modified.  Warn the user that the attempt is being ignored.
+            if (key.equals("forest")) {
+                RFLogger.log(Level.WARNING, "forest ensemble cannot be modified.");
+            }
+            else if (key.equals("qualitativeTerminalInfo")) {
+                RFLogger.log(Level.WARNING, "qualitativeTerminalInfo ensemble cannot be modified.");
             }
             else {
-                RFLogger.log(Level.SEVERE, "Unknown ensemble value in <key, value>:  " + "< " + key + ", " + value + " >");
-                throw new IllegalArgumentException();
+                java.util.HashMap nativeOptMap = ensembleList.get(key).option;
+                if (nativeOptMap.containsKey(value)) {
+                    ensembleArg.put(key, value);
+                }
+                else {
+                    RFLogger.log(Level.SEVERE, "Unknown ensemble value in <key, value>:  " + "< " + key + ", " + value + " >");
+                    throw new IllegalArgumentException();
+                }
             }
         }
         else {
@@ -184,17 +193,17 @@ class EnsembleArg {
     
     int getNative(String key) {
 
-        
+        // Get the user value associated with this key.
         String value = ensembleArg.get(key);
 
-        
+        // Get the native option object for this key.
         NativeOpt nativeOpt = ensembleList.get(key);
 
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
         @RF_TRACE_OFF@  RFLogger.log(Level.INFO, "Native Option <key, value> = < " + key + ", " + value + " > == " + nativeOpt.get(value));        
         @RF_TRACE_OFF@  }
         
-        
+        // Get the bit equivalent for this key.
         return nativeOpt.get(value);
     }
 

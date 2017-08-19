@@ -19,12 +19,12 @@ public class RFLogger4j {
     
     private RFLogger4j() {
 
-        
-        
-        
+        // Create the log manager. It seems like Spark automagically
+        // reads the .properties file, so we don't really need this
+        // downstream.
         logManager = org.apache.log4j.LogManager.getLogManager();
 
-        
+        // Create the logger.
         logger = org.apache.log4j.Logger.getLogger(RFLogger4j.class.getName());
 
         String parameter = new String("rfsrc test 1 2 3");

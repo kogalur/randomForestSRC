@@ -97,6 +97,7 @@ extract.factor <- function (dat, generic.names = NULL) {
 }
 map.factor <- function (gvar, gfactor) {
   if (!is.null(gfactor)) {
+    
     if (length(gfactor$factor) > 0) {
       gvar[, match(gfactor$factor, colnames(gvar))] <- data.frame(
         mclapply(1:length(gfactor$factor),

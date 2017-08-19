@@ -22,7 +22,7 @@ public class RFLogger {
 
     private RFLogger() {
 
-        
+        // Create the logger.
         logger = java.util.logging.Logger.getLogger(RFLogger.class.getName());
 
         try {
@@ -37,24 +37,24 @@ public class RFLogger {
             System.out.println("Resorting to console handler.");
 
         
-            
+            //Create consoleHandler.
             consoleHandler = new ConsoleHandler();
         
-            
+            //Assigning handler to logger object.
             logger.addHandler(consoleHandler);
         
-            
+            //Setting levels to handler and logger.
             consoleHandler.setLevel(Level.INFO);
             logger.setLevel(Level.ALL);
         
-            
+            // Creating SimpleFormatter for human readable format.
             simpleFormatter = new SimpleFormatter();
 
-            
+            // Setting formatter to all handlers.
             consoleHandler.setFormatter(simpleFormatter);
 
-            
-            
+            // Remove parent handlers in order to respect our formatting only.
+            // logger.setUseParentHandlers(false);
         }
     }
     

@@ -3,6 +3,7 @@
 JNIEnv    *RF_java_env;
 jobject    RF_java_obj;
 jclass     RF_java_cls;
+jclass     RF_java_except_cls;
 jclass     RF_java_arrlst_cls;
 jmethodID  RF_java_arrlst_constr;
 jmethodID  RF_java_arrlst_add;
@@ -11,6 +12,7 @@ jclass     RF_java_ens_cls;
 jmethodID  RF_java_ens_mid;
 jmethodID  RF_java_mid_log;
 jmethodID  RF_java_mid_logError;
+jmethodID  RF_java_mid_logExit;
 JNI1DInfo **RF_jni1DInfoList;
 JNI2DInfo **RF_jni2DInfoList;
 JNIEnsembleInfo **RF_jniEnsembleInfoList;
@@ -147,6 +149,7 @@ double   *RF_fullEnsembleCLS_;
 double   *RF_oobEnsembleRGR_;
 double   *RF_fullEnsembleRGR_;
 double     *RF_proximity_;
+ 
 double     *RF_weight_;
 uint      RF_opt;
 uint      RF_optHigh;
@@ -165,6 +168,7 @@ uint    **RF_bootstrapIn;
 double   *RF_caseWeight;
 double   *RF_xSplitStatWt;
 double   *RF_yWeight;
+ 
 double   *RF_xWeight;
 uint      RF_ptnCount;
 int       RF_numThreads;
@@ -296,6 +300,7 @@ uint  **RF_TN_ACNT_ptr;
 double **RF_proximityPtr;
 double **RF_proximityDenPtr;
 double  *RF_proximityDen;
+ 
 uint    RF_rejectedTreeCount;
 uint    RF_validTreeCount;
 uint    RF_stumpedTreeCount;
@@ -1198,6 +1203,7 @@ void processDefaultGrow() {
   RF_optHigh = RF_optHigh & (~OPT_TERM_INCG);
   RF_optHigh = RF_optHigh & (~OPT_MEMB_INCG);
   RF_frSize = RF_fobservationSize = 0;
+   
   if (RF_opt & OPT_IMPU_ONLY) {
     RF_opt                  = RF_opt & (OPT_IMPU_ONLY | OPT_BOOT_TYP1 | OPT_BOOT_TYP2);
     RF_optHigh              = RF_optHigh & (OPT_MISS_SKIP | OPT_MISS_MIA | OPT_MISS_MIAH | OPT_BOOT_SWOR);
@@ -1221,6 +1227,7 @@ void processDefaultGrow() {
       RF_opt = RF_opt | OPT_PROX_IBG;
       RF_opt = RF_opt | OPT_PROX_OOB;
     }
+     
     if (RF_optHigh & OPT_WGHT) {
       RF_optHigh = RF_optHigh & (~OPT_WGHT_TYP1);
       RF_optHigh = RF_optHigh |   OPT_WGHT_TYP2;
@@ -1298,6 +1305,7 @@ void processDefaultPredict() {
       RF_opt = RF_opt | OPT_PROX_IBG;
       RF_opt = RF_opt | OPT_PROX_OOB;
     }
+     
     if (RF_optHigh & OPT_WGHT) {
       if ( (!(RF_opt & OPT_BOOT_TYP1) &&  (RF_opt & OPT_BOOT_TYP2)) ||
            ( (RF_opt & OPT_BOOT_TYP1) && !(RF_opt & OPT_BOOT_TYP2))) { 
@@ -1352,6 +1360,7 @@ void processDefaultPredict() {
         RF_opt = RF_opt | OPT_PROX_IBG;
         RF_opt = RF_opt | OPT_PROX_OOB;
       }
+       
       if (RF_optHigh & OPT_WGHT) {
         RF_optHigh = RF_optHigh & (~OPT_WGHT_TYP1);
         RF_optHigh = RF_optHigh |   OPT_WGHT_TYP2;
@@ -1374,11 +1383,13 @@ void processDefaultPredict() {
       RF_opt     = RF_opt & (~OPT_PROX);
       RF_opt     = RF_opt & (~OPT_OENS);
       RF_opt     = RF_opt & (~OPT_FENS);
+       
       RF_optHigh = RF_optHigh & (~OPT_WGHT);
   }
   else {
     RF_optHigh = RF_optHigh & (~OPT_MEMB_PRUN);
   }
+   
   if (RF_opt & OPT_PERF) {
   }
   else {
@@ -4619,6 +4630,7 @@ char getMarginalNodeMembership(char     mode,
       uint *membershipIndicator = uivector(1, obsSize);
       leftAllMembrSize = rghtAllMembrSize = 0;
       daughterFlag = RIGHT;
+       
       if (daughterFlag != NEITHER) {
         factorFlag = FALSE;
         if (RF_xType[parent -> splitParameter] == 'C') {
@@ -6244,6 +6256,7 @@ void rfsrc(char mode, int seedValue) {
                             & RF_root,
                             & RF_tLeafCount_,
                             & RF_proximity_,
+                             
                             & RF_weight_,
                             & RF_seed_,
                             & RF_imputation_,
@@ -6521,6 +6534,7 @@ void rfsrc(char mode, int seedValue) {
       if (RF_opt & OPT_PROX) {
         finalizeProximity(mode);
       }
+       
       if (RF_optHigh & OPT_WGHT) {
         finalizeWeight(mode);
       }  
@@ -14707,6 +14721,7 @@ void stackDefinedOutputObjects(char      mode,
                                Node   ***pRF_root,
                                uint    **pRF_tLeafCount,
                                double  **pRF_proximity,
+                                
                                double  **pRF_weight,
                                int     **pRF_seed,
                                double  **p_imputation,
@@ -14827,6 +14842,7 @@ void stackDefinedOutputObjects(char      mode,
     if (RF_opt & OPT_PROX) {
       RF_stackCount += 1;
     }
+     
     if (RF_optHigh & OPT_WGHT) {
       RF_stackCount += 1;
     }
@@ -14949,6 +14965,7 @@ void stackDefinedOutputObjects(char      mode,
     if (RF_opt & OPT_PROX) {
       RF_stackCount += 1;
     }
+     
     if (RF_optHigh & OPT_WGHT) {
       RF_stackCount += 1;
     }
@@ -15039,6 +15056,7 @@ void stackDefinedOutputObjects(char      mode,
     }
     break;
   }  
+   
   initProtect(RF_stackCount);
   oobFlag = fullFlag = FALSE;
   if ((RF_opt & OPT_FENS) | (RF_opt & OPT_OENS)) {
@@ -15470,6 +15488,7 @@ void stackDefinedOutputObjects(char      mode,
       }
     }
   }
+   
   if (RF_optHigh & OPT_WGHT) {
     localSize = (ulong) obsSize * RF_observationSize;
     *pRF_weight = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_WGHT_ID, localSize, RF_sexpString, &RF_weightPtr, 2, obsSize, RF_observationSize);
@@ -15691,6 +15710,7 @@ void unstackDefinedOutputObjects(char      mode,
     rspSize = RF_ySize;
     break;
   }
+   
   oobFlag = fullFlag = FALSE;
   if ((RF_opt & OPT_FENS) | (RF_opt & OPT_OENS)) {
     if (RF_opt & OPT_FENS) {
@@ -15914,6 +15934,7 @@ void unstackDefinedOutputObjects(char      mode,
     free_new_vvector(RF_proximityPtr, 1, obsSize, NRUTIL_DPTR);
     free_new_vvector(RF_proximityDenPtr, 1, obsSize, NRUTIL_DPTR);
   }
+   
   if (RF_optHigh & OPT_WGHT) {
     free_uivector(RF_weightDenom, 1, RF_observationSize);
   }
@@ -18856,6 +18877,8 @@ void acquireTree(char mode, uint r, uint b) {
         }
         free_new_vvector(membership, 1, RF_observationSize, NRUTIL_TPTR);
       }
+       
+       
       if (RF_optHigh & OPT_WGHT) {
 #ifdef _OPENMP
 #pragma omp critical (_update_weight)
@@ -18864,9 +18887,11 @@ void acquireTree(char mode, uint r, uint b) {
           updateWeight(mode, b);
         }
       }
+       
       if (RF_opt & OPT_PROX) {
         updateProximity(mode, b);
       }
+       
       if (mode == RF_GROW) {
         if (RF_opt & OPT_TREE) {
 #ifdef _OPENMP
@@ -18965,6 +18990,7 @@ void updateWeight(char mode, uint b) {
     }
   }
   mtnmFlag = FALSE;
+   
   if (flag != ACTIVE) {
     if (flag == TRUE) {
       if (!mtnmFlag) {
@@ -19142,6 +19168,7 @@ void finalizeProximity(char mode) {
   }
 }
 void updateProximity(char mode, uint b) {
+   
   Terminal **tTermMembership;
   uint  *membershipIndex;
   uint   membershipSize;
@@ -19180,6 +19207,7 @@ void updateProximity(char mode, uint b) {
     tTermMembership = RF_tTermMembership[b];
   }
   mtnmFlag = FALSE;
+   
   if (!mtnmFlag) {
     for (uint i = 1; i <= membershipSize; i++) {
       uint ii, jj;
@@ -19199,7 +19227,10 @@ void updateProximity(char mode, uint b) {
       }
     }
   }
+   
 }
+ 
+ 
 void updateSplitDepth(uint treeID, Node *rootPtr, uint maxDepth) {
   Node  *parent;
   double *localSplitDepth;

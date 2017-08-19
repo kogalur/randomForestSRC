@@ -155,14 +155,18 @@
           <replacestring from="@RF_CRANX_BEG@" to=""/>
           <replacestring from="@RF_CRANX_END@" to=""/>
 
-          <replacestring from="@RF_JAVAX_BEG@" to="/*"/>
-          <replacestring from="@RF_JAVAX_END@" to="*/"/>
+          <replacestring from="@RF_JAVAX_BEG@" to="@START_DELETE@"/>
+          <replacestring from="@RF_JAVAX_END@" to="@END_DELETE@"/>
         </tokenfilter>
-        
-        <stripjavacomments/>
-
       </filterchain>
     </concat>
+
+    <!-- CRAN/JAVA Exclusion. -->
+    <replaceregexp byline="false" flags="gs" match ="@START_DELETE@(.*?)@END_DELETE@" replace =" ">
+      <fileset dir="${pptc}/src">
+        <include name="randomForestSRC.h"/>
+      </fileset>
+    </replaceregexp>
 
     <concat destfile="${pptc}/src/randomForestSRC.c" append="false">
       <fileset dir="src/main/c"
@@ -175,15 +179,19 @@
           <replacestring from="@RF_CRANX_BEG@" to=""/>
           <replacestring from="@RF_CRANX_END@" to=""/>
 
-          <replacestring from="@RF_JAVAX_BEG@" to="/*"/>
-          <replacestring from="@RF_JAVAX_END@" to="*/"/>
+          <replacestring from="@RF_JAVAX_BEG@" to="@START_DELETE@"/>
+          <replacestring from="@RF_JAVAX_END@" to="@END_DELETE@"/>
         </tokenfilter>
-
-        <stripjavacomments/>
-
       </filterchain>
     </concat>
     
+    <!-- CRAN/JAVA Exclusion. -->
+    <replaceregexp byline="false" flags="gs" match ="@START_DELETE@(.*?)@END_DELETE@" replace =" ">
+      <fileset dir="${pptc}/src">
+        <include name="randomForestSRC.c"/>
+      </fileset>
+    </replaceregexp>
+
     <copy todir="${pptc}/src/">
       <fileset dir="src/main/c">
         <include name="splitCustom.*"/>

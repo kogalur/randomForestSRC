@@ -12,9 +12,12 @@ partial.rfsrc <- function(
   do.trace = FALSE,
   ...)
 {
+  
   user.option <- list(...)
   terminal.qualts <- is.hidden.terminal.qualts(user.option)
   terminal.quants <- is.hidden.terminal.quants(user.option)
+  
+  
   if (missing(object)) {
     stop("object is missing!")
   }
@@ -22,6 +25,7 @@ partial.rfsrc <- function(
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2) {
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
   }
+  
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.null(object$forest)) {
       stop("The forest is empty.  Re-run rfsrc (grow) call with forest=TRUE")
@@ -29,14 +33,19 @@ partial.rfsrc <- function(
     object <- object$forest
   }
     else {
+      
     }
+  
   family <- object$family
   splitrule <- object$splitrule
+  
   xvar.names <- object$xvar.names
   yvar.names <- object$yvar.names
+  
   if (length(which(xvar.names == partial.xvar)) != 1) {
     stop("x-variable specified incorrectly:  ", partial.xvar)
   }
+  
   if (!is.null(partial.xvar2)) {   
       if (length(partial.xvar2) != length(partial.values2)) {
           stop("second order x-variable and value vectors not of same length:  ", length(partial.xvar2), "vs", length(partial.values2))
@@ -47,29 +56,48 @@ partial.rfsrc <- function(
           }
       }
   }
+  
+  
+  
+  
+  
   object$yvar <- as.data.frame(object$yvar)
   colnames(object$yvar) <- yvar.names
   yfactor <- extract.factor(object$yvar)
   outcome.target.idx <- get.outcome.target(family, yvar.names, outcome.target)
+  
   yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names, object$coerce.factor)
   yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, object$yvar, object$coerce.factor)
+  
   event.info <- get.event.info(object)
+  
   cr.bits <- get.cr.bits(family)
+  
   xfactor <- extract.factor(object$xvar)
+  
   xvar.types <- get.xvar.type(xfactor$generic.types, xvar.names, object$coerce.factor)
   xvar.nlevels <- get.xvar.nlevels(xfactor$nlevels, xvar.names, object$xvar, object$coerce.factor)
+  
   ntree <- object$ntree
+  
   na.action = object$na.action
+  
   xvar <- as.matrix(data.matrix(object$xvar))
   yvar <- as.matrix(data.matrix(object$yvar))
+  
   r.dim <- ncol(cbind(yvar))
+  
+  
   rownames(xvar) <- colnames(xvar) <- NULL
   n.xvar <- ncol(xvar)
   n <- nrow(xvar)
+  
   outcome = "train"
+  
   oob.bits <- get.oob(oob)
   bootstrap.bits <- get.bootstrap(object$bootstrap)
   na.action.bits <- get.na.action(na.action)
+  
   samptype.bits <- get.samptype(object$samptype)
   partial.bits <- get.partial(length(partial.values))
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
@@ -116,11 +144,15 @@ partial.rfsrc <- function(
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
                                   as.integer(get.rf.cores()),
+                                  
                                   as.integer(0),
+                                  
                                   as.integer(0),
                                   as.integer(NULL),
+                                  
                                   as.integer(0),
                                   as.integer(NULL),
+                                    
                                   as.integer(get.type(family, partial.type)),
                                   as.integer(which(xvar.names == partial.xvar)),
                                   as.integer(length(partial.values)),
@@ -128,6 +160,7 @@ partial.rfsrc <- function(
                                   as.integer(length(partial.xvar2)),
                                   as.integer(match(partial.xvar2, xvar.names)),
                                   as.double(partial.values2),
+                                  
                                   as.integer(0),
                                   as.integer(0),
                                   as.double(NULL),
@@ -141,13 +174,19 @@ partial.rfsrc <- function(
                                   as.integer((object$nativeArrayTNDS$tnCLAS)))}, error = function(e) {
                                     print(e)
                                     NULL})
+  
   if (is.null(nativeOutput)) {
     stop("An error has occurred in prediction.  Please turn trace on for further analysis.")
   }
   rfsrcOutput <- list(call = match.call(),
                       family = family,
                       partial.time = partial.time)
+  
   if (grepl("surv", family)) {
+      
+      
+      
+      
       partial.time.idx <- sapply(partial.time, function(x) {max(which(event.info$time.interest <= x))})
       if (sum(is.na(partial.time.idx)) > 0) {
           stop("partial.time must be a subset of the time interest vector contained in the model")
@@ -156,6 +195,11 @@ partial.rfsrc <- function(
   if (family == "surv") {
     if ((partial.type == "rel.freq") || (partial.type == "mort")) {
       mort.names <- list(NULL, NULL)
+      
+      
+      
+      
+      
       survOutput <- (if (!is.null(nativeOutput$partialSurv))
                        array(nativeOutput$partialSurv,
                              c(n, length(partial.values)),
@@ -163,6 +207,11 @@ partial.rfsrc <- function(
     }
     else if (partial.type == "chf") {
       nlsn.names <- list(NULL, NULL, NULL)
+      
+      
+      
+      
+      
       survOutput <- (if (!is.null(nativeOutput$partialSurv))
                        array(nativeOutput$partialSurv,
                              c(n, length(event.info$time.interest), length(partial.values)),
@@ -173,6 +222,11 @@ partial.rfsrc <- function(
     }
       else if (partial.type == "surv") {
         surv.names <- list(NULL, NULL, NULL)
+        
+        
+        
+        
+        
         survOutput <- (if (!is.null(nativeOutput$partialSurv))
                          array(nativeOutput$partialSurv,
                                c(n, length(event.info$time.interest), length(partial.values)),
@@ -189,6 +243,11 @@ partial.rfsrc <- function(
   else if (family == "surv-CR") {
     if (partial.type == "years.lost") {
       yrls.names <- list(NULL, NULL, NULL)
+      
+      
+      
+      
+      
       survOutput <- (if (!is.null(nativeOutput$partialSurv))
                        array(nativeOutput$partialSurv,
                              c(n, length(event.info$event.type), length(partial.values)),
@@ -196,6 +255,11 @@ partial.rfsrc <- function(
     }
       else if (partial.type == "cif") {
         cifn.names <- list(NULL, NULL, NULL, NULL)
+        
+        
+        
+        
+        
         survOutput <- (if (!is.null(nativeOutput$partialSurv))
                          array(nativeOutput$partialSurv,
                                c(n, length(event.info$time.interest), length(event.info$event.type), length(partial.values)),
@@ -206,6 +270,11 @@ partial.rfsrc <- function(
       }
         else if (partial.type == "chf") {
           chfn.names <- list(NULL, NULL, NULL, NULL)
+          
+          
+          
+          
+          
           survOutput <- (if (!is.null(nativeOutput$partialSurv))
                            array(nativeOutput$partialSurv,
                                  c(n, length(event.info$time.interest), length(event.info$event.type), length(partial.values)),
@@ -220,23 +289,47 @@ partial.rfsrc <- function(
     rfsrcOutput <- c(rfsrcOutput, survOutput = list(survOutput))
   }
     else {
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
       class.index <- which(yvar.types != "R")
       class.count <- length(class.index)
       regr.index <- which(yvar.types == "R")
       regr.count <- length(regr.index)
       if (class.count > 0) {
+        
         classOutput <- vector("list", class.count)
         names(classOutput) <- yvar.names[class.index]
+        
         levels.count <- array(0, class.count)
+        
         levels.names <- vector("list", class.count)
         counter <- 0
         for (i in class.index) {
             counter <- counter + 1
+            
+            
             levels.count[counter] <- yvar.nlevels[i]
             if (yvar.types[i] == "C") {
+              
+              
               levels.names[[counter]] <- yfactor$levels[[which(yfactor$factor == yvar.names[i])]]
             }
               else {
+                
+                
                 levels.names[[counter]] <- yfactor$order.levels[[which(yfactor$order == yvar.names[i])]]
               }
         }
@@ -257,6 +350,11 @@ partial.rfsrc <- function(
           target.idx <- which (class.index == outcome.target.idx[i])
           if (length(target.idx) > 0) {
             ens.names <- list(NULL, c("all", levels.names[[target.idx]]), NULL)
+            
+            
+            
+            
+            
             ensemble <- (if (!is.null(nativeOutput$partialClas))
                              array(nativeOutput$partialClas[offset[[target.idx]]],
                                    c(n, 1 + levels.count[target.idx], length(partial.values)),
@@ -268,6 +366,7 @@ partial.rfsrc <- function(
         rfsrcOutput <- c(rfsrcOutput, classOutput = list(classOutput))        
       }
       if (regr.count > 0) {
+        
         regrOutput <- vector("list", regr.count)
         names(regrOutput) <- yvar.names[regr.index]
         iter.start <- 0
@@ -287,6 +386,11 @@ partial.rfsrc <- function(
           target.idx <- which (regr.index == outcome.target.idx[i])
           if (length(target.idx) > 0) {
             ens.names <- list(NULL, NULL)
+            
+            
+            
+            
+            
             ensemble <- (if (!is.null(nativeOutput$partialRegr))
                              array(nativeOutput$partialRegr[offset[[target.idx]]],
                                    c(n, length(partial.values)),
@@ -303,6 +407,7 @@ partial.rfsrc <- function(
 }
 partial <- partial.rfsrc
 get.partial <- function (partial.length) {
+  
   if (!is.null(partial.length)) {
     if (partial.length > 0) {
       bits <- 2^14
@@ -321,12 +426,16 @@ get.partial <- function (partial.length) {
 }
 get.type <- function (family, partial.type) {
   if (family == "surv") {
+    
+    
     if (partial.type == "rel.freq") {
       partial.type <- "mort"
     }
+    
     type <- match(partial.type, c("mort", "chf", "surv"))
   }
     else if (family == "surv-CR") {
+      
       type <- match(partial.type, c("years.lost", "cif", "chf"))
     }
       else {
@@ -338,6 +447,7 @@ get.type <- function (family, partial.type) {
   return (type)
 }
 get.oob <- function (oob) {
+  
   if (!is.null(oob)) {
     if (oob == TRUE) {
       oob <- 2^1

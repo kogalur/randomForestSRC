@@ -59,6 +59,7 @@
     <copy todir="target/spark/src/main/resources">
       <fileset dir="src/main/resources/spark/">
         <include name="log.properties"/>
+        <include name="apistyles.css"/>
       </fileset>
 
       <filterchain>
@@ -67,7 +68,6 @@
           <replacestring from="@PROJECT_VERSION@"      to="${project.version}"/>
         </tokenfilter>
       </filterchain>
-
     </copy>
 
     <concat destfile="target/spark/src/main/c/randomForestSRC.h" append="false">
@@ -76,20 +76,24 @@
       <fileset dir="src/main/c/spark"
                 includes="randomForestSRC.spark.h"/>
 
+      <!-- Switch between the CRAN/JAVA target .h files. -->
       <filterchain>
         <tokenfilter>
-          <replacestring from="@RF_CRANX_BEG@" to="/*"/>
-          <replacestring from="@RF_CRANX_END@" to="*/"/>
+          <replacestring from="@RF_CRANX_BEG@" to="@START_DELETE@"/>
+          <replacestring from="@RF_CRANX_END@" to="@END_DELETE@"/>
 
           <replacestring from="@RF_JAVAX_BEG@" to=""/>
           <replacestring from="@RF_JAVAX_END@" to=""/>
         </tokenfilter>
-        
-        <stripjavacomments/>
-
       </filterchain>
     </concat>
 
+    <!-- CRAN/JAVA Exclusion. -->
+    <replaceregexp byline="false" flags="gs" match ="@START_DELETE@(.*?)@END_DELETE@" replace =" ">
+      <fileset dir="target/spark/src/main/c">
+        <include name="randomForestSRC.h"/>
+      </fileset>
+    </replaceregexp>
       
     <concat destfile="target/spark/src/main/c/randomForestSRC.c" append="false">
       <fileset dir="src/main/c"
@@ -97,19 +101,24 @@
       <fileset dir="src/main/c/spark"
                 includes="randomForestSRC.spark.c"/>
 
+      <!-- Switch between the CRAN/JAVA target .c files. -->
       <filterchain>
         <tokenfilter>
-          <replacestring from="@RF_CRANX_BEG@" to="/*"/>
-          <replacestring from="@RF_CRANX_END@" to="*/"/>
+          <replacestring from="@RF_CRANX_BEG@" to="@START_DELETE@"/>
+          <replacestring from="@RF_CRANX_END@" to="@END_DELETE@"/>
 
           <replacestring from="@RF_JAVAX_BEG@" to=""/>
           <replacestring from="@RF_JAVAX_END@" to=""/>
         </tokenfilter>
-
-        <stripjavacomments/>
-
       </filterchain>
     </concat>
+
+    <!-- CRAN/JAVA Exclusion. -->     
+    <replaceregexp byline="false" flags="gs" match ="@START_DELETE@(.*?)@END_DELETE@" replace =" ">
+      <fileset dir="target/spark/src/main/c">
+        <include name="randomForestSRC.c"/>
+      </fileset>
+    </replaceregexp>
 
     <copy todir="target/spark/src/main/c">
       <fileset dir="src/main/c">
@@ -143,7 +152,6 @@
         <tokenfilter>
           <replacestring from="@RF_TRACE_OFF@" to="${java.trace.token}"/>
         </tokenfilter>
-        <stripjavacomments/>
       </filterchain>
 
 
@@ -179,7 +187,7 @@
     </exec>
 
     <echo file="target/spark/target/hello${scriptExtension}" append="false">${scriptFileCommentLine}
-    spark-submit --class com.kogalur.randomforest.HelloRandomForestSRC --master local[*] --jars randomForestSRC.stealth-tests.jar randomForestSRC.stealth.jar
+    spark-submit --class com.kogalur.randomforest.HelloRandomForestSRC --master local[*] --jars ${project.pkg.name}-tests.jar ${project.pkg.name}.jar
     ${scriptFileExitLine}
     </echo>
 

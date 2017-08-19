@@ -18,11 +18,9 @@
 ## ------------------------------------------------------------
 ## classification analysis
 ## ------------------------------------------------------------
-
 data(breast, package = "_PROJECT_PACKAGE_NAME_")
 breast <- na.omit(breast)
 obj <- rfsrc(status ~ ., data = breast, nsplit = 10)
 print(obj)
-
 }}
 \keyword{datasets}

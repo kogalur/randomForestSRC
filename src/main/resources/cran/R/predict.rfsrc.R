@@ -8,6 +8,7 @@ predict.rfsrc <-
            proximity = FALSE,
            forest.wt = FALSE,
            ptn.count = 0,
+            
            var.used = c(FALSE, "all.trees", "by.tree"),
            split.depth = c(FALSE, "all.trees", "by.tree"),
            seed = NULL,
@@ -25,6 +26,7 @@ predict.rfsrc <-
                                           proximity = proximity,
                                           forest.wt = forest.wt,                                          
                                           ptn.count = ptn.count,
+                                           
                                           var.used = var.used,
                                           split.depth = split.depth,
                                           seed = seed,

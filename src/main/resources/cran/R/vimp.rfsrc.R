@@ -8,6 +8,7 @@ vimp.rfsrc <- function(object,
                        do.trace = FALSE,
                        ...)
 {
+  
   if (missing(object)) {
     stop("object is missing")
   }
@@ -18,6 +19,7 @@ vimp.rfsrc <- function(object,
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2) {
     stop("This function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
   }
+  
   if (!is.logical(joint)) {
     stop("joint must be a logical value")
   }
@@ -36,6 +38,8 @@ vimp.rfsrc <- function(object,
                                         "permute.ensemble", "random.ensemble", "anti.ensemble",
                                         "permute.joint", "random.joint", "anti.joint",
                                         "permute.joint.ensemble", "random.joint.ensemble", "anti.joint.ensemble"))
+  
+  
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.null(object$forest)) {
       stop("The forest is empty.  Re-run rfsrc (grow) call with forest=TRUE")
@@ -50,10 +54,13 @@ vimp.rfsrc <- function(object,
   if (bootstrap != "by.root") {
     stop("grow objects under non-standard bootstrapping are devoid of performance values")
   }
+  
+  
   if (missing(subset)) {
     subset <- NULL
   }
     else {
+      
       if (is.logical(subset)) {
         subset <- which(subset)
       }
@@ -62,6 +69,7 @@ vimp.rfsrc <- function(object,
         stop("'subset' not set properly")
       }
     }
+  
   result <- generic.predict.rfsrc(object,
                                   outcome.target = outcome.target,
                                   importance = importance,

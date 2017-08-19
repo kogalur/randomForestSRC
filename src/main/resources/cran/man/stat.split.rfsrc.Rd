@@ -9,9 +9,7 @@
   xvar.names identified by its x-variable name.  Each element [[b]]$xvar
   contains the complete list of splits on xvar with associated
   identifying information.  The information is as follows:
-  
   \enumerate{
-    
     \item \emph{treeID} Tree identifier.
     \item \emph{nodeID} Node identifier.
     \item \emph{parmID} Variable indentifier.
@@ -21,7 +19,6 @@
     in the case of a factor split.
     \item \emph{dpthID} Zero (0) based depth of split.
     \item \emph{spltTY} Split type for parent node:
-    
     \tabular{lll}{
       bit 1 \tab  bit 0  \tab meaning\cr
       ----- \tab  -----  \tab ------- \cr
@@ -30,16 +27,12 @@
       1   \tab    0    \tab 2 = only the left daughter is terminal\cr 
       1   \tab    1    \tab 3 = both daughters are terminal\cr
     }
-    
-	  
     \item \emph{spltEC} End cut statistic for real valued variables
     between [0,0.5] that is small when the split is towards the edge and
     large when the split is towards the middle.  Subtracting this value
     from 0.5 yields the end cut statistic studied in Ishwaran (2014) and
     is a way to identify ECP behavior (end cut preference behavior).
-    
     \item \emph{spltST} Split statistic:
-    
     \enumerate{
       \item For objects of class (rfsrc, grow), this is the split
       statistic that resulted in the variable being choosen for
@@ -75,7 +68,6 @@
 ## run a forest, then make a call to stat.split
 grow.obj <- rfsrc(mpg ~., data = mtcars, membership=TRUE, statistics=TRUE)
 stat.obj <- stat.split(grow.obj)
-
 ## nice wrapper to extract split-statistic for desired variable
 ## for continuous variables plots ECP data
 get.split <- function(splitObj, xvar, inches = 0.1, ...) {
@@ -98,7 +90,6 @@ get.split <- function(splitObj, xvar, inches = 0.1, ...) {
    }
   invisible(stat)
 }
-
 ## use get.split to investigate ECP behavior of variables
 get.split(stat.obj, "disp")
 }

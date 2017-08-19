@@ -1,0 +1,2 @@
+PKG_CFLAGS = -fopenmp -DHAVE_OPENMP
+PKG_LIBS   = -fopenmp

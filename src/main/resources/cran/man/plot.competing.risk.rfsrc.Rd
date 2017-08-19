@@ -37,16 +37,13 @@
 ## ------------------------------------------------------------
 ## follicular cell lymphoma
 ## ------------------------------------------------------------
-
   data(follic, package = "_PROJECT_PACKAGE_NAME_")
   follic.obj <- rfsrc(Surv(time, status) ~ ., follic, nsplit = 3, ntree = 100)
   plot.competing.risk(follic.obj)
-
 ## ------------------------------------------------------------
 ## competing risk analysis of pbc data from the survival package
 ## events are transplant (1) and death (2)
 ## ------------------------------------------------------------
-
 if (library("survival", logical.return = TRUE)) {
    data(pbc, package = "survival")
    pbc$id <- NULL

@@ -1,7 +1,7 @@
 void exit2J();
 void errorJ(char *format, ...);
 void printJ(char *format, ...);
-jint throwRuntimeException(char *message);
+void throwRuntimeException(char *message);
 enum alloc_jtype{
   NRUTIL_J1D_PTR,
   NRUTIL_J2D_PTR,

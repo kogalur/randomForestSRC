@@ -55,18 +55,14 @@
 \details{
   The vertical axis displays the ensemble predicted value, while
   x-variables are plotted on the horizontal axis.
-  
   \enumerate{
     \item For regression, the predicted response is used.
-    
     \item For classification, it is the predicted class probability
     specified by \option{which.class}, or the class of maximum
     probability depending on \option{class.type}.
-    
     \item For multivariate families, it is the predicted value of the
     outcome specified by \option{outcome.target} and if that is a
     classification outcome, by \option{which.class}.
-    
     \item For survival, the choices are:
     \itemize{
 	    \item  Mortality (\code{mort}).
@@ -86,7 +82,6 @@
     \code{chf} the quantity is evaluated at the time point specified
     by \code{time}.
   }
-  
   For partial plots use \option{partial=TRUE}.  Their interpretation are
   different than marginal plots.  The y-value for a variable \eqn{X},
   evaluated at \eqn{X=x}, is
@@ -99,7 +94,6 @@
   Choosing a small value for \code{npts} can speed up computational
   times as this restricts the number of distinct \eqn{x} values used
   in computing \eqn{\tilde{f}}.
-  
   For continuous variables, red points are used to indicate partial
   values and dashed red lines indicate a smoothed error bar of +/- two
   standard errors.  Black dashed line are the partial values.  Set
@@ -108,7 +102,6 @@
   extending out approximately two standard errors from the mean.
   Standard errors are meant only to be a guide and should be
   interpreted with caution.
-  
   Partial plots can be slow.  Setting \option{npts} to a smaller number
   can help.
 }
@@ -118,14 +111,11 @@
 \references{
   Friedman J.H. (2001). Greedy function approximation: a gradient
   boosting machine, \emph{Ann. of Statist.}, 5:1189-1232.
-  
   Ishwaran H., Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7(2):25-31.
-  
   Ishwaran H., Kogalur U.B., Blackstone E.H. and Lauer M.S.
   (2008).  Random survival forests, \emph{Ann. App.
     Statist.}, 2:841-860.
-  
   Ishwaran H., Gerds T.A., Kogalur U.B., Moore R.D., Gange S.J. and Lau
   B.M. (2014). Random survival forests for competing risks.  To appear
   in \emph{Biostatistics}.
@@ -133,7 +123,7 @@
 \seealso{
   \command{\link{rfsrc}},
   \command{\link{rfsrcSyn}},
-  
+   
   \command{\link{predict.rfsrc}}
 }
 \examples{
@@ -141,7 +131,6 @@
 ## ------------------------------------------------------------
 ## survival/competing risk
 ## ------------------------------------------------------------
-
 ## survival
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 v.obj <- rfsrc(Surv(time,status)~., veteran, nsplit = 10, ntree = 100)
@@ -150,54 +139,43 @@ plot.variable(v.obj, plots.per.page = 2, xvar.names = c("trt", "karno", "age"))
 plot.variable(v.obj, surv.type = "surv", nvar = 1, time = 200)
 plot.variable(v.obj, surv.type = "surv", partial = TRUE, smooth.lines = TRUE)
 plot.variable(v.obj, surv.type = "rel.freq", partial = TRUE, nvar = 2)
-
 ## example of plot.variable calling a pre-processed plot.variable object
 p.v <- plot.variable(v.obj, surv.type = "surv", partial = TRUE, smooth.lines = TRUE)
 plot.variable(p.v)
 p.v$plots.per.page <- 1
 p.v$smooth.lines <- FALSE
 plot.variable(p.v)
-
 ## competing risks
 data(follic, package = "_PROJECT_PACKAGE_NAME_")
 follic.obj <- rfsrc(Surv(time, status) ~ ., follic, nsplit = 3, ntree = 100)
 plot.variable(follic.obj, which.class = 2)
-
 ## ------------------------------------------------------------
 ## regression
 ## ------------------------------------------------------------
-
 ## airquality
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)
 plot.variable(airq.obj, partial = TRUE, smooth.lines = TRUE)
-
 ## motor trend cars
 mtcars.obj <- rfsrc(mpg ~ ., data = mtcars)
 plot.variable(mtcars.obj, partial = TRUE, smooth.lines = TRUE)
-
 ## ------------------------------------------------------------
 ## classification
 ## ------------------------------------------------------------
-
 ## iris
 iris.obj <- rfsrc(Species ~., data = iris)
 plot.variable(iris.obj, partial = TRUE)
-
 ## motor trend cars: predict number of carburetors
 mtcars2 <- mtcars
 mtcars2$carb <- factor(mtcars2$carb,
    labels = paste("carb", sort(unique(mtcars$carb))))
 mtcars2.obj <- rfsrc(carb ~ ., data = mtcars2)
 plot.variable(mtcars2.obj, partial = TRUE)
-
 ## ------------------------------------------------------------
 ## multivariate regression
 ## ------------------------------------------------------------
 mtcars.mreg <- rfsrc(Multivar(mpg, cyl) ~., data = mtcars)
 plot.variable(mtcars.mreg, outcome.target = "mpg", partial = TRUE, nvar = 1)
 plot.variable(mtcars.mreg, outcome.target = "cyl", partial = TRUE, nvar = 1)
-
-
 ## ------------------------------------------------------------
 ## multivariate mixed outcomes
 ## ------------------------------------------------------------
@@ -207,8 +185,6 @@ mtcars2$cyl <- factor(mtcars2$cyl)
 mtcars.mix <- rfsrc(Multivar(carb, mpg, cyl) ~ ., data = mtcars2)
 plot.variable(mtcars.mix, outcome.target = "cyl", which.class = "4", partial = TRUE, nvar = 1)
 plot.variable(mtcars.mix, outcome.target = "cyl", which.class = 2, partial = TRUE, nvar = 1)
-
-
 }
 }
 \keyword{plot}

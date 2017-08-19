@@ -9,17 +9,15 @@
      
     <groupId>com.kogalur.randomforest</groupId>
     <artifactId>@PROJECT_PACKAGE_NAME@</artifactId>
-     
-
-    <prerequisites>
-      <maven>3.5.0</maven>
-    </prerequisites>
-     
+ 
     <version>@PROJECT_VERSION@</version>
 
     <name>RF-SRC Spark Target</name>
 
-    
+    <properties>
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
     <dependencies>
 
       <dependency>
@@ -312,6 +310,10 @@
 			    <groupId>org.apache.maven.plugins</groupId>
 			    <artifactId>maven-javadoc-plugin</artifactId>
           <version>3.0.0-M1</version>
+          <configuration>
+            <additionalparam>-Xdoclint:none</additionalparam>
+            <stylesheetfile>src/main/resources/apistyles.css</stylesheetfile>            
+          </configuration>
 			    <executions>
 				    <execution>
 					    <id>attach-javadocs</id>
@@ -325,3 +327,5 @@
       </plugins>
      </build>
 </project>
+
+

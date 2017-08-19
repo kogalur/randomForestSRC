@@ -12,7 +12,7 @@
   proximity = FALSE,
   forest.wt = FALSE,
   ptn.count = 0,
-  
+   
   var.used = c(FALSE, "all.trees", "by.tree"),
   split.depth = c(FALSE, "all.trees", "by.tree"), seed = NULL,
   do.trace = FALSE, membership = FALSE, statistics = FALSE, ...)
@@ -45,14 +45,14 @@
     \code{"all"}, \code{TRUE}, or \code{FALSE} --- but some options may
     not be valid and will depend on the context of the predict call.
     The safest choice is \code{TRUE} if proximity is desired.}
-  
+   
   \item{forest.wt}{Should the forest weight matrix for test observations
     be calculated?  Choices are the same as proximity.}
   \item{ptn.count}{The number of terminal nodes that each tree in the
     grow forest should be pruned back to.  The terminal node membership
     for the pruned forest is returned but no other action is taken.  The
     default is \code{ptn.count=0} which does no pruning.}
-  
+   
   \item{var.used}{Record the number of times a variable is split?}
   \item{split.depth}{Return minimal depth for each variable for each case?}
   \item{seed}{Negative integer specifying seed for the random number
@@ -74,19 +74,16 @@
   when the dimension is high), thus if VIMP is not needed, computational
   times can be significantly improved by setting
   \option{importance="none"} which turns VIMP off.
-  
   Setting \option{na.action="na.impute"} imputes missing test data
   (x-variables and/or y-outcomes).  Imputation uses the grow-forest and
   only training data is used to impute test data to avoid biasing error
   rates and VIMP (Ishwaran et al. 2008).  See the \command{rfsrc}
   help file for details.
-  
   If no test data is provided, then the original training data is used
   and the code reverts to restore mode allowing the user to restore the
   original grow forest.  This is useful, because it gives the user the
   ability to extract outputs from the forest that were not asked for in
   the original grow call.  
-  
   If \option{outcome="test"}, the predictor is calculated by using
   y-outcomes from the test data (outcome information must be present).
   In this case, the terminal nodes from the grow-forest are recalculated
@@ -112,9 +109,7 @@
     grow forest.  Vector of length \code{ntree}.}
   \item{proximity}{Symmetric proximity matrix of the test data.}
   \item{forest}{The grow forest.}
-  
-                   
-  
+                    
   \item{membership}{Matrix recording terminal node membership for the
     test data where each column contains the node number that a
     case falls in for that tree.}
@@ -139,31 +134,24 @@
   \item{predicted}{Test set predicted value.}
   \item{predicted.oob}{OOB predicted value (\code{NULL} unless
     \option{outcome="test"}).}\cr
-  
   \item{++++++++}{for classification settings, additionally ++++++++} \cr     
   \item{class}{In-bag predicted class labels.}
   \item{class.oob}{OOB predicted class labels (\code{NULL} unless \option{outcome="test"}).}\cr
-  
   \item{++++++++}{for multivariate settings, additionally ++++++++} \cr
-  
   \item{regrOutput}{List containing performance values for
 	  test multivariate regression responses (applies only in
 	  multivariate settings).}
 	\item{clasOutput}{List containing performance values for
 	  test multivariate categorical (factor) responses (applies only in
 	  multivariate settings).}
-  
   \item{++++++++}{for survival settings, additionally ++++++++} \cr
-  
   \item{chf}{Cumulative hazard function (CHF).}
   \item{chf.oob}{OOB CHF (\code{NULL} unless \option{outcome="test"}).}
   \item{survival}{Survival function.}
   \item{survival.oob}{OOB survival function (\code{NULL} unless \option{outcome="test"}).}
   \item{time.interest}{Ordered unique death times.}
   \item{ndead}{Number of deaths.}\cr
-  
   \item{++++++++}{for competing risks, additionally ++++++++} \cr
-  
   \item{chf}{Cause-specific cumulative hazard function (CSCHF)
     for each event.}
   \item{chf.oob}{OOB CSCHF for each event (\code{NULL} unless \option{outcome="test"}).}
@@ -179,7 +167,6 @@
   y-outcomes are not present.  For multivariate families, predicted
   values, VIMP, error rate, and performance values are stored in the
   lists \code{regrOutput} and \code{clasOutput}.
-  
   For detailed definitions of returned values (such as \code{predicted})
   see the \command{rfsrc} help file.
 }
@@ -188,11 +175,9 @@
 }
 \references{
   Breiman L. (2001). Random forests, \emph{Machine Learning}, 45:5-32.
-  
   Ishwaran H., Kogalur U.B., Blackstone E.H. and Lauer M.S.
   (2008).  Random survival forests, \emph{Ann. App.
     Statist.}, 2:841-860.
-  
   Ishwaran H. and Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7(2):25-31.
 }	
@@ -209,161 +194,130 @@
 ## ------------------------------------------------------------
 ## typical train/testing scenario
 ## ------------------------------------------------------------
-
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 train <- sample(1:nrow(veteran), round(nrow(veteran) * 0.80))
 veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ], ntree = 100) 
 veteran.pred <- predict(veteran.grow, veteran[-train , ])
 print(veteran.grow)
 print(veteran.pred)
-
 \dontrun{
 ## ------------------------------------------------------------
 ## predicted probability and predicted class labels are returned
 ## in the predict object for classification analyses
 ## ------------------------------------------------------------
-
 data(breast, package = "_PROJECT_PACKAGE_NAME_")
 breast.obj <- rfsrc(status ~ ., data = breast[(1:100), ], nsplit = 10)
 breast.pred <- predict(breast.obj, breast[-(1:100), ])
 print(head(breast.pred$predicted))
 print(breast.pred$class)
-
 ## ------------------------------------------------------------
 ## example illustrating restore mode
 ## if predict is called without specifying the test data
 ## the original training data is used and the forest is restored
 ## ------------------------------------------------------------
-
 # first we make the grow call
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)
-
 # now we restore it and compare it to the original call
 # they are identical
 predict(airq.obj)
 print(airq.obj)
-
 # we can retrieve various outputs that were not asked for in
 # in the original call
-
 #here we extract the proximity matrix
 prox <- predict(airq.obj, proximity = TRUE)$proximity
 print(prox[1:10,1:10])
-
 #here we extract the number of times a variable was used to grow
 #the grow forest
 var.used <- predict(airq.obj, var.used = "by.tree")$var.used
 print(head(var.used))
-
 ## ------------------------------------------------------------
 ## unique feature of _PROJECT_PACKAGE_NAME_
 ## cross-validation can be used when factor labels differ over
 ## training and test data
 ## ------------------------------------------------------------
-
 # first we convert all x-variables to factors
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 veteran.factor <- data.frame(lapply(veteran, factor))
 veteran.factor$time <- veteran$time
 veteran.factor$status <- veteran$status
-
 # split the data into unbalanced train/test data (5/95)
 # the train/test data have the same levels, but different labels
 train <- sample(1:nrow(veteran), round(nrow(veteran) * .05))
 summary(veteran.factor[train,])
 summary(veteran.factor[-train,])
-
 # grow the forest on the training data and predict on the test data
 veteran.f.grow <- rfsrc(Surv(time, status) ~ ., veteran.factor[train, ]) 
 veteran.f.pred <- predict(veteran.f.grow, veteran.factor[-train , ])
 print(veteran.f.grow)
 print(veteran.f.pred)
-
 ## ------------------------------------------------------------
 ## example illustrating the flexibility of outcome = "test"
 ## illustrates restoration of forest via outcome = "test"
 ## ------------------------------------------------------------
-
 # first we make the grow call
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 pbc.grow <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 10)
-
 # now use predict with outcome = TEST
 pbc.pred <- predict(pbc.grow, pbc, outcome = "test")
-
 # notice that error rates are the same!!
 print(pbc.grow)
 print(pbc.pred)
-
 # note this is equivalent to restoring the forest
 pbc.pred2 <- predict(pbc.grow)
 print(pbc.grow)
 print(pbc.pred)
 print(pbc.pred2)
-
 # similar example, but with na.action = "na.impute"
 airq.obj <- rfsrc(Ozone ~ ., data = airquality, na.action = "na.impute")
 print(airq.obj)
 print(predict(airq.obj))
 # ... also equivalent to outcome="test" but na.action = "na.impute" required
 print(predict(airq.obj, airquality, outcome = "test", na.action = "na.impute"))
-
 # classification example
 iris.obj <- rfsrc(Species ~., data = iris)
 print(iris.obj)
 print(predict.rfsrc(iris.obj, iris, outcome = "test"))
-
 ## ------------------------------------------------------------
 ## another example illustrating outcome = "test"
 ## unique way to check reproducibility of the forest
 ## ------------------------------------------------------------
-
 # primary call
 set.seed(542899)
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 train <- sample(1:nrow(pbc), round(nrow(pbc) * 0.50))
 pbc.out <- rfsrc(Surv(days, status) ~ .,  data=pbc[train, ],
         nsplit = 10)
-
 # standard predict call
 pbc.train <- predict(pbc.out, pbc[-train, ], outcome = "train")
 #non-standard predict call: overlays the test data on the grow forest
 pbc.test <- predict(pbc.out, pbc[-train, ], outcome = "test")
-
 # check forest reproducibilility by comparing "test" predicted survival
 # curves to "train" predicted survival curves for the first 3 individuals
 Time <- pbc.out$time.interest
 matplot(Time, t(exp(-pbc.train$chf)[1:3,]), ylab = "Survival", col = 1, type = "l")
 matlines(Time, t(exp(-pbc.test$chf)[1:3,]), col = 2)
-
 ## ------------------------------------------------------------
 ## survival analysis using mixed multivariate outcome analysis 
 ## compare the predicted value to RSF
 ## ------------------------------------------------------------
-
 # fit the pbc data using RSF
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 rsf.obj <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 10)
 yvar <- rsf.obj$yvar
-
 # fit a mixed outcome forest using days and status as y-variables
 pbc.mod <- pbc
 pbc.mod$status <- factor(pbc.mod$status)
 mix.obj <- rfsrc(Multivar(days, status) ~., pbc.mod, nsplit = 10)
-
 # compare oob predicted values
 rsf.pred <- rsf.obj$predicted.oob
 mix.pred <- mix.obj$regrOutput$days$predicted.oob
 plot(rsf.pred, mix.pred)
-
 # compare C-index error rate
 rsf.err <- _PROJECT_PACKAGE_NAME_:::cindex(yvar$days, yvar$status, rsf.pred)
 mix.err <- 1 - _PROJECT_PACKAGE_NAME_:::cindex(yvar$days, yvar$status, mix.pred)
 cat("RSF                :", rsf.err, "\n")
 cat("multivariate forest:", mix.err, "\n")
-
 }
 }
 \keyword{predict}
 \keyword{forest}
-

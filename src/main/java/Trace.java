@@ -16,11 +16,11 @@ final class Trace {
         trace = 0;
     }
     
-    public static void set(int val) {
+    static void set(int val) {
         trace = val;
     }
     
-    public static boolean get(int val) {
+    static boolean get(int val) {
         if ((trace & val) > 0) {
             return true;
         }
