@@ -1,8 +1,8 @@
 plot.variable.rfsrc <- function(
   x,
   xvar.names,
-  which.class,
-  outcome.target=NULL,
+  target,
+  m.target=NULL,
   time,
   surv.type = c("mort", "rel.freq", "surv", "years.lost", "cif", "chf"),
   class.type = c("prob", "bayes"),
@@ -18,12 +18,12 @@ plot.variable.rfsrc <- function(
   subset,
   ...)
 {
-  
+  ## is this a synthetic forest?
   if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
     x <- x$rfSyn
   }
-  
-  
+  ## check that object is interpretable
+  ## first rename x to object to avoid confusion with x matrix
   object <- x
   remove(x)
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2 &
@@ -34,83 +34,83 @@ plot.variable.rfsrc <- function(
   if (object$family == "unsupv") {
     stop("this function does not apply to unsupervised forests")
   }
-  
+  ## terminate if a partial plot is requested but no forest is found
   if (partial && is.null(object$forest)) {
     stop("forest is empty:  re-run rfsrc (grow) call with forest=TRUE")
   }
-  
-  
+  ## if missing data was imputed then overlay the missing data for x
+  ## bug reported by John Ehrlinger
   xvar <- object$xvar
   if (!is.null(object$imputed.indv)) {
     xvar[object$imputed.indv, ] <- object$imputed.data[, object$xvar.names]
   }
   n <- nrow(xvar)
-  
-  
-  
+  ## --------------------------------------------------------------------------------------------
+  ## do the following if the class is NOT "plot.variable" 
+  ## (i.e. the object has not already been processed by the wraper)
   if (!inherits(object, "plot.variable")) {
-    
-    
+    ## process the subsetted index 
+    ## assumes the entire data set is to be used if not specified
     if (missing(subset)) {
       subset <- 1:n
     }
       else {
-        
+        ## convert the user specified subset into a usable form
         if (is.logical(subset)) subset <- which(subset)
         subset <- unique(subset[subset >= 1 & subset <= n])
         if (length(subset) == 0) {
           stop("'subset' not set properly")
         }
       }
-    
+    ## subset the x-data
     xvar <- xvar[subset,, drop = FALSE]
     n <- nrow(xvar)
-    
+    ## process the object depending on the underlying family
     family <- object$family
-    
-    outcome.target <- get.univariate.target(object, outcome.target)
-    
+    ## Ensure the coherency of multivariate target.
+    m.target <- get.univariate.target(object, m.target)
+    ## Survival and competing risk families.
     if (grepl("surv", family)) {
-      
+      ##extract event information
       event.info <- get.event.info(object, subset)
       cens <- event.info$cens
       event.type <- event.info$event.type
-      
+      ## assign time if missing
       if (missing(time)) {
         time <- median(event.info$time.interest, na.rm = TRUE)
       }
-      
+      ## Check for single time point.
       if (length(time) > 1) {
         stop("time must be a single value:  ", time)
       }
-        
+        ## Check for a wierd NULL surv.type.  This just makes life easier later.
       if (is.null(surv.type)) {
         stop("surv.type is specified incorrectly:  ", surv.type)
       }
-      
+      ## CR analysis.
       if (family == "surv-CR") {
-        if (missing(which.class)) {
-          which.class <- 1
+        if (missing(target)) {
+          target <- 1
         }
           else {
-            if (which.class < 1 || which.class > max(event.type, na.rm = TRUE)) {
-              stop("'which.class' is specified incorrectly")
+            if (target < 1 || target > max(event.type, na.rm = TRUE)) {
+              stop("'target' is specified incorrectly")
             }
           }
-        VIMP <- object$importance[, which.class]
-        
+        VIMP <- object$importance[, target]
+        ## Pick the first occurrence.  This allows the omission of a value for surv.type.
         pred.type <- setdiff(surv.type, c("rel.freq", "mort", "chf", "surv"))[1]
         pred.type <- match.arg(pred.type, c("years.lost", "cif", "chf"))
         ylabel <- switch(pred.type,
-                         "years.lost" = paste("Years lost for event ", which.class),
-                         "cif"        = paste("CIF for event ", which.class, " (time=", time, ")", sep = ""),
-                         "chf"        = paste("CHF for event ", which.class, " (time=", time, ")", sep = ""))
+                         "years.lost" = paste("Years lost for event ", target),
+                         "cif"        = paste("CIF for event ", target, " (time=", time, ")", sep = ""),
+                         "chf"        = paste("CHF for event ", target, " (time=", time, ")", sep = ""))
       }
-      
+      ## Right-censoring analysis.
         else {
-          which.class <- 1
+          target <- 1
           VIMP <- object$importance
-          
+          ## Pick the first occurrence.  This allows the omission of a value for surv.type.
           pred.type <- setdiff(surv.type, c("years.lost", "cif", "chf"))[1]
           pred.type <- match.arg(pred.type, c("rel.freq", "mort", "chf", "surv"))
           ylabel <- switch(pred.type,
@@ -120,46 +120,46 @@ plot.variable.rfsrc <- function(
                            "surv"       = paste("predicted survival (time=", time, ")", sep = ""))
         }
     }
-    
+    ## Univariate and multivariate families.
       else {
-        
+        ## assign a null time value
         event.info <- time <- NULL
-        
-        if(is.factor(coerce.multivariate(object, outcome.target)$yvar)) {
-          object.yvar.levels <- levels(coerce.multivariate(object, outcome.target)$yvar)
+        ## Factor outcome.
+        if(is.factor(coerce.multivariate(object, m.target)$yvar)) {
+          object.yvar.levels <- levels(coerce.multivariate(object, m.target)$yvar)
           pred.type <- match.arg(class.type, c("prob", "bayes"))
-          if (missing(which.class)) {
-            which.class <- object.yvar.levels[1]
+          if (missing(target)) {
+            target <- object.yvar.levels[1]
           }
-          if (is.character(which.class)) {
-            which.class <- match(match.arg(which.class, object.yvar.levels), object.yvar.levels)
+          if (is.character(target)) {
+            target <- match(match.arg(target, object.yvar.levels), object.yvar.levels)
           }
             else {
-              if ((which.class > length(object.yvar.levels)) | (which.class < 1)) {
-                stop("which.class is specified incorrectly:", which.class)
+              if ((target > length(object.yvar.levels)) | (target < 1)) {
+                stop("target is specified incorrectly:", target)
               }
             }
           if (pred.type == "prob") {
-            VIMP <- coerce.multivariate(object, outcome.target)$importance[, 1 + which.class]
-            ylabel <- paste("probability", object.yvar.levels[which.class])
+            VIMP <- coerce.multivariate(object, m.target)$importance[, 1 + target]
+            ylabel <- paste("probability", object.yvar.levels[target])
             remove(object.yvar.levels)
           }
             else {
-              VIMP <- coerce.multivariate(object, outcome.target)$importance[, 1]
+              VIMP <- coerce.multivariate(object, m.target)$importance[, 1]
               ylabel <- paste("bayes")
               remove(object.yvar.levels)
             }
         }
-        
+        ## Regression outcome.
           else {
             pred.type <- "y"
-            which.class <- NULL
-            VIMP <- coerce.multivariate(object, outcome.target)$importance
+            target <- NULL
+            VIMP <- coerce.multivariate(object, m.target)$importance
             ylabel <- expression(hat(y))
           }
       }
-    
-    
+    ## extract x-var names to be plotted
+    ## should x-var be sorted by importance?
     if (missing(xvar.names)) {
       xvar.names <- object$xvar.names
     }
@@ -178,23 +178,21 @@ plot.variable.rfsrc <- function(
     }
     nvar <- length(xvar.names)
     if (!partial) {
-      
-      yhat <- extract.pred(predict.rfsrc(object,
-                                         outcome.target = outcome.target,
-                                         importance = "none"),
+      ## Marginal plot setup only.
+      yhat <- extract.pred(predict.rfsrc(object, m.target = m.target, importance = "none"),
                            pred.type,
                            subset,
                            time,
-                           outcome.target,
-                           which.class,
+                           m.target,
+                           target,
                            oob = oob)
     }
       else {
-        
+        ## Partial plot set up only.
         if (npts < 1) npts <- 1 else npts <- round(npts)
-        
+        ## Loop over all x-variables.
         prtl <- lapply(1:nvar, function(k) {
-          
+          ## We do not currently subset the x-values or n in the partial mode call. 
           x <- na.omit(object$xvar[, object$xvar.names == xvar.names[k]])
           if (is.factor(x)) x <- factor(x, exclude = NULL)          
           n.x <- length(unique(x))
@@ -208,19 +206,19 @@ plot.variable.rfsrc <- function(
           yhat <- yhat.se <- NULL
           factor.x <- !(!is.factor(x) & (n.x > granule))
           pred.temp <- extract.partial.pred(partial.rfsrc(object$forest,
-                                                          outcome.target = outcome.target,
+                                                          m.target = m.target,
                                                           partial.type = pred.type,
                                                           partial.xvar = xvar.names[k],
                                                           partial.values = x.uniq,
                                                           partial.time = time,
                                                           oob = oob),
-
-
+##                                                        seed = -1
+##                                                        do.trace = 15 + 2^4 + 2^8
                                             pred.type,
                                             1:n,
-                                            outcome.target,
-                                            which.class)
-          
+                                            m.target,
+                                            target)
+          ## Results in the mean along an x-value over n.
           if (!is.null(dim(pred.temp))) {
             mean.temp <- apply(pred.temp, 2, mean, na.rm = TRUE)
           }
@@ -229,7 +227,7 @@ plot.variable.rfsrc <- function(
             }
           if (!factor.x) {
             yhat <- mean.temp
-            if (coerce.multivariate(object, outcome.target)$family == "class") {
+            if (coerce.multivariate(object, m.target)$family == "class") {
               yhat.se <- mean.temp * (1 - mean.temp) / sqrt(n)
             }
               else {
@@ -246,11 +244,11 @@ plot.variable.rfsrc <- function(
       }
     plots.per.page <- max(round(min(plots.per.page,nvar)), 1)
     granule <- max(round(granule), 1)
-    
+    ## save the plot.variable object
     plot.variable.obj <- list(family = family,
                               partial = partial,
                               event.info = event.info,
-                              which.class = which.class,
+                              target = target,
                               ylabel = ylabel,
                               n = n,
                               xvar.names = xvar.names,
@@ -265,19 +263,19 @@ plot.variable.rfsrc <- function(
         plot.variable.obj$yhat <- yhat
         plot.variable.obj$xvar <- xvar
       }
-    
+    ## assign the class
     class(plot.variable.obj) <- c("rfsrc", "plot.variable", family)
   }
-  
-  
-  
+  ## ---------------------------------------------------------------------------------
+  ## (TBD TBD) Currently, the plot.variable family is not implemented!
+  ## Just pull the precomputed variables ...
     else {
       plot.variable.obj <- object
       remove(object)
       family <- plot.variable.obj$family
       partial <- plot.variable.obj$partial
       event.info <- plot.variable.obj$event.info
-      which.class <- plot.variable.obj$which.class
+      target <- plot.variable.obj$target
       ylabel <- plot.variable.obj$ylabel
       n <- plot.variable.obj$n
       xvar.names <- plot.variable.obj$xvar.names
@@ -297,26 +295,26 @@ plot.variable.rfsrc <- function(
         event.type <- event.info$event.type
       }
     }
-  
+  ## save par settings
   if (show.plots) {
     old.par <- par(no.readonly = TRUE)
   }
-  
-  
-  
-  
-  
+  ## --------------------------------------------------------------------------------
+  ##
+  ## marginal plots
+  ##
+  ## --------------------------------------------------------------------------------
   if (!partial && show.plots) {
-    
+    ## graphical set up
     par(mfrow = c(min(plots.per.page, ceiling(nvar / plots.per.page)), plots.per.page))
     if (n > 500) cex.pt <- 0.5 else cex.pt <- 0.75
-    
+    ## loop over variables
     for (k in 1:nvar) {
-      
+      ##x-stuff
       x <- xvar[, which(colnames(xvar) == xvar.names[k])]
       x.uniq <- unique(x)
       n.x <- length(x.uniq)
-      
+      ## x-continuous-plot
       if (!is.factor(x) & n.x > granule) {
         plot(x,
              yhat,
@@ -324,12 +322,12 @@ plot.variable.rfsrc <- function(
              ylab = ylabel,
              type = "n", ...) 
         if (grepl("surv", family)) {
-          points(x[cens == which.class], yhat[cens == which.class], pch = 16, col = 4, cex = cex.pt)
+          points(x[cens == target], yhat[cens == target], pch = 16, col = 4, cex = cex.pt)
           points(x[cens == 0], yhat[cens == 0], pch = 16, cex = cex.pt)
         }
         lines(lowess(x[!is.na(x)], yhat[!is.na(x)]), col = 2, lwd=3)
       }
-      
+      ## x-factor-plots
         else {
           if (is.factor(x)) x <- factor(x, exclude = NULL)          
           boxplot(yhat ~ x, na.action = "na.omit",
@@ -349,29 +347,29 @@ plot.variable.rfsrc <- function(
         }
     }
   }
-  
-  
-  
-  
-  
+  ## --------------------------------------------------------------------------------
+  ##
+  ## partial plots
+  ##
+  ## --------------------------------------------------------------------------------
   if (partial && show.plots) {
-    
+    ## graphical setup
     plots.per.page <- max(round(min(plots.per.page,nvar)), 1)
     granule <- max(round(granule),1)
     par(mfrow = c(min(plots.per.page, ceiling(nvar/plots.per.page)), plots.per.page))
-    
+    ## loop over variables
     for (k in 1:nvar) {
-      
+      ## x-stuff
       x <- prtl[[k]]$x
       if (is.factor(x)) x <- factor(x, exclude = NULL)          
       x.uniq <- prtl[[k]]$x.uniq
       n.x <- prtl[[k]]$n.x
       if (n.x > 25) cex.pt <- 0.5 else cex.pt <- 0.75
-      
+      ## y-stuff
       yhat <- prtl[[k]]$yhat
       yhat.se <- prtl[[k]]$yhat.se
       factor.x <- !(!is.factor(x) & (n.x > granule))
-      
+      ## x-continuous-plot
       if (!factor.x) {
         plot(c(min(x), x.uniq, max(x), x.uniq, x.uniq),
              c(NA, yhat, NA, yhat + 2 * yhat.se, yhat - 2 * yhat.se),
@@ -397,7 +395,7 @@ plot.variable.rfsrc <- function(
           }
         rug(x, ticksize=0.03)
       }
-      
+      ## x-factor-plots
         else {
           y.se <- 0.005
           bxp.call <- boxplot(yhat ~ rep(x.uniq, rep(n, n.x)), range = 2, plot = FALSE)
@@ -421,17 +419,17 @@ plot.variable.rfsrc <- function(
         }
     }
   }
-  
+  ## Restore par settings
   if (show.plots) {
     par(old.par)
   }
-  
+  ## Return the plot.variable object for reuse
   invisible(plot.variable.obj)
 }
-extract.pred <- function(obj, type, subset, time, outcome.target, which.class, oob = oob) {
-    
-    obj <- coerce.multivariate(obj, outcome.target)
-    
+extract.pred <- function(obj, type, subset, time, m.target, target, oob = oob) {
+    ## Coerce the (potentially) multivariate object if necessary.
+    obj <- coerce.multivariate(obj, m.target)
+    ## decide if OOB or in-bag values are requested
     if (oob == FALSE) {
         pred <- obj$predicted
         surv <- obj$survival
@@ -444,29 +442,29 @@ extract.pred <- function(obj, type, subset, time, outcome.target, which.class, o
         chf <- obj$chf.oob
         cif <- obj$cif.oob
     }
-    
+    ## Survival and competing risk families.
     if (grepl("surv", obj$family)) {
-      
+      ## Competing risks:
       if (obj$family == "surv-CR") {
         n <- dim(pred)[1]
         if (missing(subset)) subset <- 1:n
-        
-        if (missing(which.class)) which.class <- 1
+        ## Default is first event type.
+        if (missing(target)) target <- 1
         type <- match.arg(type, c("years.lost", "cif", "chf"))
-        
+        ## Get the index of the closest point of the grow time interest vector.
         time.idx <-  max(which(obj$time.interest <= time))
         return(switch(type,
-                      "years.lost" = pred[subset, which.class],
-                      "cif"        = cif[subset, time.idx, which.class],
-                      "chf"        = chf[subset, time.idx, which.class]
+                      "years.lost" = pred[subset, target],
+                      "cif"        = cif[subset, time.idx, target],
+                      "chf"        = chf[subset, time.idx, target]
                       ))
       }
-      
+      ## Right-censored:
       else {
         n <- length(pred)
         if (missing(subset)) subset <- 1:n
         type <- match.arg(type, c("rel.freq", "mort", "chf", "surv"))
-        
+        ## Get the index of the closest point of the grow time interest vector.
         time.idx <-  max(which(obj$time.interest <= time))
         return(switch(type,
                       "rel.freq" = pred[subset]/max(n, na.omit(pred)),
@@ -476,17 +474,17 @@ extract.pred <- function(obj, type, subset, time, outcome.target, which.class, o
                       ))
       }
     }
-    
+    ## The object has been coerced.  It will be univariate.
       else {
         if (obj$family == "class") {
           n <- dim(pred)[1]
           if (missing(subset)) subset <- 1:n
           type <- match.arg(type, c("prob", "bayes"))
-          
-          if (missing(which.class)) which.class <- 1
+          ## The default is first class label.
+          if (missing(target)) target <- 1
           prob <- pred[subset,, drop = FALSE]
           return(switch(type,
-                        "prob" = prob[, which.class],
+                        "prob" = prob[, target],
                         "bayes" =  bayes.rule(prob)))
         }
           else {
@@ -496,31 +494,31 @@ extract.pred <- function(obj, type, subset, time, outcome.target, which.class, o
           }
       }
   }
-
-
-
-
-
-
-
-extract.partial.pred <- function(obj, type, subset, outcome.target, which.class) {
-  
+## Note that currently only one (1) time point is requested via the
+## plot.variable() R-wrapper.  Only one (1) is allowed.
+## Additional time points can be specified
+## using the partial.rfsrc() wrapper, and then extracted without any
+## additional calls to the native code.  The extract call
+## is limited to only one (1) time point on each call.
+## The same protocol holds for m.target.
+extract.partial.pred <- function(obj, type, subset, m.target, target) {
+  ## Survival families
   if (grepl("surv", obj$family)) {
     n <- dim(obj$survOutput)[1]
     if (missing(subset)) subset <- 1:n
     time.idx <-  1
-    
+    ## Competing risks:
     if (obj$family == "surv-CR") {
-      
-      if (missing(which.class)) which.class <- 1
+      ## Default is first event type.
+      if (missing(target)) target <- 1
       type <- match.arg(type, c("years.lost", "cif", "chf"))
       return(switch(type,
-                    "years.lost" = obj$survOutput[subset, which.class, ],
-                    "cif" = obj$survOutput[subset, time.idx, which.class, ],
-                    "chf" = obj$survOutput[subset, time.idx, which.class, ]
+                    "years.lost" = obj$survOutput[subset, target, ],
+                    "cif" = obj$survOutput[subset, time.idx, target, ],
+                    "chf" = obj$survOutput[subset, time.idx, target, ]
                     ))
     }
-    
+    ## Right censored:
       else {
         if (type == "rel.freq") {
           sz <- apply(obj$survOutput[subset, ], 2, function(x) {length(na.omit(x))})
@@ -535,64 +533,64 @@ extract.partial.pred <- function(obj, type, subset, outcome.target, which.class)
       }
   }
     else {
-      
-      
-      
-      
-      
-      
-      
-      target <- NULL
-      
-      
-      if (is.null(target)) {
+      ## Univariate and multivariate families:
+      ## The incoming partial object is always presented in a mulitvariate list, regardless of whether
+      ## the grow object was univariate or multivariate.  There is no coersion.  In a multivariate case,
+      ## m.target is coherent.  But in a univariate case, it will be NULL.  As a result, we
+      ## accomodate for the NULL case by grabbing the first (and actually only) valid output below, in
+      ## order to parse the multivariate list correctly.
+      ## We are either classification or regression but we don't know which yet.
+      regrClassTarget <- NULL
+      ## It doesn't matter whether we process regression or classification first.
+      ## But one and only one family will be processed.
+      if (is.null(regrClassTarget)) {
         if (!is.null(obj$classOutput)) {
-          if (is.null(outcome.target)) {
-            
-            outcome.target <- names(obj$classOutput)[1]
+          if (is.null(m.target)) {
+            ## Grab the first outcome!  It will exist, as this is the univariate case.
+            m.target <- names(obj$classOutput)[1]
           }
-          target <- which (names(obj$classOutput) == outcome.target)
-          
-          if (length(target) > 0) {
-            if (length(target) > 1) {
-              
+          regrClassTarget <- which (names(obj$classOutput) == m.target)
+          ## Classification.
+          if (length(regrClassTarget) > 0) {
+            if (length(regrClassTarget) > 1) {
+              ## Safety check in case m.target was incorrect coming into this routine.
               stop("Invalid number of target outcomes specified in partial plot extraction.")
             }
             type <- match.arg(type, c("prob", "bayes"))
-            
-            if (missing(which.class)) which.class <- 1
-            n <- dim(obj$classOutput[[target]])[1]
+            ## Default is first class label.
+            if (missing(target)) target <- 1
+            n <- dim(obj$classOutput[[regrClassTarget]])[1]
             if (missing(subset)) subset <- 1:n
             return(switch(type,
-                          "prob" = obj$classOutput[[target]][subset, 1 + which.class, ],
-                          "bayes" =  obj$classOutput[[target]][subset, 1, ]))
+                          "prob" = obj$classOutput[[regrClassTarget]][subset, 1 + target, ],
+                          "bayes" =  obj$classOutput[[regrClassTarget]][subset, 1, ]))
           }
         }
       }
-      
-      
-      if (is.null(target)) {
+      ## It doesn't matter whether we process regression or classification first.
+      ## But one and only one family will be processed.
+      if (is.null(regrClassTarget)) {
         if (!is.null(obj$regrOutput)) {
-          if (is.null(outcome.target)) {
-            
-            outcome.target <- names(obj$regrOutput)[1]
+          if (is.null(m.target)) {
+            ## Grab the first outcome!  It will exist, as this is the univariate case.
+            m.target <- names(obj$regrOutput)[1]
           }
-          target <- which (names(obj$regrOutput) == outcome.target)
-          
-          if (length(target) > 0) {
-            if (length(target) > 1) {            
-              
+          regrClassTarget <- which (names(obj$regrOutput) == m.target)
+          ## Regression.
+          if (length(regrClassTarget) > 0) {
+            if (length(regrClassTarget) > 1) {            
+              ## Safety check in case m.target was incorrect coming into this routine.
               stop("Invalid number of target outcomes specified in partial plot extraction.")
             }
-            n <- dim(obj$classOutput[[target]])[1]
+            n <- dim(obj$classOutput[[regrClassTarget]])[1]
             if (missing(subset)) subset <- 1:n
-            return(obj$regrOutput[[target]][subset, ])
+            return(obj$regrOutput[[regrClassTarget]][subset, ])
           }
         }
       }
-      
-      if (is.null(target)) {
-        stop("Invalid target specified in partial plot extraction:  ", outcome.target)
+      ## If after parsing both classification and regression we have not found the target, we error.
+      if (is.null(regrClassTarget)) {
+        stop("Invalid target specified in partial plot extraction:  ", m.target)
       }
     }
 }

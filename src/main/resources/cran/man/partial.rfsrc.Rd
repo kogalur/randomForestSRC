@@ -40,8 +40,10 @@ partial.rfsrc(object, outcome.target = NULL,
   \item{...}{Further arguments passed to or from other methods.}
 }
 \details{
+
   \enumerate{
     \item For regression, the predicted response is used.
+    
     \item For survival, the choices are:
     \itemize{
       \item Relative frequency of mortality (\code{rel.freq}) or
@@ -53,6 +55,7 @@ partial.rfsrc(object, outcome.target = NULL,
       \item The survival function (\code{surv}) is of dim \code{[n] x
         [length(partial.time)] x [length(partial.values)]}.
     }
+    
     \item For competing risks, the choices are:
     \itemize{
 	    \item The expected number of life years lost (\code{years.lost})
@@ -66,6 +69,7 @@ partial.rfsrc(object, outcome.target = NULL,
       \code{[n] x [length(partial.time)] x [length(event.info$event.type)]
         x [length(partial.values)]}.
     }
+
     \item For regression, it is of dim \code{[n] x [length(partial.values)]}.
     \item For classification, it is of dim \code{[n] x [1 + yvar.nlevels[.]] x [length(partial.values)]}.
   }
@@ -76,9 +80,11 @@ partial.rfsrc(object, outcome.target = NULL,
 \references{
   Ishwaran H., Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7(2):25-31.
+  
   Ishwaran H., Kogalur U.B., Blackstone E.H. and Lauer M.S.
   (2008).  Random survival forests, \emph{Ann. App.
     Statist.}, 2:841-860.
+  
  Ishwaran H., Gerds T.A., Kogalur U.B., Moore R.D., Gange S.J. and Lau
   B.M. (2014). Random survival forests for competing risks.
   \emph{Biostatistics}, 15(4):757-773.
@@ -91,6 +97,7 @@ partial.rfsrc(object, outcome.target = NULL,
 ## ------------------------------------------------------------
 ## survival/competing risk
 ## ------------------------------------------------------------
+
 ## survival
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 v.obj <- rfsrc(Surv(time,status)~., veteran, nsplit = 10, ntree = 100)
@@ -99,6 +106,7 @@ partial.obj <- partial(v.obj,
   partial.xvar = "age",
   partial.values = v.obj$xvar[, "age"],
   partial.time = v.obj$time.interest)
+
 ## competing risks
 data(follic, package = "_PROJECT_PACKAGE_NAME_")
 follic.obj <- rfsrc(Surv(time, status) ~ ., follic, nsplit = 3, ntree = 100)
@@ -108,17 +116,20 @@ partial.obj <- partial(follic.obj,
   partial.values = follic.obj$xvar[, "age"],
   partial.time = follic.obj$time.interest,
   oob = TRUE)
+
 ## regression
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)
 partial.obj <- partial(airq.obj,
   partial.xvar = "Wind",
   partial.values = airq.obj$xvar[, "Wind"],
   oob = FALSE)
+
 ## classification
 iris.obj <- rfsrc(Species ~., data = iris)
 partial.obj <- partial(iris.obj,
   partial.xvar = "Sepal.Length",
   partial.values = iris.obj$xvar[, "Sepal.Length"])
+
 ## multivariate mixed outcomes
 mtcars2 <- mtcars
 mtcars2$carb <- factor(mtcars2$carb)
@@ -127,6 +138,7 @@ mtcars.mix <- rfsrc(Multivar(carb, mpg, cyl) ~ ., data = mtcars2)
 partial.obj <- partial(mtcars.mix,
   partial.xvar = "disp",
   partial.values = mtcars.mix$xvar[, "disp"])
+
 ## second order variable specification
 mtcars.obj <- rfsrc(mpg ~., data = mtcars)
 partial.obj <- partial(mtcars.obj,
@@ -134,6 +146,7 @@ partial.obj <- partial(mtcars.obj,
   partial.values = c(4, 8),
   partial.xvar2 = c("gear", "disp", "carb"),
   partial.values2 = c(4, 200, 3))
+
 }
 }
 \keyword{partial}

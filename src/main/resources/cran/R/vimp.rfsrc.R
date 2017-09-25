@@ -8,7 +8,7 @@ vimp.rfsrc <- function(object,
                        do.trace = FALSE,
                        ...)
 {
-  
+  ## Incoming parameter checks.  All are fatal.
   if (missing(object)) {
     stop("object is missing")
   }
@@ -19,7 +19,7 @@ vimp.rfsrc <- function(object,
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2) {
     stop("This function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
   }
-  
+  ## Process the importance specification
   if (!is.logical(joint)) {
     stop("joint must be a logical value")
   }
@@ -38,8 +38,8 @@ vimp.rfsrc <- function(object,
                                         "permute.ensemble", "random.ensemble", "anti.ensemble",
                                         "permute.joint", "random.joint", "anti.joint",
                                         "permute.joint.ensemble", "random.joint.ensemble", "anti.joint.ensemble"))
-  
-  
+  ## grow objects under non-standard bootstrapping are devoid of
+  ## performance values
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.null(object$forest)) {
       stop("The forest is empty.  Re-run rfsrc (grow) call with forest=TRUE")
@@ -54,13 +54,13 @@ vimp.rfsrc <- function(object,
   if (bootstrap != "by.root") {
     stop("grow objects under non-standard bootstrapping are devoid of performance values")
   }
-  
-  
+  ## Process the subsetted index 
+  ## Assumes the entire data set is to be used if not specified
   if (missing(subset)) {
     subset <- NULL
   }
     else {
-      
+      ## convert the user specified subset into a usable form
       if (is.logical(subset)) {
         subset <- which(subset)
       }
@@ -69,7 +69,7 @@ vimp.rfsrc <- function(object,
         stop("'subset' not set properly")
       }
     }
-  
+  ## make the call to generic predict
   result <- generic.predict.rfsrc(object,
                                   outcome.target = outcome.target,
                                   importance = importance,

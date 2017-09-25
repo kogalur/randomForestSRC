@@ -1,4 +1,5 @@
 useDynLib(_PROJECT_PACKAGE_NAME_, .registration = TRUE)
+
 importFrom("parallel", mclapply)
 importFrom("graphics", "abline", "axis", "box", "boxplot", "legend",
            "lines", "matlines", "matplot", "mtext", "par", "plot",
@@ -11,6 +12,7 @@ importFrom("stats", "as.formula", "dlnorm", "formula", "lowess",
 importFrom("utils", "installed.packages", "write.table",
            "txtProgressBar", "setTxtProgressBar")
 importFrom("grDevices", "gray")
+
 export(cindex,
         
        find.interaction,
@@ -49,6 +51,8 @@ export(cindex,
        var.select.rfsrc,
        vimp,
        vimp.rfsrc)
+
+
 S3method(print, rfsrc)
  
 S3method(plot, rfsrc)
@@ -61,3 +65,4 @@ S3method(plot, variable)
 S3method(plot, variable.rfsrc)
 S3method(plot, survival)
 S3method(plot, survival.rfsrc)
+

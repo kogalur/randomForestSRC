@@ -13,15 +13,37 @@ class EnsembleArg {
 
     private String mode;
     private String family;
+    private EnsembleArg growEnsembleArg;
     
     private java.util.HashMap <String, String> ensembleArg;
     private java.util.HashMap <String, NativeOpt> ensembleList;
-    
+
+    // Nominal GROW mode constructor.
     EnsembleArg(String mode, String family) {
 
         this.mode = mode;
         this.family = family;
 
+        // Safe the grow-side ensemble argument object as it is irrelevant.
+        growEnsembleArg = null;
+        
+        set();
+    }
+
+    // Nominal !GROW mode constructor.
+    EnsembleArg(EnsembleArg growEnsembleArg, String mode, String family) {
+
+        this.mode = mode;
+        this.family = family;
+
+        // Initialize the grow-side ensemble argument object. We access
+        // potentially existing qualt and quant outgoing options and
+        // convey these as incoming options to the native code.
+        this.growEnsembleArg = growEnsembleArg;
+        
+        // Safe the grow-side ensemble argument object as it is irrelevant.
+        growEnsembleArg = null;
+        
         set();
     }
 
@@ -29,15 +51,30 @@ class EnsembleArg {
         
         ensembleArg = new java.util.HashMap <String, String> (16);
         ensembleList = new java.util.HashMap <String, NativeOpt> (16);
-        
 
-        // Always output "forest" in grow mode. Always. 
         if (mode.equals("grow")) {
+            // Always output "forest" in grow mode. Always. 
             ensembleArg.put("forest", "yes");
             ensembleList.put("forest",
                              new NativeOpt("forest",
                                            new String[] {"yes"},
                                            new int[] {(1 << 5)}));
+
+            
+            // Default action is to output qualts in grow mode.
+            ensembleArg.put("qualitativeTerminalInfo", "yes");
+            ensembleList.put("qualitativeTerminalInfo",
+                             new NativeOpt("qualitativeTerminalInfo",
+                                           new String[] {"no", "yes"},
+                                           new int[] {0, (1 << 16)}));
+            
+            // Default action is to not output quants in grow mode.
+            ensembleArg.put("quantitativeTerminalInfo", "no");
+            ensembleList.put("quantitativeTerminalInfo",
+                             new NativeOpt("quantitativeTerminalInfo",
+                                           new String[] {"no", "yes"},
+                                           new int[] {0, (1 << 18)}));
+            
         }
         else {
             // Never output "forest" in !grow mode. Never. 
@@ -46,6 +83,27 @@ class EnsembleArg {
                              new NativeOpt("forest",
                                            new String[] {"no"},
                                            new int[] {(0)}));
+
+            // Default action is to assume no incoming qualts in !grow mode.
+            ensembleArg.put("qualitativeTerminalInfo", "no");
+            ensembleList.put("qualitativeTerminalInfo",
+                             new NativeOpt("qualitativeTerminalInfo",
+                                           new String[] {"no", "yes"},
+                                           new int[] {0, (1 << 17)}));
+            
+            // Default action is to assume no incoming quants in !grow mode.
+            ensembleArg.put("quantitativeTerminalInfo", "no");
+            ensembleList.put("quantitativeTerminalInfo",
+                             new NativeOpt("quantitativeTerminalInfo",
+                                           new String[] {"no", "yes"},
+                                           new int[] {0, (1 << 19)}));
+
+            // !GROW mode allows the presence of a grow-side ensemble argument object.
+            if (growEnsembleArg != null) {
+                // Override the qualts and quants accordingly.
+                ensembleArg.put("qualitativeTerminalInfo",  growEnsembleArg.get("qualitativeTerminalInfo"));
+                ensembleArg.put("quantitativeTerminalInfo", growEnsembleArg.get("quantitativeTerminalInfo"));
+            }
         }
             
         if (mode.equals("grow") || mode.equals("rest")) {
@@ -55,22 +113,29 @@ class EnsembleArg {
             ensembleArg.put("weight", "no");
             ensembleList.put("weight",
                               new NativeOpt("weight",
-                                            new String[] {"no", "inbag", "oob", "all"},
+                                            new String[] {"no", "inbag", "oob"},
                                             new int[] {0,
-                                                       (1 << 0) + (1 << 1),
-                                                       (1 << 0) + (1 << 2), 
-                                                       (1 << 0) + (1 << 21) + (1 << 22)}));
+                                                       (1 << 0),
+                                                       (1 << 0) + (1 << 1)}));
 
 
             ensembleArg.put("proximity", "no");
-            ensembleList.put("proximity",
+                             ensembleList.put("proximity",
                               new NativeOpt("proximity",
-                                            new String[] {"no", "inbag", "oob", "all"},
+                                            new String[] {"no", "inbag", "oob"},
                                             new int[] {0,
                                                        (1 << 28) + (1 << 29),
-                                                       (1 << 28) + (1 << 29), 
-                                                       (1 << 28) + (1 << 29) + (1 << 30)}));
+                                                       (1 << 28) + (1 << 30)}));
 
+            ensembleArg.put("importance", "no");
+            ensembleList.put("importance",
+                             new NativeOpt("importance",
+                                           new String[] {"no",
+                                                         "permute.ensemble", "random.ensemble",
+                                                         "permute", "random"},
+                                           new int[] {0,
+                                                      (1 << 25) + (1 << 8), (1 << 25) + (1 << 9),
+                                                      (1 << 25) + (1 << 24) + (1 << 8), (1 << 25) + (1 << 24) + (1 << 9)}));
         }
         else {
 
@@ -79,17 +144,36 @@ class EnsembleArg {
             ensembleArg.put("weight", "no");
             ensembleList.put("weight",
                               new NativeOpt("weight",
-                                            new String[] {"no", "all"},
+                                            new String[] {"no", "inbag", "oob", "all"},
                                             new int[] {0,
-                                                       (1 << 0) + (1 << 21) + (1 << 22)}));
+                                                       (1 << 0),
+                                                       (1 << 0) + (1 << 1),
+                                                       (1 << 0) + (1 << 2)}));
 
 
             ensembleArg.put("proximity", "no");
             ensembleList.put("proximity",
                               new NativeOpt("proximity",
-                                            new String[] {"no", "all"},
+                                            new String[] {"no", "inbag", "oob", "all"},
                                             new int[] {0,
+                                                       (1 << 28) + (1 << 29),
+                                                       (1 << 28) + (1 << 30),
                                                        (1 << 28) + (1 << 29) + (1 << 30)}));
+
+            ensembleArg.put("importance", "no");
+            ensembleList.put("importance",
+                             new NativeOpt("importance",
+                                           new String[] {"no",
+                                                         "anti.ensemble", "permute.ensemble", "random.ensemble",
+                                                         "anti.joint.ensemble", "permute.joint.ensemble", "random.joint.ensemble",
+                                                         "anti", "permute", "random",
+                                                         "anti.joint", "permute.joint", "random.joint"},
+                                           new int[] {0,
+                                                      (1 << 25) + (0), (1 << 25) + (1 << 8), (1 << 25) + (1 << 9),
+                                                      (1 << 25) + (1 << 10) + (0), (1 << 25) + (1 << 10) + (1 << 8), (1 << 25) + (1 << 10) + (1 << 9),
+                                                      (1 << 25) + (1 << 24) + (0), (1 << 25) + (1 << 24) + (1 << 8), (1 << 25) + (1 << 24) + (1 << 9),
+                                                      (1 << 25) + (1 << 24) + (1 << 10) + (0), (1 << 25) + (1 << 24) + (1 << 10) + (1 << 8), (1 << 25) + (1 << 24) + (1 << 10) + (1 << 9)}));
+
         }
 
         ensembleArg.put("membership", "no");
@@ -97,25 +181,11 @@ class EnsembleArg {
                           new NativeOpt("membership",
                                         new String[] {"no", "yes"},
                                         new int[] {0, (1 << 6)}));
-
-        ensembleArg.put("importance", "no");
-        ensembleList.put("importance",
-                          new NativeOpt("importance",
-                                        new String[] {"no",
-                                                      "anti.ensemble", "permute.ensemble", "random.ensemble",
-                                                      "anti.joint.ensemble", "permute.joint.ensemble", "random.joint.ensemble",
-                                                      "anti", "permute", "random",
-                                                      "anti.joint", "permute.joint", "random.joint"},
-                                        new int[] {0,
-                                                   (1 << 25) + (0), (1 << 25) + (1 << 8), (1 << 25) + (1 << 9),
-                                                   (1 << 25) + (1 << 10) + (0), (1 << 25) + (1 << 10) + (1 << 8), (1 << 25) + (1 << 10) + (1 << 9),
-                                                   (1 << 25) + (1 << 24) + (0), (1 << 25) + (1 << 24) + (1 << 8), (1 << 25) + (1 << 24) + (1 << 9),
-                                                   (1 << 25) + (1 << 24) + (1 << 10) + (0), (1 << 25) + (1 << 24) + (1 << 10) + (1 << 8), (1 << 25) + (1 << 24) + (1 << 10) + (1 << 9)}));
         
         ensembleArg.put("error", "last.tree");
         ensembleList.put("error",
                           new NativeOpt("error",
-                                        new String[] {"last.tree", "every.tree"},
+                                        new String[] {"every.tree", "last.tree"},
                                         new int[] {0, (1 << 13)}));
 
         ensembleArg.put("varUsed", "no");
@@ -129,14 +199,6 @@ class EnsembleArg {
                           new NativeOpt("splitDepth",
                                         new String[] {"no", "every.tree", "sum.tree"},
                                         new int[] {0, (1 << 23), (1 << 22)}));
-
-        if (mode.equals("grow")) {
-                ensembleArg.put("qualitativeTerminalInfo", "yes");
-                ensembleList.put("qualitativeTerminalInfo",
-                                 new NativeOpt("qualitativeTerminalInfo",
-                                               new String[] {"no", "yes"},
-                                               new int[] {0, (1 << 16)}));
-        }
 
         // Note that RF-M+ also supports this option on the native-side, but it not curretly enabled from the Java-side. 
         if (family.equals("RF-C") || family.equals("RF-C+")) {
@@ -159,14 +221,26 @@ class EnsembleArg {
     void set(String key, String value) {
         if (ensembleList.containsKey(key)) {
 
-            // The following keys cannot be modified.  Warn the user that the attempt is being ignored.
+            boolean setFlag = true;
+        
+            // The following keys have restrictions.
             if (key.equals("forest")) {
                 RFLogger.log(Level.WARNING, "forest ensemble cannot be modified.");
+                setFlag = false;
             }
             else if (key.equals("qualitativeTerminalInfo")) {
-                RFLogger.log(Level.WARNING, "qualitativeTerminalInfo ensemble cannot be modified.");
+                if (!mode.equals("grow")) {
+                    RFLogger.log(Level.WARNING, "qualitativeTerminalInfo ensemble cannot be modified.");
+                    setFlag = false;
+                }
             }
-            else {
+            else if (key.equals("quantitativeTerminalInfo")) {
+                if (!mode.equals("grow")) {
+                    RFLogger.log(Level.WARNING, "quantitativeTerminalInfo ensemble cannot be modified.");
+                    setFlag = false;
+                }
+            }
+            if (setFlag) {
                 java.util.HashMap nativeOptMap = ensembleList.get(key).option;
                 if (nativeOptMap.containsKey(value)) {
                     ensembleArg.put(key, value);

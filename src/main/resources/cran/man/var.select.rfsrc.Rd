@@ -17,7 +17,9 @@
   mtry = (if (method == "md") ceiling(ncol(data)/3) else NULL),
   nodesize = 2, splitrule = NULL, nsplit = 10, xvar.wt = NULL,
   refit = (method != "md"), fast = FALSE,
+  
   na.action = c("na.omit", "na.impute"),
+  
    
   always.use = NULL, nrep = 50, K = 5, nstep = 1,
   prefit =  list(action = (method != "md"), ntree = 100,
@@ -103,20 +105,26 @@
   This function implements random forest variable selection using
   tree minimal depth methodology (Ishwaran et al., 2010).  The option
   \option{method} allows for two different approaches:
+  
   \enumerate{
     \item \option{method="md"}
+    
     Invokes minimal depth variable selection.  Variables are selected
     using minimal depth variable selection.  Uses all data and all
     variables simultaneously.  This is basically a front-end to the
     \command{max.subtree} wrapper.  Users should consult the
     \command{max.subtree} help file for details.
+    
     Set \option{mtry} to larger values in high-dimensional problems.
+    
     \item \option{method="vh"} or \option{method="vh.vimp"}
+    
     Invokes variable hunting.  Variable hunting is used for problems
     where the number of variables is substantially larger than the
     sample size (e.g., p/n is greater than 10).  It is always prefered
     to use \option{method="md"}, but to find more variables, or when
     computations are high, variable hunting may be preferred.
+    
     When \option{method="vh"}: Using training data from a stratified
     K-fold subsampling (stratification based on the y-outcomes), a
     forest is fit using \code{mvars} randomly selected variables
@@ -131,6 +139,7 @@
     Final selected variables are the top P ranked variables, where P
     is the average model size (rounded up to the nearest integer) and
     variables are ranked by frequency of occurrence.
+    
     The same algorithm is used when \option{method="vh.vimp"}, but
     variables are ordered using VIMP.  This is faster, but not as
     accurate.
@@ -151,6 +160,7 @@
     selected with probability proportional to their VIMP.  In all
     cases, the entire option is overridden if \code{xvar.wt} is
     non-null.
+	  
 	  \item If \code{object} is supplied and \option{method="md"},
 	  the grow forest from \code{object} is parsed for minimal depth
 	  information.  While this avoids fitting another forest, thus
@@ -165,10 +175,12 @@
 	  refitted forest is used in its place for variable selection.
 	  Thus, the effort spent to construct the original grow forest is
 	  not used in this case.
+    
 	  \item If \option{fast=TRUE}, and variable hunting is used, the
 	  training data is chosen to be of size n/K, where n=sample size
 	  (i.e., the size of the training data is swapped with the test
 	  data).  This speeds up the algorithm.  Increasing K also helps.
+	  
 	  \item Can be used for competing risk data.  When
 	  \option{method="vh.vimp"}, variable selection based on VIMP is
 	  confined to an event specific cause specified by \code{cause}.
@@ -195,6 +207,7 @@
   Ishwaran H., Kogalur U.B., Gorodeski E.Z, Minn A.J. and 
   Lauer M.S. (2010).  High-dimensional variable selection for survival
   data.  \emph{J. Amer. Statist. Assoc.}, 105:205-217.
+  
   Ishwaran H., Kogalur U.B., Chen X. and Minn A.J. (2011).  Random
   survival forests for high-dimensional data. \emph{Statist. Anal. Data
     Mining}, 4:115-132.
@@ -210,25 +223,32 @@
 ## Minimal depth variable selection
 ## survival analysis
 ## ------------------------------------------------------------
+
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 10, importance = TRUE)
+
 # default call corresponds to minimal depth selection
 vs.pbc <- var.select(object = pbc.obj)
 topvars <- vs.pbc$topvars
+
 # the above is equivalent to
 max.subtree(pbc.obj)$topvars
+
 # different levels of conservativeness
 var.select(object = pbc.obj, conservative = "low")
 var.select(object = pbc.obj, conservative = "medium")
 var.select(object = pbc.obj, conservative = "high")
+
 ## ------------------------------------------------------------
 ## Minimal depth variable selection
 ## competing risk analysis
 ## ------------------------------------------------------------
+
 ## competing risk data set involving AIDS in women
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
 vs.wihs <- var.select(Surv(time, status) ~ ., wihs, nsplit = 3, 
                       ntree = 100, importance = TRUE)
+
 ## competing risk analysis of pbc data from survival package
 ## implement cause-specific variable selection 
 if (library("survival", logical.return = TRUE)) {
@@ -237,38 +257,48 @@ if (library("survival", logical.return = TRUE)) {
   var.select(Surv(time, status) ~ ., pbc, nsplit = 10, cause = 1)
   var.select(Surv(time, status) ~ ., pbc, nsplit = 10, cause = 2)
 }
+
 ## ------------------------------------------------------------
 ## Minimal depth variable selection
 ## classification analysis
 ## ------------------------------------------------------------
+
 vs.iris <- var.select(Species ~ ., iris)
+
 ## ------------------------------------------------------------
 ## Minimal depth variable selection
 ## Regression analysis
 ## ------------------------------------------------------------
+
 #Variable hunting (overkill for low dimensions)
 vh.air <- var.select(Ozone ~., airquality, method = "vh", nrep = 10, mvars = 5)
+
 #better analysis
 vs.air <- var.select(Ozone ~., airquality)
+
 ## ------------------------------------------------------------
 ## Minimal depth high-dimensional example
 ## van de Vijver microarray breast cancer survival data
 ## predefined weights for *selecting* a gene for node splitting
 ## determined from a preliminary forest analysis
 ## ------------------------------------------------------------
+
 data(vdv, package = "_PROJECT_PACKAGE_NAME_")
 md.breast <- var.select(Surv(Time, Censoring) ~ ., vdv,
   prefit = list(action = TRUE))
+
 ## same analysis, but with customization for the preliminary forest fit
 ## note the large mtry and small nodesize values used
 md.breast.custom <- var.select(Surv(Time, Censoring) ~ ., vdv, 
   prefit = list(action = TRUE, mtry = 500, nodesize = 1))
+
 ## ------------------------------------------------------------
 ## Minimal depth high-dimensional example
 ## van de Vijver microarray breast cancer survival data
 ## predefined weights for genes for *splitting* tree nodes
 ## weights defined in terms of cox p-values
 ## ------------------------------------------------------------
+
 if (library("survival", logical.return = TRUE) 
     & library("parallel", logical.return = TRUE))
 {
@@ -290,19 +320,24 @@ if (library("survival", logical.return = TRUE)
                       importance = TRUE)
   md.breast.splitwt <- var.select(object = breast.obj) 
 }
+
+
 ## ------------------------------------------------------------
 ## Variable hunting high-dimensional example
 ## van de Vijver microarray breast cancer survival data
 ## nrep is small for illustration; typical values are nrep = 100
 ## ------------------------------------------------------------
+
 data(vdv, package = "_PROJECT_PACKAGE_NAME_")
 vh.breast <- var.select(Surv(Time, Censoring) ~ ., vdv,
       method = "vh", nrep = 10, nstep = 5)
+
 # plot top 10 variables
 plot.variable(vh.breast$rfsrc.refit.obj,
   xvar.names = vh.breast$topvars[1:10])
 plot.variable(vh.breast$rfsrc.refit.obj,
   xvar.names = vh.breast$topvars[1:10], partial = TRUE)
+
 ## similar analysis, but using weights from univarate cox p-values
 if (library("survival", logical.return = TRUE))
 {
@@ -323,15 +358,19 @@ if (library("survival", logical.return = TRUE))
   vh.breast.cox <- var.select(rfsrc.f, vdv, method = "vh", nstep = 5,
     nrep = 10, xvar.wt = cox.wts)
 }
+
 ## ------------------------------------------------------------
 ## variable selection for multivariate mixed forests
 ## ------------------------------------------------------------
+
 mtcars.new <- mtcars
 mtcars.new$cyl <- factor(mtcars.new$cyl)
 mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
 mv.obj <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new,
               importance = TRUE)
 var.select(mv.obj, method = "vh.vimp", nrep = 10)
+
 }
 }
 \keyword{variable selection}
+

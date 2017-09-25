@@ -21,7 +21,7 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList();
-  v = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, 1, sexpString, NULL, 1, 0);
+  v = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, 1, 0, sexpString, NULL, 1, 1);
   *v = getConcordanceIndex( 1,
                             size,
                             time,
@@ -29,6 +29,7 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
                             predicted,
                             denom);
   unstackAuxiliaryInfoAndList();
+  memoryCheck();
   UNPROTECT(RF_stackCount + 2);
   return RF_sexpVector[RF_OUTP_ID];
 }
@@ -44,9 +45,10 @@ SEXP rfsrcTestSEXP(SEXP sexp_size) {
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList();
-  v = (char*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_CHARACTER, 2, size, sexpString, NULL, 1, 0);
+  v = (char*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_CHARACTER, 2, size, 0, sexpString, NULL, 1, size);
   v --;
   unstackAuxiliaryInfoAndList();
+  memoryCheck();
   UNPROTECT(RF_stackCount + 2);
   return RF_sexpVector[RF_OUTP_ID];
 }
@@ -118,7 +120,7 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList();
-  dist = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, sizeIJ, sexpString, NULL, 1, 0);
+  dist = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, sizeIJ, 0, sexpString, NULL, 1, sizeIJ);
   dist --;
   xMatrix = (double **) new_vvector(1, p, NRUTIL_DPTR);
   for (i = 1; i <= p; i++) {
@@ -131,6 +133,7 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
     dist[k] = euclidean(n, p, rowI[k], rowJ[k], xMatrix);
   }
   unstackAuxiliaryInfoAndList();
+  memoryCheck();
   UNPROTECT(RF_stackCount + 2);
   return RF_sexpVector[RF_OUTP_ID];
 }
@@ -170,7 +173,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP bootstrapSize,
                SEXP bootstrap,
                SEXP caseWeight,
-               SEXP xSplitStatWt,
+               SEXP xSplitStatWeight,
                SEXP yWeight,
                SEXP xWeight,
                SEXP xData,
@@ -190,20 +193,20 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_nodeSize             = INTEGER(nodeSize)[0];
   RF_nodeDepth            = INTEGER(nodeDepth)[0];
   RF_crWeightSize         = INTEGER(crWeightSize)[0];
-  RF_crWeight             = (double *) copy1DObject(crWeight, NATIVE_TYPE_NUMERIC, RF_crWeightSize);
+  RF_crWeight             = REAL(crWeight); RF_crWeight--;
   RF_ntree                = INTEGER(ntree)[0];
   RF_observationSize      = INTEGER(observationSize)[0];
   RF_ySize                = INTEGER(ySize)[0];
-  RF_rType                = (char *) copy1DObject(rType, NATIVE_TYPE_CHARACTER, RF_ySize);
-  RF_rLevels              = INTEGER(rLevels); RF_rLevels--;
+  RF_rType                = (char *) copy1DObject(rType, NATIVE_TYPE_CHARACTER, RF_ySize, TRUE);
+  RF_rLevels              = (uint *) INTEGER(rLevels); RF_rLevels--;
   RF_responseIn           = (double **) copy2DObject(rData, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
   RF_xSize                = INTEGER(xSize)[0];
-  RF_xType                = (char *) copy1DObject(xType, NATIVE_TYPE_CHARACTER, RF_xSize);
-  RF_xLevels              = INTEGER(xLevels); RF_xLevels--;
+  RF_xType                = (char *) copy1DObject(xType, NATIVE_TYPE_CHARACTER, RF_xSize, TRUE);
+  RF_xLevels              = (uint *) INTEGER(xLevels); RF_xLevels--;
   RF_bootstrapSize        = INTEGER(bootstrapSize)[0];
   RF_bootstrapIn          = (uint **) copy2DObject(bootstrap, NATIVE_TYPE_INTEGER, (RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2), RF_ntree, RF_observationSize);
   RF_caseWeight           = REAL(caseWeight);  RF_caseWeight--;
-  RF_xSplitStatWt          = REAL(xSplitStatWt);  RF_xSplitStatWt--;
+  RF_xSplitStatWeight     = REAL(xSplitStatWeight);  RF_xSplitStatWeight--;
   RF_yWeight               = REAL(yWeight);  RF_yWeight--;
   RF_xWeight              = REAL(xWeight);  RF_xWeight--;
   RF_observationIn        = (double **) copy2DObject(xData, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
@@ -212,21 +215,13 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_nImpute              = INTEGER(nImpute)[0];
   RF_numThreads           = INTEGER(numThreads)[0];
   processDefaultGrow();
-  stackAuxiliaryInfoList();
   rfsrc(RF_GROW, seedValue);
-  free_1DObject(RF_crWeight, NATIVE_TYPE_NUMERIC, RF_crWeightSize);
   free_1DObject(RF_rType, NATIVE_TYPE_CHARACTER, RF_ySize);
   free_1DObject(RF_xType, NATIVE_TYPE_CHARACTER, RF_xSize);
   free_2DObject(RF_responseIn, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
   free_2DObject(RF_bootstrapIn, NATIVE_TYPE_INTEGER, (RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2), RF_ntree, RF_observationSize);
   free_2DObject(RF_observationIn, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);  
-  unstackAuxiliaryInfoAndList();
-  if (RF_nativeIndex != RF_stackCount) {
-    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-    RF_nativeError("\nRF-SRC:  Stack imbalance in PROTECT/UNPROTECT:  %10d + 1 versus %10d  ", RF_nativeIndex, RF_stackCount);
-    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-    RF_nativeExit();
-  }
+  memoryCheck();
   UNPROTECT(RF_stackCount + 2);
   return RF_sexpVector[RF_OUTP_ID];
 }
@@ -296,14 +291,14 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_ntree                = INTEGER(ntree)[0];
   RF_observationSize      = INTEGER(observationSize)[0];
   RF_ySize                = INTEGER(ySize)[0];
-  RF_rType                = (char *) copy1DObject(rType, NATIVE_TYPE_CHARACTER, RF_ySize);
+  RF_rType                = (char *) copy1DObject(rType, NATIVE_TYPE_CHARACTER, RF_ySize, TRUE);
   RF_rTarget              = (uint *) INTEGER(rTarget); RF_rTarget --;
   RF_rTargetCount         = INTEGER(rTargetCount)[0];
-  RF_rLevels              = INTEGER(rLevels); RF_rLevels--;
+  RF_rLevels              = (uint *) INTEGER(rLevels); RF_rLevels--;
   RF_responseIn           = (double **) copy2DObject(rData, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
   RF_xSize                = INTEGER(xSize)[0];
-  RF_xType                = (char *) copy1DObject(xType, NATIVE_TYPE_CHARACTER, RF_xSize);
-  RF_xLevels              = INTEGER(xLevels); RF_xLevels--;
+  RF_xType                = (char *) copy1DObject(xType, NATIVE_TYPE_CHARACTER, RF_xSize, TRUE);
+  RF_xLevels              = (uint *) INTEGER(xLevels); RF_xLevels--;
   RF_observationIn        = (double **) copy2DObject(xData, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
   RF_bootstrapSize        = INTEGER(bootstrapSize)[0];
   RF_bootstrapIn          = (uint **) copy2DObject(bootstrap, NATIVE_TYPE_INTEGER, (RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2), RF_ntree, RF_observationSize);
@@ -348,7 +343,6 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_TN_REGR_ = REAL(tnREGR);
   RF_TN_CLAS_ = (uint *) INTEGER(tnCLAS);
   processDefaultPredict();
-  stackAuxiliaryInfoList();
   rfsrc((RF_fobservationSize > 0)? RF_PRED : RF_REST, seedValue);
   free_1DObject(RF_rType, NATIVE_TYPE_CHARACTER, RF_ySize);
   free_1DObject(RF_xType, NATIVE_TYPE_CHARACTER, RF_xSize);
@@ -357,13 +351,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
   free_2DObject(RF_bootstrapIn, NATIVE_TYPE_INTEGER, (RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2), RF_ntree, RF_observationSize);
   free_2DObject(RF_fresponseIn, NATIVE_TYPE_NUMERIC, RF_frSize > 0, RF_frSize, RF_fobservationSize);
   free_2DObject(RF_fobservationIn, NATIVE_TYPE_NUMERIC, RF_fobservationSize > 0 , RF_xSize, RF_fobservationSize);
-  unstackAuxiliaryInfoAndList();
-  if (RF_nativeIndex != RF_stackCount) {
-    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-    RF_nativeError("\nRF-SRC:  Stack imbalance in PROTECT/UNPROTECT:  %10d + 1 versus %10d  ", RF_nativeIndex, RF_stackCount);
-    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-    RF_nativeExit();
-  }
+  memoryCheck();
   UNPROTECT(RF_stackCount + 2);
   return RF_sexpVector[RF_OUTP_ID];
 }
@@ -383,7 +371,7 @@ void printR(char *format, ...) {
 void setNativeGlobalEnv() {
   RF_nativeIndex = RF_stackCount = 0;
 }
-void *copy1DObject(SEXP arr, char type, uint size) {
+void *copy1DObject(SEXP arr, char type, uint size, char actual) {
   void   *buffer;
   char   *cbuffer;
   double *dbuffer;
@@ -468,6 +456,7 @@ void *stackAndProtect(uint  *sexpIndex,
                       char   sexpType,
                       uint   sexpIdentity,
                       ulong  size,
+                      double value,
                       char **sexpString,
                       void  *auxiliaryPtr,
                       uint   auxiliaryDimSize,
@@ -493,9 +482,9 @@ void *stackAndProtect(uint  *sexpIndex,
   }
   va_list list;
   va_start(list, auxiliaryDimSize);
-  uint *auxiliaryDim = uivector(1, auxiliaryDimSize);
-  for (int i = 1; i <= auxiliaryDimSize; i++) {
-    auxiliaryDim[i] = va_arg(list, unsigned int);
+  int *auxiliaryDim = ivector(1, auxiliaryDimSize);
+  for (uint i = 1; i <= auxiliaryDimSize; i++) {
+    auxiliaryDim[i] = va_arg(list, int);
   }
   va_end(list);
   switch(sexpType) {
@@ -517,16 +506,24 @@ void *stackAndProtect(uint  *sexpIndex,
   }
   SET_VECTOR_ELT(RF_sexpVector[RF_OUTP_ID], *sexpIndex, thisVector);
   SET_STRING_ELT(RF_sexpVector[RF_STRG_ID], *sexpIndex, mkChar(sexpString[sexpIdentity]));
-  (*sexpIndex) ++;
   switch(sexpType) {
   case NATIVE_TYPE_NUMERIC:
     v = (double*) NUMERIC_POINTER(thisVector);
+    for (ulong i = 0; i < size; i++) {
+      ((double*) v)[i] = value;
+    }
     break;
   case NATIVE_TYPE_INTEGER:
     v = (uint*) INTEGER_POINTER(thisVector);
+    for (ulong i = 0; i < size; i++) {
+      ((uint*) v)[i] = 0;
+    }
     break;
   case NATIVE_TYPE_CHARACTER:
     v = (char*) CHARACTER_POINTER(thisVector);
+    for (ulong i = 0; i < size; i++) {
+      ((char*) v)[i] = 0;
+    }
     break;
   default:
     v = NULL;
@@ -534,11 +531,12 @@ void *stackAndProtect(uint  *sexpIndex,
   }
   allocateAuxiliaryInfo(sexpType,
                         sexpIdentity,
-                        size,
                         v,
                         auxiliaryPtr,
                         auxiliaryDimSize,
                         auxiliaryDim);
+  free_ivector(auxiliaryDim, 1, auxiliaryDimSize);
+  (*sexpIndex) ++;
   return v;
 }
 void setUserTraceFlag (uint traceFlag) {

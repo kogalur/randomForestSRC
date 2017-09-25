@@ -43,6 +43,7 @@
   assignment or by random permutation of the variable(s).  The default
   is Breiman-Cutler permutation VIMP.  See \command{rfsrc} for more
   details.
+  
   Joint VIMP is requested using \option{joint}.  The joint VIMP is the
   importance for a group of variables when the group is perturbed
   simultaneously.
@@ -70,48 +71,66 @@
 ## classification example
 ## showcase different vimp
 ## ------------------------------------------------------------
+
 iris.obj <- rfsrc(Species ~ ., data = iris)
+
 # Breiman-Cutler permutation vimp
 print(vimp(iris.obj)$importance)
+
 # Breiman-Cutler random daughter vimp
 print(vimp(iris.obj, importance = "random")$importance)
+
 # Breiman-Cutler joint permutation vimp 
 print(vimp(iris.obj, joint = TRUE)$importance)
+
 # Breiman-Cuter paired vimp
 print(vimp(iris.obj, c("Petal.Length", "Petal.Width"), joint = TRUE)$importance)
 print(vimp(iris.obj, c("Sepal.Length", "Petal.Width"), joint = TRUE)$importance)
+
+
 ## ------------------------------------------------------------
 ## regression example
 ## compare Breiman-Cutler vimp to ensemble based vimp
 ## ------------------------------------------------------------
+
 airq.obj <- rfsrc(Ozone ~ ., airquality)
 vimp.all <- cbind(
      ensemble = vimp(airq.obj, importance = "permute.ensemble")$importance,
      breimanCutler = vimp(airq.obj, importance = "permute")$importance)
 print(vimp.all)
+
+
 ## ------------------------------------------------------------
 ## regression example
 ## calculate VIMP on test data
 ## ------------------------------------------------------------
+
 set.seed(100080)
 train <- sample(1:nrow(airquality), size = 80)
 airq.obj <- rfsrc(Ozone~., airquality[train, ])
+
 #training data vimp
 print(airq.obj$importance)
 print(vimp(airq.obj)$importance)
+
 #test data vimp
 print(vimp(airq.obj, newdata = airquality[-train, ])$importance)
+
 ## ------------------------------------------------------------
 ## survival example
 ## study how vimp depends on tree imputation
 ## makes use of the subset option
 ## ------------------------------------------------------------
+
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
+
 # determine which records have missing values
 which.na <- apply(pbc, 1, function(x){any(is.na(x))})
+
 # impute the data using na.action = "na.impute"
 pbc.obj <- rfsrc(Surv(days,status) ~ ., pbc, nsplit = 3,
         na.action = "na.impute", nimpute = 1)
+
 # compare vimp based on records with no missing values
 # to those that have missing values
 # note the option na.action="na.impute" in the vimp() call

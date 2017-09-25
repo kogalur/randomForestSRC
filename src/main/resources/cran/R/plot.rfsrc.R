@@ -1,7 +1,7 @@
 plot.rfsrc <- function (x, outcome.target = NULL, plots.one.page = TRUE, sorted = TRUE, verbose = TRUE, ...)
 {
   sf.flag <- FALSE
-  
+  ## is this a synthetic forest?
   if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
     if (sum(inherits(x, c("rfsrc", "synthetic", "oob"), TRUE) == c(1, 2, 3)) != 3) {
       sf.flag <- TRUE
@@ -9,52 +9,52 @@ plot.rfsrc <- function (x, outcome.target = NULL, plots.one.page = TRUE, sorted 
     }
     x <- x$rfSyn
   }
-  
+  ## check that object is interpretable
   if (sum(inherits(x, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2 &
       sum(inherits(x, c("rfsrc", "predict"), TRUE) == c(1, 2)) != 2) {
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, predict)'")
   }
    
-  
+  ## Coerce the (potentially) multivariate object if necessary.
   outcome.target <- get.univariate.target(x, outcome.target)
   x <- coerce.multivariate(x, outcome.target)
-  
-  
+  ## grow objects under non-standard bootstrapping are devoid of
+  ## performance values
   if (is.null(x$err.rate)) {
     stop("object is devoid of performance values")
   }
-  
+  ## set importance to NA if it is NULL
   if (is.null(x$importance)) {
     x$importance <- NA
   }
-  
+  ## return when everything is NA
   if (all(is.na(x$err.rate)) & all(is.na(x$importance))) {
     stop("performance values are all NA")
   }
-  
-  
+  ## Check that the error rate vector is assigned for all trees.  If it is not,
+  ## fill in the slots for 1:(ntree-1).  This will result in the plot being a flat line.
   if (x$tree.err == FALSE) {
     colnames.err.rate <- colnames(x$err.rate)
     x$err.rate <- cbind(x$err.rate)[x$ntree, ]
     x$err.rate <- matrix(x$err.rate, x$ntree, length(x$err.rate), byrow = TRUE)
     colnames(x$err.rate) <- colnames.err.rate
   }
-  
-  if (!is.null(x$perf.type) && (x$perf.type == "g.mean" || x$perf.type == "g.mean.drc")) {
+  ## convert drc two-classifier error rate to one column
+  if (!is.null(x$forest$perf.type) && (x$forest$perf.type == "g.mean" || x$forest$perf.type == "g.mean.rfq")) {
     x$err.rate <- x$err.rate[, 1, drop = FALSE]
   }
-  
+  ## for surv/CR we do not plot the yvar.names: we set them to blank
   if (x$family == "surv-CR" | x$family == "surv") {
     plot.yvar.names <- ""
   }
   else {
     plot.yvar.names <- paste("(", x$yvar.names, ")", sep = "")
   }
-  
+  ## save par for later restoration
   old.par <- par(no.readonly = TRUE)
   cex <- par("cex")
   on.exit(par(old.par))
-  
+  ## decide what plots to generate
   if (all(is.na(x$importance))) {
     if (x$ntree > 1 && !all(is.na(x$err.rate))) {
       err <- cbind(x$err.rate)      
@@ -63,11 +63,11 @@ plot.rfsrc <- function (x, outcome.target = NULL, plots.one.page = TRUE, sorted 
     }
   }
     else {
-      
+      ## convert err/vimp to matrix format
       err <- cbind(x$err.rate)
       imp <- cbind(x$importance)
-      
-      if (!is.null(x$perf.type) && (x$perf.type == "g.mean" || x$perf.type == "g.mean.drc")) {
+      ## convert drc two-classifier vimp to one column
+      if (!is.null(x$forest$perf.type) && (x$forest$perf.type == "g.mean" || x$forest$perf.type == "g.mean.rfq")) {
         imp <- imp[, 1, drop = FALSE]
       }
       x.var.names <- rownames(imp)
@@ -91,12 +91,12 @@ plot.rfsrc <- function (x, outcome.target = NULL, plots.one.page = TRUE, sorted 
       if (x$ntree > 1 & !all(is.na(x$err.rate))) {
         plot.err(err, plot.yvar.names)
       }
-      
+      ## CR/classification scenarios
       if (ncol(imp) > 1) {
         imp.out <- imp[rev(pred.order),, drop = FALSE]
         dotChart(imp[pred.order,, drop = FALSE], plot.yvar.names, dotchart.labels, cex = cex)
       }
-      
+      ## other scenarios
       if (ncol(imp) == 1) {
         dotChart(imp[pred.order, ], plot.yvar.names, dotchart.labels, cex = cex)
         if (!is.null(x$xvar.wt) & length(unique(x$xvar.wt)) > 1 ) {
@@ -118,16 +118,16 @@ plot.rfsrc <- function (x, outcome.target = NULL, plots.one.page = TRUE, sorted 
         print(round(imp.out[1:min(n.pred, max.pred),, drop = FALSE],4), justify="right", print.gap=3)
       }    
     }
-
-  
-  
-  
-
+#################################################################################
+  ##
+  ## synthetic forest flag
+  ##
+################################################################################# 
   if (sf.flag) {
     message(sf.message)
   }
 }
-
+## error rate plot
 plot.err <- function(err, yname = NULL, ...) {
   opar <- par("cex")
   on.exit(par(opar))
@@ -140,7 +140,7 @@ plot.err <- function(err, yname = NULL, ...) {
            legend = colnames(err), col = 1:ncol(err), lty = 1, lwd = 3)
   }
 }
-
+## pretty dotchart
 dotChart <- function(x, yname = NULL, labels = NULL, cex = cex) {
   if (!is.null(dim(x))) {
     ncol  <- ncol(x)
@@ -158,7 +158,7 @@ dotChart <- function(x, yname = NULL, labels = NULL, cex = cex) {
            y.dot, x.dot, y.dot, col=c(2,4)[1 + 1 * (x.dot > 0)], lwd = 4)
   if (min(x.dot, na.rm = TRUE) < 0) abline(v=0, lwd = 2, lty = 2, col = 1)
 }
-
+## workhorse for dotchart
 dot.chart.main <- function (x, labels = NULL, groups = NULL, gdata = NULL, cex = NULL,
                             pch = 21, gpch = 21, bg = par("bg"), color = par("fg"), gcolor = par("fg"), 
                             lcolor = "gray", xlim = range(x[is.finite(x)]), main = NULL, 

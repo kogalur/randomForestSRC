@@ -12,12 +12,12 @@ partial.rfsrc <- function(
   do.trace = FALSE,
   ...)
 {
-  
+  ## Hidden options.
   user.option <- list(...)
   terminal.qualts <- is.hidden.terminal.qualts(user.option)
   terminal.quants <- is.hidden.terminal.quants(user.option)
-  
-  
+  ## Object consistency.  Note that version checking is NOT
+  ## implemented in this mode. (TBD)
   if (missing(object)) {
     stop("object is missing!")
   }
@@ -25,7 +25,7 @@ partial.rfsrc <- function(
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2) {
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
   }
-  
+  ## Acquire the forest.
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.null(object$forest)) {
       stop("The forest is empty.  Re-run rfsrc (grow) call with forest=TRUE")
@@ -33,19 +33,19 @@ partial.rfsrc <- function(
     object <- object$forest
   }
     else {
-      
+      ## Object is already a forest.
     }
-  
+  ## Multivariate family details.
   family <- object$family
   splitrule <- object$splitrule
-  
+  ## Pull the x-variable and y-outcome names from the grow object.
   xvar.names <- object$xvar.names
   yvar.names <- object$yvar.names
-  
+  ## Verify the x-var.
   if (length(which(xvar.names == partial.xvar)) != 1) {
     stop("x-variable specified incorrectly:  ", partial.xvar)
   }
-  
+  ## Verify the x-var2.
   if (!is.null(partial.xvar2)) {   
       if (length(partial.xvar2) != length(partial.values2)) {
           stop("second order x-variable and value vectors not of same length:  ", length(partial.xvar2), "vs", length(partial.values2))
@@ -56,48 +56,48 @@ partial.rfsrc <- function(
           }
       }
   }
-  
-  
-  
-  
-  
+  ## Caution:  There are no checks on partial.type.  Note that "rel.freq" and "mort"
+  ## are equivalent from a native code perspective.
+  ## Determine the immutable yvar factor map which is needed for
+  ## classification sexp dimensioning.  But, first convert object$yvar
+  ## to a data frame which is required for factor processing.
   object$yvar <- as.data.frame(object$yvar)
   colnames(object$yvar) <- yvar.names
   yfactor <- extract.factor(object$yvar)
   outcome.target.idx <- get.outcome.target(family, yvar.names, outcome.target)
-  
+  ## Get the y-outcome type and number of levels
   yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names, object$coerce.factor)
   yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, object$yvar, object$coerce.factor)
-  
+  ## Get event information for survival families.
   event.info <- get.event.info(object)
-  
+  ## CR.bits assignment.
   cr.bits <- get.cr.bits(family)
-  
+  ## Determine the immutable xvar factor map.
   xfactor <- extract.factor(object$xvar)
-  
+  ## Get the x-variable type and number of levels.
   xvar.types <- get.xvar.type(xfactor$generic.types, xvar.names, object$coerce.factor)
   xvar.nlevels <- get.xvar.nlevels(xfactor$nlevels, xvar.names, object$xvar, object$coerce.factor)
-  
+  ## Initialize the number of trees in the forest.
   ntree <- object$ntree
-  
+  ## Use the training data na.action protocol.
   na.action = object$na.action
-  
+  ## Data conversion for training data.
   xvar <- as.matrix(data.matrix(object$xvar))
   yvar <- as.matrix(data.matrix(object$yvar))
-  
+  ## Set the y dimension.
   r.dim <- ncol(cbind(yvar))
-  
-  
+  ## Remove row and column names for proper processing by the native
+  ## code.  Set the dimensions.
   rownames(xvar) <- colnames(xvar) <- NULL
   n.xvar <- ncol(xvar)
   n <- nrow(xvar)
-  
+  ## There is no test data.
   outcome = "train"
-  
+  ## Initialize the low bits.
   oob.bits <- get.oob(oob)
   bootstrap.bits <- get.bootstrap(object$bootstrap)
   na.action.bits <- get.na.action(na.action)
-  
+  ## Initalize the high bits
   samptype.bits <- get.samptype(object$samptype)
   partial.bits <- get.partial(length(partial.values))
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
@@ -144,12 +144,12 @@ partial.rfsrc <- function(
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
                                   as.integer(get.rf.cores()),
-                                  
+                                  ## Pruning disabled
                                   as.integer(0),
-                                  
+                                  ## Importance disabled
                                   as.integer(0),
                                   as.integer(NULL),
-                                  
+                                  ## Subsetting disabled.
                                   as.integer(0),
                                   as.integer(NULL),
                                     
@@ -160,7 +160,7 @@ partial.rfsrc <- function(
                                   as.integer(length(partial.xvar2)),
                                   as.integer(match(partial.xvar2, xvar.names)),
                                   as.double(partial.values2),
-                                  
+                                  ## New data disabled.
                                   as.integer(0),
                                   as.integer(0),
                                   as.double(NULL),
@@ -174,19 +174,19 @@ partial.rfsrc <- function(
                                   as.integer((object$nativeArrayTNDS$tnCLAS)))}, error = function(e) {
                                     print(e)
                                     NULL})
-  
+  ## check for error return condition in the native code
   if (is.null(nativeOutput)) {
     stop("An error has occurred in prediction.  Please turn trace on for further analysis.")
   }
   rfsrcOutput <- list(call = match.call(),
                       family = family,
                       partial.time = partial.time)
-  
+  ## Subset the user time vector from the grow time interest vector.
   if (grepl("surv", family)) {
-      
-      
-      
-      
+      ## Get the indices of the closest points of the grow time interest vector.
+      ## Exact:
+      ## partial.time.idx <- match(partial.time, event.info$time.interest)
+      ## Closest:
       partial.time.idx <- sapply(partial.time, function(x) {max(which(event.info$time.interest <= x))})
       if (sum(is.na(partial.time.idx)) > 0) {
           stop("partial.time must be a subset of the time interest vector contained in the model")
@@ -195,11 +195,11 @@ partial.rfsrc <- function(
   if (family == "surv") {
     if ((partial.type == "rel.freq") || (partial.type == "mort")) {
       mort.names <- list(NULL, NULL)
-      
-      
-      
-      
-      
+      ## Incoming from the native code:
+      ##   type = mort
+      ##   -> of dim [length(partial.values)] x [1] x [1] x [n]
+      ## Outgoing to the R code:
+      ##   -> of dim [n] x [length(partial.values)]  
       survOutput <- (if (!is.null(nativeOutput$partialSurv))
                        array(nativeOutput$partialSurv,
                              c(n, length(partial.values)),
@@ -207,11 +207,11 @@ partial.rfsrc <- function(
     }
     else if (partial.type == "chf") {
       nlsn.names <- list(NULL, NULL, NULL)
-      
-      
-      
-      
-      
+      ## Incoming from the native code:
+      ##   type = chf
+      ##   -> of dim [length(partial.values)] x [1] x [length(partial.time)] x [n]
+      ## Outgoing to the R code:
+      ##   -> of dim [n] x [length(partial.time)] x [length(partial.values)]  
       survOutput <- (if (!is.null(nativeOutput$partialSurv))
                        array(nativeOutput$partialSurv,
                              c(n, length(event.info$time.interest), length(partial.values)),
@@ -222,11 +222,11 @@ partial.rfsrc <- function(
     }
       else if (partial.type == "surv") {
         surv.names <- list(NULL, NULL, NULL)
-        
-        
-        
-        
-        
+        ## Incoming from the native code:
+        ##   type = surv
+        ##   -> of dim [length(partial.values)] x [1] x [length(partial.time)] x [n]
+        ## Outgoing to the R code:
+        ##   -> of dim [n] x [length(partial.time)] x [length(partial.values)]  
         survOutput <- (if (!is.null(nativeOutput$partialSurv))
                          array(nativeOutput$partialSurv,
                                c(n, length(event.info$time.interest), length(partial.values)),
@@ -243,11 +243,11 @@ partial.rfsrc <- function(
   else if (family == "surv-CR") {
     if (partial.type == "years.lost") {
       yrls.names <- list(NULL, NULL, NULL)
-      
-      
-      
-      
-      
+      ## Incoming from the native code:
+      ##   type = years.lost
+      ##   -> of dim [length(partial.values)] x [length(event.info$event.type)] x [1] x [n]
+      ## Outgoing to the R code:
+      ##   -> of dim [n] x [length(event.info$event.type)] x [length(partial.values)]  
       survOutput <- (if (!is.null(nativeOutput$partialSurv))
                        array(nativeOutput$partialSurv,
                              c(n, length(event.info$event.type), length(partial.values)),
@@ -255,11 +255,11 @@ partial.rfsrc <- function(
     }
       else if (partial.type == "cif") {
         cifn.names <- list(NULL, NULL, NULL, NULL)
-        
-        
-        
-        
-        
+        ## Incoming from the native code:
+        ##   type = cif
+        ##   -> of dim [length(partial.values)] x [length(event.info$event.type)] x [length(partial.time)] x [n]
+        ## Outgoing to the R code:
+        ##   -> of dim [n] x [length(partial.time)] x [length(event.info$event.type)] x [length(partial.values)]
         survOutput <- (if (!is.null(nativeOutput$partialSurv))
                          array(nativeOutput$partialSurv,
                                c(n, length(event.info$time.interest), length(event.info$event.type), length(partial.values)),
@@ -270,11 +270,11 @@ partial.rfsrc <- function(
       }
         else if (partial.type == "chf") {
           chfn.names <- list(NULL, NULL, NULL, NULL)
-          
-          
-          
-          
-          
+          ## Incoming from the native code:
+          ##   type = chfn
+          ##   -> of dim [length(partial.values)] x [length(event.info$event.type)] x [length(partial.time)] x [n]
+          ## Outgoing to the R code:
+          ##   -> of dim [n] x [length(partial.time)] x [length(event.info$event.type)] x [length(partial.values)]
           survOutput <- (if (!is.null(nativeOutput$partialSurv))
                            array(nativeOutput$partialSurv,
                                  c(n, length(event.info$time.interest), length(event.info$event.type), length(partial.values)),
@@ -289,47 +289,47 @@ partial.rfsrc <- function(
     rfsrcOutput <- c(rfsrcOutput, survOutput = list(survOutput))
   }
     else {
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
+      ## We consider "R", "I", and "C" outcomes.  The outcomes are grouped
+      ## by type and sequential.  That is, the first "C" encountered in the
+      ## response type vector is in position [[1]] in the classification output
+      ## list, the second "C" encountered is in position [[2]] in the
+      ## classification output list, and so on.  The same applies to the
+      ## regression outputs.  We also have a mapping from the outcome slot back
+      ## to the original response vector type, given by the following:
+      ## Given yvar.types = c("R", "C", "R", "C", "R" , "I")
+      ## regr.index[1] -> 1
+      ## regr.index[2] -> 3
+      ## regr.index[3] -> 5
+      ## clas.index[1] -> 2
+      ## clas.index[2] -> 4
+      ## clas.index[3] -> 6
+      ## This will pick up all "C" and "I".
       class.index <- which(yvar.types != "R")
       class.count <- length(class.index)
       regr.index <- which(yvar.types == "R")
       regr.count <- length(regr.index)
       if (class.count > 0) {
-        
+        ## Create and name the classification outputs.
         classOutput <- vector("list", class.count)
         names(classOutput) <- yvar.names[class.index]
-        
+        ## Vector to hold the number of levels in each factor response. 
         levels.count <- array(0, class.count)
-        
+        ## List to hold the names of levels in each factor response. 
         levels.names <- vector("list", class.count)
         counter <- 0
         for (i in class.index) {
             counter <- counter + 1
-            
-            
+            ## Note that [i] is the actual index of the y-variables and not a sequential iterator.
+            ## The sequential iteratior is [counter]
             levels.count[counter] <- yvar.nlevels[i]
             if (yvar.types[i] == "C") {
-              
-              
+              ## This an unordered factor.
+              ## Here, we don't know the sequence of the unordered factor list, so we identify the factor by name.
               levels.names[[counter]] <- yfactor$levels[[which(yfactor$factor == yvar.names[i])]]
             }
               else {
-                
-                
+                ## This in an ordered factor.
+                ## Here, we don't know the sequence of the ordered factor list, so we identify the factor by name.
                 levels.names[[counter]] <- yfactor$order.levels[[which(yfactor$order == yvar.names[i])]]
               }
         }
@@ -350,11 +350,11 @@ partial.rfsrc <- function(
           target.idx <- which (class.index == outcome.target.idx[i])
           if (length(target.idx) > 0) {
             ens.names <- list(NULL, c("all", levels.names[[target.idx]]), NULL)
-            
-            
-            
-            
-            
+            ## Incoming from the native code:
+            ##   type = NULL
+            ##   -> of dim [length(partial.values)] x [length(1 + yvar.nlevels[.]] x [n]
+            ## Outgoing to the R code:
+            ##   -> of dim [n] x [1 + yvar.nlevels[.]] x [length(partial.values)]
             ensemble <- (if (!is.null(nativeOutput$partialClas))
                              array(nativeOutput$partialClas[offset[[target.idx]]],
                                    c(n, 1 + levels.count[target.idx], length(partial.values)),
@@ -366,7 +366,7 @@ partial.rfsrc <- function(
         rfsrcOutput <- c(rfsrcOutput, classOutput = list(classOutput))        
       }
       if (regr.count > 0) {
-        
+        ## Create and name the classification outputs.
         regrOutput <- vector("list", regr.count)
         names(regrOutput) <- yvar.names[regr.index]
         iter.start <- 0
@@ -386,11 +386,11 @@ partial.rfsrc <- function(
           target.idx <- which (regr.index == outcome.target.idx[i])
           if (length(target.idx) > 0) {
             ens.names <- list(NULL, NULL)
-            
-            
-            
-            
-            
+            ## Incoming from the native code:
+            ##   type = NULL
+            ##   -> of dim [length(partial.values)] x [1] x [n]
+            ## Outgoing to the R code:
+            ##   -> of dim [n] x [length(partial.values)]
             ensemble <- (if (!is.null(nativeOutput$partialRegr))
                              array(nativeOutput$partialRegr[offset[[target.idx]]],
                                    c(n, length(partial.values)),
@@ -407,7 +407,7 @@ partial.rfsrc <- function(
 }
 partial <- partial.rfsrc
 get.partial <- function (partial.length) {
-  
+  ## Convert partial option into native code parameter.
   if (!is.null(partial.length)) {
     if (partial.length > 0) {
       bits <- 2^14
@@ -426,16 +426,16 @@ get.partial <- function (partial.length) {
 }
 get.type <- function (family, partial.type) {
   if (family == "surv") {
-    
-    
+    ## The native code interprets "rel.freq" as "mort".  The R-side
+    ## handles the difference downstream after native code exit.
     if (partial.type == "rel.freq") {
       partial.type <- "mort"
     }
-    
+    ## Warning:  Hard coded in global.h
     type <- match(partial.type, c("mort", "chf", "surv"))
   }
     else if (family == "surv-CR") {
-      
+      ## Warning:  Hard coded in global.h
       type <- match(partial.type, c("years.lost", "cif", "chf"))
     }
       else {
@@ -447,7 +447,7 @@ get.type <- function (family, partial.type) {
   return (type)
 }
 get.oob <- function (oob) {
-  
+  ## Convert forest option into native code parameter.
   if (!is.null(oob)) {
     if (oob == TRUE) {
       oob <- 2^1

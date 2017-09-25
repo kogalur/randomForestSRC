@@ -9,9 +9,10 @@ rfsrc <- function(formula,
                   nodedepth = NULL,
                   splitrule = NULL,
                   nsplit = 0,
-                  split.null = FALSE,
                   importance = c(FALSE, TRUE, "none", "permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"),
+                  
                   na.action = c("na.omit", "na.impute"),
+                  
                    
                   nimpute = 1,
                   ntime,
@@ -36,16 +37,19 @@ rfsrc <- function(formula,
                    ...)
 {
   univariate.nomenclature = TRUE
-  
+  ## get any hidden options
   user.option <- list(...)
   impute.only <- is.hidden.impute.only(user.option)
   terminal.qualts <- is.hidden.terminal.qualts(user.option)
   terminal.quants <- is.hidden.terminal.quants(user.option)
+  ## TBD TBD make perf.type visible TBD TBD
   perf.type <- is.hidden.perf.type(user.option)
-  
+  ## verify key options
   bootstrap <- match.arg(bootstrap, c("by.root", "by.node", "none", "by.user"))
   importance <- match.arg(as.character(importance), c(FALSE, TRUE, "none", "permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"))
+  
   na.action <- match.arg(na.action, c("na.omit", "na.impute"))
+  
    
   proximity <- match.arg(as.character(proximity), c(FALSE, TRUE, "inbag", "oob", "all"))
      
@@ -53,9 +57,9 @@ rfsrc <- function(formula,
   split.depth <- match.arg(as.character(split.depth),  c("FALSE", "all.trees", "by.tree"))
   if (var.used == "FALSE") var.used <- FALSE
   if (split.depth == "FALSE") split.depth <- FALSE
-  
+  ## data cannot be missing
   if (missing(data)) stop("data is missing")
-  
+  ## conduct preliminary formula validation
   if (missing(formula) | (!missing(formula) && is.null(formula))) {
     if (is.null(ytry)) {
       formula <- as.formula("Unsupervised() ~ .")
@@ -65,8 +69,11 @@ rfsrc <- function(formula,
     }
   } 
   formulaPrelim <- parseFormula(formula, data, ytry)
-  
-  
+  ## save the call/formula for the return object
+  my.call <- match.call()
+  my.call$formula <- eval(formula)
+  ## conduct preliminary processing of missing data
+  ## record whether there's no missing data: efficiency step
   if (any(is.na(data))) {
     data <- parseMissingData(formulaPrelim, data)
     miss.flag <- TRUE
@@ -74,67 +81,67 @@ rfsrc <- function(formula,
     else {
       miss.flag <- FALSE
     }
-  
+  ## finalize the formula based on the pre-processed data
   formulaDetail <- finalizeFormula(formulaPrelim, data)
-  
+  ## coherence checks on option parameters
   ntree <- round(ntree)
   if (ntree < 1) stop("Invalid choice of 'ntree'.  Cannot be less than 1.")
   if (!is.null(nodesize) && nodesize < 1) stop("Invalid choice of 'nodesize'. Cannot be less than 1.")
   if (!is.null(nodedepth)) nodedepth = round(nodedepth) else nodedepth = -1
   nimpute <- round(nimpute)
   if (nimpute < 1) stop("Invalid choice of 'nimpute'.  Cannot be less than 1.")
-  
+  ## initialize the seed
   seed <- get.seed(seed)
-  
+  ## save the family for convenient access
   family <- formulaDetail$family
-  
+  ## save the names for convenient access
   xvar.names <- formulaDetail$xvar.names
   yvar.names <- formulaDetail$yvar.names
-  
-  
+  ## reality check on x and y
+  ## are there any x-variables?  (can happen when for multivariate formula)
   if (length(xvar.names) == 0) {
     stop("something seems wrong: your formula did not define any x-variables")
   }
-  
+  ## .. are there any y-variables?  (do not test for the unsupervised case)
   if (family != "unsupv" && length(yvar.names) == 0) {
     stop("something seems wrong: your formula did not define any y-variables")
   }
-  
+  ## missing levels are allowed.
   if (family == "class") {
     if (length(setdiff(levels(data[, yvar.names]), unique(data[, yvar.names]))) > 0) {
       warning("empty classes found when implementing classification\n")
     }
   }
-  
+  ## mark missing factor levels as NA.
   data <- rm.na.levels(data, xvar.names)
   data <- rm.na.levels(data, yvar.names)
-  
+  ## Determine the immutable yvar factor map.
   yfactor <- extract.factor(data, yvar.names)
-  
+  ## Determine the immutable xvar factor map.
   xfactor <- extract.factor(data, xvar.names)
-  
+  ## get the y-outcome type and nlevels
   yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names)
   yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, data)
-  
+  ## get the x-variable type and nlevels
   xvar.types <- get.xvar.type(xfactor$generic.types, xvar.names)
   xvar.nlevels <- get.xvar.nlevels(xfactor$nlevels, xvar.names, data)
-  
+  ## Convert the data to numeric mode, apply the na.action protocol.
   data <- finalizeData(c(yvar.names, xvar.names), data, na.action, miss.flag)
-  
+  ## Save the row and column names for later overlay
   data.row.names <- rownames(data)
   data.col.names <- colnames(data)
-  
+  ## Finalize the xvar matrix.
   xvar <- as.matrix(data[, xvar.names, drop = FALSE])
   rownames(xvar) <- colnames(xvar) <- NULL
-  
-  
-  
+  ## Initialize sample size
+  ## Set mtry
+  ## Set the weight matrix for xvar, and the split
   n <- nrow(xvar)
   n.xvar <- ncol(xvar)
   mtry <- get.grow.mtry(mtry, n.xvar, family)
   samptype <- match.arg(samptype, c("swr", "swor"))
   if (bootstrap == "by.root") {
-    
+    ## Set the default value for the size of the bootstrap
     if(missing(sampsize) | is.null(sampsize)) {
       if (samptype == "swr") {
         sampsize <- nrow(xvar)
@@ -149,19 +156,19 @@ rfsrc <- function(formula,
         stop("sampsize must be greater than zero")
       }
       if (samptype == "swr") {
-        
+        ## Size is not limited.
       }
       if (samptype == "swor") {
-        
+        ## Size is limited by the number of cases.
         sampsize <- min(sampsize, nrow(xvar))
       }
     }
     samp = NULL
   }
     else if (bootstrap == "by.user") {
-      
+      ## Override sample type when bootstrapping by user.
       samptype <- "swr"
-      
+      ## Check for coherent sample.  It will of be dim [n] x [ntree].
       if (is.null(samp)) {
         stop("samp must not be NULL when bootstrapping by user")
       }
@@ -172,79 +179,79 @@ rfsrc <- function(formula,
       sampsize <- sampsize[1]
     }
       else {
-        
+        ## Override sample size when not bootstrapping by root or user.
         sampsize = nrow(xvar)
-        
+        ## Override sample type when not bootstrapping by root or user.
         samptype <- "swr"
       }
   case.wt  <- get.weight(case.wt, n)
   forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))
   split.wt <- get.weight(split.wt, n.xvar)
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
+  ## Note that yvar.types is based on the formula:
+  ## If the family is unsupervised, yvar.types is NULL
+  ## If the family is regression, classification, or
+  ## multivariate/mixed, it is of length greater than zero (0).  In the case
+  ## of surival and competing risk, it is specifically of length two (2) for
+  ## coherency, though it is ignored in the native-code.
+  ## Note that ytry is set by the formula.
+  ## If the family is unsupervised, ytry assumes the value specified
+  ## via the formula.  If the family is regression, classification, or
+  ## multivariate/mixed, it defaults to length(yvar.types).  In the case
+  ## of survival and competing risk, it assumes the value of two (2) for
+  ## coherency, though it is ignored in the native-code.
   if (family == "surv") {
-    
+    ## Override any incoming weights.
     yvar.wt <- NULL
   }
   else if (family == "unspv") {
-    
+    ## Override any incoming weights.
     yvar.wt <- NULL
   }
   else {
     yvar.wt <- get.weight(yvar.wt, length(yvar.types))
   }
   xvar.wt  <- get.weight(xvar.wt, n.xvar)
-  
+  ## Get the y-outcome
   yvar <- as.matrix(data[, yvar.names, drop = FALSE])
   if(dim(yvar)[2] == 0) {
-    
+    ## Override yvar if it is not present.
     yvar <- NULL
   }
-  
+  ## Determine the number of missing values
   if (miss.flag) {
     n.miss <- get.nmiss(xvar, yvar)
   }
     else {
       n.miss <- 0
     }
-  
-  
+  ## In impute.only, if there is no missing data,
+  ## return the data and do nothing else.
   if (impute.only && n.miss == 0) {
     return(data)
   }
-  
+  ## Don't need the data anymore.
   remove(data)
-  
-  
+  ## Memory management option
+  ## (TBD) Not currently implemented.
   big.data <- FALSE
-  
-  
-  
+  ## TBD I think we need to separate event related data and dimensioning
+  ## of the response which this function combines. TBD 
+  ## Get event information and dimensioning for families
   event.info <- get.grow.event.info(yvar, family, ntime = ntime)
-  
+  ## Initialize nsplit, noting that it may be been overridden.
   splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, nsplit, event.info$event.type)
-  
+  ## Set the cause weights for the split statistic calculation.
   if (family == "surv" || family == "surv-CR") {
     if (length(event.info$event.type) > 1) {
-      
-      
+      ## This may or may not be CR, but we do have multiple events.
+      ## This requires associated weights.
       if (missing(cause) || is.null(cause)) {
         cause <- NULL
         cause.wt <- rep(1, length(event.info$event.type))
       }
       else {
         if (length(cause) == 1) {
-          
+          ## Event specific selection
           if (cause >= 1 && cause <= length(event.info$event.type)) {
             cause.wt <- rep(0, length(event.info$event.type))
             cause.wt[cause] <- 1
@@ -254,7 +261,7 @@ rfsrc <- function(formula,
           }
         }
         else {
-          
+          ## The user has specified event specific weights
           if (length(cause) == length(event.info$event.type) && all(cause >= 0) && !all(cause == 0)) {
             cause.wt <- cause / sum(cause)
           }
@@ -265,33 +272,33 @@ rfsrc <- function(formula,
       }
     }
     else {
-      
+      ## We are conducting non-CR, without multiple events.  Send in a dummy value.
       cause <- NULL
       cause.wt = 1
     }
-    
+    ## Set the coerced family.
     family <- get.coerced.survival.fmly(family, event.info$event.type, splitinfo$name)
   }
   else {
-    
+    ## We pass in NULL for the cause weight for all other families
     cause <- cause.wt <- NULL
   }
-  
+  ## Nodesize determination
   nodesize <- get.grow.nodesize(family, nodesize)
-  
+  ## Initialize the performance option
   perf <- NULL
-  
+  ## Turn ensemble outputs off unless bootstrapping by root or user.
   if ((bootstrap != "by.root") && (bootstrap != "by.user")) {
     importance <- "none"
     perf <- "none"
   }
-  
+  ## Turn ensemble outputs off for unsupervised mode only
   if (family == "unsupv") {
     importance <- "none"
     perf <- "none"
   }
-  
-  
+  ## Impute only mode
+  ## Some of this may be redundant
   if (impute.only) {
     forest       <- FALSE
     proximity    <- FALSE
@@ -303,19 +310,19 @@ rfsrc <- function(formula,
     importance   <- "none"
     terminal.qualts <- FALSE
     terminal.quants <- FALSE
-    
-    
-    
-    
-    
-    
-    
+    ## We have deleted the following line because it was incorrectly
+    ## overriding the user specified option na.action in 
+    ## impute.rfsrc( generic.impute.rfsrc( rfsrc() ) ).  Now, the user specified option
+    ## is respected.  Note that calls from impute.rfsrc()
+    ## set the impute.only bit which results in turning of all outputs
+    ## other than imputed data.
+    ## na.action    <- "na.impute"
   }
-  
+  ## Bit dependencies:
   if (terminal.qualts | terminal.quants) {
     forest <- TRUE
   }
-  
+  ## Assign low bits for the native code
   impute.only.bits <- get.impute.only(impute.only, n.miss)
   var.used.bits <- get.var.used(var.used)
   split.depth.bits <- get.split.depth(split.depth)
@@ -324,21 +331,21 @@ rfsrc <- function(formula,
   forest.bits <- get.forest(forest)
   proximity.bits <- get.proximity(TRUE, proximity)
      
-  split.null.bits <- get.split.null(split.null)
+  split.null.bits <- 0###TBD TBD TBD TBD
   membership.bits <-  get.membership(membership)
   statistics.bits <- get.statistics(statistics)
   split.cust.bits <- get.split.cust(splitinfo$cust)
-  
+  ## This is dependent on impute.only and the family being initialized.
   perf <- get.perf(perf, impute.only, family, perf.type)
   perf.bits <-  get.perf.bits(perf)
-  
+  ## Assign high bits for the native code
   samptype.bits <- get.samptype(samptype)
   forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
   na.action.bits <- get.na.action(na.action)
   tree.err.bits <- get.tree.err(tree.err)
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, FALSE)
   terminal.quants.bits <- get.terminal.quants(terminal.quants, FALSE)
-  
+  ## Set the trace
   do.trace <- get.trace(do.trace)
   nativeOutput <- tryCatch({.Call("rfsrcGrow",
                                   as.integer(do.trace),
@@ -350,7 +357,7 @@ rfsrc <- function(formula,
                                                      bootstrap.bits +
                                                        forest.bits +
                                                          proximity.bits +
-                                                           split.null.bits +
+                                                           split.null.bits +###TBD TBD TBD
                                                              perf.bits +
                                                                statistics.bits),
                                   as.integer(samptype.bits +
@@ -392,32 +399,32 @@ rfsrc <- function(formula,
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
-  
+  ## check for error return condition in the native code
   if (is.null(nativeOutput)) {
     if (impute.only) {
-      
+      ## in impute mode we proceed and return NULL
       return(NULL)
     }
       else {
-        
+        ## currently all other modes will error out with the RFSRC error message
         stop("An error has occurred in the grow algorithm.  Please turn trace on for further analysis.")
       }
   }
-  
+  ## check if there was missing data, and assign imputed data if so.
   if (n.miss > 0) {
     imputed.data <- matrix(nativeOutput$imputation, nrow = n.miss, byrow = FALSE)
     imputed.indv <- imputed.data[, 1]
     imputed.data <- as.matrix(imputed.data[, -1, drop = FALSE])
-    
-    
-    
+    ##if (n.miss == 1) {
+    ##  imputed.data <- t(imputed.data)
+    ##}
     nativeOutput$imputation <- NULL
-    
-    
-    
-    
+    ## fill NA's in original GROW data with multiply imputed values.
+    ## This will now serve as the forest data set and will enable
+    ## recovery of terminal node membership with the head of the
+    ## seed chain
     if (nimpute > 1) {
-      
+      ## the forest was grown using overlaid full (all) summary values
       if (grepl("surv", family)) {
         yvar[imputed.indv, 1] <- imputed.data[, 1]
         yvar[imputed.indv, 2] <- imputed.data[, 2]
@@ -432,32 +439,32 @@ rfsrc <- function(formula,
               xvar[imputed.indv, ] <- imputed.data
             }
         }
-      
+      ## remove the imputed data outputs
       imputed.indv <- NULL
       imputed.data <- NULL
       imputedOOBData <- NULL
-      
-      
+      ## the missingness action for the training data is formally safed.  This is saved as part of the
+      ## forest object, but the setting is now irrelevant as the training data has no missingness.
       na.action = "na.omit"
     }
       else {
-        
-        
+        ## add column names to the imputed data outputs in the absence
+        ## of multiple imputation.
         colnames(imputed.data) <- c(yvar.names, xvar.names)
         imputed.data <- as.data.frame(imputed.data)
       }
-    
-    
-    
+    ## now map the imputed.data columns back to their original order
+    ## commented out because of difficulty in maintaining order across different modes
+    ## imputed.data <- imputed.data[, data.col.names]
   }
-  
+  ## add row and column names to xvar matrix
   xvar <- as.data.frame(xvar)
   rownames(xvar) <- data.row.names
   colnames(xvar) <- xvar.names
-  
+  ## map xvar factors back to original values
   xvar <- map.factor(xvar, xfactor)
-  
-  
+  ## add column names to response matrix
+  ## does not apply for unsupervised mode
   if (family != "unsupv") {
     yvar <- as.data.frame(yvar)
     colnames(yvar) <- yvar.names
@@ -465,8 +472,8 @@ rfsrc <- function(formula,
   else {
     yvar <- NULL
   }
-  
-  
+  ## map response factors back to original values
+  ## does not apply for unsupervised mode
   if (family != "unsupv") {
     if (family == "regr+" | family == "class+" | family == "mix+") {
       yvar <- map.factor(yvar, yfactor)
@@ -475,34 +482,34 @@ rfsrc <- function(formula,
       yvar <- amatrix.remove.names(map.factor(yvar, yfactor))
     }
   }
-  
-  
+  ## map imputed data factors back to original values
+  ## does NOT apply for y under unsupervised mode
   if ((n.miss > 0) & (nimpute < 2)) {
     imputed.data <- map.factor(imputed.data, xfactor)
     if (family != "unsupv") {
       imputed.data <- map.factor(imputed.data, yfactor)
     }
   }
-  
+  ## Define the forest.
   if (forest) {
-    
-    
-    
-    
-    
+    ## In the native code, de-allocation of a tree after it is grown
+    ## rather than after the  entire forest has been grown saves us a
+    ## lot of memory.  However, we  do not know the size of the forest
+    ## before hand.  We thus, in the native code, we allocate the native array to its
+    ## theoretical maximum.  This is trimmed  below to the actual size.
     nativeArraySize = 0
     mwcpPTSize = 0
     for (b in 1:ntree) {
       if (nativeOutput$leafCount[b] > 0) {
-        
-        
+        ## The tree was not rejected.  Count the number of internal
+        ## and external (terminal) nodes in the forest.
         nativeArraySize = nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
         mwcpPTSize = mwcpPTSize + nativeOutput$mwcpCount[b]
       }
         else {
-          
-          
-          
+          ## The tree was rejected.  However, it acts as a
+          ## placeholder, being a stump topologically and thus adds to
+          ## the total node count.
           nativeArraySize = nativeArraySize + 1
         }
     }
@@ -513,20 +520,20 @@ rfsrc <- function(formula,
                                        nativeOutput$mwcpSZ[1:nativeArraySize]))
     names(nativeArray) <- c("treeID", "nodeID", "parmID", "contPT", "mwcpSZ")
     if (mwcpPTSize > 0) {
-      
-      
+      ## This can be NULL if there are no factor splits.
+      ## TBD TBD Adjust the XML header or just make it go away.  TBD TBD
       nativeFactorArray <- nativeOutput$mwcpPT[1:mwcpPTSize]
     }
       else {
         nativeFactorArray <- NULL
       }
     if (terminal.qualts | terminal.quants) {
-      
-      
-      
-      
-      
-      
+      ## The terminal node qualitative and quantitative outputs
+      ## are allocated to their theoretical maximum.
+      ## Each tree-specific segment has an initialized and uninitialized
+      ## partition. It will have [1:leafCount] validly populated, and
+      ## [leafCount+1 : treeTheoreticalMaximum] uninitialized.  We parse the
+      ## valid segments here and concatenate them.
       temp <- 2 * (nodesize - 1)
       if (sampsize  > temp) { 
         treeTheoreticalMaximum <- sampsize - temp;
@@ -542,7 +549,7 @@ rfsrc <- function(formula,
         offset <- offset + treeTheoreticalMaximum
       }
       if (terminal.quants) {
-        
+        ## family specific additions to the grow object
         if (grepl("surv", family)) {
           offset <- 0
           valid.2D.surv.indices <- NULL
@@ -564,19 +571,19 @@ rfsrc <- function(formula,
           }
         }
           else {
-            
+            ## This will pick up all "C" and "I".
             class.index <- which(yvar.types != "R")
             class.count <- length(class.index)
             regr.index <- which(yvar.types == "R")
             regr.count <- length(regr.index)
             if (class.count > 0) {
-              
+              ## Vector to hold the number of levels in each factor response. 
               levels.count <- array(0, class.count)
               counter <- 0
               for (i in class.index) {
                 counter <- counter + 1
-                
-                
+                ## Note that [i] is the actual index of the y-variables and not a sequential iterator.
+                ## The sequential iteratior is [counter]
                 levels.count[counter] <- yvar.nlevels[i]
               }
               offset <- 0
@@ -617,7 +624,6 @@ rfsrc <- function(formula,
                        totalNodeCount = dim(nativeArray)[1],
                        nodesize = nodesize,
                        nodedepth = nodedepth,
-                       split.null = split.null,
                        ntree = ntree,
                        family = family,
                        splitrule = splitinfo$name,
@@ -637,21 +643,21 @@ rfsrc <- function(formula,
                        version = "@PROJECT_VERSION@",
                        na.action = na.action,
                        perf.type = perf.type)
-    
+    ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
     }
-    
+    ## Initialize the default class of the forest.
     class(forest.out) <- c("rfsrc", "forest", family)
     if (big.data) {
       class(forest.out) <- c(class(forest.out), "bigdata")
     }
   }
-  
+  ## the forest is NULL (the user has requested not to save the forest)
   else {
     forest.out <- NULL
   }
-  
+  ## process the proximity matrix
   if (proximity != FALSE) {
     proximity.out <- matrix(0, n, n)
     count <- 0
@@ -666,7 +672,7 @@ rfsrc <- function(formula,
     proximity.out <- NULL
   }
     
-  
+  ## process weight matrix
   if (forest.wt != FALSE) {
     forest.wt.out <- matrix(nativeOutput$weight, c(n, n), byrow = TRUE)
     nativeOutput$weight <- NULL
@@ -674,7 +680,7 @@ rfsrc <- function(formula,
   else {
     forest.wt.out <- NULL
   }
-  
+  ## membership
   if (membership) {
     membership.out <- matrix(nativeOutput$nodeMembership, c(n, ntree))
     inbag.out <- matrix(nativeOutput$bootMembership, c(n, ntree))
@@ -685,7 +691,7 @@ rfsrc <- function(formula,
       membership.out <- NULL
       inbag.out <- NULL
     }
-  
+  ## variables used
   if (var.used != FALSE) {
     if (var.used == "all.trees") {
       var.used.out <- nativeOutput$varUsed
@@ -700,7 +706,7 @@ rfsrc <- function(formula,
     else {
       var.used.out <-  NULL
     }
-  
+  ## split depth
   if (split.depth != FALSE) {
     if (split.depth == "all.trees") {
       split.depth.out <- array(nativeOutput$splitDepth, c(n, n.xvar))
@@ -713,17 +719,17 @@ rfsrc <- function(formula,
   else {
     split.depth.out <-  NULL
   }
-  
+  ## node statistics
   if (statistics) {
     node.stats <- as.data.frame(cbind(nativeOutput$spltST[1:nativeArraySize]))
     colnames(node.stats) <- "spltST"
     node.mtry.stats <- t(array(nativeOutput$mtryST[1:nativeArraySize], c(mtry, forest.out$totalNodeCount)))
     node.mtry.index <- t(array(nativeOutput$mtryID[1:nativeArraySize], c(mtry, forest.out$totalNodeCount)))
-    
-    
-    
-    
-    
+    ## In the case of unsupervised splitting, output additional
+    ## statistics.
+    ## (TBD TBD) We need to output ytry related statistics in
+    ## the supervised case as well, following the introduction of ytry in
+    ## supervised settings.
     if (family == "unsupv") {
       node.ytry.index <- t(array(nativeOutput$uspvST[1:nativeArraySize], c(formulaDetail$ytry, forest.out$totalNodeCount)))
     }
@@ -737,9 +743,9 @@ rfsrc <- function(formula,
       node.mtry.index <- NULL
       node.ytry.index <- NULL
     }
-  
+  ## make the output object
   rfsrcOutput <- list(
-    call = match.call(),
+    call = my.call,
     family = family,
     n = n,
     ntree = ntree,
@@ -773,7 +779,7 @@ rfsrc <- function(formula,
     node.ytry.index = node.ytry.index,
     tree.err = tree.err
   )
-  
+  ## memory management
   remove(yvar)
   remove(xvar)
   nativeOutput$leafCount <- NULL
@@ -787,14 +793,14 @@ rfsrc <- function(formula,
   if (n.miss > 0) remove(imputed.indv)
   if (n.miss > 0) remove(imputed.data)
   remove(split.depth.out)
-  
+  ## save the outputs
   survOutput <- NULL
   classOutput <- NULL
   regrOutput <- NULL
-  
-  
+  ## EFFICIENCY EFFICIENCY EFFICIENCY
+  ## for efficiency - the following does not need to be executed in impute.only mode
   if (!impute.only) {
-    
+    ## family specific additions to the grow object
     if (grepl("surv", family)) {
         if ((length(event.info$event.type) > 1) &&
             (splitinfo$name != "l2.impute") &&
@@ -805,27 +811,27 @@ rfsrc <- function(formula,
           coerced.event.count <- 1
         }
       if (family == "surv") {
-        
+        ## Right Censored names.
         ens.names <- list(NULL, NULL)
         mortality.names <- list(NULL, NULL)
         err.names <- list(NULL, NULL)
         vimp.names <- list(NULL, xvar.names)
       }
         else {
-          
+          ## Competing Risk names.
           ens.names <- list(NULL, NULL, c(paste("condCHF.", 1:length(event.info$event.type), sep = "")))
           mortality.names <- list(NULL, paste("event.", 1:length(event.info$event.type), sep = ""))
           cif.names <- list(NULL, NULL, c(paste("CIF.", 1:length(event.info$event.type), sep = "")))
           err.names <- list(c(paste("event.", 1:length(event.info$event.type), sep = "")), NULL)
           vimp.names <- list(paste("event.", 1:length(event.info$event.type), sep = ""), xvar.names)
         }
-      
-      
-      
-      
-      
-      
-      
+      ## From the native code:
+      ##   "allEnsbCHF"
+      ##   "oobEnsbCHF"
+      ## -> of dim [length(event.info$event.type)] x [RF_sortedTimeInterestSize] x [n]
+      ##    where [length(event.info$event.type)] may be equal to [1].
+      ## To the R code:
+      ## -> of dim [n] x [RF_sortedTimeInterestSize] x [length(event.info$event.type)]  
       chf <- (if (!is.null(nativeOutput$allEnsbCHF))
                 adrop3d.last(array(nativeOutput$allEnsbCHF,
                                    c(n, length(event.info$time.interest), length(event.info$event.type)),
@@ -840,12 +846,12 @@ rfsrc <- function(formula,
       nativeOutput$oobEnsbCHF <- NULL
       survOutput = c(survOutput, chf.oob = list(chf.oob))
       remove(chf.oob)
-      
-      
-      
-      
-      
-      
+      ## From the native code:
+      ##   "allEnsbMRT"
+      ##   "oobEnsbMRT"
+      ## -> of dim [length(event.info$event.type)] x [n]
+      ## To the R code:
+      ## -> of dim [n] x [length(event.info$event.type)] 
       predicted <- (if (!is.null(nativeOutput$allEnsbMRT))
                       adrop2d.last(array(nativeOutput$allEnsbMRT,
                                          c(n, length(event.info$event.type)), dimnames=mortality.names), coerced.event.count) else NULL)
@@ -858,12 +864,12 @@ rfsrc <- function(formula,
       nativeOutput$oobEnsbMRT <- NULL
       survOutput <- c(survOutput, predicted.oob = list(predicted.oob))
       remove(predicted.oob)
-      
-      
-      
-      
-      
-      
+      ## From the native code:
+      ##   "allEnsbSRV"
+      ##   "oobEnsbSRV"
+      ## -> of dim [RF_sortedTimeInterestSize] x [n]
+      ## To the R code:
+      ## -> of dim [n] x [RF_sortedTimeInterestSize]
       survival <-  (if (!is.null(nativeOutput$allEnsbSRV))
                       matrix(nativeOutput$allEnsbSRV,
                              c(n, length(event.info$time.interest))) else NULL)
@@ -876,12 +882,12 @@ rfsrc <- function(formula,
       nativeOutput$oobEnsbSRV <- NULL
       survOutput <- c(survOutput, survival.oob = list(survival.oob))
       remove(survival.oob)
-      
-      
-      
-      
-      
-      
+      ## From the native code:
+      ##   "allEnsbCIF"
+      ##   "oobEnsbCIF"
+      ##   -> of dim [length(event.info$event.type)] x [RF_sortedTimeInterestSize] x [n]
+      ## To the native code:
+      ##   -> of dim  [n] x [RF_sortedTimeInterestSize] x [length(event.info$event.type)]
       cif <- (if (!is.null(nativeOutput$allEnsbCIF))
                 array(nativeOutput$allEnsbCIF,
                       c(n, length(event.info$time.interest), length(event.info$event.type)),
@@ -896,11 +902,11 @@ rfsrc <- function(formula,
       nativeOutput$oobEnsbCIF <- NULL
       survOutput = c(survOutput, cif.oob = list(cif.oob))
       remove(cif.oob)
-      
-      
-      
-      
-      
+      ## From the native code:
+      ##   "perfSurv"
+      ##   -> of dim [ntree] x length(event.info$event.type)]
+      ## To the R code:
+      ##   -> of dim [ntree] x length(event.info$event.type)]
       if (!is.null(nativeOutput$perfSurv)) {
         err.rate <- adrop2d.first(array(nativeOutput$perfSurv,
                                         c(length(event.info$event.type), ntree),
@@ -915,11 +921,11 @@ rfsrc <- function(formula,
           }
         remove(err.rate)
       }
-      
-      
-      
-      
-      
+      ## From the native code:
+      ##   "vimpSurv"
+      ##   -> of dim [n.xvar] x length(event.info$event.type)]
+      ## To the R code:
+      ##   -> of dim length(event.info$event.type)] x [n.xvar]
       if (!is.null(nativeOutput$vimpSurv)) {
         importance <- adrop2d.first(array(nativeOutput$vimpSurv,
                                           c(length(event.info$event.type), n.xvar),
@@ -939,7 +945,7 @@ rfsrc <- function(formula,
           time.interest = event.info$time.interest,
           ndead = sum(na.omit(event.info$cens) != 0))
       )
-      
+      ## When TRUE we revert to univariate nomenclature for all the outputs.
       if(univariate.nomenclature) {
         rfsrcOutput <- c(rfsrcOutput, survOutput)
       }
@@ -948,63 +954,63 @@ rfsrc <- function(formula,
         }
     }
     else {
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
-      
+      ## We consider "R", "I", and "C" outcomes.  The outcomes are grouped
+      ## by type and sequential.  That is, the first "C" encountered in the
+      ## response type vector is in position [[1]] in the classification output
+      ## list, the second "C" encountered is in position [[2]] in the
+      ## classification output list, and so on.  The same applies to the
+      ## regression outputs.  We also have a mapping from the outcome slot back
+      ## to the original response vector type, given by the following:
+      ## Given yvar.types = c("R", "C", "R", "C", "R" , "I")
+      ## regr.index[1] -> 1
+      ## regr.index[2] -> 3
+      ## regr.index[3] -> 5
+      ## clas.index[1] -> 2
+      ## clas.index[2] -> 4
+      ## clas.index[3] -> 6
+      ## This will pick up all "C" and "I".
       class.index <- which(yvar.types != "R")
       class.count <- length(class.index)
       regr.index <- which(yvar.types == "R")
       regr.count <- length(regr.index)
       if (class.count > 0) {
         classOutput <- vector("list", class.count)
-        
+        ## Names of the classification outputs.
         names(classOutput) <- yvar.names[class.index]
-        
+        ## Vector to hold the number of levels in each factor response. 
         levels.count <- array(0, class.count)
-        
+        ## List to hold the names of levels in each factor response. 
         levels.names <- vector("list", class.count)
         counter <- 0
         for (i in class.index) {
             counter <- counter + 1
-            
-            
+            ## Note that [i] is the actual index of the y-variables and not a sequential iterator.
+            ## The sequential iteratior is [counter]
             levels.count[counter] <- yvar.nlevels[i]
             if (yvar.types[i] == "C") {
-              
-              
+              ## This an unordered factor.
+              ## Here, we don't know the sequence of the unordered factor list, so we identify the factor by name.
               levels.names[[counter]] <- yfactor$levels[[which(yfactor$factor == yvar.names[i])]]
             }
               else {
-                
-                
+                ## This in an ordered factor.
+                ## Here, we don't know the sequence of the ordered factor list, so we identify the factor by name.
                 levels.names[[counter]] <- yfactor$order.levels[[which(yfactor$order == yvar.names[i])]]
               }
         }
-        
-        
-        
-        
-        
+        ## Incoming error rates: T=tree R=response L=level
+        ## T1R1L0 T1R1L1 T1R1L2 T1R1L3 T1R2L0 T1R2L1 T1R2L2, T2R1L0 T2R1L1 T2R1L2 T2R1L3 T2R2L0 T2R2L1 T2R2L2, ... 
+        ## In GROW mode, all class objects are represented in the tree offset calculation.
+        ## In PRED mode, the offsets are dependent on the only those targets that are requested!
+        ## Yields tree.offset = c(1, 8, ...) 
         tree.offset <- array(1, ntree)
         if (ntree > 1) {
           tree.offset[2:ntree] <- sum(1 + levels.count)
         }
         tree.offset <-  cumsum(tree.offset)
-        
-        
-        
+        ## Incoming vimp rates: V=xvar R=response L=level
+        ## V1R1L0 V1R1L1 V1R1L2 V1R1L3 V1R1L0 V1R2L1 V1R2L2, V2R1L0 V2R1L1 V2R1L2 V2R1L3 V2R2L0 V2R2L1 V2R2L2, ... 
+        ## Yields vimp.offset = c(1, 8, ...) 
         vimp.offset <- array(1, n.xvar)
         if (n.xvar > 1) {
           vimp.offset[2:n.xvar] <- sum(1 + levels.count)
@@ -1012,25 +1018,25 @@ rfsrc <- function(formula,
         vimp.offset <-  cumsum(vimp.offset)
         iter.ensb.start <- 0
         iter.ensb.end   <- 0
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+        ## From the native code:
+        ##   "allEnsbCLS"
+        ##   "oobEnsbCLS"
+        ## -> of dim [class.count] x [levels.count[]] x [n]
+        ##    where this is a ragged array.
+        ## From the native code:
+        ##   "perfClas"
+        ## -> of dim [ntree] x [class.count] x [1 + levels.count[]]
+        ## where the slot [.] x [.] x [1] holds the unconditional error rate.
+        ## Note that this is a ragged array.
+        ## To the R code:
+        ## -> of dim [[class.count]] x [ntree] x [1 + levels.count[]] 
+        ## From the native code:
+        ##   "vimpClas"
+        ## -> of dim [n.xvar] x [class.count] x [1 + levels.count[]]
+        ## where the slot [.] x [.] x [1] holds the unconditional vimp.
+        ## Note that this is a ragged array.
+        ## To the R code:
+        ## -> of dim [[class.count]] x [1 + levels.count[]] x [n.xvar] 
         for (i in 1:class.count) {
           iter.ensb.start <- iter.ensb.end
           iter.ensb.end <- iter.ensb.end + (levels.count[i] * n)
@@ -1077,7 +1083,7 @@ rfsrc <- function(formula,
         nativeOutput$oobEnsbCLS <- NULL
         nativeOutput$perfClas <- NULL
         nativeOutput$vimpClas <- NULL
-        
+        ## When TRUE we revert to univariate nomenclature for all the outputs.
         if(univariate.nomenclature) {
           if ((class.count == 1) & (regr.count == 0)) {
             names(classOutput) <- NULL
@@ -1094,17 +1100,17 @@ rfsrc <- function(formula,
       if (regr.count > 0) {
         regrOutput <- vector("list", regr.count)
         names(regrOutput) <- yvar.names[regr.index]
-        
-        
-        
+        ## Incoming: T=tree R=response
+        ## T1R1 T1R2, T2R1 T2R2, T3R1 T3R2, ... 
+        ## Yields tree.offset = c(1, 3, 5, ...) 
         tree.offset <- array(1, ntree)
         if (ntree > 1) {
           tree.offset[2:ntree] <- length(regr.index)
         }
         tree.offset <-  cumsum(tree.offset)
-        
-        
-        
+        ## Incoming vimp rates: V=xvar R=response L=level
+        ## V1R1 V1R2, V2R1 V2R2, V3R1 V3R2, ... 
+        ## Yields vimp.offset = c(1, 3, 5, ...) 
         vimp.offset <- array(1, n.xvar)
         if (n.xvar > 1) {
           vimp.offset[2:n.xvar] <- length(regr.index)
@@ -1112,20 +1118,20 @@ rfsrc <- function(formula,
         vimp.offset <-  cumsum(vimp.offset)
         iter.ensb.start <- 0
         iter.ensb.end   <- 0
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
-        
+        ## From the native code:
+        ##   "allEnsbRGR"
+        ##   "oobEnsbRGR"
+        ## -> of dim [regr.count] x [obsSize]
+        ## From the native code:
+        ##   "perfRegr"
+        ## -> of dim [ntree] x [regr.count]
+        ## To the R code:
+        ## -> of dim [ntree] x [[regr.count]]
+        ## From the native code:
+        ##   "vimpRegr"
+        ## -> of dim [n.vxar] x [regr.count]
+        ## To the R code:
+        ## -> of dim  [[regr.count]] x [n.xvar]
         for (i in 1:regr.count) {
           iter.ensb.start <- iter.ensb.end
           iter.ensb.end <- iter.ensb.end + n
@@ -1156,7 +1162,7 @@ rfsrc <- function(formula,
         nativeOutput$oobEnsbRGR <- NULL
         nativeOutput$perfRegr <- NULL
         nativeOutput$vimpRegr <- NULL
-        
+        ## When TRUE we revert to univariate nomenclature for all the outputs.
         if(univariate.nomenclature) {
           if ((class.count == 0) & (regr.count == 1)) {
             names(regrOutput) <- NULL
@@ -1171,7 +1177,7 @@ rfsrc <- function(formula,
         }
       }
     }
-  }
+  }## BLOCK OF CODE IS NOT EXECUTED IN IMPUTE.ONLY
   class(rfsrcOutput) <- c("rfsrc", "grow", family)
   if (big.data) {
     class(rfsrcOutput) <- c(class(rfsrcOutput), "bigdata")

@@ -8,7 +8,9 @@
 }
 \usage{\method{impute}{rfsrc}(formula, data, ntree = 500, mtry = NULL,
   xvar.wt = NULL, nodesize = 1, splitrule = NULL, nsplit = 1,
+  
   na.action = c("na.impute"),
+  
    
   nimpute = 2, mf.q, blocks,
   always.use = NULL, max.iter = 10, eps = 0.01, verbose = TRUE,
@@ -55,10 +57,12 @@
 }
 \details{
   \enumerate{
+    
     \item Grow a forest and use this to impute data.  All external
     calculations such as ensemble calculations, error rates, etc. are
     turned off.  Use this function if your only interest is imputing the
     data.
+    
     \item By default, prior to splitting a node, if there is missing
     data for a variable, the missing data is imputed by randomly drawing
     values from non-missing in-bag data.  The purpose of this is to make
@@ -66,6 +70,7 @@
     is split on a variable with missing data.  Imputed data is however
     not used to calculate the split-statistic, which uses non-missing
     data only.
+    
     \item If no formula is specified, unsupervised splitting is
     implemented using a \code{ytry} value of sqrt(\code{p}) where
     \code{p} equals the number of variables.  More precisely,
@@ -75,6 +80,7 @@
     splitting rule of dimension \code{ytry} is then applied to each of
     the \code{mtry} multivariate regression problems and the node split
     on the variable leading to the best split (Tang and Ishwaran, 2017).
+    
     \item If \code{mf.q} is specified, then a multivariate version of
     missForest imputation (Stekhoven and Buhlmann, 2012) is applied.  A
     fraction \code{mf.q} of the variables are used as multivariate
@@ -88,12 +94,15 @@
     and \code{eps}).  Using an integer value for \code{mf.q} is allowed,
     in which case a total of \code{mf.q} variables are used as
     multivariate responses.
+    
     \item Prior to imputation, the data is processed and records with
     all values missing are removed, as are variables having all missing
     values.
+    
     \item If there is no missing data, either before or after processing
     of the data, the algorithm returns the processed data and no
     imputation is performed.
+    
     \item The default choice \command{nimpute=2} is chosen for coherence
     with the default missing data algorithm implemented in grow mode.
     Thus, if the user imputes data with \command{nimpute=2} and runs a
@@ -101,6 +110,7 @@
     VIMP and error rates will coincide with those obtained by running a
     grow forest on the original non-imputed data using \code{na.action =
       "na.impute"}.  Ignored for multivariate missForest.
+    
     \item All options are the same as \command{rfsrc} and the user should
     consult the \command{rfsrc} help file for details.
   }
@@ -116,9 +126,11 @@
   Ishwaran H., Kogalur U.B., Blackstone E.H. and Lauer M.S.
   (2008).  Random survival forests, \emph{Ann. App.
     Statist.}, 2:841-860.
+  
   Stekhoven D.J. and Buhlmann P. (2012). MissForest--non-parametric
   missing value imputation for mixed-type data.
   \emph{Bioinformatics}, 28(1):112-118.
+  
   Tang F. and Ishwaran H. (2017).  Random forest missing data
   algorithms.  To appear in \emph{Statistical Analysis and Data Mining}.
 }
@@ -130,31 +142,41 @@
 ## ------------------------------------------------------------
 ## example of survival imputation
 ## ------------------------------------------------------------
+
 ## unsupervised splitting
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 pbc1.d <- impute(data = pbc, nodesize = 1, nsplit = 10, nimpute = 5)
+
 #imputation using outcome splitting
 pbc2.d <- impute(Surv(days, status) ~ ., data = pbc, nsplit = 3)
+
 #random splitting can be reasonably good
 pbc4.d <- impute(Surv(days, status) ~ ., data = pbc,
           splitrule = "random", nodesize = 1, nimpute = 5)
+
 ## ------------------------------------------------------------
 ## example of regression imputation
 ## ------------------------------------------------------------
+
 air1.d <- impute(data = airquality, nimpute = 5, nodesize = 1)
 air2.d <- impute(Ozone ~ ., data = airquality, nimpute = 5)
 air3.d <- impute(Ozone ~ ., data = airquality, nimpute = 5,
            splitrule = "random", nodesize = 1)
+
 ## ------------------------------------------------------------
 ## multivariate missForest imputation -- slow!!
 ## ------------------------------------------------------------
+
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
+
 ## use 10 percent of variables as responses
 ## i.e. multivariate missForest
 pbc.d <- impute(data = pbc, mf.q = .01, nodesize = 1)
+
 ## use 1 variable as the response
 ## i.e. original missForest algorithm
 pbc.d <- impute(data = pbc, mf.q = 1, nodesize = 1)
 }
 }
 \keyword{missing data}
+

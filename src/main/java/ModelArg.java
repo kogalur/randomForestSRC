@@ -31,8 +31,8 @@ import java.util.Vector;
 
 
 /**
- * Class containing the user-controlled parameters that produce the {@link
- * RandomForest} object.  Parameters are of two types: those that
+ * Class containing the user-defined model arguments that produce the {@link
+ * RandomForestModel} object.  Parameters are of two types: those that
  * define how the forest is to be trained; those that define the
  * requested ensemble outputs.
  * @author Udaya Kogalur
@@ -100,7 +100,6 @@ public class ModelArg {
     // Model Inputs passed via option bits to the native code.
     // *****************************************************************
     private String sampleType;
-    private String nullSplit;
     private int    customSplitIndex;
 
     // *****************************************************************
@@ -152,10 +151,15 @@ public class ModelArg {
     private java.util.HashMap <String, Character> yTypeHash;
     private java.util.HashMap <String, Character> xTypeHash;
 
-    // Counts of factors for x-vars and y-vars.
+    // Counts of factors and non-factors for x-vars and y-vars.
     private int xFactorCount;
     private int yFactorCount;
+    private int yNonFactorCount;
     private int tFactorCount;
+
+    // Index of factors and non-factors for y-vars.
+    private int[] yFactorIndex;
+    private int[] yNonFactorIndex;
     
     // HashMap of HashMap(s) containing immutable mapping of classes
     // to double integers for each factor.
@@ -190,32 +194,32 @@ public class ModelArg {
      *  <tr>
      *    <td>survivial or competing risk</td>
      *    <td>Surv(time, status) ~ .</td>
-     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/MASS/VA.csv" target="_blank">Veteran's Administration Lung Cancer Trial</a>
+     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/MASS/VA.csv" target="_blank">Veteran's Administration Lung Cancer Trial</a></td>
      *  </tr>
      *  <tr>
      *    <td>regression</td>
      *    <td>Ozone ~.</td>
-     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/airquality.csv" target="_blank">New York Air Quality Measurements</a>
+     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/airquality.csv" target="_blank">New York Air Quality Measurements</a></td>
      *  </tr>
      *  <tr>
      *    <td>classification</td>
      *    <td>Species ~.</td>
-     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/iris.csv" target="_blank">Edgar Anderson's Iris Data</a>
+     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/iris.csv" target="_blank">Edgar Anderson's Iris Data</a></td>
      *  </tr>
      *  <tr>
      *    <td>multivariate regression</td>
      *    <td>Multivar(mpg, cyl) ~ .</td>
-     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/mtcars.csv" target="_blank">Motor Trend Car Road Tests</a>
+     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/mtcars.csv" target="_blank">Motor Trend Car Road Tests</a></td>
      *  </tr>
      *  <tr>
      *    <td>multivariate regression</td>
      *    <td>Multivariate(mpg, wt) ~ hp + drat</td>
-     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/mtcars.csv" target="_blank">Motor Trend Car Road Tests</a>
+     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/datasets/mtcars.csv" target="_blank">Motor Trend Car Road Tests</a></td>
      *  </tr>
      *  <tr>
      *    <td>unsupervised</td>
      *    <td>Unsupervised() ~.</td>
-     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/MASS/VA.csv" target="_blank">Veteran's Administration Lung Cancer Trial</a>
+     *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/MASS/VA.csv" target="_blank">Veteran's Administration Lung Cancer Trial</a></td>
      *  </tr>
      * </table></p>
      *        
@@ -274,7 +278,8 @@ public class ModelArg {
         
         if (formulaU.length != 2) {
             // Bad Formula.  Throw exception.
-            System.out.println("\n Unknown Formula Syntax.");
+            RFLogger.log(Level.SEVERE, "Unknown Formula Syntax:  " + formula);
+            throw new IllegalArgumentException();
         }
 
         // Initialize the family to an invalid value, in case it is
@@ -437,7 +442,7 @@ public class ModelArg {
         StructType incomingSchema = dataset.schema();
 
         // Set the factor counts to zero.
-        xFactorCount = yFactorCount = 0;
+        xFactorCount = yFactorCount = yNonFactorCount = 0;
         
         if (formulaY != null) {
             yTypeHash = new HashMap <String, Character> (formulaY.length);
@@ -488,6 +493,7 @@ public class ModelArg {
                     }
                     else {
                         // Set the variable type to 'R' for now for both 'I' and 'R'.
+                        yNonFactorCount++;
                         yType[i] = 'R';
                     }
                 }
@@ -522,7 +528,29 @@ public class ModelArg {
             // Allocate the HashMap of HashMap(s) containing the immutable mapping of factor class to double integer values.
             immutableMap = new HashMap <String, HashMap> (tFactorCount);
         }
+
+
+        // Initialize the factor and non-factor indices.  These are
+        // used to parse the ensemble outputs.  The counts may be
+        // zero (0).
+        yFactorIndex = new int[yFactorCount];
+        yNonFactorIndex = new int[yNonFactorCount];
+
+        if (ySize > 0) {
+            int factorIter = 0;
+            int nonFactorIter = 0;
         
+            for (int i = 0; i < ySize; i++) {
+                if (yType[i] == 'C') {
+                    yFactorIndex[factorIter] = i;
+                }
+                else {
+                    yNonFactorIndex[nonFactorIter] = i;
+                }
+            }
+        }
+        
+
         @RF_TRACE_OFF@  if (Trace.get(Trace.HGH)) {
         @RF_TRACE_OFF@  Set set;
         @RF_TRACE_OFF@  Iterator itr;
@@ -555,6 +583,16 @@ public class ModelArg {
         @RF_TRACE_OFF@  }
     }
 
+    
+    // These may be vectors of length zero (0).
+    int[] getYfactorIndex() {
+        return yFactorIndex;
+    }
+    int[] getYnonFactorIndex() {
+        return yNonFactorIndex;
+    }
+    
+            
     private static char initializeType(DataType dataType) {
         char result;
         if (dataType == DataTypes.BooleanType) {
@@ -626,7 +664,12 @@ public class ModelArg {
     }
 
 
-
+    String[] getXvar() {
+        return formulaX;
+    }
+    String[] getYvar() {
+        return formulaY;
+    }
 
 
 
@@ -926,8 +969,6 @@ public class ModelArg {
         return generic;
     }
 
-    
-
 
     private TreeSet <Integer> initializeEventType() {
         
@@ -1016,8 +1057,7 @@ public class ModelArg {
         // Default bootstrap.
         set_bootstrap();
 
-        // Set case weight, x-weight, y-weight, and split weight.
-        set_caseWeight();
+        // Set x-weight, y-weight, and split weight.
         set_xWeight();
 
         // yWeight must always be specified explicitly, otherwise it
@@ -1065,14 +1105,11 @@ public class ModelArg {
         // Default value of nodeDepth.
         set_nodeDepth(-1);
 
-        // Default value of nullSplit.  This must occur AFTER family is defined.
-        set_nullSplit("no");
+        // Set seed.
+        set_seed();
 
         // Default value of rfCores.
         set_rfCores(-1);
-
-        // Set seed.
-        set_seed();
 
 
     }
@@ -1352,23 +1389,23 @@ public class ModelArg {
      * </table></p>
      *
      *                                                                                       >0
-     *                                                                swr                  /------ sampleSize
-     *                                                              /------ sampleSize? --/                         
+     *                                                                swr                  /------ sampleSize, 
+     *                                                              /------ sampleSize? --/        caseWeight (may be null)     
      *                                                             /                      \
-     *                                      auto                  /                        \------ (sampleSize = n)
-     *                >0                  /------ sampleType? ---/                           =0
+     *                                      auto                  /                        \------ sampleSize = n,
+     *                >0                  /------ sampleType? ---/                           =0    caseWeight (may be null) 
      *               ------ bootstrap? --/                       \                         
      *              /                    \                        \                           1 <= sampleSize <= n
-     *   ntree?  --/                      \                        \                        /----- sampleSize
-     *             \                       \                        \------ sampleSize? -- /
+     *   ntree?  --/                      \                        \                        /----- sampleSize,
+     *             \                       \                        \------ sampleSize? -- /       caseWeight (may be null)
      *              \------ WARNING         \                         swor                 \
-     *                =0                     \                                              \----- (sampleSize = n * (e-1)/e)
-     *                                        \                                               =0
+     *                =0                     \                                              \----- sampleSize = n * (e-1)/e,
+     *                                        \                                               =0   caseWeight (may be null)     
      *                                         \
      *                                          \                     !null
-     *                                           \                  /------ (sampleType = swr) && 
-     *                                            ------ sample? --/        (sampleSize determined by sample) && 
-     *                                             user            \        (ntree determined by sample)
+     *                                           \                  /------ sampleType = swr, 
+     *                                            ------ sample? --/        sampleSize (determined by sample), 
+     *                                             user            \        ntree (determined by sample)
      *                                                              \
      *                                                               \------ ERROR 
      *                                                                 null                                              
@@ -1376,15 +1413,28 @@ public class ModelArg {
      * </code> </pre>
      * Finally, note that when bootstrap = auto is in force, it is also
      * possible to use case weights in conjuntion with sampleType.  
-     * See {@link #set_caseWeight(double[])} for more details.
      *
      * @param ntree Number of trees in the forest.
      * @param bootstrap Type of bootstrap used in the model.
      * @param sampleType Type of sampling used in generating the bootstrap.
      * @param sampleSize Size of sample used in generating the bootstrap.
      * @param sample 2-D matrix explicitly specifying the bootstrap sample.
+     * @param caseWeight The case weight vector.  This vector 
+     * must be of length nSize ({@link #get_nSize}).  This is a vector of non-negative
+     * weights where, after normalizing, weight[k] is the
+     * probability of selecting case k as a candidate when bootstrap = auto.
+     * The default is to use uniform weights for selection.  It is generally better to use real
+     * weights rather than integers.  With larger values of nsize, the
+     * slightly different sampling algorithms depolyed in the two
+     * scenarios can result in dramatically different execution times.
      */
-    public void set_bootstrap(int ntree, String bootstrap, String sampleType, int sampleSize, int[][] sample) {
+    public void set_bootstrap(int ntree,
+                              String bootstrap,
+                              String sampleType,
+                              int sampleSize,
+                              int[][] sample,
+                              double[] caseWeight) {
+
         if (ntree <= 0) {
             RFLogger.log(Level.WARNING, "Invalid value for bootstrap parameter ntree:  " + ntree);
             RFLogger.log(Level.WARNING, "Overriding all bootstrap parameters with default values.");
@@ -1394,6 +1444,9 @@ public class ModelArg {
 
             this.ntree = ntree;
             this.bootstrap = "auto";
+
+            // Set the case weight vector appropriately.  It may or may not be null.
+            this.caseWeight = setWeight(caseWeight, nSize);
             
             if (sampleType.equals("swr")) {
                 this.sampleType = sampleType;
@@ -1435,7 +1488,8 @@ public class ModelArg {
             this.ntree = ntree;
             this.bootstrap = "user";
             this.sampleType = "swr";
-
+            this.caseWeight = setWeight(null, nSize);
+            
             // Check for coherent sample.  It will of be dim [ntree] x [nSize].
             if (sample == null) {
                 RFLogger.log(Level.SEVERE, "sample must not be null when bootstrapping by user.");
@@ -1477,7 +1531,6 @@ public class ModelArg {
                 this.sampleSize = sSize[0];
                 this.sample = sample;
             }
-
         }
         else {
             RFLogger.log(Level.WARNING, "Invalid value for bootstrap parameter bootstrap:  " + bootstrap);
@@ -1488,7 +1541,7 @@ public class ModelArg {
 
     /** Sets the bootstrap related parameters in the model.  Use default values for all unspecified parameters.
      * @param ntree Number of trees in the random forest.
-     * @see #set_bootstrap(int, String, String, int, int[][])
+     * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
     public void set_bootstrap(int ntree) {
         this.ntree = 1000;
@@ -1496,20 +1549,21 @@ public class ModelArg {
         sampleType = "swr";
         sampleSize = nSize;
         sample = null;
+        caseWeight = setWeight(null, nSize);
     }
     
     /** Sets the bootstrap related parameters in the model.  Use default values for all unspecified parameters.
      * @param ntree Number of trees in the random forest.
      * @param sample 2-D matrix explicitly specifying the bootstrap sample.
-     * @see #set_bootstrap(int, String, String, int, int[][])
+     * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
     public void set_bootstrap(int ntree, int[][] sample) {
-        set_bootstrap(ntree, "user", "swr", 0, sample); 
+        set_bootstrap(ntree, "user", "swr", 0, sample, null); 
     }
 
 
     /** Sets the bootstrap related parameters in the model.  Use default values for all parameters.
-     * @see #set_bootstrap(int, String, String, int, int[][]) 
+     * @see #set_bootstrap(int, String, String, int, int[][], double[]) 
      */
     public void set_bootstrap() {
         ntree = 1000;
@@ -1517,12 +1571,13 @@ public class ModelArg {
         sampleType = "swr";
         sampleSize = nSize;
         sample = null;
+        caseWeight = setWeight(null, nSize);
     }
 
     /** 
      * Returns the type of bootstrap used in the model. 
      * @return The type of bootstrap used in the model.
-     * @see #set_bootstrap(int, String, String, int, int[][])
+     * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
     public String get_bootstrap() {
         return bootstrap;
@@ -1531,7 +1586,7 @@ public class ModelArg {
     /**
      * Returns the type of sampling used in generating the bootstrap.
      * @return The type of sampling used in generating the bootstrap.
-     * @see #set_bootstrap(int, String, String, int, int[][])
+     * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
     public String get_sampleType() {
         return sampleType;
@@ -1540,7 +1595,7 @@ public class ModelArg {
     /**
      * Returns the size of sample used in generating the bootstrap.
      * @return The size of sample used in generating the bootstrap.
-     * @see #set_bootstrap(int, String, String, int, int[][])
+     * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
     public int get_sampleSize() {
         return sampleSize;
@@ -1549,7 +1604,7 @@ public class ModelArg {
     /**
      * Returns the 2-D matrix explicitly specifying the bootstrap sample.
      * @return The 2-D matrix explicitly specifying the bootstrap sample.
-     * @see #set_bootstrap(int, String, String, int, int[][])
+     * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
     public int[][] get_sample() {
         return sample;
@@ -1558,7 +1613,7 @@ public class ModelArg {
     /**
      * Returns the number of trees in the forest.
      * @return The number of trees in the forest.
-     * @see #set_bootstrap(int, String, String, int, int[][])
+     * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
     public int get_ntree() {
         return ntree;
@@ -1646,33 +1701,9 @@ public class ModelArg {
 
 
     /**
-     * Sets the case weight vector.  
-     * @param weight The case weight vector.  The vector 
-     * must be of length nSize ({@link #get_nSize}).  This is a vector of non-negative
-     * weights where, after normalizing, weight[k] is the
-     * probability of selecting case k as a candidate when bootstrap = auto.
-     * The default is to use uniform weights for selection.  It is generally better to use real
-     * weights rather than integers.  With larger values of nsize, the
-     * slightly different sampling algorithms depolyed in the two
-     * scenarios can result in dramatically different execution times.
-     * @see #set_bootstrap(int, String, String, int, int[][])
-     */
-    public void set_caseWeight(double[] weight) {
-        caseWeight = setWeight(weight, nSize);
-    }
-
-    /** 
-     * Set the case weight vector to uniform weights.
-     * @see #set_caseWeight(double[])
-     */
-    public void set_caseWeight() {
-        caseWeight = setWeight(null, nSize);
-    }
-
-    /**
      * Returns the case weight vector.
      * @return The case weight vector.
-     * @see #set_caseWeight(double[])
+     * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
     public double[] get_caseWeight() {
         return caseWeight;
@@ -2450,73 +2481,6 @@ public class ModelArg {
         return nodeDepth;
     }
 
-    /**
-     * Sets the parameter to control whether the null hypothesis is used in generating the model.  
-     * @param nullSplit The parameter to control whether the null hypothesis is used in generating the model.  The null
-     * hypothesis assumes no relation between x-variables and
-     * y-variables.  To test this, before growing each tree, we
-     * permute the each y-variable independently over the non-missing
-     * cases.  When the family is survival or competing risk, we
-     * restrict permutation to time, and leave censoring untouched.  When the family is
-     * unsupervised, this parameter is (no).  The default value
-     * for this parameter is (no).
-     */
-    public void set_nullSplit(String nullSplit) {
-        if (nullSplit.equals("yes") || nullSplit.equals("no")) {
-            this.nullSplit = nullSplit;
-            if (nullSplit.equals("yes")) {
-                if (family.equals("RF-U")) { 
-                    RFLogger.log(Level.WARNING, "Overriding parameter nullSplit with (no) when family is RF-U.");            
-                    this.nullSplit = "no";
-                }
-            }
-        }
-        else {
-            RFLogger.log(Level.SEVERE, "Invalid value for nullSplit:  " + nullSplit);
-            throw new IllegalArgumentException();
-        }
-    }
-
-    /**
-     * Returns the parameter to control whether the null hypothesis is used in generating the model.
-     * @return The parameter to control whether the null hypothesis is used in generating the model.
-     * @see #set_nullSplit(String)
-     */
-    public String get_nullSplit() {
-        return nullSplit;
-    }
-
-    /**
-    * Sets the number of cores to be used by the algorithm when OpenMP
-    * parallel processing is in force.  
-    * @param rfCores The number of cores to be used by the algorithm when OpenMP
-    * parallel processing is in force. The default behaviour is to
-    * use all cores available.  This is achieved by setting the
-    * parameter to a negative value.  The result is that each core
-    * will be independently tasked with growing a tree.  Significant
-    * savings in elapsed computation times can be achieved.
-    */
-    public void set_rfCores(int rfCores) {
-        int availableCores = Runtime.getRuntime().availableProcessors();
-
-        this.rfCores = rfCores;
-        if (rfCores > availableCores) {
-            RFLogger.log(Level.WARNING, "Invalid value for parameter rfCores:  " + rfCores);
-            RFLogger.log(Level.WARNING, "Overriding rfCores with (" + availableCores + "), the maximum available processors.");
-            this.rfCores = availableCores;
-        }
-        
-    }
-
-    /**
-    * Returns the number of cores to be used by the algorithm when OpenMP
-    * parallel processing is in force.
-    * @return the number of cores to be used by the algorithm when OpenMP parallel processing is in force.
-    * @see #set_rfCores(int)
-    */
-    public int get_rfCores() {
-        return rfCores;
-    }
 
     /** 
     * Sets the seed for the random number generator used by the
@@ -2548,7 +2512,7 @@ public class ModelArg {
 
     private void set_seed() {
         generator = new Random();
-        seed = - generator.nextInt();
+        seed = - Math.abs(generator.nextInt());
     }
 
     /** 
@@ -2593,11 +2557,43 @@ public class ModelArg {
 
 
     /**
-     * Sets the ensemble outputs desired from the model.  
-     * These
-     * settings are in the form of &lt;key, value&gt; pairs, where the key
-     * is the name of the ensemble, and the value is the specific
-     * option for that ensemble.  
+    * Sets the number of cores to be used by the algorithm when OpenMP
+    * parallel processing is in force.  
+    * @param rfCores The number of cores to be used by the algorithm when OpenMP
+    * parallel processing is in force. The default behaviour is to
+    * use all cores available.  This is achieved by setting the
+    * parameter to a negative value.  The result is that each core
+    * will be independently tasked with growing a tree.  Significant
+    * savings in elapsed computation times can be achieved.
+    */
+    public void set_rfCores(int rfCores) {
+        int availableCores = Runtime.getRuntime().availableProcessors();
+
+        this.rfCores = rfCores;
+        if (rfCores > availableCores) {
+            RFLogger.log(Level.WARNING, "Invalid value for parameter rfCores:  " + rfCores);
+            RFLogger.log(Level.WARNING, "Overriding rfCores with (" + availableCores + "), the maximum available processors.");
+            this.rfCores = availableCores;
+        }
+        
+    }
+
+    /**
+    * Returns the number of cores to be used by the algorithm when OpenMP
+    * parallel processing is in force.
+    * @return the number of cores to be used by the algorithm when OpenMP parallel processing is in force.
+    * @see #set_rfCores(int)
+    */
+    public int get_rfCores() {
+        return rfCores;
+    }
+
+
+    /**
+     * Sets the ensemble outputs desired from the model.  These
+     * settings are in the form of &lt;key, value&gt; pairs, where the
+     * key is the name of the ensemble, and the value is the specific
+     * option for that ensemble.
      * <p> The default option for each key is in bold. </p>
      *
      * <pre> <code> 
@@ -2607,16 +2603,15 @@ public class ModelArg {
      *    <th>Possible Values</th>
      *  </tr>
      *  
+      
      *  <tr>
      *    <td>weight</td>
-     *    <td><b>no</b>, inbag, oob, all</td>
+     *    <td><b>no</b>, inbag, oob</td>
      *  </tr>
-
-      
 
      *  <tr>
      *    <td>proximity</td>
-     *    <td><b>no</b>, inbag, oob, all</td>
+     *    <td><b>no</b>, inbag, oob</td>
      *  </tr>
      *  
      *  <tr>
@@ -2654,27 +2649,31 @@ public class ModelArg {
      * @param key The name of the ensemble output.
      * @param value The specific value for the ensemble output. 
      */
-    public void set_ensembleArg(String key, String value) {
+    public void setEnsembleArg(String key, String value) {
         ensembleArg.set(key, value);
     }
 
     /**
-     * Sets the default values for ensemble outputs desired from the model.  
-     * @see #set_ensembleArg(String, String).
+     * Sets default values for the ensemble outputs resulting from the model.
+     * @see #setEnsembleArg(String, String).
      */
-    public void set_ensembleArg() {
+    public void setEnsembleArg() {
         ensembleArg.set();
     }
 
     /**
-     * Returns the default or user defined option for the specified ensembled.
+     * Returns the current value for the specified ensemble argument.
      * @param key The name of the ensemble output.
-     * @see #set_ensembleArg(String, String).
+     * @see #setEnsembleArg(String, String).
      */
-    public String get_ensembleArg(String key) {
+    public String getEnsembleArg(String key) {
         return ensembleArg.get(key);
     }
     
+
+    EnsembleArg getEnsembleArg() {
+        return ensembleArg;
+    }
     
     int getEnsembleArgOptLow() {
 
@@ -2689,13 +2688,13 @@ public class ModelArg {
     int getEnsembleArgOptHigh() {
 
         return (ensembleArg.getNative("membership") + 
-
                 ensembleArg.getNative("weight") +                 
                  
                  
                 
                 ensembleArg.getNative("error") +
-                ensembleArg.getNative("qualitativeTerminalInfo")); 
+                ensembleArg.getNative("qualitativeTerminalInfo") + 
+                ensembleArg.getNative("quantitativeTerminalInfo"));         
     }
 
     int getModelArgOptLow() {
@@ -2708,12 +2707,6 @@ public class ModelArg {
                                   new int[] {0, (1 << 19) + (1 << 20)});
 
         result += nativeOpt.get(bootstrap);
-
-        nativeOpt = new NativeOpt("nullSplit",
-                                  new String[] {"no", "yes"},
-                                  new int[] {0, (1 << 18)});
-
-        result += nativeOpt.get(nullSplit);
 
         return result;
     }

@@ -14,7 +14,7 @@ cindex <- function (time,
   if (nmiss == size) {
     stop("no valid pairs found, too much missing data")
   }
-  
+  ## Flag missing members so we can exclude them in the pairs.
   denom <- sapply(miss, function(x) if (x) 0 else 1)
   nativeOutput <- .Call("rfsrcCIndex",
                         as.integer(do.trace),
@@ -23,7 +23,7 @@ cindex <- function (time,
                         as.double(censoring),
                         as.double(predicted),
                         as.integer(denom))
-  
+  ## check for error return condition in the native code
   if (is.null(nativeOutput)) {
     stop("An error has occurred in rfsrcCIndex.  Please turn trace on for further analysis.")
   }

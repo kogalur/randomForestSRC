@@ -118,7 +118,6 @@ typedef unsigned long ulong;
 #define OPT_PERF_GMND 0x00008000 
 #define OPT_IMPU_ONLY 0x00010000 
 #define OPT_OUTC_TYPE 0x00020000 
-#define OPT_SPLT_NULL 0x00040000 
 #define OPT_BOOT_TYP1 0x00080000 
 #define OPT_BOOT_TYP2 0x00100000 
 #define OPT_COMP_RISK 0x00200000 
@@ -201,9 +200,9 @@ typedef unsigned long ulong;
 #define RF_WGHT_INTEGER 2
 #define RF_WGHT_GENERIC 3
 #define RF_DISTANCE_EUCLIDEAN 1
-#define NATIVE_TYPE_NUMERIC   0
+#define NATIVE_TYPE_CHARACTER 0
 #define NATIVE_TYPE_INTEGER   1
-#define NATIVE_TYPE_CHARACTER 2
+#define NATIVE_TYPE_NUMERIC   2
 typedef struct node Node;
 struct node {
   struct node *parent;
@@ -757,9 +756,9 @@ struct snpAuxiliaryInfo {
   uint identity;
   ulong linearSize;
   void *snpPtr;
-  void *auxiliaryPtr;
+  void *auxiliaryArrayPtr;
   uint dimSize;
-  uint *dim;
+  int *dim;
 };
 char getBestSplit(uint    treeID,
                   Node   *parent,
@@ -1345,12 +1344,6 @@ void stackTNQualitativeOutputObjects(char     mode,
                                      uint   **pRF_AMBR_ID_,
                                      uint   **pRF_TN_RCNT_,
                                      uint   **pRF_TN_ACNT_);
-void stackAuxTNQualitativeStructures(char     mode,
-                                     uint    *pRF_RMBR_ID_,
-                                     uint    *pRF_AMBR_ID_,
-                                     uint    *pRF_TN_RCNT_,
-                                     uint    *pRF_TN_ACNT_);
-void unstackAuxTNQualitativeStructures(char    mode);
 void stackTNQuantitativeOutputObjects(char     mode,
                                       double **pRF_TN_SURV_,
                                       double **pRF_TN_MORT_,
@@ -1359,26 +1352,18 @@ void stackTNQuantitativeOutputObjects(char     mode,
                                       double **pRF_TN_CIFN_,
                                       double **pRF_TN_REGR_,
                                       uint   **pRF_TN_CLAS_);
-void stackAuxTNQuantitativeStructures(char    mode,
-                                      double *pRF_TN_SURV_,
-                                      double *pRF_TN_MORT_,
-                                      double *pRF_TN_NLSN_,
-                                      double *pRF_TN_CSHZ_,
-                                      double *pRF_TN_CIFN_,
-                                      double *pRF_TN_REGR_,
-                                      uint   *pRF_TN_CLAS_);
-void unstackAuxTNQuantitativeStructures(char    mode);
 void verifyAndRegisterCustomSplitRules();
 extern void registerCustomFunctions();
 void stackAuxiliaryInfoList();
 void allocateAuxiliaryInfo(char   type,
                            uint   identity,
-                           ulong  linearSize,
                            void  *snpPtr,
-                           void  *auxiliaryPtr,
+                           void  *auxiliaryArrayPtr,
                            uint   dimSize,
-                           uint  *dim);
+                           int   *dim);
+uint getAuxDim(int *dim, uint preIndex, uint postIndex);
 void unstackAuxiliaryInfoAndList();
+void memoryCheck();
 void stackIncomingResponseArrays(char mode);
 void unstackIncomingResponseArrays(char mode);
 void unstackIncomingCovariateArrays(char mode);
@@ -1500,65 +1485,6 @@ void unstackMultiClassProb(Terminal *tTerm);
 void stackMeanResponse(Terminal *tTerm, unsigned int rnfCount);
 void unstackMeanResponse(Terminal *tTerm);
 void getTerminalInfo(Terminal *termPtr);
-#include <stdlib.h>
-#include <time.h>
-#ifndef TRUE
-#define TRUE      0x01
-#endif
-#ifndef FALSE
-#define FALSE     0x00
-#endif
-@RF_CRANX_BEG@
-#include <R_ext/Print.h>
-#ifndef RF_nativePrint
-#define RF_nativePrint printR
-#endif
-extern void printR(char *format, ...);
-@RF_CRANX_END@
-@RF_JAVAX_BEG@
-#ifndef RF_nativePrint
-#define RF_nativePrint printJ
-#endif
-extern void printJ(char *format, ...);
-@RF_JAVAX_END@
-#define SUMM_DEF_TRACE  0x00000001
-#define SUMM_LOW_TRACE  0x00000002
-#define SUMM_MED_TRACE  0x00000004
-#define SUMM_HGH_TRACE  0x00000008
-#define SPLT_DEF_TRACE  0x00000010
-#define SPLT_LOW_TRACE  0x00000020
-#define SPLT_MED_TRACE  0x00000040
-#define SPLT_HGH_TRACE  0x00000080
-#define FORK_DEF_TRACE  0x00000100
-#define MISS_LOW_TRACE  0x00000200
-#define MISS_MED_TRACE  0x00000400
-#define MISS_HGH_TRACE  0x00000800
-#define OUTP_DEF_TRACE  0x00001000
-#define NUMR_DEF_TRACE  0x00002000
-#define FACT_LOW_TRACE  0x00004000
-#define FACT_HGH_TRACE  0x00008000
-#define ENSB_LOW_TRACE  0x00010000
-#define ENSB_HGH_TRACE  0x00020000
-#define BOOT_MED_TRACE  0x00040000
-#define VIMP_LOW_TRACE  0x00080000
-#define NODE_DEF_TRACE  0x00100000
-#define TIME_DEF_TRACE  0x00200000
-#define RAND_DEF_TRACE  0x00400000
-#define TURN_OFF_TRACE  0x00000000
-void setTraceFlag(unsigned int traceFlag, unsigned int tree);
-unsigned int getTraceFlag(unsigned int tree);
-unsigned int updateTimeStamp(unsigned int before);
-unsigned int getNodeDefTraceFlag();
-unsigned int getForkDefTraceFlag();
-unsigned int getTurnOffTraceFlag();
-unsigned int getNumrDefTraceFlag();
-unsigned int getTimeDefTraceFlag();
-void   setMaxMemoryAllocation(size_t value);
-void   setMinMemoryAllocation(size_t value);
-size_t getMaxMemoryAllocation();
-size_t getMinMemoryAllocation();
-void   increaseMemoryAllocation(size_t amount);
-void   decreaseMemoryAllocation(size_t amount);
 void acquireTree(char mode, uint r, uint b);
 void updateWeight(char mode, uint b);
 void finalizeWeight(char mode);

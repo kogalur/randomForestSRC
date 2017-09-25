@@ -1,5 +1,5 @@
 get.bootstrap <- function (bootstrap) {
-  
+  ## Convert bootstrap option into native code parameter.
   if (bootstrap == "by.root") {
     bootstrap <- 0
   }
@@ -18,7 +18,7 @@ get.bootstrap <- function (bootstrap) {
   return (bootstrap)
 }
 get.samptype <- function (samptype) {
-  
+  ## Convert samptype option into native code parameter.
   if (samptype == "swr") {
     bits <- 0
   }
@@ -39,16 +39,16 @@ get.cr.bits <- function (fmly) {
 }
 get.na.action <- function (na.action) {
   if (na.action == "na.omit") {
-    
+    ## This is the high byte!
     na.action <- 0
   }
     else if (na.action == "na.impute") {
-      
+      ## This is the high byte!
       na.action <- 2^4
-      
-      
-      
-      
+      ## To recover the original functionality in which the split
+      ## statistic uses missing in-node imputed values, uncomment 
+      ## the following statement:
+      ## na.action <- 0
     }
       
     else {
@@ -57,7 +57,7 @@ get.na.action <- function (na.action) {
   return (na.action)
 }
 get.forest <- function (forest) {
-  
+  ## Convert forest option into native code parameter.
   if (!is.null(forest)) {
     if (forest == TRUE) {
       forest <- 2^5
@@ -75,7 +75,7 @@ get.forest <- function (forest) {
   return (forest)
 }
 get.forest.wt <- function (grow.equivalent, bootstrap, weight) {
-  
+  ## Convert weight option into native code parameter.
   if (!is.null(weight)) {
     if (weight == FALSE) {
       weight <- 0
@@ -123,9 +123,9 @@ get.forest.wt <- function (grow.equivalent, bootstrap, weight) {
   return (weight)
 }
 get.importance <-  function (importance) {
-  
+  ## Convert importance option into native code parameter.
   if (!is.null(importance)) {
-    
+    ## Override lazy values.
     if (importance == TRUE) {
       importance <- "permute"
     }
@@ -194,7 +194,7 @@ get.impute.only <-  function (impute.only, nMiss) {
     }
 }
 get.outcome <- function (outcome) {
-  
+  ## Convert outcome option into native code parameter.
   if (outcome == "train") {
     outcome <- 0
   }
@@ -207,8 +207,8 @@ get.outcome <- function (outcome) {
   return (outcome)
 }
 get.perf <-  function (perf, impute.only, family, perf.type) {
-    
-    
+    ## Entry value is typically "none" or NULL.  But we handle the
+    ## case when it is "default" as well.
     if (impute.only == TRUE) {
         result = "none"
     }
@@ -236,8 +236,8 @@ get.perf <-  function (perf, impute.only, family, perf.type) {
         }
     }
     else {
-        
-        
+        ## Ingore any other incoming values of perf other than NULL,
+        ## "none", or "default".
         result = "none"
     }
     return (result)
@@ -260,7 +260,7 @@ get.perf.bits <- function (perf) {
     }
 }
 get.proximity <- function (grow.equivalent, proximity) {
-  
+  ## Convert proximity option into native code parameter.
     if (!is.null(proximity)) {
       if (proximity == FALSE) {
         prox.bits <- 0
@@ -319,7 +319,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (seed)
   }
   get.split.depth <- function (split.depth) {
-    
+    ## Convert split.depth option into native code parameter.
     if (!is.null(split.depth)) {
       if (split.depth == "all.trees") {
         split.depth <- 2^22
@@ -340,28 +340,28 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (split.depth)
   }
   get.split.null <- function (split.null) {
-    
+    ## Convert split.null option into native code parameter.
     if (!is.null(split.null)) {
       if (split.null == TRUE) {
         split.null <- 2^18
       }
-        else if (split.null == FALSE) {
-          split.null <- 0
-        }
-          else {
-            stop("Invalid choice for 'split.null' option:  ", split.null)
-          }
-    }
+      else if (split.null == FALSE) {
+        split.null <- 0
+      }
       else {
         stop("Invalid choice for 'split.null' option:  ", split.null)
       }
+    }
+    else {
+      stop("Invalid choice for 'split.null' option:  ", split.null)
+    }
     return (split.null)
   }
   get.split.cust <- function (split.cust) {
-    
+    ## Convert split.cust option into native code parameter.
     if (!is.null(split.cust)) {
       if ((split.cust >= 1) && (split.cust <= 16)) {
-        
+        ## Bit shift eight left.
         split.cust <- 256 * (split.cust - 1)
       }
         else {
@@ -374,7 +374,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (split.cust)
   }
   get.statistics <- function (statistics) {
-    
+    ## Convert statistics option into native code parameter.
     if (!is.null(statistics)) {
       if (statistics == TRUE) {
         statistics <- 2^27
@@ -392,7 +392,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (statistics)
   }
   get.trace <- function (do.trace) {
-    
+    ## Convert trace into native code parameter.
     if (!is.logical(do.trace)) {
       if (do.trace >= 1) {
         do.trace <- round(do.trace)
@@ -407,7 +407,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (do.trace)
   }
   get.var.used <- function (var.used) {
-    
+    ## Convert var.used option into native code parameter.
     if (!is.null(var.used)) {
       if (var.used == "all.trees") {
         var.used <- 2^12
@@ -428,7 +428,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (var.used)
   }
   get.vimp.only <-  function (vimp.only) {
-    
+    ## Convert vimp.only option into native code parameter.
     if (!is.null(vimp.only)) {
       if (vimp.only) {
         return (2^27)
@@ -445,7 +445,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   get.membership <- function (membership) {
-    
+    ## Convert option into native code parameter.
     bits <- 0
     if (!is.null(membership)) {
       if (membership == TRUE) {
@@ -461,13 +461,13 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (bits)
   }
   get.terminal.qualts <- function (terminal.qualts, incoming.flag) {
-    
-    
-    
+    ## Convert option into native code parameter.  This 
+    ## is sensitive to incoming and outgoing data 
+    ## (from the native code perspective).
     bits <- 0
     if (is.null(incoming.flag)) {
-      
-      
+      ## Do nothing.  This ensures backwards compatibility with
+      ## versions prior to these bits being flagged in the grow object.
     }
       else if (incoming.flag) {
         bits <- bits + 2^17
@@ -486,13 +486,13 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (bits)
   }
   get.terminal.quants <- function (terminal.quants, incoming.flag) {
-    
-    
-    
+    ## Convert option into native code parameter.  This 
+    ## is sensitive to incoming and outgoing data 
+    ## (from the native code perspective).
     bits <- 0
     if (is.null(incoming.flag)) {
-      
-      
+      ## Do nothing.  This ensures backwards compatibility with
+      ## versions prior to these bits being flagged in the grow object.
     }
       else if (incoming.flag) {
         bits <- bits + 2^19
@@ -511,7 +511,7 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (bits)
   }
   get.tree.err <- function (tree.err) {
-    
+    ## Convert tree.err option into native code parameter.
     if (!is.null(tree.err)) {
       if (tree.err == FALSE) {
         tree.err <- 2^13
@@ -528,7 +528,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (tree.err)
   }
-  
+  ## HIDDEN VARIABLES FOLLOW:
   is.hidden.impute.only <-  function (user.option) {
     if (is.null(user.option$impute.only)) {
       FALSE
@@ -538,7 +538,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   is.hidden.terminal.qualts <-  function (user.option) {
-    
+    ## Default value is !FALSE
     if (is.null(user.option$terminal.qualts)) {
       !FALSE
     }
@@ -547,7 +547,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   is.hidden.terminal.quants <-  function (user.option) {
-    
+    ## Default value is FALSE
     if (is.null(user.option$terminal.quants)) {
       FALSE
     }
@@ -556,7 +556,7 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   is.hidden.perf.type <-  function (user.option) {
-    
+    ## Default value is NULL
     if (is.null(user.option$perf.type)) {
       NULL
     }
@@ -573,16 +573,16 @@ get.proximity <- function (grow.equivalent, proximity) {
     }
   }
   get.univariate.target <- function(x, outcome.target = NULL) {
-    
-    
-    
-    
-    
+    ## This function takes a grow, grow-equivalent, or predict object and returns a single coherent target.
+    ## That is, if no target has been specified, the first regression outcome with statistics is chosen.
+    ## If no regression outcome exists, the first classification outcome with statistics is chosen.
+    ## If the target is specified, the object is verified to contain the target outcome statistics
+    ## for that y-var.  If none exist, the function will error.
     if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
       if (is.null(outcome.target)) {
-        
-        
-        
+        ## Check the y-vars against regression and then classification.
+        ## We choose the "first" variable, favoring regression, then
+        ## classification.
         target <- match(c("regrOutput", "classOutput"), names(x))
         target <- target[!is.na(target)]
         if(length(target) > 0) {
@@ -590,9 +590,9 @@ get.proximity <- function (grow.equivalent, proximity) {
           for (i in target) {
             for (j in 1:length(x[[i]])) {
               if (length(x[[i]][[j]]) > 0) {
-                
+                ## This is a non-null output.
                 outcome.target <- names(x[[i]][j])
-                
+                ## Exit the loop.
                 do.break <- TRUE
                 break
               }
@@ -603,16 +603,16 @@ get.proximity <- function (grow.equivalent, proximity) {
           }
         }
           else {
-            
+            ## Something would have to be seriously wrong for this to happen.
             stop("No outcomes found in object.  Please contact technical support.")
           }
       }
       else {
-        
+        ## Check that one and only one target has been specified.
         if (sum(is.element(outcome.target, x$yvar.names)) != 1) {
           stop("User must specify one and only one outcome.target for multivariate families.")
         }
-        
+        ## A target outcome has been specified.  Verify that it contains outcome statistics.
         target <- match(c("regrOutput", "classOutput"), names(x))
         target <- target[!is.na(target)]
         found = FALSE
@@ -621,10 +621,10 @@ get.proximity <- function (grow.equivalent, proximity) {
           for (i in target) {
             for (j in 1:length(x[[i]])) {
               if (length(x[[i]][[j]]) > 0) {
-                
+                ## This is a non-null output.
                 if (outcome.target == names(x[[i]][j])) {
                   found = TRUE
-                  
+                  ## Exit the loop.
                   do.break <- TRUE
                   break
                 }
@@ -640,31 +640,31 @@ get.proximity <- function (grow.equivalent, proximity) {
         }
       }
     }
-    
-    
-    
+    ## This function will return NULL if the function is not
+    ## multivariate.  Otherwise, the outcome and its associated statistics is
+    ## guaranteed to exist in the object.
     outcome.target
   }
   coerce.multivariate <- function(x, outcome.target) {
-    
-    
-    
-    
-    
+    ## Warning:  This functon assumes that get.univariate.target has been called first, to
+    ## verify the coherency of the target.  This means that the target exists in the forest object, and that
+    ## it contains outcome statistics.
+    ## If this is a multivarate family, we coerce the object, based on outcome.target
+    ## into a univaritate regression or classification object.
     x$univariate <- TRUE
     if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
-      
+      ##  Coerce the mulitvariate object into a univariate object.
       x.coerced <- unlist(list(x$classOutput, x$regrOutput), recursive = FALSE)[[outcome.target]]
       x$univariate <- FALSE
       x$yvar <- x$yvar[, outcome.target]
-      
+      ## Test for factors.  Ordered factors are treated as factors!
       if (is.factor(x$yvar) || is.ordered(x$yvar)) {
         x$family <- "class"
       }
       else {
         x$family <- "regr"
       }
-      
+      ## Make various assignments to the coerced object.
       x$predicted <- x.coerced$predicted
       x$predicted.oob <- x.coerced$predicted.oob
       x$class <- x.coerced$class

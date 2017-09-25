@@ -14,12 +14,14 @@
   -->
 
   <!-- CAUTION:  These comments affect the public build.     -->
-  <!-- CAUTION   Uncomment them for diagnostic uses only.    -->
+  <!-- CAUTION   "java-trace" means TRACE IS OFF:            -->  
   <target name="java-trace">
+    <property name="java.trace.token" value="//"/>
+  </target>
 
-    <!--property name="java.trace.token" value="//"/-->
+  <!-- CAUTION   "java-trace" means TRACE IS ON:             -->  
+  <target name="java-trace-x">
     <property name="java.trace.token" value=""/>
-
   </target>
 
   <!--
@@ -138,6 +140,7 @@
         <include name="EnsembleArg.java"/>
         <include name="Ensemble.java"/>        
         <include name="NativeOpt.java"/>
+        <include name="ModelType.java"/>
       </fileset>
 
       <filterchain>
@@ -187,7 +190,7 @@
     </exec>
 
     <echo file="target/spark/target/hello${scriptExtension}" append="false">${scriptFileCommentLine}
-    spark-submit --class com.kogalur.randomforest.HelloRandomForestSRC --master local[*] --jars ${project.pkg.name}-tests.jar ${project.pkg.name}.jar
+    spark-submit --class HelloRandomForestSRC --master local[*] --jars ${project.pkg.name}-tests.jar ${project.pkg.name}.jar
     ${scriptFileExitLine}
     </echo>
 

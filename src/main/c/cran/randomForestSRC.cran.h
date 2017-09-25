@@ -39,7 +39,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP bootstrapSize,
                SEXP bootstrap,
                SEXP caseWeight,
-               SEXP xSplitStatWt,
+               SEXP xSplitStatWeight,
                SEXP yWeight,
                SEXP xWeight,
                SEXP xData,
@@ -108,7 +108,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
 void exit2R();
 void printR(char *format, ...);
 void setNativeGlobalEnv();
-void *copy1DObject(SEXP arr, char type, uint size);
+void *copy1DObject(SEXP arr, char type, uint size, char actual);
 void *copy2DObject(SEXP arr, char type, char flag, uint row, uint col);
 void free_1DObject(void *arr, char type, uint size);
 void free_2DObject(void *arr, char type, char flag, uint row, uint col);
@@ -117,6 +117,7 @@ void *stackAndProtect(uint  *sexpIndex,
                       char   sexpType,
                       uint   sexpIdentity,
                       ulong  size,
+                      double value,
                       char **sexpString,
                       void  *auxiliaryPtr,
                       uint   auxiliaryDimSize,

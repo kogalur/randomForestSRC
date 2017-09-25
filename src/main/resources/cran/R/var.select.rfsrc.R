@@ -15,7 +15,9 @@ var.select.rfsrc <-
            xvar.wt = NULL,
            refit = (method != "md"),
            fast = FALSE,
+           
            na.action = c("na.omit", "na.impute"),
+           
             
            always.use = NULL,  
            nrep = 50,        
@@ -27,24 +29,24 @@ var.select.rfsrc <-
            ...
            )
 {
-  
-  
-  
-  
-  
+  ## --------------------------------------------------------------
+  ##  
+  ##  workhorse: variable hunting algorithm
+  ##
+  ## --------------------------------------------------------------
   rfsrc.var.hunting <- function(train.id, var.pt, nstep) {
-    
+    ## ------------------filtering step-----------------------
     if (verbose) cat("\t", paste("selecting variables using", mName), "...\n")
-    
+    ## which variables to include
     drop.var.pt <- setdiff(var.columns, var.pt)
-    
+    ## family specific checks
     if (grepl("surv", family)) {
       if (sum(data[train.id, 2], na.rm = TRUE) < 2) {
         stop("training data has insufficient deaths: K is probably set too high\n")
       }
     }
-    
-    
+    ## filtered forest
+    ## over-ride user mtry setting: use an aggressive value
     rfsrc.filter.obj  <- rfsrc(rfsrc.all.f,
                                data=(if (LENGTH(var.pt, drop.var.pt)) data[train.id, -drop.var.pt]
                                        else data[train.id, ]),
@@ -57,15 +59,15 @@ var.select.rfsrc <-
                                na.action = na.action,
                                do.trace = do.trace,
                                importance="permute")
-    
+    ## set the target dimension for CR families
     if (rfsrc.filter.obj$family == "surv-CR") {
       target.dim <- max(1, min(cause, max(get.event.info(rfsrc.filter.obj)$event.type)), na.rm = TRUE)
     }
-    
-    
+    ## extract vimp
+    ## for multivariate families we must manually extract the importance and error rate
     imp <- get.imp(coerce.multivariate(rfsrc.filter.obj, outcome.target), target.dim)
     names(imp) <- rfsrc.filter.obj$xvar.names
-    
+    ## selection using vimp
     if (method == "vh.vimp") {
       VarStrength <- sort(imp, decreasing = TRUE)
       lower.VarStrength <- min(VarStrength) - 1 #need theoretical lower bound to vimp
@@ -73,11 +75,11 @@ var.select.rfsrc <-
       forest.depth <- m.depth <- NA
       sig.vars.old <- names(VarStrength)[1]
     }
-    
+    ## selection using minimal depth
       else {
         max.obj <- max.subtree(rfsrc.filter.obj, conservative = (conservative == "high"))
         if (is.null(max.obj$order)) {
-          
+          ## maximal information failed; revert to vimp
           VarStrength <- lower.VarStrength <- 0
           forest.depth <- m.depth <- NA
           sig.vars.old <- names(sort(imp, decreasing = TRUE))[1]
@@ -95,10 +97,10 @@ var.select.rfsrc <-
             sig.vars.old <- names(VarStrength)[1]
           }
       }
-    
+    ## set nstep
     nstep <- max(round(length(rfsrc.filter.obj$xvar.names)/nstep), 1)
     imp.old <- 0
-    
+    ## regularized forward selection using joint vimp
     for (b in 1:nstep) {
       if (b == 1) {
         if (sum(VarStrength > lower.VarStrength) == 0) {
@@ -121,12 +123,12 @@ var.select.rfsrc <-
       }
       imp <- coerce.multivariate(vimp(rfsrc.filter.obj, sig.vars, outcome.target = outcome.target,
                                       joint = TRUE), outcome.target)$importance[target.dim]
-      
+      ## verbose output
       if (verbose) cat("\t iteration: ", b,
                        "  # vars:",     length(sig.vars),
                        "  joint-vimp:",  round(imp, 3),
                        "\r")
-      
+      ## break when joint vimp no longer increases (strict inequality is a safety feature)
       if (imp  <= imp.old) {
         sig.vars <- sig.vars.old
         break
@@ -137,9 +139,9 @@ var.select.rfsrc <-
           imp.old <- imp
         }
     }
-    
-    
-    
+    ## refit forest and exit
+    ## over-ride user specified nodesize: use default mtry as variables 
+    ## should now be filtered and default settings should therefore apply
     var.pt <- var.columns[match(sig.vars, xvar.names)]
     drop.var.pt <- setdiff(var.columns, var.pt)
     rfsrc.obj  <- rfsrc(rfsrc.all.f,
@@ -153,12 +155,12 @@ var.select.rfsrc <-
                         do.trace = do.trace)
     return(list(rfsrc.obj=rfsrc.obj, sig.vars=rfsrc.obj$xvar.names, forest.depth=forest.depth, m.depth=m.depth))
   }
-  
-  
-  
-  
-  
-  
+  ## --------------------------------------------------------------
+  ##   
+  ##   preliminary processing
+  ##
+  ## --------------------------------------------------------------
+  ## Incoming parameter checks.  All are fatal.
   if (!missing(object)) {
     if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2) {
       stop("This function only works for objects of class `(rfsrc, grow)'")
@@ -170,7 +172,7 @@ var.select.rfsrc <-
   }
     else {
       if (missing(formula) || missing(data)) {
-        
+        ## allowance for users who overlook the correct way to assign the object
         if (sum(inherits(formula, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
           object <- formula
         }
@@ -180,16 +182,16 @@ var.select.rfsrc <-
       }
       rfsrc.all.f <- formula
     }
-  
+  ## If an object is provided, after the above checks, make the outcome.target coherent.
   if (!missing(object)) {
-    
-    
+    ## Initialize the target outcome, in case it is NULL.
+    ## Coersion of an object depends on a target outcome.
     outcome.target <- get.univariate.target(object, outcome.target)
   }
-  
-  
+  ## rearrange the data
+  ## need to handle unsupervised families carefully: minimal depth is the only permissible method
   if (missing(object)) {
-    
+    ## parse the formula
     formulaDetail <- finalizeFormula(parseFormula(rfsrc.all.f, data), data)
     family <- formulaDetail$family
     xvar.names <- formulaDetail$xvar.names
@@ -206,7 +208,7 @@ var.select.rfsrc <-
       }
   }
     else {
-      
+      ## parse the object
       family <- object$family
       xvar.names <- object$xvar.names
       if (family != "unsupv") {
@@ -222,19 +224,19 @@ var.select.rfsrc <-
           method <- "md"
         }
     }
-  
+  ## specify the default event type for CR
   if (missing(cause)) {
     cause <- 1
   }
-  
+  ## verify key options
   method <- match.arg(method, c("md", "vh", "vh.vimp"))
   conservative = match.arg(conservative, c("medium", "low", "high"))
-  
+  ## pretty names for method
   mName <- switch(method,
                   "md"      = "Minimal Depth",
                   "vh"      = "Variable Hunting",
                   "vh.vimp" = "Variable Hunting (VIMP)")
-  
+  ## simplify the formula: needed when we drop variables
   rfsrc.all.f <- switch(family,
                         "surv"   = as.formula(paste("Surv(",yvar.names[1],",",yvar.names[2],") ~ .")),
                         "surv-CR"= as.formula(paste("Surv(",yvar.names[1],",",yvar.names[2],") ~ .")),
@@ -245,12 +247,12 @@ var.select.rfsrc <-
                         "class+" = as.formula(paste("Multivar(", paste(yvar.names, collapse = ","), paste(") ~ ."), sep = "")),
                         "mix+"   = as.formula(paste("Multivar(", paste(yvar.names, collapse = ","), paste(") ~ ."), sep = ""))
                         )
-  
+  ## initialize dimensions
   n <- nrow(data)
   P <- length(xvar.names)
-  
+  ## Specify the target event.  Later will be over-written for CR
   target.dim <- 1
-  
+  ## make special allowance for always.use x-variables
   var.columns <- (1 + yvar.dim):ncol(data)
   if (!is.null(always.use)) {
     always.use.pt <- var.columns[match(always.use, xvar.names)]
@@ -258,14 +260,14 @@ var.select.rfsrc <-
     else {
       always.use.pt <- NULL
     }
-  
+  ## if xvar weight is specified, then make sure it is defined correctly
   xvar.wt <- get.weight(xvar.wt, P)
-  
+  ## Final checks on option parameters  
   if (!is.null(mtry)) {
     mtry <- round(mtry)
     if (mtry < 1 | mtry > P) mtry <- max(1, min(mtry, P))
   }
-  
+  ## prefit forest parameter details
   prefit.masterlist <- list(action = (method != "md"), ntree = 100, mtry = 500, nodesize = 3, nsplit = 1)
   parm.match <- na.omit(match(names(prefit), names(prefit.masterlist)))
   if (length(parm.match) > 0) {
@@ -275,15 +277,15 @@ var.select.rfsrc <-
   }
   prefit <- prefit.masterlist
   prefit.flag  <- prefit$action
-  
-  
-  
-  
-  
+  ## --------------------------------------------------------------
+  ##  
+  ##  minimal depth analysis
+  ##
+  ## --------------------------------------------------------------
   if (method == "md") {
-    
-    
-    
+    ## ------------------------------------------------
+    ## run preliminary forest to determine weights for variables
+    ## we do this OUTSIDE of the loop
     if (prefit.flag && is.null(xvar.wt) && missing(object)) {
       if (verbose) cat("Using forests to preweight each variable's chance of splitting a node...\n")
       rfsrc.prefit.obj  <- rfsrc(rfsrc.all.f,
@@ -296,25 +298,25 @@ var.select.rfsrc <-
                                  cause = cause,
                                  na.action = na.action,
                                  importance="permute")
-      
+      ## set the target dimension for CR families
       if (rfsrc.prefit.obj$family == "surv-CR") {
         target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
       }
-      
+      ## for multivariate families we must manually extract the importance and error rate
       wts <- pmax(get.imp(coerce.multivariate(rfsrc.prefit.obj, outcome.target), target.dim), 0)
       if (any(wts > 0)) {
         xvar.wt <- get.weight(wts, P)
       }
       rm(rfsrc.prefit.obj)
     }
-    
-    
+    ## ------------------------------------------------
+    ## extract minimal depth
     if (!missing(object)) {
     }
     if (!missing(object) && !prefit.flag) {
       if (verbose) cat("minimal depth variable selection ...\n")
       md.obj <- max.subtree(object, conservative = (conservative == "high"))
-      
+      ## for multivariate families we must manually extract the importance and error rate
       object <- coerce.multivariate(object, outcome.target)
       outcome.target <- object$outcome.target
       pe <- get.err(object)
@@ -322,7 +324,7 @@ var.select.rfsrc <-
       nsplit <- object$nsplit
       mtry <- object$mtry
       nodesize <- object$nodesize
-      
+      ## set the target dimension for CR families
       if (family == "surv-CR") {
         target.dim <- max(1, min(cause, max(get.event.info(object)$event.type)), na.rm = TRUE)
       }
@@ -330,8 +332,8 @@ var.select.rfsrc <-
       imp.all <- get.imp.all(object)
       rm(object)
     }
-    
-    
+    ## ------------------------------------------------
+    ## otherwise run forests...then extract minimal depth    
       else {
         if (verbose) cat("running forests ...\n")
         rfsrc.obj <- rfsrc(rfsrc.all.f,
@@ -346,13 +348,13 @@ var.select.rfsrc <-
                            do.trace = do.trace,
                            xvar.wt = xvar.wt,
                            importance="permute")
-        
+        ## set the target dimension for CR families
         if (rfsrc.obj$family == "surv-CR") {
           target.dim <- max(1, min(cause, max(get.event.info(rfsrc.obj)$event.type)), na.rm = TRUE)
         }
         if (verbose) cat("minimal depth variable selection ...\n")
         md.obj <- max.subtree(rfsrc.obj, conservative = (conservative == "high"))
-        
+        ## for multivariate families we must manually extract the importance and error rate
         rfsrc.obj <- coerce.multivariate(rfsrc.obj, outcome.target)
         outcome.target <- rfsrc.obj$outcome.target
         pe <- get.err(rfsrc.obj)
@@ -364,7 +366,7 @@ var.select.rfsrc <-
         family <- rfsrc.obj$family
         rm(rfsrc.obj)#don't need the grow object
       }
-    
+    ## parse minimal depth information
     depth <- md.obj$order[, 1]
     threshold <- ifelse(conservative == "low", md.obj$threshold.1se, md.obj$threshold)
     top.var.pt <- (depth <= threshold)
@@ -373,8 +375,8 @@ var.select.rfsrc <-
     top.var.pt <- top.var.pt[o.r.m]
     varselect <- as.data.frame(cbind(depth = depth, vimp = imp.all))[o.r.m, ]
     topvars <- unique(c(always.use, rownames(varselect)[top.var.pt]))
-    
-    
+    ## fit a forest to final variable list
+    ## use default settings for nodesize, mtry due to dimension reduction
     if (refit == TRUE) {
       if (verbose) cat("fitting forests to minimal depth selected variables ...\n")
       var.pt <- var.columns[match(topvars, xvar.names)]
@@ -387,13 +389,13 @@ var.select.rfsrc <-
                                 nsplit = nsplit,
                                 na.action = na.action,
                                 do.trace = do.trace)
-      
+      ## for multivariate families we must manually extract the importance and error rate
       rfsrc.refit.obj <- coerce.multivariate(rfsrc.refit.obj, outcome.target)
     }
       else {
         rfsrc.refit.obj <- NULL
       }
-    
+    ## output: all nicely packaged
     if (verbose) {
       cat("\n\n")
       cat("-----------------------------------------------------------\n")
@@ -425,7 +427,7 @@ var.select.rfsrc <-
       print(round(varselect[top.var.pt, ], 3))
       cat("-----------------------------------------------------------\n")
     }
-    
+    ## Return the goodies
     return(invisible((list(err.rate=pe,
                            modelsize=modelsize,
                            topvars=topvars,
@@ -434,18 +436,18 @@ var.select.rfsrc <-
                            md.obj=md.obj
                            ))))
   }  
-  
-  
-  
-  
-  
-  
+  ## --------------------------------------------------------------
+  ##  
+  ##  VH algorithm
+  ##
+  ## --------------------------------------------------------------
+  ## vectors/matrices etc.
   pred.results <- dim.results <- forest.depth <- rep(0, nrep)
   var.signature <- NULL
   var.depth <- matrix(NA, nrep, P)
-  
-  
-  
+  ## ------------------------------------------------
+  ## run preliminary forest to determine weights for variables
+  ## we do this OUTSIDE of the loop
   outside.loop <- FALSE
   if (prefit.flag & is.null(xvar.wt)) {
     if (verbose) cat("Using forests to select a variables likelihood of splitting a node...\n")
@@ -458,19 +460,19 @@ var.select.rfsrc <-
                                cause = cause,
                                splitrule = splitrule,
                                na.action = na.action)
-    
+    ## set the target dimension for CR families
     if (rfsrc.prefit.obj$family == "surv-CR") {
       target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
     }
-    
+    ## record that a pre-fit has occurred
     outside.loop <- TRUE
   }
-  
-  
+  ## ------------------------------------------------
+  ## loop
   for (m in 1:nrep) {
     if (verbose & nrep>1) cat("---------------------  Iteration:", m, "  ---------------------\n")
-    
-    
+    ## train/test subsamples
+    ## use balanced sampling for CR/multiclass
     all.folds <- switch(family,
                         "surv"     =  balanced.folds(yvar[, 2], K),
                         "surv-CR"  =  balanced.folds(yvar[, 2], K),
@@ -488,8 +490,8 @@ var.select.rfsrc <-
         test.id <- all.folds[[1]]
         train.id <- setdiff(1:n, test.id)
       }
-    
-    
+    ## run preliminary forest to determine weights for variables
+    ## we do this INSIDE of the loop
     if (is.null(xvar.wt)) {
       if (!prefit.flag) {
         if (verbose) cat("Using forests to determine variable selection weights...\n")
@@ -503,12 +505,12 @@ var.select.rfsrc <-
                                    splitrule = splitrule,
                                    na.action = na.action,
                                    importance = "permute")
-        
+        ## set the target dimension for CR families
         if (rfsrc.prefit.obj$family == "surv-CR") {
           target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
         }
       }
-      
+      ## for multivariate families we must manually extract the importance and error rate
       rfsrc.prefit.obj <- coerce.multivariate(rfsrc.prefit.obj, outcome.target)
       wts <- pmax(get.imp(rfsrc.prefit.obj, target.dim), 0)
       if (any(wts > 0)) {
@@ -521,15 +523,15 @@ var.select.rfsrc <-
       else {
         var.pt <- var.columns[1:P]
       }
-    
+    ## pre-guided gene selection
     if (!is.null(xvar.wt)) {
       var.pt <- unique(resample(var.columns, mvars, replace = TRUE, prob = xvar.wt))
     }
-    
+    ## always.use variables 
     if (!is.null(always.use)) {
       var.pt <- unique(c(var.pt, always.use.pt))
     }
-    
+    ## RFSRC gene hunting call
     object <- rfsrc.var.hunting(train.id, var.pt, nstep)
     rfsrc.obj <- object$rfsrc.obj
     outcome.target <- get.univariate.target(rfsrc.obj, outcome.target)
@@ -538,28 +540,28 @@ var.select.rfsrc <-
       forest.depth[m] <- object$forest.depth
       var.depth[m, match(names(object$m.depth), xvar.names)] <- object$m.depth
     }
-    
-    
+    ## RFSRC prediction
+    ## for multivariate families we must manually extract the importance and error rate
     pred.out <- coerce.multivariate(predict(rfsrc.obj, data[test.id, ], importance = "none"), outcome.target)
     pred.results[m] <- get.err(pred.out)[target.dim] 
     dim.results[m] <- length(sig.vars)
     var.signature <- c(var.signature, sig.vars)
-    
+    ## nice output
     if (verbose) {
       cat("\t                                                                \r")
       cat("\t PE:", round(pred.results[m], 4), "     dim:", dim.results[m], "\n")
     }
   }
-  
-  
-  
+  ## --------------------------------------------------------------
+  ## finalize details
+  ## remove NA's in PE 
   pred.results <- c(na.omit(pred.results))
-  
+  ## frequency
   var.freq.all.temp <- 100 * tapply(var.signature, var.signature, length) / nrep
   freq.pt <- match(names(var.freq.all.temp), xvar.names)
   var.freq.all <- rep(0, P)
   var.freq.all[freq.pt] <- var.freq.all.temp
-  
+  ##  package it up for output
   if (method == "vh") {
     var.depth.all <- apply(var.depth, 2, mean, na.rm = T)
     varselect <- cbind(depth = var.depth.all, rel.freq = var.freq.all)
@@ -572,7 +574,7 @@ var.select.rfsrc <-
   varselect <- varselect[o.r.f,, drop = FALSE]
   modelsize <- ceiling(mean(dim.results))  
   topvars <- unique(c(always.use, rownames(varselect)[1:modelsize]))
-  
+  ## fit a forest to final variable list
   if (refit == TRUE) {
     if (verbose) cat("fitting forests to final selected variables ...\n")
     var.pt <- var.columns[match(rownames(varselect)[1:modelsize], xvar.names)]
@@ -591,7 +593,7 @@ var.select.rfsrc <-
     else {
       rfsrc.refit.obj <- NULL
     }
-  
+  ## output: all nicely packaged
   if (verbose) {
     cat("\n\n")
     cat("-----------------------------------------------------------\n")
@@ -627,7 +629,7 @@ var.select.rfsrc <-
     print(round(varselect[1:modelsize,, drop = FALSE], 3))
     cat("-----------------------------------------------------------\n")
   }
-  
+  ## return the goodies 
   return(invisible(list(err.rate=pred.results,
                         modelsize=modelsize,
                         topvars=topvars,
@@ -636,11 +638,11 @@ var.select.rfsrc <-
                         md.obj=NULL
                         )))
 }
-
-
-
-
-
+## --------------------------------------------------------------
+##  
+## internal functions
+##
+## --------------------------------------------------------------
 get.imp <- function(f.o, target.dim) {
   if (!is.null(f.o$importance)) {
     c(cbind(f.o$importance)[, target.dim])

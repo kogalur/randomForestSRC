@@ -1,5 +1,5 @@
 plot.competing.risk.rfsrc <- function (x, plots.one.page = FALSE, ...) {
-  
+  ## Incoming parameter checks.  All are fatal.
   if (is.null(x)) {
     stop("object x is empty!")
   }
@@ -10,7 +10,7 @@ plot.competing.risk.rfsrc <- function (x, plots.one.page = FALSE, ...) {
   if (x$family != "surv-CR") {
     stop("this function only supports competing risk settings")
   }
-  
+  ## work-horse plotting function
   matPlot <- function(matx, ylab = "", legend = "", pos = 1) {
     m <- dim(cbind(matx))[2]
     if (m > 1) legend <- paste(legend, 1:m, "  ")
@@ -18,7 +18,7 @@ plot.competing.risk.rfsrc <- function (x, plots.one.page = FALSE, ...) {
             col = (1:m), lty = 1, lwd = 3)
     legend(c("topright", "bottomright")[pos], legend = legend, col = (1:m), lty = 1, lwd = 3)
   }
-  
+  ## save par settings
   opar <- par(no.readonly = TRUE)
   on.exit(par(opar))
   if (plots.one.page) par(mfrow = c(1,1)) else par(mfrow = c(1,2))

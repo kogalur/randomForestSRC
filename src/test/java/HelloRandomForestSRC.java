@@ -1,4 +1,7 @@
-package com.kogalur.randomforest;
+import com.kogalur.randomforest.ModelArg;
+import com.kogalur.randomforest.RandomForest;
+import com.kogalur.randomforest.RandomForestModel;
+import com.kogalur.randomforest.Trace;
 
 import com.kogalur.randomforest.RFLogger;
 import com.kogalur.randomforest.RandomForest;
@@ -42,10 +45,14 @@ public class HelloRandomForestSRC {
         
         String formulaU = new String(" Unsupervised () ~ .");
 
+        boolean regr, clas, mult1, mult2, unsp, surv;
+
+        regr = clas = mult1 = mult2 = unsp = surv = false;
+        
         // Java-side trace.
         Trace.set(15);
         
-        if (true) {
+        if (!true) {
 
             Dataset<Row> irisDF = spark
                 .read()
@@ -59,10 +66,11 @@ public class HelloRandomForestSRC {
 
             modelArg = new ModelArg(formulaC, irisDF);
 
-
+            clas = true;
+            
         }
 
-        if (!true) {
+        if (true) {
 
             Dataset<Row> mtcarsDF = spark
                 .read()
@@ -76,6 +84,7 @@ public class HelloRandomForestSRC {
 
             modelArg = new ModelArg(formulaR, mtcarsDF);
 
+            regr = true;
 
         }
 
@@ -93,6 +102,8 @@ public class HelloRandomForestSRC {
 
             modelArg = new ModelArg(formulaS, wihsDF);
 
+            surv = true;
+            
             if (!true) {
 
                 double[] newTI = new double[(modelArg.get_timeInterest()).length - 20];
@@ -117,7 +128,10 @@ public class HelloRandomForestSRC {
             
         }
 
-        modelArg.set_ensembleArg("error", "every.tree");
+        modelArg.setEnsembleArg("error", "every.tree");
+
+        // TBD TBD TBD we still need to trim the quant TBD TBD TBD
+        modelArg.setEnsembleArg("quantitativeTerminalInfo", "no");
 
         // Serial or parallel.
         modelArg.set_rfCores(1);
@@ -126,16 +140,49 @@ public class HelloRandomForestSRC {
         modelArg.set_seed(-1);
 
         // We set ntree here.
-        modelArg.set_bootstrap(2, "auto", "swr", 0, null);
+        modelArg.set_bootstrap(10, "auto", "swr", 0, null, null);
             
         // Native-code trace.
-        // modelArg.set_trace(15 + (1<<13));
+        modelArg.set_trace(15 + (1<<13));
        
         RandomForestModel growModel = RandomForest.train(modelArg);
-        RandomForestModel restModel = RandomForest.predict(modelArg);
+
+
+        //  int[][] rmbrMembership = (int[][]) growModel.getEnsemble("rmbrMembership");
+        //  growModel.printEnsemble(rmbrMembership);
+
+        if (regr) {
+            double[][] perfRegr = (double[][]) growModel.getEnsemble("perfRegr");
+            growModel.printEnsemble(perfRegr);
+        }
+        if (clas) {
+            double[][][] perfClas = (double[][][]) growModel.getEnsemble("perfClas");
+            growModel.printEnsemble(perfClas);
+        }
         
-        RFLogger.log(Level.WARNING, "\n\nHelloRandomForestSRC() nominal exit.\n\n");                
+        RFLogger.log(Level.INFO, "\n\nHelloRandomForestSRC() GROW nominal exit.\n\n");
+
+        if (!false) {
+
+            growModel.set_trace(15 + (1<<13));
+            growModel.setEnsembleArg("importance", "permute");
+            growModel.set_xImportance();
+            growModel.setEnsembleArg("proximity", "oob");
+
+            growModel.setEnsembleArg("error", "every.tree");
+            
+            RandomForestModel restModel = RandomForest.predict(growModel);
+
+        if (regr) {
+            double[][] perfRegr = (double[][]) restModel.getEnsemble("perfRegr");
+            restModel.printEnsemble(perfRegr);
+        }
+
+            
+            RFLogger.log(Level.INFO, "\n\nHelloRandomForestSRC() REST nominal exit.\n\n");
+        }
         
+        System.out.println("\n\nHelloRandomForestSRC() nominal exit.\n\n");
     }
 
 }

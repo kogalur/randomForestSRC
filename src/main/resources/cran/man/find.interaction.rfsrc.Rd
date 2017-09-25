@@ -47,8 +47,10 @@
   Using a previously grown forest, identify pairwise interactions for
   all pairs of variables from a specified list.  There are two
   distinct approaches specified by the option \option{method}.
+  
   \enumerate{
     \item \option{method="maxsubtree"}
+    
     This invokes a maximal subtree analysis.  In this case, a matrix
     is returned where entries [i][i] are the normalized minimal depth
     of variable [i] relative to the root node (normalized wrt the
@@ -60,7 +62,9 @@
     interaction between variable i and j (note: the user should scan
     rows, not columns, for small entries).  See Ishwaran et
     al. (2010, 2011) for more details.
+    
     \item \option{method="vimp"}
+    
     This invokes a joint-VIMP approach.  Two variables are paired and
     their paired VIMP calculated (refered to as 'Paired' importance).
     The VIMP for each separate variable is also calculated.  The sum
@@ -70,10 +74,12 @@
     univariate VIMP for each of the paired-variables is reasonably
     large.  See Ishwaran (2007) for more details.
   }
+  
   Computations might be slow depending upon the size of the data
   and the forest.  In such cases, consider setting \option{nvar} to a
   smaller number.  If \option{method="maxsubtree"}, consider using a
   smaller number of trees in the original grow call.
+  
   If \option{nrep} is greater than 1, the analysis is repeated
   \code{nrep} times and results averaged over the replications
   (applies only when \option{method="vimp"}).
@@ -88,9 +94,11 @@
 \references{
   Ishwaran H. (2007).  Variable importance in binary regression
   trees and forests,  \emph{Electronic J. Statist.}, 1:519-537.
+  
   Ishwaran H., Kogalur U.B., Gorodeski E.Z, Minn A.J. and 
   Lauer M.S. (2010).  High-dimensional variable selection for survival
   data.  \emph{J. Amer. Statist. Assoc.}, 105:205-217.
+  
   Ishwaran H., Kogalur U.B., Chen X. and Minn A.J. (2011).  Random
   survival forests for high-dimensional data. \emph{Statist. Anal. Data
     Mining}, 4:115-132.
@@ -105,32 +113,41 @@
 ## ------------------------------------------------------------
 ## find interactions, survival setting
 ## ------------------------------------------------------------
+
 data(pbc, package = "_PROJECT_PACKAGE_NAME_") 
 pbc.obj <- rfsrc(Surv(days,status) ~ ., pbc, nsplit = 10, importance = TRUE)
 find.interaction(pbc.obj, method = "vimp", nvar = 8)
+
 ## ------------------------------------------------------------
 ## find interactions, competing risks
 ## ------------------------------------------------------------
+
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
 wihs.obj <- rfsrc(Surv(time, status) ~ ., wihs, nsplit = 3, ntree = 100,
                        importance = TRUE)
 find.interaction(wihs.obj)
 find.interaction(wihs.obj, method = "vimp")
+
 ## ------------------------------------------------------------
 ## find interactions, regression setting
 ## ------------------------------------------------------------
+
 airq.obj <- rfsrc(Ozone ~ ., data = airquality, importance = TRUE)
 find.interaction(airq.obj, method = "vimp", nrep = 3)
 find.interaction(airq.obj)
+
 ## ------------------------------------------------------------
 ## find interactions, classification setting
 ## ------------------------------------------------------------
+
 iris.obj <- rfsrc(Species ~., data = iris, importance = TRUE)
 find.interaction(iris.obj, method = "vimp", nrep = 3)
 find.interaction(iris.obj)
+
 ## ------------------------------------------------------------
 ## interactions for multivariate mixed forests
 ## ------------------------------------------------------------
+
 mtcars2 <- mtcars
 mtcars2$cyl <- factor(mtcars2$cyl)
 mtcars2$carb <- factor(mtcars2$carb, ordered = TRUE)
@@ -141,3 +158,4 @@ find.interaction(mv.obj, method = "vimp", outcome.target = "cyl")
 }
 }
 \keyword{variable selection}
+

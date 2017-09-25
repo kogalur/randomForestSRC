@@ -34,6 +34,7 @@
 }
 \references{
   Breiman L. (2001). Random forests, \emph{Machine Learning}, 45:5-32.
+  
   Ishwaran H. and Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7(2):25-31.
 }
@@ -46,12 +47,15 @@
 ## ------------------------------------------------------------
 ## classification example
 ## ------------------------------------------------------------
+
 iris.obj <- rfsrc(Species ~ ., data = iris,
      tree.err = TRUE, importance = TRUE)
 plot(iris.obj)
+
 ## ------------------------------------------------------------
 ## competing risk example
 ## ------------------------------------------------------------
+
 ## use the pbc data from the survival package
 ## events are transplant (1) and death (2)
 if (library("survival", logical.return = TRUE)) {
@@ -59,9 +63,11 @@ if (library("survival", logical.return = TRUE)) {
   pbc$id <- NULL
   plot(rfsrc(Surv(time, status) ~ ., pbc, nsplit = 10, tree.err = TRUE))
 }
+
 ## ------------------------------------------------------------
 ## multivariate mixed forests
 ## ------------------------------------------------------------
+
 mtcars.new <- mtcars
 mtcars.new$cyl <- factor(mtcars.new$cyl)
 mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
@@ -69,6 +75,7 @@ mv.obj <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new, tree.err = TRUE)
 plot(mv.obj, outcome.target = "carb")
 plot(mv.obj, outcome.target = "mpg")
 plot(mv.obj, outcome.target = "cyl")
+
 }
 }
 \keyword{plot}

@@ -15,7 +15,7 @@ find.interaction.rfsrc <- function(
   verbose = TRUE,
   ...)
 {
-  
+  ## Check that 'object' is of the appropriate type.
   if (is.null(object)) stop("Object is empty!")
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2    &
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2)
@@ -24,24 +24,24 @@ find.interaction.rfsrc <- function(
     if (is.null(object$forest)) 
       stop("Forest is empty!  Re-run grow call with forest set to 'TRUE'.")
   }
-  
+  ## specify the default event type for CR
   if (missing(cause)) {
     cause <- 1
   }
-  
+  ## unsupervised family: minimal depth is the only permissible method
   if (object$family == "unsupv") {
     method <- "maxsubtree"
   }
-  
+  ## Verify key options
   method <- match.arg(method,  c("maxsubtree", "vimp"))
   importance <- match.arg(importance, c("permute", "random", "anti",
                                         "permute.ensemble", "random.ensemble", "anti.ensemble"))
-  
+  ## get the event data
   event.info <- get.event.info(object)
   n.event <- max(1, length(event.info$event.type))
-  
+  ## acquire the target outcome (if there is one)
   outcome.target <- get.univariate.target(object, outcome.target)
-  
+  ## extract the importance
   if (n.event > 1) {
     object.imp <- NULL
     interact.imp.list.names <- paste("event.", 1:length(event.info$event.type), sep = "")
@@ -49,9 +49,9 @@ find.interaction.rfsrc <- function(
     else {
       object.imp <- cbind(coerce.multivariate(object, outcome.target)$importance)[, cause, drop = FALSE]
     }
-  
+  ## pull the original xvariable names
   xvar.org.names <- object$xvar.names
-  
+  ## has the user provided a subset of variables to focus on?
   if (!missing(xvar.names)) {
     if (sum(is.element(xvar.org.names, xvar.names)) == 0) {
       stop("Variables do not match original analysis:", xvar.names)
@@ -63,16 +63,16 @@ find.interaction.rfsrc <- function(
     else {
       xvar.names <- xvar.org.names
     }
-  
+  ## determine the number of remaining variables
   n.interact <- length(xvar.names)
-  
+  ## sort the variables by VIMP?
   if (sorted) {
     if (!is.null(object.imp)) {
       o.r <- order(object.imp[xvar.names, ], decreasing = TRUE)
       xvar.names <- xvar.names[o.r]
     }
   }
-  
+  ## restrict attention to top nvar variables?
   if (!missing(nvar)) {
     n.interact <- min(n.interact, max(round(nvar), 1))
     xvar.names <- xvar.names[1:n.interact]
@@ -80,10 +80,10 @@ find.interaction.rfsrc <- function(
   if (n.interact == 1) {
     stop("Pairwise comparisons require more than one candidate variable.")
   }
-  
+  ## VIMP approach
   if (method == "vimp") {
     yvar.dim <- ncol(object$yvar)
-    
+    ## Save the original family.
     family.org <- object$family
     if (n.event > 1) {
       interact.imp.list <- vector("list", n.event)
@@ -133,11 +133,11 @@ find.interaction.rfsrc <- function(
         interact.imp.list[[j]] <- interact.imp
       }
     }
-    
+    ## CR details
     if (n.event > 1) {
       interact.imp <- interact.imp.list
     }
-    
+    ## output table
     if (verbose) {
       cat("\n")
       cat("                              Method: ", method,                       "\n", sep="")
@@ -154,11 +154,11 @@ find.interaction.rfsrc <- function(
       cat("\n")
       if (n.event == 1) print(round(interact.imp, 4)) else print(interact.imp)
     }
-    
+    ## return the goodies
     invisible(interact.imp)
   }
     else {
-      
+      ## maximal subtree approach
       max.obj <- max.subtree(object, sub.order = TRUE, max.order = 1)
       sub.order <- max.obj$sub.order
       if (sorted) {
@@ -167,7 +167,7 @@ find.interaction.rfsrc <- function(
       }
       xvar.pt <- is.element(colnames(sub.order), xvar.names[1:n.interact])
       sub.order <- sub.order[xvar.pt, xvar.pt]
-      
+      ## output table
       if (verbose) {
         cat("\n")
         cat("                              Method: ", method,              "\n", sep="")
@@ -176,7 +176,7 @@ find.interaction.rfsrc <- function(
         cat("\n")
         print(round(sub.order, 2))
       }
-      
+      ## return the goodies
       invisible(sub.order)
     }
 }

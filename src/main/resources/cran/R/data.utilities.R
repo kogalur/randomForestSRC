@@ -1,5 +1,5 @@
 adrop3d.last <- function(x, d, keepColNames = FALSE) {
-  
+  ## this function is for arrays only
   if (!is.array(x)) {
     x
   }
@@ -14,7 +14,7 @@ adrop3d.last <- function(x, d, keepColNames = FALSE) {
             else {
               if (dim(x)[2] == 1) {
                 if (keepColNames) {
-                  
+                  ##needed for J=1 classification pathology
                   xnew <- cbind(x[,,1, drop = TRUE])
                   colnames(xnew) <- colnames(x)
                   xnew
@@ -31,7 +31,7 @@ adrop3d.last <- function(x, d, keepColNames = FALSE) {
     }
 }
 adrop2d.first <- function(x, d, keepColNames = FALSE) {
-  
+  ## this function is for arrays only
   if (!is.array(x)) {
     x
   }
@@ -45,7 +45,7 @@ adrop2d.first <- function(x, d, keepColNames = FALSE) {
     }
 }
 adrop2d.last <- function(x, d, keepColNames = FALSE) {
-  
+  ## this function is for arrays only
   if (!is.array(x)) {
     x
   }
@@ -135,7 +135,7 @@ bayes.rule <- function(prob, pi.hat = NULL) {
       }
     })], levels = class.labels)
   }
-  
+  ## added to handle drc classifier
   else {
     minority <- which.min(pi.hat)
     majority <- setdiff(1:2, minority)      
@@ -144,7 +144,7 @@ bayes.rule <- function(prob, pi.hat = NULL) {
     class.labels[drc.rule]
   }
 }
-
+## normalized brier (normalized to one for strawman coin toss)
 brier <- function(ytest, prob) {
   cl <- colnames(prob)
   J <- length(cl)
@@ -196,17 +196,17 @@ family.pretty <- function(fmly) {
          )
 }
 finalizeFormula <- function(formula.obj, data) {
-  
+  ## parse the formula object
   yvar.names <- formula.obj$yvar.names
   all.names  <- formula.obj$all.names
   index      <- length(yvar.names)
   fmly       <- formula.obj$family
   ytry       <- formula.obj$ytry
-  
+  ## total number of variables should exceed number of yvars
   if (length(all.names) <= index) {
     stop("formula is misspecified: total number of variables does not exceed total number of y-variables")
   }
-  
+  ## extract the xvar names
   if (all.names[index + 1] == ".") {
     if(index == 0) {
       xvar.names <- names(data)
@@ -227,35 +227,35 @@ finalizeFormula <- function(formula.obj, data) {
         stop("formula is misspecified, object ", xvar.names[not.specified], " not found")
       }
     }
-  
+  ## return the goodies
   return (list(family=fmly, yvar.names=yvar.names, xvar.names=xvar.names, ytry=ytry))
 }
 finalizeData <- function(fnames, data, na.action, miss.flag = TRUE) {
-  
+  ## restrict data to the target variables
   data <- data[ , is.element(names(data), fnames), drop = FALSE]
-  
-  
+  ## data conversion to numeric mode for factors
+  ## no need for conversion if factors are not present
   factor.names <- unlist(lapply(data, is.factor))
   if (sum(factor.names) > 0) {
     data[, factor.names] <- data.matrix(data[, factor.names, drop = FALSE])
   }
-  
+  ## omit the na's
   if (miss.flag == TRUE && na.action == "na.omit") {
-    
+    ## no need to make the call if there is no missing data
     if (any(is.na(data))) {
       data <- na.omit(data)
     }
   }
-  
+  ## is anything left?
   if (nrow(data) == 0) {
     stop("no records in the NA-processed data: consider using 'na.action=na.impute'")
   }
-  
+  ## convert logicals to 0/1 real (bug reported by John Ehrlinger)
   logical.names <- unlist(lapply(data, is.logical))
   if (sum(logical.names) > 0) {
     data[, logical.names] <- 1 * data[, logical.names, drop = FALSE]
   }
-  
+  ## characters not allowed (bug reported by John Ehrlinger)
   character.names <- unlist(lapply(data, is.character))
   if (sum(character.names) > 0) {
     stop("data types cannot be character: please convert all characters to factors")
@@ -263,10 +263,10 @@ finalizeData <- function(fnames, data, na.action, miss.flag = TRUE) {
   return (data)
 }
 get.importance.xvar <- function(importance.xvar, importance, object) {
-  
+  ## Check that importance has been requested
   if (!is.null(importance)) {
-    
-    
+    ## Map vimp names to columns of GROW x-matrix
+    ## Ensure names are coherent
     if (missing(importance.xvar) || is.null(importance.xvar)) {
       importance.xvar <- object$xvar.names
     }
@@ -279,7 +279,7 @@ get.importance.xvar <- function(importance.xvar, importance, object) {
     }
   }
     else {
-      
+      ## This was previously zero.  We set this so as to get length zero to the native code.
       importance.xvar <- NULL
     }
   return (importance.xvar)
@@ -298,7 +298,7 @@ get.outcome.target <- function(family, yvar.names, outcome.target) {
     if (is.null(outcome.target)) {
       outcome.target <- yvar.names
     }
-    
+    ## Map target names to outcome names and ensure coherency.
     outcome.target <- unique(outcome.target)
     outcome.target <- intersect(outcome.target, yvar.names)
     if (length(outcome.target) == 0) {
@@ -307,61 +307,61 @@ get.outcome.target <- function(family, yvar.names, outcome.target) {
     outcome.target <- match(outcome.target, yvar.names)
   }
     else {
-      
+      ## This is surv or surv-CR
       outcome.target <- 0
     }
 }
 get.grow.nodesize <- function(fmly, nodesize) {
-  
+  ## Default node size for right-censored survival
   if (fmly == "surv"){
     if (is.null(nodesize)) {
       nodesize <- 3
     }
   }
-  
+  ## Default node size for competing risks
     else if (fmly == "surv-CR"){
       if (is.null(nodesize)) {
         nodesize <- 6
       }
     }
-  
+  ## Default node size for classification
       else if (fmly == "class" | fmly == "class+") {
         if (is.null(nodesize)) {
           nodesize <- 1
         }
       }
-  
+  ## Default node size for regression
         else if (fmly == "regr" | fmly == "regr+") {
           if (is.null(nodesize)) {
             nodesize <- 5
           }
         }
-  
+  ## Default node size for mixed outcomes
           else if (fmly == "mix+") {
             if (is.null(nodesize)) {
               nodesize <- 3
             }
           }
-  
+  ## Default node size for unsupervised splitting
             else if (fmly == "unsupv") {
               if (is.null(nodesize)) {
                 nodesize <- 3
               }
             }
-  
+  ## The family is misspecified
               else if (is.null(nodesize)) {
                 stop("family is misspecified")
               }
-  
+  ## Nodesize should be rounded if non-integer
   nodesize <- round(nodesize)
 }
 get.coerced.survival.fmly <- function(fmly, event.type, splitrule = NULL) {
   if (grepl("surv", fmly)) {
-    
+    ## assume no coercion
     coerced.fmly <- "surv"
     if (!is.null(splitrule)) {
-      
-      
+      ## either competing risks or right censoring competing risks
+      ## is coerced to right censoring in some settings
         if ((length(event.type) > 1) &&
             (splitrule != "l2.impute") &&
             (splitrule != "logrankscore")) {
@@ -380,7 +380,7 @@ get.coerced.survival.fmly <- function(fmly, event.type, splitrule = NULL) {
   coerced.fmly
 }
 get.event.info <- function(obj, subset = NULL) {
-  
+  ## survival case
   if (grepl("surv", obj$family)) {
     if (!is.null(obj$yvar)) {
       if (is.null(subset)) {
@@ -389,24 +389,24 @@ get.event.info <- function(obj, subset = NULL) {
       r.dim <- 2
       time <- obj$yvar[subset, 1]
       cens <- obj$yvar[subset, 2]
-      
+      ## censoring must be coded coherently
       if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
         stop("for survival families censoring variable must be coded as a non-negative integer")
       }
-      
+      ## Extract the unique event types.
       event <- na.omit(cens)[na.omit(cens) > 0]
       event.type <- sort(unique(event))
     }
-    
+    ##everything else
       else {
         r.dim <- 0
         event <- event.type <- cens <- cens <- time <- NULL
       }
-    
+    ## Set grid of time points.
     time.interest <- obj$time.interest
   }
     else {
-      
+      ## NULL for other families
       if ((obj$family == "regr+") | (obj$family == "class+")) {
         r.dim <- dim(obj$yvar)[2]
       }
@@ -423,33 +423,33 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
     r.dim <- 2
     time <- yvar[, 1]
     cens <- yvar[, 2]
-    
+    ## censoring must be coded coherently
     if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
       stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
     }
-    
+    ## check if deaths are available (if user specified)
     if (need.deaths && (all(na.omit(cens) == 0))) {
       stop("no deaths in data!")
     }
-    
+    ## Check for event time consistency.
     if (!all(na.omit(time) >= 0)) {
       stop("time must be  positive")
     }
-    
+    ## Extract the unique event types.
     event.type <- unique(na.omit(cens))
-    
+    ## Ensure they are all greater than or equal to zero.
     if (sum(event.type >= 0) != length(event.type)) {
       stop("censoring variable must be coded as NA, 0, or greater than 0.")
     }
-    
+    ## Discard the censored state, if it exists.
     event <- na.omit(cens)[na.omit(cens) > 0]
     event.type <- unique(event)
-    
+    ## Set grid of time points.
     nonMissingOutcome <- which(!is.na(cens) & !is.na(time))
     nonMissingDeathFlag <- (cens[nonMissingOutcome] != 0)
     time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
-    
-    
+    ## trim the time points if the user has requested it
+    ## we also allow the user to pass requested time points
     if (!missing(ntime)) {
       if (length(ntime) == 1 && length(time.interest) > ntime) {
         time.interest <- time.interest[
@@ -462,7 +462,7 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
       }
     }
   }
-  
+  ## handle other families
     else {
       if ((fmly == "regr+") | (fmly == "class+") | (fmly == "mix+")) {
         r.dim <- dim(yvar)[2]
@@ -482,26 +482,26 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
               time = time, r.dim = r.dim))
 }
 get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
-  
-  splitrule.names <- c("logrank",              
-                       "logrankscore",         
-                       "logrankCR",            
-                       "logrankACR",           
-                       "random",               
-                       "mse",                  
-                       "mse.unwt",             
-                       "mse.hvwt",             
-                       "gini",                 
-                       "gini.unwt",            
-                       "gini.hvwt",            
-                       "unsupv",               
-                       "mv.mse",               
-                       "mv.gini",              
-                       "mv.mix",               
-                       "custom",               
-                       "l2.impute")            
+  ## CAUTION:  HARD CODED ON NATIVE SIDE
+  splitrule.names <- c("logrank",              ##  1
+                       "logrankscore",         ##  2
+                       "logrankCR",            ##  3
+                       "logrankACR",           ##  4
+                       "random",               ##  5
+                       "mse",                  ##  6
+                       "mse.unwt",             ##  7
+                       "mse.hvwt",             ##  8
+                       "gini",                 ##  9
+                       "gini.unwt",            ## 10
+                       "gini.hvwt",            ## 11
+                       "unsupv",               ## 12
+                       "mv.mse",               ## 13 --  reg/class/mix
+                       "mv.gini",              ## 14 --  reg/class/mix
+                       "mv.mix",               ## 15 --  reg/class/mix
+                       "custom",               ## 16
+                       "l2.impute")            ## 17
   fmly <- formula.detail$family
-  
+  ## Preliminary check for consistency.
   nsplit <- round(nsplit)
   if (nsplit < 0) {
     stop("Invalid nsplit value specified.")
@@ -517,9 +517,9 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
     }
       else if (splitrule == "random") {
         splitrule.idx <- which(splitrule.names == "random")
-        
-        
-        
+        ## Override the nsplit value in the case of pure random
+        ## splitting.  It is set to the defalut value of one (1). In the native code,
+        ## values greater than one are ignored in the case of pure random splitting!
         nsplit <- 1
         splitpass <- TRUE
       }
@@ -527,7 +527,7 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
   if (!splitpass) {
     if (grepl("surv", fmly)) {
       if (is.null(splitrule)) {
-        
+        ## No split rule specified, use default.
         if (length(event.type) ==  1) {
           splitrule.idx <- which(splitrule.names == "logrank")
         }
@@ -537,7 +537,7 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
         splitrule <- splitrule.names[splitrule.idx]
       }
         else {
-          
+          ## User split rule specified.
           splitrule.idx <- which(splitrule.names == splitrule)
           if (length(splitrule.idx) != 1) {
             stop("Invalid split rule specified:  ", splitrule)
@@ -546,19 +546,19 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
             stop("Cannot specify logrankCR splitting for right-censored data")
           }
           if ((length(event.type) >   1) & (splitrule.idx == which(splitrule.names == "logrank"))) {
-            
+            ## Override the splitrule to access the CR split rule.
             splitrule.idx <- which(splitrule.names == "logrankACR")
           }
         }
     }
     if (fmly == "class") {
       if (is.null(splitrule)) {
-        
+        ## No split rule specified, use default.
         splitrule.idx <- which(splitrule.names == "gini")
         splitrule <- splitrule.names[splitrule.idx]
       }
         else {
-          
+          ## User specified split rule.
           if ((splitrule != "gini") &
               (splitrule != "gini.unwt") &
               (splitrule != "gini.hvwt")) {
@@ -569,12 +569,12 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
     }
     if (fmly == "regr") {
       if (is.null(splitrule)) {
-        
+        ## No split rule specified, use default.
         splitrule.idx <- which(splitrule.names == "mse")
         splitrule <- splitrule.names[splitrule.idx]
       }
         else {
-          
+          ## User specified split rule.
           if ((splitrule != "mse") &
               (splitrule != "mse.unwt") &
               (splitrule != "mse.hvwt")) {
@@ -585,12 +585,12 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
     }
     if (fmly == "regr+") {
       if (is.null(splitrule)) {
-        
+        ## No split rule specified, use default.
         splitrule.idx <- which(splitrule.names == "mv.mse")
         splitrule <- splitrule.names[splitrule.idx]
       }
         else {
-          
+          ## User specified split rule.
           if ((splitrule != "mv.mse")) {
             stop("Invalid split rule specified:  ", splitrule)
           }
@@ -599,12 +599,12 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
     }
     if (fmly == "class+") {
       if (is.null(splitrule)) {
-        
+        ## No split rule specified, use default.
         splitrule.idx <- which(splitrule.names == "mv.gini")
         splitrule <- splitrule.names[splitrule.idx]
       }
         else {
-          
+          ## User specified split rule.
           if ((splitrule != "mv.gini")) {
             stop("Invalid split rule specified:  ", splitrule)
           }
@@ -613,12 +613,12 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
     }
     if (fmly == "mix+") {
       if (is.null(splitrule)) {
-        
+        ## No split rule specified, use default.
         splitrule.idx <- which(splitrule.names == "mv.mse")
         splitrule <- "mv.mix"
       }
         else {
-          
+          ## User specified split rule.
           if ((splitrule != "mv.mix")) {
             stop("Invalid split rule specified:  ", splitrule)
           }
@@ -627,12 +627,12 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
     }
     if (fmly == "unsupv") {
       if (is.null(splitrule)) {
-        
+        ## No split rule specified, use default.
         splitrule.idx <- which(splitrule.names == "unsupv")
         splitrule <- splitrule.names[splitrule.idx]
       }
         else {
-          
+          ## User specified split rule.
           if ((splitrule != "unsupv")) {
             stop("Invalid split rule specified:  ", splitrule)
           }
@@ -644,7 +644,7 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
   return (splitinfo)
 }
 get.weight <- function(weight, n) {
-  
+  ## set the default weight
   if (!is.null(weight)) {
     if (any(weight < 0)      ||
         all(weight == 0)     ||
@@ -759,7 +759,7 @@ get.yvar.type <- function(fmly, generic.types, yvar.names, coerce.factor = NULL)
       }
         else {
           yvar.type <- generic.types
-          
+          ## is coerce.factor at play for the y-outcomes?
           if (!is.null(coerce.factor$yvar.names)) {
             yvar.type[is.element(yvar.names, coerce.factor$yvar.names)] <- "C"
           }
@@ -781,32 +781,32 @@ get.yvar.nlevels <- function(fmly, nlevels, yvar.names, yvar, coerce.factor = NU
     yvar.nlevels
 }
 gmean <- function(y, prob, perf.type = NULL, robust = FALSE) {
-  
+  ## determine frequencies: exit if this is not a two-class problem
   frq <- table(y)  
   if (length(frq) > 2) {
     return(NULL)
   }
-  
+  ## determine threshold
   if (!is.null(perf.type) && perf.type == "g.mean.drc") {
     threshold <- min(frq, na.rm = TRUE) / sum(frq, na.rm = TRUE)
   }
   else {
     threshold <- 0.5
   }
-  
+  ## convert yhat to a class label: 0 = majority, 1 = minority
   minority <- which.min(frq)
   majority <- setdiff(1:2, minority)
   yhat <- factor(1 * (prob[, minority] >= threshold), levels = c(0,1))
-  
+  ## compute the confusion matrix and extract TN,TP etc.
   confusion.matrix <- table(y, yhat)
-  if (nrow(confusion.matrix) > 1) {
-    
+  if (nrow(confusion.matrix) > 1) {##check that dimension is correct
+    ## calculate the various rates
     TN <- confusion.matrix[minority, 2]
     FP <- confusion.matrix[minority, 1]
     FN <- confusion.matrix[majority, 2]
     TP <- confusion.matrix[majority, 1]
-    
-    if (robust) {
+    ## assemble the sensitivity/specificity values
+    if (robust) {##modified with 1 added to diagonals
       sensitivity <- (1 + TP) / (1 + TP + FN)
       specificity <- (1 + TN) / (1 + TN + FP)
     }
@@ -814,7 +814,7 @@ gmean <- function(y, prob, perf.type = NULL, robust = FALSE) {
       sensitivity <- TP / (TP + FN)
       specificity <- TN / (TN + FP)
     }
-    
+    ## return the g mean
     sqrt(sensitivity * specificity)
   }
   else {
@@ -822,7 +822,7 @@ gmean <- function(y, prob, perf.type = NULL, robust = FALSE) {
   }
 }
 parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
-  
+  ## confirm coherency of the formula
   if (!inherits(f, "formula")) {
     stop("'formula' is not a formula object.")
   }
@@ -832,12 +832,12 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
   if (!is.data.frame(data)) {
     stop("'data' must be a data frame.")
   }
-  
+  ## pull the family and y-variable names
   fmly <- all.names(f, max.names = 1e7)[2]
   all.names <- all.vars(f, max.names = 1e7)
   yvar.names <- all.vars(formula(paste(as.character(f)[2], "~ .")), max.names = 1e7)
   yvar.names <- yvar.names[-length(yvar.names)]
-  
+  ## is coerce.factor at play for the y-outcomes?
   coerce.factor.org <- coerce.factor
   coerce.factor <- vector("list", 2)
   names(coerce.factor) <- c("xvar.names", "yvar.names")
@@ -848,7 +848,7 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
     }
     coerce.factor$xvar.names <- intersect(setdiff(colnames(data), yvar.names), coerce.factor.org)
   }
-  
+  ## survival forests
   if ((fmly == "Surv")) {
     if (sum(is.element(yvar.names, names(data))) != 2) {
       stop("Survival formula incorrectly specified.")
@@ -856,44 +856,44 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
     family <- "surv"
     ytry <- 2
   }
-  
+  ## multivariate forests
     else if ((fmly == "Multivar" || fmly == "cbind")  && length(yvar.names) > 1) {
       if (sum(is.element(yvar.names, names(data))) < length(yvar.names)) {
         stop("Multivariate formula incorrectly specified: y's listed in formula are not in data.")
       }
-      
+      ## determine the family: now handles mixed outcomes
       Y <- data[, yvar.names, drop = FALSE]
-      
+      ## Convert to 0/1 real (bug reported by John Ehrlinger)
       logical.names <- unlist(lapply(Y, is.logical))
       if (sum(logical.names) > 0) {
         Y[, logical.names] <- 1 * Y[, logical.names, drop = FALSE]
       }
-      
-      
+      ## are all the responses factors?
+      ## caution: ordered factors are factors!
       if ((sum(unlist(lapply(Y, is.factor))) + 
           length(coerce.factor$yvar.names)) == length(yvar.names)) {
         family <- "class+"
       }
-      
-      
+      ## are all the responses continuous?
+      ## caution: ordered factors are factors!
       else if ((sum(unlist(lapply(Y, is.factor))) + 
           length(coerce.factor$yvar.names)) == 0) {
         family <- "regr+"
       }
-      
-      
+      ## are the responses a combination of factors and continuous?
+      ## caution: ordered factors are factors!
       else if (((sum(unlist(lapply(Y, is.factor))) +
                  length(coerce.factor$yvar.names)) > 0) && 
                ((sum(unlist(lapply(Y, is.factor))) +
                  length(coerce.factor$yvar.names)) < length(yvar.names))) {
         family <- "mix+"
       }
-      
+      ## failure
         else {
           stop("y-outcomes must be either real or factors in multivariate forests.")
         }
       if (!is.null(ytry)) {
-        
+        ## Check that incoming ytry is consistent.
         if ((ytry < 1) || (ytry > length(yvar.names))) {
           stop("invalid value for ytry:  ", ytry)
         }
@@ -902,15 +902,15 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
           ytry <- length(yvar.names)
         }
     }
-  
+  ## unsupervised forests
       else if (fmly == "Unsupervised") {
-        
+        ## unsupervised forests
         if (length(yvar.names) != 0) {
           stop("Unsupervised forests require no y-responses")
         }
         family <- "unsupv"
         yvar.names <- NULL
-        
+        ## Strip away the family from the formula, leaving ytry.
         temp <- gsub(fmly, "", as.character(f)[2])
         temp <- gsub("\\(|\\)", "", temp)
         ytry <- as.integer(temp)
@@ -923,18 +923,18 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
             }
           }
       }
-  
+  ## univariate forests (regression or classification)
         else {
-          
+          ## must be a (univariate) regresssion or classification
           if (sum(is.element(yvar.names, names(data))) != 1) {
             stop("formula is incorrectly specified.")
           }
           Y <- data[, yvar.names]
-          
+          ## logicals are treated as 0/1 real (bug reported by John Ehrlinger)
           if (is.logical(Y)) {
             Y <- as.numeric(Y)
           }
-          
+          ## check whether we have a factor or a continuous variable
           if (!(is.factor(Y) | is.numeric(Y))) {
             stop("the y-outcome must be either real or a factor.")
           }
@@ -946,51 +946,51 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
             }
           ytry <- 1
         }
-  
+  ## done: return the goodies
   return (list(all.names=all.names, family=family, yvar.names=yvar.names, ytry=ytry,
                coerce.factor = coerce.factor))
 }
 is.all.na <- function(x) {all(is.na(x))}
 parseMissingData <- function(formula.obj, data) {
-  
+  ## parse the formula object
   yvar.names <- formula.obj$yvar.names
   if (length(yvar.names) > 0) {
     resp <- data[, yvar.names, drop = FALSE]
-    
-    
+    ## determine whether all the outcomes are missing
+    ## works for any dimension
     col.resp.na <- unlist(lapply(data[, yvar.names, drop = FALSE], is.all.na))
     if (any(col.resp.na)) {
       stop("All records are missing for the yvar(s)")
     }
   }
-  
+  ## remove all x variables with missing values for all records
   colPt <- unlist(lapply(data, is.all.na))
-  
+  ## terminate if all columns have all missing data
   if (sum(colPt) > 0 && sum(colPt) >= (ncol(data) - length(yvar.names))) {
     stop("All x-variables have all missing data:  analysis not meaningful.")
   }
   data <- data[, !colPt, drop = FALSE]
-  
+  ## remove all records with missing values for all outcomes(s) and xvar
   rowPt <- apply(data, 1, is.all.na)
   if (sum(rowPt) == nrow(data)) {
     stop("Rows of the data have all missing data:  analysis not meaningful.")
   }
   data <- data[!rowPt,, drop = FALSE]
-  
+  ## return the NA processed data
   return(data)
 }
-
-
+## make inbag bootstrap samples (for use with bootstrap = "by.user")
+## allows for under/over sampling, but default is Efron
 make.sample <- function(ntree, samp.size, boot.size = NULL) {
-  
+  ## samp.size cannot be negative
   if (samp.size < 0) {
     stop("samp.size cannot be negative:", samp.size)
   }
-  
+  ## default is Efron bootstrap
   if (is.null(boot.size)) {
     boot.size <- samp.size
   }
-  
+  ## use rbind at the end to ensure a matrix
   rbind(sapply(1:ntree, function(bb){
     inb <- rep(0, samp.size)
     smp <- sample(1:samp.size, size = boot.size, replace = TRUE)
@@ -1001,14 +1001,14 @@ make.sample <- function(ntree, samp.size, boot.size = NULL) {
   }))
 }
  
-
-
+## make stratified inbag bootstrap samples for imbalanced two class problem
+## allows for arbitrary under-sampling ratio of the majority class
 make.imbalanced.sample <- function(ntree, ratio = 0.5, y) {
-  
+  ## ratio must be between 0 and 1
   if (ratio < 0 | ratio > 1) {
     stop("undersampling ratio must be between 0 and 1:", ratio)
   }
-  
+  ## determine minority/majority frequencies
   frq <- table(y)
   class.labels <- names(frq)
   minority <- which.min(frq)
@@ -1016,7 +1016,7 @@ make.imbalanced.sample <- function(ntree, ratio = 0.5, y) {
   n.minority <- min(frq, na.rm = TRUE)
   n.majority <- max(frq, na.rm = TRUE)
   samp.size <- length(y)
-  
+  ## use rbind to ensure a matrix
   rbind(sapply(1:ntree, function(bb){
     inb <- rep(0, samp.size)
     smp.min <- sample(which(y == class.labels[minority]), size = n.minority, replace = TRUE)
@@ -1028,29 +1028,29 @@ make.imbalanced.sample <- function(ntree, ratio = 0.5, y) {
     inb
   }))
 }
-
+## sample size for subsampling
 make.size <- function(y) {
-  
+  ## extract the relative frequencies
   frq <- table(y)
   min(length(y), min(frq, na.rm = TRUE) * length(frq))
 }
-
+## imbalanced weights for subsampling
 make.wt <- function(y) {
-  
+  ## extract the relative frequencies
   frq <- table(y)
   class.labels <- names(frq)
   wt <- rep(1, length(y))
-  
+  ## weights for class j equal product of all non-j class frequencies
   nullO <- sapply(1:length(frq), function(j) {
     wt[y == class.labels[j]] <<- prod(frq[-j], na.rm = TRUE)
     NULL
   })
-  
-  
+  ## weights can become large, so divide by the maximum value
+  ## this ensures 0 < wt <= 1
   wt / max(wt, na.rm = TRUE)
 }
  
-
+## robust resampling
 resample <- function(x, size, ...) {
   if (length(x) <= 1) {
     if (!missing(size) && size == 0) x[FALSE] else x
@@ -1059,7 +1059,7 @@ resample <- function(x, size, ...) {
       sample(x, size, ...)
     }
 }
-
+## determine rows and columns missing from dat
 row.col.deleted <- function(dat, r.n, c.n)
 {
   which.r <- setdiff(r.n, rownames(dat))
