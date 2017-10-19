@@ -25,48 +25,14 @@
 data(nutrigenomic, package = "_PROJECT_PACKAGE_NAME_")
 
 ## nice wrapper for making multivariate formula
-mvrfsrc.f <- function(ynames, dat) {
+get.mv.f <- function(ynames) {
   as.formula(paste("Multivar(", paste(ynames, collapse = ","),paste(") ~ ."), sep = ""))
 }
 
 ## multivariate mixed forest call
-mv.obj <- rfsrc(mvrfsrc.f(colnames(nutrigenomic$lipids)),
+mv.obj <- rfsrc(get.mv.f(colnames(nutrigenomic$lipids)),
             data.frame(do.call(cbind, nutrigenomic)),
             importance=TRUE, nsplit = 10)
-
-
-## ------------------------------------------------------------
-## nice wrappers to extract standardized performance values
-## works for all forests - including multivariate forests
-## ------------------------------------------------------------
-
-## pull the standardized error from a forest object
-get.error <- function(obj) {
-  100 * c(sapply(obj$yvar.names, function(nn) {
-    o.coerce <- _PROJECT_PACKAGE_NAME_:::coerce.multivariate(obj, nn)
-    if (o.coerce$family == "class") {
-      tail(o.coerce$err.rate[, 1], 1)
-    }
-    else {
-      tail(o.coerce$err.rate, 1) / var(o.coerce$yvar, na.rm = TRUE)
-    }
-  }))
-}
-
-## pull the standardized VIMP from a forest object
-get.vimp <- function(obj) {
-  vimp <- 100 * do.call(cbind, lapply(obj$yvar.names, function(nn) {
-    o.coerce <- _PROJECT_PACKAGE_NAME_:::coerce.multivariate(obj, nn)
-    if (o.coerce$family == "class") {
-      o.coerce$importance[, 1]
-    }
-    else {
-      o.coerce$importance / var(o.coerce$yvar, na.rm = TRUE)
-    }
-  }))
-  colnames(vimp) <- obj$yvar.names
-  vimp
-}
 
 ## ------------------------------------------------------------
 ## plot the standarized performance and VIMP values
@@ -74,10 +40,10 @@ get.vimp <- function(obj) {
 
 ## acquire the error rate for each of the 21-coordinates 
 ## standardize to allow for comparison across coordinates
-serr <- get.error(mv.obj)
+serr <- get.mv.error(mv.obj, std = TRUE)
 
 ## acquire standardized VIMP 
-svimp <- get.vimp(mv.obj)
+svimp <- get.mv.vimp(mv.obj, std = TRUE)
 
 par(mfrow = c(1,2))
 plot(serr, xlab = "Lipids", ylab = "Standardized Performance")

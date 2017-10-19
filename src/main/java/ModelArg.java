@@ -161,8 +161,13 @@ public class ModelArg {
     private int[] yFactorIndex;
     private int[] yNonFactorIndex;
     
-    // HashMap of HashMap(s) containing immutable mapping of classes
-    // to double integers for each factor.
+    // HashMap of HashMap(s) containing immutable mapping of incoming
+    // values to double integers for each factor, irrespective of x-
+    // or y-variable.  Note that not all factors are mapped when they
+    // are x-variables.  Only 'B' and 'C' are mapped in that scenario,
+    // since they require character translation.  Type 'I' is treated
+    // in the native code as 'R' for splitting, and does not need the
+    // additional overhead of a map. 
     HashMap <String, HashMap> immutableMap;
 
     // Incoming Spark Dataset.
@@ -491,8 +496,18 @@ public class ModelArg {
                         // Respect the variable type.
                         yType[i] = tempType.charValue();
                     }
+                    else if (tempType.compareTo('I') == 0) {
+                        yFactorCount++;
+                        // Respect the variable type.
+                        yType[i] = tempType.charValue();
+                    }
+                    else if (tempType.compareTo('B') == 0) {
+                        yFactorCount++;
+                        // Respect the variable type.
+                        yType[i] = tempType.charValue();
+                    }
                     else {
-                        // Set the variable type to 'R' for now for both 'I' and 'R'.
+                        // Assume the variable type is 'R'.
                         yNonFactorCount++;
                         yType[i] = 'R';
                     }
@@ -516,8 +531,22 @@ public class ModelArg {
                 // Respect the variable type.
                 xType[i] = tempType.charValue();
             }
+            else if (tempType.compareTo('I') == 0) {
+                // Respect the variable type.  BUT since it is treated
+                // as a non-factor on the native-code, we do not
+                // create an immutable map here, or in the
+                // native-code.
+                xType[i] = tempType.charValue();
+            }
+            else if (tempType.compareTo('B') == 0) {
+                // Respect the variable type.  BUT since it is treated
+                // as a non-factor on the native-code, we do not
+                // create an immutable map here, or in the
+                // native-code.
+                xType[i] = tempType.charValue();
+            }
             else {
-                // Set the variable type to 'R' for now for both 'I' and 'R'.
+                // Assume the variable type is 'R'.
                 xType[i] = 'R';
             }
         }
@@ -542,6 +571,12 @@ public class ModelArg {
         
             for (int i = 0; i < ySize; i++) {
                 if (yType[i] == 'C') {
+                    yFactorIndex[factorIter] = i;
+                }
+                else if (yType[i] == 'I') {
+                    yFactorIndex[factorIter] = i;
+                }
+                else if (yType[i] == 'B') {
                     yFactorIndex[factorIter] = i;
                 }
                 else {
@@ -675,21 +710,27 @@ public class ModelArg {
 
 
     
-    private double[][] initializeData(int zSize, String[] formulaZ, HashMap <String, Character> zTypeHash) {
+    private double[][] initializeData(boolean yFlag, int zSize, String[] formulaZ, HashMap <String, Character> zTypeHash) {
 
         // Factors must be treated differently in forming the X- or
-        // Y-matrix.  We know the number of total factors in the
+        // Y-matrix.  For Y-matrix factors, we create an immutable map
+        // for all types except 'R'.  For X-matrix factors, we only
+        // create an immutable map for 'C' and 'B'.  'C' requires
+        // character translation, as does 'B'.  Ordinal 'I' x-values
+        // use the same splitting routines as 'R', and do not require
+        // translation or mapping.
+
+        // Note that we know the number of total factors in the
         // dataset.  For convenience, formulaX and formulaY determines
         // the order of the X- and Y-matrix.  When a non-factor is
         // encountered, we simply extract the corresponding column of
         // the dataset as a <Row> object and copy the <Row> to the
         // corresponding row in the X-matrix.  When a factor is
         // encountered, we extract the corresponding column of the
-        // dataset as a <Row> object, transform the string values to
+        // dataset as a <Row> object, transform the values to
         // double integer values, massage them to non-zero values by
         // adding one (1) and then copy the <Row> to the corresponding
-        // row in the X-matrix.  When a boolean value is encountered,
-        // it is treated as an integer type with true=1, false=0
+        // row in the matrix.  
 
         // Note sloppy conversion of (long) to (int).  This is not big-n compliant.
         nSize = (int) dataset.count();
@@ -714,19 +755,7 @@ public class ModelArg {
             // Create a Row object that accesses the incoming non-factor in the dataset.
             org.apache.spark.sql.Row[] thisRow = (org.apache.spark.sql.Row[]) dataset.select(formulaZ[i]).collect();
             
-            if ((zTypeHash.get(formulaZ[i])).compareTo('B') == 0) {
-
-                // Boolean types are mapped as type 'I' to the
-                // native-code.  Values are true=1, false=0.
-                for (int j = 0; j < nSize; j++) {
-                    zData[i][j] = (thisRow[j].getBoolean(0)) ? 2 : 1;
-                }
-
-                @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
-                @RF_TRACE_OFF@  RFLogger.log(Level.INFO, "Found Boolean:   " + i + " " + formulaZ[i]);                
-                @RF_TRACE_OFF@  }
-            }
-            else if ((zTypeHash.get(formulaZ[i])).compareTo('R') == 0) {
+            if ((zTypeHash.get(formulaZ[i])).compareTo('R') == 0) {
 
                 for (int j = 0; j < nSize; j++) {
                     zData[i][j] = (double) thisRow[j].getDouble(0);
@@ -736,7 +765,18 @@ public class ModelArg {
                 @RF_TRACE_OFF@  RFLogger.log(Level.INFO, "Found Double:   " + i + " " + formulaZ[i]);                
                 @RF_TRACE_OFF@  }
             }
-            else if ((zTypeHash.get(formulaZ[i])).compareTo('I') == 0) {
+            else if ((zTypeHash.get(formulaZ[i])).compareTo('B') == 0) {
+
+                // Boolean types are mapped as follows:true=1, false=0.
+                for (int j = 0; j < nSize; j++) {
+                    zData[i][j] = (thisRow[j].getBoolean(0)) ? 2 : 1;
+                }
+
+                @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
+                @RF_TRACE_OFF@  RFLogger.log(Level.INFO, "Found Boolean:   " + i + " " + formulaZ[i]);                
+                @RF_TRACE_OFF@  }
+            }
+            else if (((zTypeHash.get(formulaZ[i])).compareTo('I') == 0) && !yFlag) {
 
                 for (int j = 0; j < nSize; j++) {
                     zData[i][j] = (double) thisRow[j].getInt(0);
@@ -748,21 +788,41 @@ public class ModelArg {
 
                     
             }
+            else if (((zTypeHash.get(formulaZ[i])).compareTo('I') == 0) && yFlag) {
+
+                // The function call below creates the immutable map
+                // of incoming values to integer values.  It adds the
+                // map to the HashMap of HashMap(s) with <Key, Value>
+                // given by <String, HashMap>.  It creates a Row
+                // object that accesses the incoming factor in the
+                // dataset, and returns the row object containing the
+                // massaged non-zero integer values that are
+                // native-code compliant.
+                
+                org.apache.spark.sql.Row[] thisMappedRow = mapFactor(formulaZ[i], 'I');
+
+                for (int j = 0; j < nSize; j++) {
+                    zData[i][j] = (double) thisMappedRow[j].getDouble(0);
+                }
+
+                @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
+                @RF_TRACE_OFF@  RFLogger.log(Level.INFO, "Found Factor: " + i + " " + formulaZ[i]);
+                @RF_TRACE_OFF@  }
+                    
+            }
             else if ((zTypeHash.get(formulaZ[i])).compareTo('C') == 0) {
 
                 
                 // The function call below creates the immutable map
-                // of class to integer values.  It adds the map to the
-                // HashMap of HashMap(s) with <Key, Value> given by
-                // <String, HashMap>.  It initializes the appropriate
-                // slot in xLevel[] that indicates the number of
-                // levels for the factor being analyzed..Create a Row
-                // object that accesses the incoming non-factor in the
-                // dataset.  Finally, it returns the row object
-                // containing the massaged non-zero integer values
-                // that are native-code compliant.
+                // of incoming values to integer values.  It adds the
+                // map to the HashMap of HashMap(s) with <Key, Value>
+                // given by <String, HashMap>.  It creates a Row
+                // object that accesses the incoming factor in the
+                // dataset, and returns the row object containing the
+                // massaged non-zero integer values that are
+                // native-code compliant.
                 
-                org.apache.spark.sql.Row[] thisMappedRow = mapFactor(formulaZ[i]);
+                org.apache.spark.sql.Row[] thisMappedRow = mapFactor(formulaZ[i], 'C');
 
                 for (int j = 0; j < nSize; j++) {
                     zData[i][j] = (double) thisMappedRow[j].getDouble(0);
@@ -786,7 +846,7 @@ public class ModelArg {
     }
 
 
-    private org.apache.spark.sql.Row[] mapFactor(String name) {
+    private org.apache.spark.sql.Row[] mapFactor(String name, Character type) {
 
         // Define the transformation that will change the string
         // representation of the factor level to a double integer.
@@ -837,7 +897,8 @@ public class ModelArg {
 
         int addedCount = 0;
         int tempIter   = 0;
-        
+
+
         while (addedCount < levelCount) {
             // Check if the key has been added to the HashMap?
             if (!fMap.containsKey(rowFactorOriginal[tempIter].getString(0))) {
@@ -846,7 +907,7 @@ public class ModelArg {
             }
             tempIter++;
         }
-
+        
         // Display immutable map.
         @RF_TRACE_OFF@  if (Trace.get(Trace.MED)) {        
         @RF_TRACE_OFF@  Set set = fMap.entrySet();
@@ -877,18 +938,9 @@ public class ModelArg {
     }
 
 
-    // This function is called by x-var processing, and again by y-var
-    // processing.  Set the level counts for factors.  Currently,
-    // ordered factors are NOT SUPPORTED.  They are treated as double
-    // values.  In the future, responses that are ordered factors will
-    // be treated as a form of classification with a special split
-    // rule.  They will not have an allocated immutable map in HashMap
-    // immutableMap.  This is because the mapping will simply be the
-    // identity.  However, we will have to to inform the native code
-    // about the number of levels in the ordered factor response.
-    // When are x-vars are ordered factors, they will be treated in
-    // the same manner as a double for splitting, and imputation.
-    private int[] initializeLevel(String[] formulaZ, HashMap <String, Character> zTypeHash) {
+    // This function is called by x-var and y-var processing.  Set the
+    // level counts for factors ('C', 'B', 'I').
+    private int[] initializeLevel(boolean yFlag, String[] formulaZ, HashMap <String, Character> zTypeHash) {
         
         Character variable;
         
@@ -897,30 +949,12 @@ public class ModelArg {
         for (int i = 0; i < formulaZ.length; i++) {
             variable = zTypeHash.get(formulaZ[i]);
             if (variable.compareTo('B') == 0) {
-                // Default level for boolean types is two. They are considered unordered factors.
+                // Default level for boolean types is two. 
                 zLevel[i] = 2;
             }
-            else if (variable.compareTo('I') == 0) {
-
-                if (false) {
-                    // Acquire the maximum level in the ordered factor.
-                    // First we target the ordered factor, and extract it
-                    // as an array.
-                    org.apache.spark.sql.Row[] rowInteger = (org.apache.spark.sql.Row[]) dataset.select(formulaZ[i]).collect();
-
-                    zLevel[i] = 0;
-
-                    for (int j = 0; j < rowInteger.length; j++) {
-                        if (rowInteger[j].getInt(0) > zLevel[i]) {
-                            zLevel[i] = rowInteger[j].getInt(0);
-                        }
-                    }
-                }
-                else {
-                    zLevel[i] = 0;
-                }
-                
-            
+            else if ((variable.compareTo('I') == 0) && yFlag) {
+                // Get the number of levels from the immutable map.
+                zLevel[i] = (immutableMap.get(formulaZ[i])).size();
             }
             else if (variable.compareTo('C') == 0) {
                 // Get the number of levels from the immutable map.
@@ -1032,16 +1066,16 @@ public class ModelArg {
         // massaged into native-code compliant integer values.
 
         // Get the x-matrix.  
-        xData = initializeData(xSize, formulaX, xTypeHash);
+        xData = initializeData(false, xSize, formulaX, xTypeHash);
         // Determine the maximum levels encountered in the x-var factor variables.
-        xLevel = initializeLevel(formulaX, xTypeHash);
+        xLevel = initializeLevel(false, formulaX, xTypeHash);
 
         if (formulaY != null) {
             // Get the y-matrix.
-            yData = initializeData(ySize, formulaY, yTypeHash);
+            yData = initializeData(true, ySize, formulaY, yTypeHash);
 
             // Determine the maximum levels encountered in the y-var factor variables.
-            yLevel = initializeLevel(formulaY, yTypeHash);
+            yLevel = initializeLevel(true, formulaY, yTypeHash);
         }
         else {
             yData = null;
@@ -2054,25 +2088,25 @@ public class ModelArg {
     }
 
     /**
-     * Sets the split rule to be used in generating the model.  
-     * @param splitRule The split rule to be used in generating the model.  The split rules available are detailed below. The   
-     * rule in bold denotes the default split rule for each
-     * family. The default split rule is applied when the user does
-     * not specify a split rule. Survival and
-     * Competing Risk both have two split rules. Regression has three
-     * flavours of split rules based on mean-squared
-     * error. Classification also has three flavours of split rules
-     * based on the Gini index. The Multivariate and Unsupervised
-     * split rules are a composite rule based on Regression and
-     * Classification. Each component of the composite is normalized
-     * so that the magnitude of any one y-variable does not influence
-     * the statistic. All families also allow the user to define a
-     * custom split rule statistic. Some basic C-programming skills
-     * are required. Examples for all the families reside in the C
-     * source code directory of the package in the file
-     * <code>src/main/c/splitCustom.c</code>. Note that recompiling and
-     * re-installing the package is necessary after modifying the
-     * source code.
+     * Sets the split rule to be used in generating the model.
+     * @param splitRule The split rule to be used in generating the
+     * model.  The split rules available are detailed below. The rule
+     * in bold denotes the default split rule for each family. The
+     * default split rule is applied when the user does not specify a
+     * split rule. Survival and Competing Risk both have two split
+     * rules. Regression has three flavours of split rules based on
+     * mean-squared error. Classification also has three flavours of
+     * split rules based on the Gini index. The Multivariate and
+     * Unsupervised split rules are a composite rule based on
+     * Regression and Classification. Each component of the composite
+     * is normalized so that the magnitude of any one y-variable does
+     * not influence the statistic. All families also allow the user
+     * to define a custom split rule statistic. Some basic
+     * C-programming skills are required. Examples for all the
+     * families reside in the C source code directory of the package
+     * in the file <code>src/main/c/splitCustom.c</code>. Note that
+     * recompiling and re-installing the package is necessary after
+     * modifying the source code.
      * 
      * <pre> <code> 
      * <table class= "myColumnPadding">

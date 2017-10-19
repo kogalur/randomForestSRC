@@ -365,7 +365,6 @@ generic.predict.rfsrc <-
   importance.bits <- get.importance(importance)
   proximity.bits <- get.proximity(grow.equivalent, proximity)
     
-  split.null.bits <- 0###TBD TBD TBD TBD
   split.depth.bits <- get.split.depth(split.depth)
   var.used.bits <- get.var.used(var.used)
   outcome.bits <- get.outcome(outcome)
@@ -414,7 +413,6 @@ generic.predict.rfsrc <-
                                   as.integer(importance.bits +
                                                bootstrap.bits +
                                                  proximity.bits +
-                                                   split.null.bits +
                                                      split.depth.bits +
                                                        var.used.bits +
                                                          outcome.bits +

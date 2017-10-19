@@ -31,16 +31,19 @@
         <include name="NAMESPACE"/>
         <include name="DESCRIPTION"/>
         <include name="configure.ac"/>
+        <include name="cleanup"/>
       </fileset>
 
       <filterchain>
         <tokenfilter>
           <replacestring from="_PROJECT_PACKAGE_NAME_" to="${project.pkg.name}"/>
-          <replacestring from="@PROJECT_VERSION@"   to="${project.version}"/>
+          <replacestring from="@PROJECT_VERSION@"      to="${project.version}"/>
           <replacestring from="_PROJECT_DSTAMP_"       to="${DSTAMP}"/>
         </tokenfilter>
       </filterchain>
     </copy>
+
+    <chmod file="${pptc}/cleanup" perm="ugo+x"/>
 
     <copy todir="${pptc}/inst">
       <fileset dir="${ppsc}/inst">
@@ -50,8 +53,8 @@
       <filterchain>
         <tokenfilter>
           <replacestring from="_PROJECT_PACKAGE_NAME_" to="${project.pkg.name}"/>
-          <replacestring from="@PROJECT_VERSION@"   to="${project.version}"/>
-          <replacestring from="@PROJECT_BUILD@"     to="${project.build}"/>
+          <replacestring from="@PROJECT_VERSION@"      to="${project.version}"/>
+          <replacestring from="@PROJECT_BUILD@"        to="${project.build}"/>
           <replacestring from="_PROJECT_DSTAMP_"       to="${DSTAMP}"/>
         </tokenfilter>
       </filterchain>
@@ -212,6 +215,17 @@
       <fileset dir="target/cran/${project.pkg.name}"/> 
     </copy>
 
+    <chmod file="target/cran/staged/${project.pkg.name}/cleanup" perm="ugo+x"/>
+
+    <exec dir="target/cran/staged/${project.pkg.name}" executable="autoconf" failonerror="TRUE" os="Linux,Mac OS X"/>
+
+    <exec dir="target" executable="cp" failonerror="TRUE" os="Linux,Mac OS X">
+      <arg line="cran/staged/${project.pkg.name}/configure"/>
+      <arg line="cran/${project.pkg.name}/configure"/>
+    </exec>
+    
+    <chmod file="target/cran/${project.pkg.name}/configure" perm="ugo+x" os="Linux,Mac OS X"/>
+
     <exec dir="target/cran/staged" executable="R" failonerror="TRUE">
       <arg line="CMD check"/>
       <!--arg line="- -as-cran"/ -->
@@ -234,39 +248,21 @@
 
   <!--
     ========================================================================
-      INSTALL-CRAN-MAC target, Entry Point
+      INSTALL-CRAN-xxx target, Entry Point
     ========================================================================
   -->
-  <target name="install-cran-mac" depends="os-prep, source-cran">
+  <target name="install-cran-mac" depends="os-prep, source-cran, install-cran-generic"/>
+  <target name="install-cran-lin" depends="os-prep, source-cran, install-cran-generic"/>
+  <target name="install-cran-win" depends="os-prep, source-cran, install-cran-generic"/>
 
-    <delete dir="target/cran/staged"/>
-    <mkdir dir="target/cran/staged"/>
-
-    <copy todir="target/cran/staged/${project.pkg.name}">
-      <fileset dir="target/cran/${project.pkg.name}"/> 
-    </copy>
-
-    <exec dir="target/cran/staged/${project.pkg.name}" executable="autoconf" failonerror="TRUE"/>
-
-    <exec dir="target/cran/staged" executable="R" failonerror="TRUE">
-      <arg line="CMD INSTALL"/>
-      <arg line="--clean"/>
-      <arg line="--preclean"/>
-      <arg line="-l ${env.R_LIBS}"/>
-      <arg line="--build"/>
-      <arg line="${project.pkg.name}"/>
-    </exec>
-
-    <copy file="target/cran/staged/${project.pkg.name}_${project.version}.${cranArchive}" todir="target/cran"/>
-
-  </target>
-
+  
   <!--
     ========================================================================
-      INSTALL-CRAN-LIN target, Entry Point
+      Internal target, install-cran-generic
     ========================================================================
   -->
-  <target name="install-cran-lin" depends="os-prep, source-cran">
+
+  <target name="install-cran-generic">
 
     <delete dir="target/cran/staged"/>
     <mkdir dir="target/cran/staged"/>
@@ -275,7 +271,8 @@
       <fileset dir="target/cran/${project.pkg.name}"/> 
     </copy>
 
-    <exec dir="target/cran/staged/${project.pkg.name}" executable="autoconf" failonerror="TRUE"/>
+    <chmod file="target/cran/staged/${project.pkg.name}/cleanup" perm="ugo+x"/>
+    <chmod file="target/cran/staged/${project.pkg.name}/configure" perm="ugo+x" os="Linux,Mac OS X"/>
 
     <exec dir="target/cran/staged" executable="R" failonerror="TRUE">
       <arg line="CMD INSTALL"/>
@@ -286,40 +283,7 @@
       <arg line="${project.pkg.name}"/>
     </exec>
 
-    <copy file="target/cran/staged/${project.pkg.name}_${project.version}_${cranArchive}" todir="target/cran"/>
-
-  </target>
-
-  <!--
-    ========================================================================
-      Internal target, package-and-install-openmp-win-generic
-    ========================================================================
-  -->
-
-  <target name="install-cran-win" depends="os-prep, source-cran">
-
-    <delete dir="target/cran/staged"/>
-    <mkdir dir="target/cran/staged"/>
-
-    <copy todir="target/cran/staged/${project.pkg.name}">
-      <fileset dir="target/cran/${project.pkg.name}"/> 
-    </copy>
-
-    <echo file="target/cran/staged/${project.pkg.name}/src/Makevars.win" append="false">
-PKG_CFLAGS = -fopenmp -DHAVE_OPENMP
-PKG_LIBS   = -fopenmp
-    </echo>
-
-    <exec dir="target/cran/staged" executable="R" failonerror="TRUE">
-      <arg line="CMD INSTALL"/>
-      <arg line="--clean"/>
-      <arg line="--preclean"/>
-      <arg line="-l ${env.R_LIBS}"/>
-      <arg line="--build"/>
-      <arg line="${project.pkg.name}"/>
-    </exec>
-
-    <copy file="target/cran/staged/${project.pkg.name}_${project.version}.${cranArchive}" todir="target/cran"/>
+    <copy file="target/cran/staged/${project.pkg.name}_${project.version}${cranArchive}" todir="target/cran"/>
 
     <delete dir="target/cran/staged"/>
     

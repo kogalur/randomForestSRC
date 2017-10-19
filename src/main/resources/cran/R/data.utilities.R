@@ -499,7 +499,8 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
                        "mv.gini",              ## 14 --  reg/class/mix
                        "mv.mix",               ## 15 --  reg/class/mix
                        "custom",               ## 16
-                       "l2.impute")            ## 17
+                       "l2.impute",            ## 17
+                       "rps")                  ## 18
   fmly <- formula.detail$family
   ## Preliminary check for consistency.
   nsplit <- round(nsplit)
@@ -558,13 +559,14 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
         splitrule <- splitrule.names[splitrule.idx]
       }
         else {
-          ## User specified split rule.
-          if ((splitrule != "gini") &
-              (splitrule != "gini.unwt") &
-              (splitrule != "gini.hvwt")) {
-            stop("Invalid split rule specified:  ", splitrule)
-          }
-          splitrule.idx <- which(splitrule.names == splitrule)
+            ## User specified split rule.
+            if ((splitrule != "rps") &
+                (splitrule != "gini") &
+                (splitrule != "gini.unwt") &
+                (splitrule != "gini.hvwt")) {
+                stop("Invalid split rule specified:  ", splitrule)
+            }
+            splitrule.idx <- which(splitrule.names == splitrule)
         }
     }
     if (fmly == "regr") {
@@ -787,7 +789,7 @@ gmean <- function(y, prob, perf.type = NULL, robust = FALSE) {
     return(NULL)
   }
   ## determine threshold
-  if (!is.null(perf.type) && perf.type == "g.mean.drc") {
+  if (!is.null(perf.type) && perf.type == "g.mean.rfq") {
     threshold <- min(frq, na.rm = TRUE) / sum(frq, na.rm = TRUE)
   }
   else {

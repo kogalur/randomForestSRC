@@ -7,8 +7,8 @@
 <project name="RF-SRC Public" basedir="." default="usage" >
 
   <property name="project.pkg.name"  value="randomForestSRC"/>
-  <property name="project.version"   value="2.5.0.6"/>
-  <property name="project.build"     value="bld20170925b"/>
+  <property name="project.version"   value="2.5.1"/>
+  <property name="project.build"     value="bld20171017"/>
   <property name="minimum.version"   value="2.3.0"/>
   
   <property name="http.prefix"       value="http://"/>
@@ -59,7 +59,7 @@
     <property name="scriptExtension" value=".cmd"/>
     <property name="scriptFileCommentLine" value="@echo off"/>
     <property name="scriptFileExitLine" value="exit /b"/>
-    <property name="cranArchive" value="zip"/>
+    <property name="cranArchive" value=".zip"/>
 
     <echo message="Customization for Windows 10"/>
   </target>
@@ -69,7 +69,7 @@
     <property name="scriptExtension" value=".sh"/>
     <property name="scriptFileCommentLine" value="#!/bin/bash"/>
     <property name="scriptFileExitLine" value="exit 0"/>
-    <property name="cranArchive" value="R_x86_64-pc-linux-gnu.tar.gz"/>
+    <property name="cranArchive" value="_R_x86_64-pc-linux-gnu.tar.gz"/>
 
     <echo message="Customization for Linux"/>
   </target>
@@ -79,9 +79,9 @@
     <property name="scriptExtension" value=".sh"/>
     <property name="scriptFileCommentLine" value="#!/bin/bash"/>
     <property name="scriptFileExitLine" value="exit 0"/>
-    <echo message="Customization for Mac OS X"/>
+    <property name="cranArchive" value=".tgz"/>
 
-    <property name="cranArchive" value="tgz"/>
+    <echo message="Customization for Mac OS X"/>
 
   </target>
 

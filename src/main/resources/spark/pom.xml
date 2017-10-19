@@ -113,14 +113,17 @@
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-enforcer-plugin</artifactId>
-          <version>1.4.1</version>
+          <version>3.0.0-M1</version>
           <executions>
             <execution>
               <id>enforce-plugin-versions</id>
               <goals>
                 <goal>enforce</goal>
               </goals>
-              <configuration>
+            </execution>
+          </executions>
+
+          <configuration>
                 <rules>
                   <requireMavenVersion>
                     <version>3.5.0</version>
@@ -141,8 +144,6 @@
                   </requirePluginVersions>
                 </rules>
               </configuration>
-            </execution>
-          </executions>
         </plugin>
 
 
@@ -254,8 +255,8 @@
               </source>
             </sources>
             <compilerProvider>generic-classic</compilerProvider>
-            <compilerExecutable>gcc-6</compilerExecutable>
-            <linkerExecutable>gcc-6</linkerExecutable> 
+            <compilerExecutable>gcc-7</compilerExecutable>
+            <linkerExecutable>gcc-7</linkerExecutable> 
 
 					  <compilerStartOptions>
               <compilerStartOption>-std=gnu99</compilerStartOption>

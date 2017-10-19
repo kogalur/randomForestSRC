@@ -115,7 +115,7 @@ typedef unsigned long ulong;
 #define OPT_VARUSED_F 0x00001000 
 #define OPT_VARUSED_T 0x00002000 
 #define OPT_PERF_GMN2 0x00004000 
-#define OPT_PERF_GMND 0x00008000 
+#define OPT_PERF_GMNQ 0x00008000 
 #define OPT_IMPU_ONLY 0x00010000 
 #define OPT_OUTC_TYPE 0x00020000 
 #define OPT_BOOT_TYP1 0x00080000 
@@ -182,7 +182,8 @@ typedef unsigned long ulong;
 #define MVMX_SPLIT  15 
 #define CUST_SPLIT  16
 #define SURV_L2IMP  17
-#define MAXM_SPLIT  18 
+#define CLAS_RNKPS  18
+#define MAXM_SPLIT  19 
 #define SPLIT_MIA_NONE  0  
 #define SPLIT_MIA_LEFT  1  
 #define SPLIT_MIA_RGHT  2  
@@ -317,7 +318,7 @@ double getGMeanIndex(uint    size,
                      double *responsePtr,
                      uint   *denomCount,
                      double *maxVote);
-double getGMeanDRC(uint     size,
+double getGMeanQC(uint     size,
                    uint     rTarget,
                    double  *responsePtr,
                    double **outcomeCLS,
@@ -342,11 +343,11 @@ Factor *makeFactor(uint r, char bookFlag);
 void free_Factor(Factor *f);
 char bookFactor(Factor *f);
 char unbookFactor(Factor *f);
-void bookPair (uint    levelCount, 
-               uint    setSize, 
-               uint    setColumn, 
-               uint   *setRow, 
-               uint   *pair, 
+void bookPair (uint    levelCount,
+               uint    groupIndex,
+               uint    levelIndex,
+               uint   *row,
+               uint   *level,
                Factor *f);
 void nChooseK (uint n, uint r, char type, void *result);
 char reduceFraction(uint *numerator, uint *denominator);
@@ -720,7 +721,7 @@ void updateCDF(uint    treeID,
                uint   *sampleSize,
                uint    sampleSlot,
                double *cdf,
-               uint   *cdfSize,
+               uint    cdfSize,
                uint   *density,
                uint   *densitySize,
                uint  **densitySwap,
@@ -818,6 +819,20 @@ char classificationXwghtSplit(uint    treeID,
                               char  **splitIndicator,
                               char   *splitMIA,
                               char    multImpFlag);
+char classificationRankedPS(uint    treeID,
+                            Node   *parent,
+                            uint   *repMembrIndx,
+                            uint    repMembrSize,
+                            uint   *allMembrIndx,
+                            uint    allMembrSize,
+                            uint   *splitParameterMax,
+                            double *splitValueMaxCont,
+                            uint   *splitValueMaxFactSize,
+                            uint  **splitValueMaxFactPtr,
+                            double *splitStatistic,
+                            char  **splitIndicator,
+                            char   *splitMIA,
+                            char    multImpFlag);
 char regressionXwghtSplit(uint    treeID,
                           Node   *parent,
                           uint   *repMembrIndx,
@@ -832,6 +847,74 @@ char regressionXwghtSplit(uint    treeID,
                           char  **splitIndicator,
                           char   *splitMIA,
                           char    multImpFlag);
+char regressionXwghtSplitMIA (uint    treeID,
+                              Node   *parent,
+                              uint   *repMembrIndx,
+                              uint    repMembrSize,
+                              uint   *allMembrIndx,
+                              uint    allMembrSize,
+                              uint   *splitParameterMax,
+                              double *splitValueMaxCont,
+                              uint   *splitValueMaxFactSize,
+                              uint  **splitValueMaxFactPtr,
+                              double *splitStatistic,
+                              char  **splitIndicator,
+                              char   *splitMIA,
+                              char    multImpFlag);
+char regressionXwghtSplitGreedy(uint    treeID,
+                          Node   *parent,
+                          uint   *repMembrIndx,
+                          uint    repMembrSize,
+                          uint   *allMembrIndx,
+                          uint    allMembrSize,
+                          uint   *splitParameterMax,
+                          double *splitValueMaxCont,
+                          uint   *splitValueMaxFactSize,
+                          uint  **splitValueMaxFactPtr,
+                          double *splitStatistic,
+                          char  **splitIndicator,
+                          char   *splitMIA,
+                          char    multImpFlag);
+char selectRandomCovariatesGreedy(uint     treeID,
+                                  Node     *parent,
+                                  uint     *repMembrIndx,
+                                  uint      repMembrSize,
+                                  uint     *covariateIndex,
+                                  uint     *uniformCovariateSize,
+                                  uint     *uniformCovariateIndex,
+                                  double   *cdf,
+                                  uint     *cdfSize,
+                                  uint     *cdfSort,
+                                  uint     *density,
+                                  uint     *densitySize,
+                                  uint    **densitySwap,
+                                  uint     *covariate,
+                                  uint     *actualCovariateCount,
+                                  uint     *candidateCovariateCount,
+                                  double   *splitVector,
+                                  uint     *splitVectorSize,
+                                  uint    **indxx,
+                                  uint      nonMissMembrSizeStatic,
+                                  uint     *nonMissMembrIndxStatic,
+                                  uint     *nonMissMembrSize,
+                                  uint    **nonMissMembrIndx,
+                                  char      multImpFlag);
+void unselectRandomCovariatesGreedy(uint      treeID,
+                              Node     *parent,
+                              uint      repMembrSize,
+                              uint     *indxx,
+                              uint     nonMissMembrSizeStatic,
+                              uint    *nonMissMembrIndx,
+                                    char      multImpFlag);
+typedef struct hyperCube HyperCube;
+struct hyperCube {
+  unsigned int r; 
+  unsigned int cardinalGroupCount; 
+  uint *complementaryPairCount;
+  void *cardinalGroupSize; 
+  unsigned int **cardinalGroupBinary;
+  unsigned int mwcpSize;
+};
 char logRankNCR(uint    treeID,
                 Node   *parent,
                 uint   *repMembrIndx,
@@ -1103,7 +1186,7 @@ void unselectRandomCovariates(uint      treeID,
                               uint      nonMissMembrSizeStatic,
                               uint     *nonMissMembrIndx,
                               char      multImpFlag);
-char selectRandomCovariatesNew(uint     treeID,
+char selectRandomCovariatesMIA(uint     treeID,
                             Node     *parent,
                             uint     *repMembrIndx,
                             uint      repMembrSize,
@@ -1129,14 +1212,14 @@ char selectRandomCovariatesNew(uint     treeID,
                             uint     *missMembrSize,
                             uint    **missMembrIndx,
                             char      multImpFlag);
-void unselectRandomCovariatesNew(uint      treeID,
-                              Node     *parent,
-                              uint      repMembrSize,
-                              uint     *indxx,
-                              uint      nonMissMembrSizeStatic,
-                              uint     *nonMissMembrIndx,
+void unselectRandomCovariatesMIA(uint      treeID,
+                                 Node     *parent,
+                                 uint      repMembrSize,
+                                 uint     *indxx,
+                                 uint      nonMissMembrSizeStatic,
+                                 uint     *nonMissMembrIndx,
                                  uint     *missMembrIndx,
-                              char      multImpFlag);
+                                 char      multImpFlag);
 uint virtuallySplitNode(uint  treeID,
                            char  factorFlag,
                            uint  mwcpSizeAbsolute,
@@ -1186,7 +1269,7 @@ char getPreSplitResult (uint      treeID,
                         double   *preSplitMean,
                         char      multImpFlag,
                         char      multVarFlag);
-char getPreSplitResultNew (uint      treeID,
+char getPreSplitResultMIA (uint      treeID,
                            Node     *parent,
                            uint      repMembrSize,
                            uint     *repMembrIndx,
@@ -1204,7 +1287,7 @@ void unstackPreSplit (char      preliminaryResult,
                       uint      repMembrSize,
                       double   *splitVector,
                       uint     *nonMissMembrIndx);
-void unstackPreSplitNew (char      preliminaryResult,
+void unstackPreSplitMIA (char      preliminaryResult,
                          char      multImpFlag,
                          char      multVarFlag,
                          uint      repMembrSize,
@@ -1228,7 +1311,7 @@ char updateMaximumSplit(uint    treeID,
                         uint  **splitValueMaxFactPtr,
                         void   *splitVectorPtr,
                         char  **splitIndicator);
-char updateMaximumSplitNew(uint    treeID,
+char updateMaximumSplitMIA(uint    treeID,
                            Node   *parent,
                            double  delta,
                            uint    candidateCovariateCount,
@@ -1250,7 +1333,8 @@ char updateMaximumSplitNew(uint    treeID,
 void updateNodeStatistics(Node *parent, double delta, uint candidateCovariateCount, uint covariate);
 void initializeTimeArrays(char mode);
 void stackFactorArrays();
-void stackFactorGeneric(uint    size,
+void stackFactorGeneric(char    respFlag,
+                        uint    size,
                         char   *type,
                         uint  **p_factorMap,
                         uint   *factorCount,

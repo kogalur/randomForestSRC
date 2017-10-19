@@ -1,8 +1,12 @@
-# Template suggestion from forum by Simon Urbanek at the R Project:
+### configure.ac					-*- Autoconf -*-
 
-# Process this file with autoconf to produce a configure script.
-AC_INIT([_PROJECT_PACKAGE_NAME_], [@PROJECT_VERSION_@], [ubk@kogalur.com], [_PROJECT_PACKAGE_NAME_], [http://www.kogalur-shear.com])
-# OpenMP checking was added in autoconf version 2.62.
+dnl Based on OpenMP detection in R's configure script,
+dnl which in turn is based on autoconf's openmp.m4, 
+dnl with is licensed under GPL-3 with the 
+dnl Autoconf Configure Script Exception, version 3.0.
+
+AC_INIT([_PROJECT_PACKAGE_NAME_], [@PROJECT_VERSION@], [ubk@kogalur.com], [_PROJECT_PACKAGE_NAME_], [https://github.com/kogalur/randomForestSRC])
+
 AC_PREREQ([2.62])
 
 # Find R home and set CC/CFLAGS
@@ -14,37 +18,39 @@ fi
 RBIN="${R_HOME}/bin/R"
 CC=`"${RBIN}" CMD config CC`;
 CFLAGS=`"${RBIN}" CMD config CFLAGS`
-LIBS="${PKG_LIBS}"
 
-# Checks for programs.
-AC_PROG_CC
-# Check for OpenMP
-AC_OPENMP
-
-# Since some systems have broken OMP libraries we also check that the
-# actual package will work.
-ac_pkg_openmp=no
-if test -n "${OPENMP_CFLAGS}"; then
-  AC_MSG_CHECKING([whether OpenMP will work in a package])
-  AC_LANG_CONFTEST([AC_LANG_PROGRAM([[#include <omp.h>]], [[ return omp_get_num_threads (); ]])])
-  PKG_CFLAGS="${OPENMP_CFLAGS}" PKG_LIBS="${OPENMP_CFLAGS}" "$RBIN" CMD SHLIB conftest.c 1>&AS_MESSAGE_LOG_FD 2>&AS_MESSAGE_LOG_FD && "$RBIN" --vanilla -q -e "dyn.load(paste('conftest',.Platform\$dynlib.ext,sep=''))" 1>&AS_MESSAGE_LOG_FD 2>&AS_MESSAGE_LOG_FD && ac_pkg_openmp=yes
-  AC_MSG_RESULT([${ac_pkg_openmp}])
-fi
-
-# If ${ac_pkg_openmp} = "yes" then we have OMP, otherwise it will be "no".
-if test "${ac_pkg_openmp}" = no; then
-  OPENMP_CFLAGS=''
-  HAVE_OPENMP=''
-  AC_MSG_WARN([OpenMP does NOT appear to be supported on this system.])
-else
-  HAVE_OPENMP='-DHAVE_OPENMP'
-fi
+AC_LANG(C)
+dnl this the meat of R's m4/openmp.m4
+  OPENMP_[]_AC_LANG_PREFIX[]FLAGS=
+  AC_ARG_ENABLE([openmp],
+    [AS_HELP_STRING([--disable-openmp], [do not use OpenMP])])
+  if test "$enable_openmp" != no; then
+    AC_CACHE_CHECK([for $[]_AC_CC[] option to support OpenMP],
+      [ac_cv_prog_[]_AC_LANG_ABBREV[]_openmp],
+      [AC_LINK_IFELSE([_AC_LANG_OPENMP],
+	 [ac_cv_prog_[]_AC_LANG_ABBREV[]_openmp='none needed'],
+	 [ac_cv_prog_[]_AC_LANG_ABBREV[]_openmp='unsupported'
+	  for ac_option in -fopenmp -xopenmp -qopenmp \
+                           -openmp -mp -omp -qsmp=omp -homp \
+			   -fopenmp=libomp \
+                           -Popenmp --openmp; do
+	    ac_save_[]_AC_LANG_PREFIX[]FLAGS=$[]_AC_LANG_PREFIX[]FLAGS
+	    _AC_LANG_PREFIX[]FLAGS="$[]_AC_LANG_PREFIX[]FLAGS $ac_option"
+	    AC_LINK_IFELSE([_AC_LANG_OPENMP],
+	      [ac_cv_prog_[]_AC_LANG_ABBREV[]_openmp=$ac_option])
+	    _AC_LANG_PREFIX[]FLAGS=$ac_save_[]_AC_LANG_PREFIX[]FLAGS
+	    if test "$ac_cv_prog_[]_AC_LANG_ABBREV[]_openmp" != unsupported; then
+	      break
+	    fi
+	  done])])
+    case $ac_cv_prog_[]_AC_LANG_ABBREV[]_openmp in #(
+      "none needed" | unsupported)
+	;; #(
+      *)
+	OPENMP_[]_AC_LANG_PREFIX[]FLAGS=$ac_cv_prog_[]_AC_LANG_ABBREV[]_openmp ;;
+    esac
+  fi
 
 AC_SUBST(OPENMP_CFLAGS)
-AC_SUBST(HAVE_OPENMP)
-
 AC_CONFIG_FILES([src/Makevars])
-
 AC_OUTPUT
-
-

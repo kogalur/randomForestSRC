@@ -331,7 +331,6 @@ rfsrc <- function(formula,
   forest.bits <- get.forest(forest)
   proximity.bits <- get.proximity(TRUE, proximity)
      
-  split.null.bits <- 0###TBD TBD TBD TBD
   membership.bits <-  get.membership(membership)
   statistics.bits <- get.statistics(statistics)
   split.cust.bits <- get.split.cust(splitinfo$cust)
@@ -357,7 +356,6 @@ rfsrc <- function(formula,
                                                      bootstrap.bits +
                                                        forest.bits +
                                                          proximity.bits +
-                                                           split.null.bits +###TBD TBD TBD
                                                              perf.bits +
                                                                statistics.bits),
                                   as.integer(samptype.bits +
