@@ -72,7 +72,7 @@ and on the <a href="https://github.com/kogalur/randomForestSRC/tree/master">mast
 branch on our GitHub repository.
 Interim, sometimes unstable, development builds with bug fixes and/or additional
 functionality are available on the
-<a href="https://github.com/kogalur/randomForestSRC/tree/master">develop</a>
+<a href="https://github.com/kogalur/randomForestSRC/tree/develop">develop</a>
 branch of our GitHub repository.
 </p>
 
@@ -109,7 +109,12 @@ which can be run on the given dataset</p>
 an installation of R (> v3.0) that is capable of compiling
 source code packages containing C-code.  This means that the
 approprate C-code compilers need to be in place and accessible by the
-R packaging and installation engine.  You will also need Apache Ant (v1.10), and Java JDK (v1.80).
+R packaging and installation engine.
+Detailed descriptions on how this is achieved are available
+on a number of sites online and will not be reproduced here.
+You will also need Apache Ant (v1.10), and Java JDK (v1.80). Once the
+R package development environment is in place, it is possible to build
+our package natively on your platform using the following steps:
 </p>
 
 <p>From the top-level directory (the directory containing <code>build.xml</code>), the command
@@ -130,121 +135,18 @@ install randomForestSRC in your default library, change to the
 directory <code>./target/cran/</code> and type
 </p>
 
-<p><code>R CMD INSTALL randomForestSRC</code></p>
+<p><code>R CMD INSTALL --preclean --clean randomForestSRC</code></p>
 
 <p>
-This will ONLY install the serial version of the package.  The next section
-details the process of installing the parallel version of the package.
-
-
-<a id="Zopenmp_installation"></a><h3>OpenMP Parallel Processing &ndash; Installation</h3>
-
-<p>This package implements OpenMP shared-memory parallel programming.  However, the
-default installation will only execute serially.  To utilize OpenMP,
-the target architecture and operating system must support it.
-</p>
-<p>An understanding of resource utilization (CPU and RAM) is necessary
-when running the package using OpenMP and Open MPI parallel execution.
-Memory usage is greater when running with OpenMP
-enabled.  Diligence should be used not to overtax the hardware available.
-</p>
-<p>There are THREE strategies for installing the OpenMP capable version
-of the R package.  <b>Method 1</b> relies on having full package
-development prerequisites, the build environment necessary for
-creating R packages from source.  This is the preferred and
-comprehensive way to guarantee natively compiled, compatible and
-optimized binaries for your system.  <b>Method 2</b> relies on having
-partial package development prerequisites.  This makes some
-assumptions about your system, that are not entirely platform
-independent, but will usually work.  <b>Method 3</b> is the easiest
-and does not require package development prerequisites.  Method 3
-relies on pre-built binaries, and is intended for users not interested
-in investing the time necessary to have the capability to natively
-build packages. We do not recommend this method as it does not
-guarantee OpenMP execution, nor does it guarantee that our binaries
-will even be compatible with your system.  However, we are providing
-them as a convenience.
-</p>
-
-<table summary="Rd table">
-<tr>
- <td style="text-align: center;">
-    <code><b>[METHOD]</b></code> </td><td style="text-align: center;"> <code><b>[R Development Toolset]</b></code> 
-    </td><td style="text-align: center;"> <code><b>[Difficulty]</b></code> 
-    </td><td style="text-align: center;"> <code><b>[OpenMP Execution]</b></code> </td>
-</tr>
-<tr>
- <td style="text-align: center;">
-    <code>1</code> </td><td style="text-align: center;"> <code>Full</code> </td><td style="text-align: center;"> <code>High</code> </td><td style="text-align: center;"> <code>Guaranteed</code> </td>
-</tr>
-<tr>
- <td style="text-align: center;">
-    <code>2</code> </td><td style="text-align: center;"> <code>Partial</code> </td><td style="text-align: center;"> <code>Medium</code> </td><td style="text-align: center;">
-    <code>Good Success</code> </td>
-</tr>
-<tr>
- <td style="text-align: center;">
-    <code>3</code> </td><td style="text-align: center;"> <code>None</code> </td><td style="text-align: center;"> <code>Low</code> </td><td style="text-align: center;"> <code>Moderate Success</code>
-  </td>
-</tr>
-
-</table>
-
-
-
-<h4>OpenMP Parallel Processing &ndash; Method 1</h4>
-
-<p>The core software development utilities required for R package
-development vary by operating system.  The difficulty of installing
-this build environment also varies by operating system.  Unix-based
-systems are the friendliest, followed by Mac OS X, followed lastly by
-Windows.  Detailed descriptions on how this is achieved are available
-on a number of sites online and will not be reproduced here.  Once the
-R package development environment is in place, it is possible to build
-our package natively on your platform using the following steps:
-</p>
-
-<ol>
-<li><p> Download the randomForestSRC R source code package from CRAN
-  or, alternatively, build the package using the GitHub
-  repository. See [<a href="#Zcreating_installing_cran">above</a>] for the
-  later.  On CRAN, the source code package has the form
-  <code>randomForestSRC_X.x.x.tar.gz</code>.  The X's indicate the
-  version posted.  You will need to unzip this tarball into your
-  working directory before proceeding.  Make sure you are not using
-  one of the binary distributions on CRAN and, instead, are using the
-  source code package.
-</p>
-</li>
-<li><p> After creating the source code package, navigate into the
-package directory <code>randomForestSRC</code>.
-</p>
-</li>
-<li><p> Run autoconf using the command
-</p>
-<p><code>autoconf</code>
-</p>
-</li>
-<li><p> Change back to your working directory using the command
-</p>
-<p><code>cd ..</code>
-</p>
-</li>
-<li><p> From your working directory, execute the command
-</p>
-<p><code>R CMD INSTALL --preclean --clean randomForestSRC</code>
-</p>
-<p>on the modified
-package.  
-</p>
-</li></ol>
+This will install an OpenMP parallel version of the package if the
+host system is capable of supporting this mode of execution.
 
 <p> Please note than on some platforms, even though an OpenMP C-compiler
 may have ben installed, the R packaging and installation engine does
 not pick up the appropriate compiler.  For example, on macOS, the
 default compiler is Clang.  It is not OpenMP capable out-of-the-box.
-You will need to install an OpenMP version of it, or install GCC.
-Most importantly, you will also need to direct the R packaging and installtion
+You will need to install an OpenMP version of it, or install GCC using
+Homebrew or another package manager.  Most importantly, you will also need to direct the R packaging and installtion
 engine to the OpenMP capable compiler. This is done by
 creating an <code>.R</code> directory in your <code>HOME</code> directory, and
 creating a <code>Makevars</code> file in that directory containing
@@ -253,77 +155,14 @@ the appropriate compiler instructions. As an example, on macOS Sierra
 <code>Makevars</code> file:</p>
 
 <pre><code class="R">
-F77 = gfortran-4.8
-FC  = gfortran-4.8
-CC  = gcc-6
-CXX = g++-6
-CFLAGS = -I/usr/local/Cellar/gcc/6.3.0_1/include
-LDFLAGS = -L/usr/local/Cellar/gcc/6.3.0_1/lib/gcc/6
-
+F77 = gfortran-7
+FC  = gfortran-7
+CC  = gcc-7
+CXX = g++-7
+CFLAGS = -I/usr/local/Cellar/gcc/7.2.0/include
+LDFLAGS = -L/usr/local/Cellar/gcc/7.2.0/lib/gcc/7
 </code></pre>
 </p>
-
-<h4>OpenMP Parallel Processing &ndash; Method 2</h4>
-
-<p>This method hard codes some OpenMP compiler directives.  On Windows systems
-this method is generally easier than Method 1.  The
-instructions for this method follow:
-</p>
-
-<ol>
-<li><p> Download the randomForestSRC R source code package from CRAN
-  or, alternatively, build the package using the GitHub
-  repository. See [<a href="#Zcreating_installing">above</a>] for the
-  later.  On CRAN, the source code package has the form
-  <code>randomForestSRC_X.x.x.tar.gz</code>.  The X's indicate the
-  version posted.  You will need to unzip this tarball into your
-  working directory before proceeding.  Make sure you are not using
-  one of the binary distributions on CRAN and, instead, are using the
-  source code package.
-</p>
-</li>
-</li>
-<li><p> Download the Makevars file containing the OpenMP custom compiler
-directives from the GitHub repository.  It is located in the GitHub
-repository
-[<a href="https://github.com/kogalur/randomForestSRC/blob/master/src/main/resources/cran/scripts/Makevars">here</a>].
-
-Copy it into the R source code directory-tree <code>randomForestSRC/src</code>. On Windows
-systems, take the additional step of renaming it to
-<code>Makevars.win</code>.
-</p>
-</li>
-<li><p> From your working directory, execute the command
-</p>
-<p><code>R CMD INSTALL --preclean --clean randomForestSRC</code>
-</p>
-<p>on the modified package.
-</p>
-</li></ol>
-
-<h4>OpenMP Parallel Processing &ndash; Method 3</h4>
-
-<p>The easiest but least recommended way to install the OpenMP version of
-the package is to download our pre-compiled binaries and attempt to
-use them on your system. Successful execution is not always
-guaranteed.  The instructions for this method follow:
-</p>
-
-<ol>
-<li><p> Download the OpenMP platform specific binary file
-<code>randomForestSRC_X.x.x.&lt;extension&gt;</code> from
-<a href="http://www.ccs.miami.edu/~hishwaran/rfsrc.html">http://www.ccs.miami.edu/~hishwaran/rfsrc.html</a>.
-</p>
-</li>
-<li><p> From the R GUI, navigate to &quot;Install Packages&quot; (or similar)
-and select &quot;From Local Archive&quot; (or similar).  Then navigate to the
-downloaded binary and click &quot;Install&quot;.  If you are not using the R
-GUI, navigate to the directory where you downloaded the compressed
-binary file and execute the command
-</p>
-<p><code>R CMD INSTALL randomForestSRC_X.x.x.zip</code>
-</p>
-</li></ol>
 
 <h4>OpenMP Parallel Processing &ndash; Setting the Number of CPUs</h4>
 

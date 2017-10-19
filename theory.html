@@ -116,10 +116,6 @@ computation in a non-trivial and massive way, and provide details
 of how this can be achieved. In the [<a href="#Ztheory_and_specifications">Theory and
 Specifications</a>] section we provide the mathematics for the split rules,
 terminal node estimators, and prediction error for each family.
-Finally, in the section on [<a
-href="#Zcompilation_and_execution">Compilation and Execution</a>] we
-provide instructions on how to aquire and compile the source code to
-enable OpenMP parallel processing.
 </p>  
 
 <a id="Zpackage_overview"></a><h2>Package Overview</h2>
@@ -1130,17 +1126,13 @@ returns the forest ensemble(s) to the R function, which
 post-processes the results.  It is advantageous to parallelize this
 iterative process.  Such situations are often called "pleasingly
 parallel". The default pre-compiled binaries, available on CRAN,
-will execute only serially, but the package has been written to be
+should execute in parallel.  If not, the package has been written to be
 easily compiled to accommodate
 parallel execution.   As a prerequisite, the host architecture,
 operating system, and installed compilers must support it.  OpenMP and
 Open MPI compilers must be available on the host
 system.  If this
-is the case, it is possible to install platform specific binaries of
-the packag or,
-alternatively, compile the source code to enable parallel processing.
-More details on this process is contained in the section
-[<a href="#Zcompilation_and_execution">Compilation and Execution</a>].
+is the case, it is possible to compile the source code to enable parallel processing.
 </p>
 
 <figure id="Yiterative_process" class="frame"> <img
@@ -1311,8 +1303,6 @@ decreases in elapsed time were observed.  This indicates that the
 package is capable of massive scalability.  The primary and replica
 code harnesses are given in the section [<a
 href="#Zsupplementary_code">Supplementary Code</a>].
-More details on installing an OpenMP enabled version of the package is contained in the section
-[<a href="#Zcompilation_and_execution">Compilation and Execution</a>].
 </p>
 
 <figure id="Ypegasus" class="frame"> <img
