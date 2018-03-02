@@ -34,7 +34,7 @@ rfsrc(formula, data, ntree = 1000,
   nodesize = NULL,
   nodedepth = NULL,
   splitrule = NULL,
-  nsplit = 0,
+  nsplit = NULL,
   importance = c(FALSE, TRUE, "none", "permute", "random", "anti", 
                  "permute.ensemble", "random.ensemble",  "anti.ensemble"),
   
@@ -109,11 +109,11 @@ rfsrc(formula, data, ntree = 1000,
     concept in that scenario.  However, values greater than one are
     accepted, as with the other split rules.}
   \item{importance}{Method for computing variable importance (VIMP).
-    Calculating VIMP can be computationally expensive when the number of
-    variables is high, thus the default action is
-    \code{importance="none"}.  Setting \code{importance=TRUE} implements
-    Breiman-Cutler permutation VIMP.  See below for further
-    details.} 
+    Because VIMP is computationally expensive, the default action is
+    \code{importance="none"} (VIMP can always be recovered later
+    using the functions \command{vimp} or \command{predict}). Setting
+    \code{importance=TRUE} implements Breiman-Cutler permutation VIMP.
+    See below for more details.}
   \item{na.action}{Action taken if the data contains \code{NA}'s.
     Possible values are \code{na.omit} or \code{na.impute}.
     The default \code{na.omit} removes the entire record if
@@ -172,7 +172,9 @@ rfsrc(formula, data, ntree = 1000,
     sample size).  It is generally better to use real weights rather than
     integers.  With larger sizes of \code{n}, the slightly different
     sampling algorithms used in the two scenarios can result in
-    dramatically different execution times.}
+    dramatically different execution times.  See the example below for
+    the breast data set for an illustration of its use for
+    class imbalanced data.}
   \item{split.wt}{Vector of non-negative weights where entry
     \code{k}, after normalizing, is the multiplier by which the
     split statistic for a variable is adjusted.  A large value
@@ -224,9 +226,10 @@ rfsrc(formula, data, ntree = 1000,
   \enumerate{
     
     \item \emph{Families}
-    
-    The package automagically determines the underlying random forest
-    family to be fit from the following eight choices:
+
+    Users do *not* set this value as the package automagically determines
+    the underlying random forest family from the type of response and
+    the formula supplied.  There are eight possible scenarios:
     
     \code{regr}, \code{regr+}, \code{class}, \code{class+}, \code{mix+},
     \code{unsupv}, \code{surv}, and \code{surv-CR}.
@@ -247,7 +250,7 @@ rfsrc(formula, data, ntree = 1000,
     }
     
     See below for how to code the response in the two different survival
-    scenarios and for responses for multivariate forests.
+    scenarios and for specifying formula for multivariate forests.
     
     \item \emph{Splitrules}
     
@@ -491,7 +494,7 @@ rfsrc(formula, data, ntree = 1000,
     \item \emph{Multivariate Forests}
     
     Multivariate forests are specified by using the multivariate formula
-    interface.  Such a call can take one of two forms:
+    interface.  Such a call takes one of two forms:
     
     rfsrc(Multivar(y1, y2, ..., yd) ~ . , my.data, ...)
     
@@ -501,10 +504,7 @@ rfsrc(formula, data, ntree = 1000,
     nodes.  The nature of the outcomes will inform the code as to the
     type of multivariate forest to be grown; i.e. whether it is real-valued,
     categorical, or a combination of both (mixed). Note that performance
-    measures such as VIMP and error rates are returned for all outcomes.
-    For faster speed, VIMP can be turned off and the \command{predict}
-    function used later to extract these values.
-    
+    measures (when requested) are returned for all outcomes.
     
     \item \emph{Unsupervised Forests}
     
@@ -596,18 +596,16 @@ rfsrc(formula, data, ntree = 1000,
     Setting \option{na.action="na.impute"} imputes missing data (both x
     and y-variables) using a modification of the missing data algorithm
     of Ishwaran et al. (2008).  See also Tang and Ishwaran (2017).
-    Prior to splitting a node, missing data for a variable is imputed by
-    randomly drawing values from non-missing in-bag data.  The purpose
-    of this imputed data is to make it possible to assign cases to
-    daughter nodes in the event the node is split on a variable with
-    missing data.  Imputed data is however not used to calculate the
-    split-statistic which uses non-missing data only.  Following a node
-    split, imputed data are reset to missing and the process is repeated
-    until terminal nodes are reached.  Missing data in terminal nodes
-    are imputed using in-bag non-missing terminal node data.  For
-    integer valued variables and censoring indicators, imputation uses a
-    maximal class rule, whereas continuous variables and survival time
-    use a mean rule.
+    Split statistics are calculated using non-misssing data only.  If a
+    node splits on a variable with missing data, the variable's missing
+    data is imputed by randomly drawing values from non-missing in-bag
+    data.  The purpose of this is to make it possible to assign cases to
+    daughter nodes based on the split.  Following a node split, imputed
+    data are reset to missing and the process is repeated until terminal
+    nodes are reached.  Missing data in terminal nodes are imputed using
+    in-bag non-missing terminal node data.  For integer valued variables
+    and censoring indicators, imputation uses a maximal class rule,
+    whereas continuous variables and survival time use a mean rule.
     
     The missing data algorithm can be iterated by setting \code{nimpute}
     to a positive integer greater than 1.  Using only a few iterations are
@@ -816,13 +814,23 @@ rfsrc(formula, data, ntree = 1000,
   Lauer M.S. (2010).  High-dimensional variable selection for survival
   data.  \emph{J. Amer. Statist. Assoc.}, 105:205-217.
   
+  Ishwaran H., Kogalur U.B., Chen X. and Minn A.J. (2011). Random survival
+  forests for high-dimensional data. \emph{Stat. Anal. Data Mining}, 4:115-132
+  
   Ishwaran H., Gerds T.A., Kogalur U.B., Moore R.D., Gange S.J. and Lau
   B.M. (2014). Random survival forests for competing risks.
   \emph{Biostatistics}, 15(4):757-773.
   
+  Ishwaran H. and Malley J.D. (2014). Synthetic learning
+  machines. \emph{BioData Mining}, 7:28.
+
   Ishwaran H. (2015).  The effect of splitting on random forests.
   \emph{Machine Learning}, 99:75-118.
-  
+
+  Ishwaran H. and Lu M.  (2017).  Standard errors and confidence
+  intervals for variable importance in random forest regression,
+  classification, and survival.
+
   Lin Y. and Jeon Y. (2006).  Random forests and adaptive nearest
   neighbors, \emph{J. Amer. Statist. Assoc.}, 101:578-590.
   
@@ -838,11 +846,14 @@ rfsrc(formula, data, ntree = 1000,
   forests for survival analysis using prediction error curves,
   \emph{J.  Statist. Software}, 50(11): 1-23.
   
+  O'Brien R. and Ishwaran H. (2017).  A random forests quantile
+  classifier for class imbalanced data.
+
   Segal M.R. (1988).  Regression trees for censored data,
   \emph{Biometrics},  44:35-47.
 
   Tang F. and Ishwaran H. (2017).  Random forest missing data
-  algorithms.  To appear in \emph{Statistical Analysis and Data Mining}.
+  algorithms.  \emph{Statistical Analysis and Data Mining}, 10, 363-377.
 }
 \seealso{
   \command{\link{find.interaction}},
@@ -1071,6 +1082,29 @@ iris.obj <- rfsrc(Species ~., data = iris)
 data(breast, package = "_PROJECT_PACKAGE_NAME_")
 breast.obj <- rfsrc(status ~ ., data = breast, nsplit = 10, tree.err=TRUE)
 plot(breast.obj)
+
+## ------------------------------------------------------------
+## Classification analysis with class imbalanced data
+## ------------------------------------------------------------
+
+data(breast, package = "_PROJECT_PACKAGE_NAME_")
+breast <- na.omit(breast)
+o <- rfsrc(status ~ ., data = breast, nsplit = 10)
+print(o)
+
+## The data is imbalanced so we use balanced random forests
+## with undersampling of the majority class
+##
+## Specifically let n0, n1 be sample sizes for majority, minority
+## cases.  We sample 2 x n1 cases with majority, minority cases chosen
+## with probabilities n1/n, n0/n where n=n0+n1
+
+y <- breast$status
+o <- rfsrc(status ~ ., data = breast, nsplit = 10,
+           case.wt = _PROJECT_PACKAGE_NAME_:::make.wt(y),
+           sampsize = _PROJECT_PACKAGE_NAME_:::make.size(y))
+print(o)
+
 
 ## ------------------------------------------------------------
 ## Unsupervised analysis

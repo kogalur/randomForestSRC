@@ -1,6 +1,6 @@
 partial.rfsrc <- function(
   object,
-  outcome.target = NULL,
+  m.target = NULL,
   partial.type = NULL,
   partial.xvar = NULL,
   partial.values = NULL,
@@ -64,7 +64,7 @@ partial.rfsrc <- function(
   object$yvar <- as.data.frame(object$yvar)
   colnames(object$yvar) <- yvar.names
   yfactor <- extract.factor(object$yvar)
-  outcome.target.idx <- get.outcome.target(family, yvar.names, outcome.target)
+  m.target.idx <- get.outcome.target(family, yvar.names, m.target)
   ## Get the y-outcome type and number of levels
   yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names, object$coerce.factor)
   yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, object$yvar, object$coerce.factor)
@@ -107,19 +107,21 @@ partial.rfsrc <- function(
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
-                                  as.integer(oob.bits + bootstrap.bits + cr.bits), 
+                                  as.integer(
+                                      oob.bits +
+                                      bootstrap.bits +
+                                      cr.bits), 
                                   as.integer(
                                     samptype.bits +
                                       na.action.bits +
                                         terminal.qualts.bits +
                                           terminal.quants.bits +
                                             partial.bits),
+                                  ## >>>> start of maxi forest object >>>>
                                   as.integer(ntree),
                                   as.integer(n),
                                   as.integer(r.dim),
                                   as.character(yvar.types),
-                                  as.integer(outcome.target.idx),
-                                  as.integer(length(outcome.target.idx)),
                                   as.integer(yvar.nlevels),
                                   as.double(as.vector(yvar)),
                                   as.integer(ncol(xvar)),
@@ -131,28 +133,70 @@ partial.rfsrc <- function(
                                   as.double(object$case.wt),
                                   as.integer(length(event.info$time.interest)),
                                   as.double(event.info$time.interest),
+                                  as.integer(object$totalNodeCount),
+                                  as.integer(object$seed),
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
+                                  as.integer(object$htry),
+                                  if (object$htry > 0) {
+                                      list((object$nativeArray)$hcDim,
+                                      (object$nativeArray)$hcPartDim,
+                                      (object$nativeArray)$hcPartIdx,
+                                      (object$nativeArray)$osPartIdx)
+                                  }
+                                  else {
+                                      NULL
+                                  },
                                   as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
-                                  as.integer(object$nativeFactorArray),
+                                  as.integer((object$nativeFactorArray)$mwcpPT),
+                                  if (object$htry > 1) {
+                                      list((object$nativeArray)$parmID2,
+                                      (object$nativeArray)$contPT2,
+                                      (object$nativeArray)$mwcpSZ2,
+                                      (object$nativeFactorArray)$mwcpPT2)
+                                  }
+                                  else {
+                                      NULL
+                                  },
+                                  if (object$htry > 2) {
+                                      list((object$nativeArray)$parmID3,
+                                      (object$nativeArray)$contPT3,
+                                      (object$nativeArray)$mwcpSZ3,
+                                      (object$nativeFactorArray)$mwcpPT3)
+                                  }
+                                  else {
+                                      NULL
+                                  },
+                                  if (object$htry > 3) {
+                                      list((object$nativeArray)$parmID4,
+                                      (object$nativeArray)$contPT4,
+                                      (object$nativeArray)$mwcpSZ4,
+                                      (object$nativeFactorArray)$mwcpPT4)
+                                  }
+                                  else {
+                                      NULL
+                                  },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
                                   as.integer(object$nativeArrayTNDS$tnRCNT),
                                   as.integer(object$nativeArrayTNDS$tnACNT),
-                                  as.integer(object$totalNodeCount),
-                                  as.integer(object$seed),
-                                  as.integer(get.rf.cores()),
-                                  ## Pruning disabled
-                                  as.integer(0),
-                                  ## Importance disabled
-                                  as.integer(0),
-                                  as.integer(NULL),
-                                  ## Subsetting disabled.
-                                  as.integer(0),
-                                  as.integer(NULL),
+                                  as.double((object$nativeArrayTNDS$tnSURV)),
+                                  as.double((object$nativeArrayTNDS$tnMORT)),
+                                  as.double((object$nativeArrayTNDS$tnNLSN)),
+                                  as.double((object$nativeArrayTNDS$tnCSHZ)),
+                                  as.double((object$nativeArrayTNDS$tnCIFN)),
+                                  as.double((object$nativeArrayTNDS$tnREGR)),
+                                  as.integer((object$nativeArrayTNDS$tnCLAS)),
+                                  ## <<<< end of maxi forest object <<<<
+                                  as.integer(m.target.idx),
+                                  as.integer(length(m.target.idx)),
+                                  as.integer(0),  ## Pruning disabled
                                     
+                                  as.integer(0),     ## Importance disabled
+                                  as.integer(NULL),  ## Importance disabled
+                                  ## Partial variables enabled.
                                   as.integer(get.type(family, partial.type)),
                                   as.integer(which(xvar.names == partial.xvar)),
                                   as.integer(length(partial.values)),
@@ -160,18 +204,13 @@ partial.rfsrc <- function(
                                   as.integer(length(partial.xvar2)),
                                   as.integer(match(partial.xvar2, xvar.names)),
                                   as.double(partial.values2),
-                                  ## New data disabled.
-                                  as.integer(0),
-                                  as.integer(0),
-                                  as.double(NULL),
-                                  as.double(NULL),
-                                  as.double((object$nativeArrayTNDS$tnSURV)),
-                                  as.double((object$nativeArrayTNDS$tnMORT)),
-                                  as.double((object$nativeArrayTNDS$tnNLSN)),
-                                  as.double((object$nativeArrayTNDS$tnCSHZ)),
-                                  as.double((object$nativeArrayTNDS$tnCIFN)),
-                                  as.double((object$nativeArrayTNDS$tnREGR)),
-                                  as.integer((object$nativeArrayTNDS$tnCLAS)))}, error = function(e) {
+                                  as.integer(0),     ## Subsetting disabled.
+                                  as.integer(NULL),  ## Subsetting disabled.
+                                  as.integer(0),    ## New data disabled.
+                                  as.integer(0),    ## New data disabled.
+                                  as.double(NULL),  ## New data disabled.
+                                  as.double(NULL),  ## New data disabled.
+                                  as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
   ## check for error return condition in the native code
@@ -337,8 +376,8 @@ partial.rfsrc <- function(
         iter.end   <- 0
         offset <- vector("list", class.count)
         for (p in 1:length(partial.values)) {
-          for (k in 1:length(outcome.target.idx)) {
-            target.idx <- which (class.index == outcome.target.idx[k])
+          for (k in 1:length(m.target.idx)) {
+            target.idx <- which (class.index == m.target.idx[k])
             if (length(target.idx) > 0) {
               iter.start <- iter.end
               iter.end <- iter.start + ((1 + levels.count[target.idx]) * n)
@@ -346,8 +385,8 @@ partial.rfsrc <- function(
             }
           }
         }
-        for (i in 1:length(outcome.target.idx)) {
-          target.idx <- which (class.index == outcome.target.idx[i])
+        for (i in 1:length(m.target.idx)) {
+          target.idx <- which (class.index == m.target.idx[i])
           if (length(target.idx) > 0) {
             ens.names <- list(NULL, c("all", levels.names[[target.idx]]), NULL)
             ## Incoming from the native code:
@@ -373,8 +412,8 @@ partial.rfsrc <- function(
         iter.end   <- 0
         offset <- vector("list", regr.count)
         for (p in 1:length(partial.values)) {
-          for (k in 1:length(outcome.target.idx)) {
-            target.idx <- which (regr.index == outcome.target.idx[k])
+          for (k in 1:length(m.target.idx)) {
+            target.idx <- which (regr.index == m.target.idx[k])
             if (length(target.idx) > 0) {
               iter.start <- iter.end
               iter.end <- iter.start + n
@@ -382,8 +421,8 @@ partial.rfsrc <- function(
             }
           }
         }
-        for (i in 1:length(outcome.target.idx)) {
-          target.idx <- which (regr.index == outcome.target.idx[i])
+        for (i in 1:length(m.target.idx)) {
+          target.idx <- which (regr.index == m.target.idx[i])
           if (length(target.idx) > 0) {
             ens.names <- list(NULL, NULL)
             ## Incoming from the native code:

@@ -5,14 +5,14 @@
   Plot out-of-bag (OOB) error rates and variable importance (VIMP)
   from a RF-SRC analysis. This is the default plot method for the package.
 }
-\usage{\method{plot}{rfsrc}(x, outcome.target = NULL,
+\usage{\method{plot}{rfsrc}(x, m.target = NULL,
   plots.one.page = TRUE, sorted = TRUE, verbose = TRUE,  ...)}
 \arguments{
   \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc, synthetic)},
     or \code{(rfsrc, predict)}.}
-  \item{outcome.target}{Character value for multivariate families
-    specifying the target outcome to be used. The default is to use the
-    first coordinate.}
+  \item{m.target}{Character value for multivariate families
+    specifying the target outcome to be used.  If left unspecified, the
+    algorithm will choose a default target.}
   \item{plots.one.page}{Should plots be placed on one page?}
   \item{sorted}{Should variables be sorted by importance values?}
   \item{verbose}{Should VIMP be printed?}
@@ -72,9 +72,9 @@ mtcars.new <- mtcars
 mtcars.new$cyl <- factor(mtcars.new$cyl)
 mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
 mv.obj <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new, tree.err = TRUE)
-plot(mv.obj, outcome.target = "carb")
-plot(mv.obj, outcome.target = "mpg")
-plot(mv.obj, outcome.target = "cyl")
+plot(mv.obj, m.target = "carb")
+plot(mv.obj, m.target = "mpg")
+plot(mv.obj, m.target = "cyl")
 
 }
 }

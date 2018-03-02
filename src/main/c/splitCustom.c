@@ -54,7 +54,7 @@ void registerCustomFunctions() {
 /*
   Generic Custom Split Rule Harness
 
-  Function Inputs:
+  FUNCTION INPUTS:
   n - number of replicates in the parent node to be split
 
   membership     - vector of length n representing daughter node
@@ -81,8 +81,21 @@ void registerCustomFunctions() {
   maxLevel - convenience value representing the maximum level for this factor respone
   in the data set as a whole.  This will be NULL for non-factor respones.
 
+  feature - matrix of user specified features that can be sent into
+  the split rule and acted on as desired.  The matrix is of dimension
+  [featureCount] x [n].  Features are neither y-variables or
+  x-variables. However, for expediency, they are specified by the user
+  as y-variables, but are tagged as having zero weight via the
+  y-variable weight vector.  Thus, they are never used in the the
+  pre-defined split rules, and have no predicted value. The pointer will be NULL
+  when features are absent.
 
-  Function Output:  returns custom split statistic
+  featureCount - count of features in the above matrix, specifically the
+  number of rows.  The count will be zero when features are absent.
+
+
+  FUNCTION OUTPUT:  returns a double value representing the custom split statistic
+
 
   Depending on the split statistic, the user may need to allocate and 
   de-allocate arrays of various dimensions.  A typical alloc/de-alloc is
@@ -111,7 +124,10 @@ double getCustomSplitStatisticMultivariateRegression (unsigned int n,
                                                       double      *response,
                                                       double       mean,
                                                       double       variance,
-                                                      unsigned int maxLevel)
+                                                      unsigned int maxLevel,
+
+                                                      double     **feature,
+                                                      unsigned int featureCount)
 {
 
   // EXAMPLE:  Multivariate Regression
@@ -173,7 +189,10 @@ double getCustomSplitStatisticMultivariateClassification (unsigned int n,
                                                           double      *response,
                                                           double       mean,
                                                           double       variance,
-                                                          unsigned int maxLevel)
+                                                          unsigned int maxLevel,
+
+                                                          double     **feature,
+                                                          unsigned int featureCount)
 {
 
   // EXAMPLE:  Multivariate Classification
@@ -264,7 +283,10 @@ double getCustomSplitStatisticSurvival (unsigned int n,
                                         double      *response,
                                         double       mean,
                                         double       variance,
-                                        unsigned int maxLevel)
+                                        unsigned int maxLevel,
+
+                                        double     **feature,
+                                        unsigned int featureCount)
 {
 
   // EXAMPLE:  Survival (logrank)
@@ -400,7 +422,10 @@ double getCustomSplitStatisticCompetingRisk (unsigned int n,
                                              double      *response,
                                              double       mean,
                                              double       variance,
-                                             unsigned int maxLevel)
+                                             unsigned int maxLevel,
+                                             
+                                             double     **feature,
+                                             unsigned int featureCount)
 {
 
   // EXAMPLE:  Competing Risk (logrankCR)

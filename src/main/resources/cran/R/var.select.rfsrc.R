@@ -3,7 +3,7 @@ var.select.rfsrc <-
            data,
            object,
            cause,
-           outcome.target = NULL,
+           m.target = NULL,
            method = c("md", "vh", "vh.vimp"),
            conservative = c("medium", "low", "high"),
            ntree = (if (method == "md") 1000 else 500),
@@ -65,7 +65,7 @@ var.select.rfsrc <-
     }
     ## extract vimp
     ## for multivariate families we must manually extract the importance and error rate
-    imp <- get.imp(coerce.multivariate(rfsrc.filter.obj, outcome.target), target.dim)
+    imp <- get.varselect.imp(coerce.multivariate(rfsrc.filter.obj, m.target), target.dim)
     names(imp) <- rfsrc.filter.obj$xvar.names
     ## selection using vimp
     if (method == "vh.vimp") {
@@ -121,8 +121,8 @@ var.select.rfsrc <-
         sig.vars <- sig.vars.old
         break
       }
-      imp <- coerce.multivariate(vimp(rfsrc.filter.obj, sig.vars, outcome.target = outcome.target,
-                                      joint = TRUE), outcome.target)$importance[target.dim]
+      imp <- coerce.multivariate(vimp(rfsrc.filter.obj, sig.vars, m.target = m.target,
+                                      joint = TRUE), m.target)$importance[target.dim]
       ## verbose output
       if (verbose) cat("\t iteration: ", b,
                        "  # vars:",     length(sig.vars),
@@ -182,11 +182,11 @@ var.select.rfsrc <-
       }
       rfsrc.all.f <- formula
     }
-  ## If an object is provided, after the above checks, make the outcome.target coherent.
+  ## If an object is provided, after the above checks, make the m.target coherent.
   if (!missing(object)) {
-    ## Initialize the target outcome, in case it is NULL.
-    ## Coersion of an object depends on a target outcome.
-    outcome.target <- get.univariate.target(object, outcome.target)
+    ## initialize the target outcome, in case it is NULL
+    ## coersion of an object depends on a target outcome
+    m.target <- get.univariate.target(object, m.target)
   }
   ## rearrange the data
   ## need to handle unsupervised families carefully: minimal depth is the only permissible method
@@ -303,7 +303,7 @@ var.select.rfsrc <-
         target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
       }
       ## for multivariate families we must manually extract the importance and error rate
-      wts <- pmax(get.imp(coerce.multivariate(rfsrc.prefit.obj, outcome.target), target.dim), 0)
+      wts <- pmax(get.varselect.imp(coerce.multivariate(rfsrc.prefit.obj, m.target), target.dim), 0)
       if (any(wts > 0)) {
         xvar.wt <- get.weight(wts, P)
       }
@@ -317,9 +317,9 @@ var.select.rfsrc <-
       if (verbose) cat("minimal depth variable selection ...\n")
       md.obj <- max.subtree(object, conservative = (conservative == "high"))
       ## for multivariate families we must manually extract the importance and error rate
-      object <- coerce.multivariate(object, outcome.target)
-      outcome.target <- object$outcome.target
-      pe <- get.err(object)
+      object <- coerce.multivariate(object, m.target)
+      m.target <- object$outcome.target
+      pe <- get.varselect.err(object)
       ntree <- object$ntree
       nsplit <- object$nsplit
       mtry <- object$mtry
@@ -328,8 +328,8 @@ var.select.rfsrc <-
       if (family == "surv-CR") {
         target.dim <- max(1, min(cause, max(get.event.info(object)$event.type)), na.rm = TRUE)
       }
-      imp <- get.imp(object, target.dim)
-      imp.all <- get.imp.all(object)
+      imp <- get.varselect.imp(object, target.dim)
+      imp.all <- get.varselect.imp.all(object)
       rm(object)
     }
     ## ------------------------------------------------
@@ -355,11 +355,11 @@ var.select.rfsrc <-
         if (verbose) cat("minimal depth variable selection ...\n")
         md.obj <- max.subtree(rfsrc.obj, conservative = (conservative == "high"))
         ## for multivariate families we must manually extract the importance and error rate
-        rfsrc.obj <- coerce.multivariate(rfsrc.obj, outcome.target)
-        outcome.target <- rfsrc.obj$outcome.target
-        pe <- get.err(rfsrc.obj)
-        imp <- get.imp(rfsrc.obj, target.dim)
-        imp.all <- get.imp.all(rfsrc.obj)
+        rfsrc.obj <- coerce.multivariate(rfsrc.obj, m.target)
+        m.target <- rfsrc.obj$outcome.target
+        pe <- get.varselect.err(rfsrc.obj)
+        imp <- get.varselect.imp(rfsrc.obj, target.dim)
+        imp.all <- get.varselect.imp.all(rfsrc.obj)
         mtry <- rfsrc.obj$mtry
         nodesize <- rfsrc.obj$nodesize
         n <- nrow(rfsrc.obj$xvar)
@@ -390,7 +390,7 @@ var.select.rfsrc <-
                                 na.action = na.action,
                                 do.trace = do.trace)
       ## for multivariate families we must manually extract the importance and error rate
-      rfsrc.refit.obj <- coerce.multivariate(rfsrc.refit.obj, outcome.target)
+      rfsrc.refit.obj <- coerce.multivariate(rfsrc.refit.obj, m.target)
     }
       else {
         rfsrc.refit.obj <- NULL
@@ -402,7 +402,7 @@ var.select.rfsrc <-
       cat("family             :", family, "\n")
       if (family == "regr+" | family == "class+" | family == "mix+") {
         cat("no. y-variables    : ", yvar.dim,       "\n", sep="")
-        cat("response used      : ", outcome.target, "\n", sep="")
+        cat("response used      : ", m.target, "\n", sep="")
       }    
       cat("var. selection     :", mName, "\n")
       cat("conservativeness   :", conservative, "\n")
@@ -511,8 +511,8 @@ var.select.rfsrc <-
         }
       }
       ## for multivariate families we must manually extract the importance and error rate
-      rfsrc.prefit.obj <- coerce.multivariate(rfsrc.prefit.obj, outcome.target)
-      wts <- pmax(get.imp(rfsrc.prefit.obj, target.dim), 0)
+      rfsrc.prefit.obj <- coerce.multivariate(rfsrc.prefit.obj, m.target)
+      wts <- pmax(get.varselect.imp(rfsrc.prefit.obj, target.dim), 0)
       if (any(wts > 0)) {
         var.pt <- unique(resample(var.columns, mvars, replace = TRUE, prob = wts))
       }
@@ -534,7 +534,7 @@ var.select.rfsrc <-
     ## RFSRC gene hunting call
     object <- rfsrc.var.hunting(train.id, var.pt, nstep)
     rfsrc.obj <- object$rfsrc.obj
-    outcome.target <- get.univariate.target(rfsrc.obj, outcome.target)
+    m.target <- get.univariate.target(rfsrc.obj, m.target)
     sig.vars <- object$sig.vars
     if (method == "vh") {
       forest.depth[m] <- object$forest.depth
@@ -542,8 +542,8 @@ var.select.rfsrc <-
     }
     ## RFSRC prediction
     ## for multivariate families we must manually extract the importance and error rate
-    pred.out <- coerce.multivariate(predict(rfsrc.obj, data[test.id, ], importance = "none"), outcome.target)
-    pred.results[m] <- get.err(pred.out)[target.dim] 
+    pred.out <- coerce.multivariate(predict(rfsrc.obj, data[test.id, ], importance = "none"), m.target)
+    pred.results[m] <- get.varselect.err(pred.out)[target.dim] 
     dim.results[m] <- length(sig.vars)
     var.signature <- c(var.signature, sig.vars)
     ## nice output
@@ -600,7 +600,7 @@ var.select.rfsrc <-
     cat("family             :", family, "\n")
     if (family == "regr+" | family == "class+" | family == "mix+") {
       cat("no. y-variables    : ", yvar.dim,              "\n", sep="")
-      cat("response used      : ", outcome.target, "\n", sep="")
+      cat("response used      : ", m.target, "\n", sep="")
     }    
     cat("var. selection     :", mName, "\n")
     cat("conservativeness   :", conservative, "\n")
@@ -643,7 +643,7 @@ var.select.rfsrc <-
 ## internal functions
 ##
 ## --------------------------------------------------------------
-get.imp <- function(f.o, target.dim) {
+get.varselect.imp <- function(f.o, target.dim) {
   if (!is.null(f.o$importance)) {
     c(cbind(f.o$importance)[, target.dim])
   }
@@ -651,7 +651,7 @@ get.imp <- function(f.o, target.dim) {
       rep(NA, length(f.o$xvar.names))
     }
 }
-get.imp.all <- function(f.o) {
+get.varselect.imp.all <- function(f.o) {
   if (!is.null(f.o$importance)) {
     imp.all <- cbind(f.o$importance)
     if (ncol(imp.all) == 1) {
@@ -666,7 +666,7 @@ get.imp.all <- function(f.o) {
       rep(NA, length(f.o$xvar.names))
     }
 }
-get.err <- function(f.o) {
+get.varselect.err <- function(f.o) {
   if (!is.null(f.o$err.rate)) {
     if (grepl("surv", f.o$family)) {
       err <- 100 * cbind(f.o$err.rate)[f.o$ntree, ]

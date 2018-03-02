@@ -101,18 +101,18 @@
 }
 
 \section{OpenMP Parallel Processing -- Installation}{This package
-  implements OpenMP shared-memory parallel programming.  However, the
-  default installation will only execute serially.  To utilize OpenMP,
-  the target architecture and operating system must support it.
+  implements OpenMP shared-memory parallel programming if the
+  target architecture and operating system support it.  This is the
+  default mode of execution.
 
+  Additional instructions for configuring OpenMP parallel processing
+  are available at
+  \url{_HTTPS_PREFIX_kogalur.github.io/randomForestSRC/building.html}.
+  
   An understanding of resource utilization (CPU and RAM) is necessary
   when running the package using OpenMP and Open MPI parallel execution.
   Memory usage is greater when running with OpenMP
   enabled.  Diligence should be used not to overtax the hardware available.
-
-  Instructions for installing the OpenMP capable version
-  of the CRAN package are available at
-  \url{_HTTPS_PREFIX_kogalur.github.io/randomForestSRC/#section9}.
 
 }
 
@@ -135,29 +135,49 @@
   Ishwaran H., Kogalur U.B., Gorodeski E.Z, Minn A.J. and
   Lauer M.S. (2010).  High-dimensional variable selection for survival
   data.  \emph{J. Amer. Statist. Assoc.}, 105:205-217.
-  
+
+  Ishwaran H., Kogalur U.B., Chen X. and Minn A.J. (2011). Random survival
+  forests for high-dimensional data. \emph{Stat. Anal. Data Mining}, 4:115-132
+
   Ishwaran H., Gerds T.A., Kogalur U.B., Moore R.D., Gange S.J. and Lau
   B.M. (2014). Random survival forests for competing risks.
   \emph{Biostatistics}, 15(4):757-773.
+
+  Ishwaran H. and Malley J.D. (2014). Synthetic learning
+  machines. \emph{BioData Mining}, 7:28.
   
   Ishwaran H. (2015).  The effect of splitting on random forests.
   \emph{Machine Learning}, 99:75-118.
+  
+  Ishwaran H. and Lu M.  (2017).  Standard errors and confidence
+  intervals for variable importance in random forest regression,
+  classification, and survival.
+
+  Mantero A. and Ishwaran H. (2017). Unsupervised random forests.
+
+  O'Brien R. and Ishwaran H. (2017).  A random forests quantile
+  classifier for class imbalanced data.
 
   Tang F. and Ishwaran H. (2017).  Random forest missing data
-  algorithms.  To appear in \emph{Statistical Analysis and Data Mining}. 
+  algorithms.  \emph{Statistical Analysis and Data Mining}, 10, 363-377.
 }
 \seealso{
   \command{\link{find.interaction}},
-  \command{\link{impute.rfsrc}},
+   
+  \command{\link{impute}},
   \command{\link{max.subtree}},
+   
   \command{\link{plot.competing.risk}},
   \command{\link{plot.rfsrc}},
   \command{\link{plot.survival}},
   \command{\link{plot.variable}},
   \command{\link{predict.rfsrc}},
   \command{\link{print.rfsrc}},
+  \command{\link{quantileReg}},
+  \command{\link{rfsrc}},
   \command{\link{rfsrcSyn}},
-  \command{\link{stat.split}}
+   
+  \command{\link{stat.split}},
   \command{\link{var.select}},
   \command{\link{vimp}}
 }

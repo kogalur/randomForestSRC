@@ -1,7 +1,7 @@
-plot.rfsrc <- function (x, outcome.target = NULL, plots.one.page = TRUE, sorted = TRUE, verbose = TRUE, ...)
+plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE, verbose = TRUE, ...)
 {
   sf.flag <- FALSE
-  ## is this a synthetic forest?
+  ## is this a synthetic forest?  Printing is different in that case
   if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
     if (sum(inherits(x, c("rfsrc", "synthetic", "oob"), TRUE) == c(1, 2, 3)) != 3) {
       sf.flag <- TRUE
@@ -15,9 +15,9 @@ plot.rfsrc <- function (x, outcome.target = NULL, plots.one.page = TRUE, sorted 
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, predict)'")
   }
    
-  ## Coerce the (potentially) multivariate object if necessary.
-  outcome.target <- get.univariate.target(x, outcome.target)
-  x <- coerce.multivariate(x, outcome.target)
+  ## coerce the (potentially) multivariate object if necessary.
+  m.target <- get.univariate.target(x, m.target)
+  x <- coerce.multivariate(x, m.target)
   ## grow objects under non-standard bootstrapping are devoid of
   ## performance values
   if (is.null(x$err.rate)) {

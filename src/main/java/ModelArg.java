@@ -61,6 +61,7 @@ public class ModelArg {
     private int        nSplit;
 
     private int        mtry;
+    private int        htry;
     private int        ytry;
 
     private int        nodeSize;
@@ -143,8 +144,10 @@ public class ModelArg {
         splitRuleID.put("unsupv",               12);
         splitRuleID.put("mv.mse",               13);
         splitRuleID.put("mv.gini",              14);
-        splitRuleID.put("custom",               15);
-        splitRuleID.put("l2.impute",            16);
+        splitRuleID.put("mv.mix",               15);
+        splitRuleID.put("custom",               16);
+        splitRuleID.put("l2.impute",            17);
+        splitRuleID.put("rps",                  18);
     }
     
     // HashMap containing types for x-vars and y-vars.
@@ -1088,20 +1091,16 @@ public class ModelArg {
         // Default value of mtry.
         set_mtry();
 
+        // Default value of htry.
+        set_htry(0);
+
         // Default bootstrap.
         set_bootstrap();
 
         // Set x-weight, y-weight, and split weight.
         set_xWeight();
 
-        // yWeight must always be specified explicitly, otherwise it
-        // is null.  In contrast, xWeight is automatically initialized
-        // as a uniform vector, with an associated default value of
-        // mtry.  Here, yWeight is initialized to null, and ytry set
-        // to zero (0).  In the case of RF-U, ytry is set via the
-        // formula, and yWeight is currently ignored on the
-        // native-side.  (TBD TBD)
-        yWeight = null;
+        set_yWeight();
 
         set_xStatisticalWeight();
 
@@ -1458,8 +1457,8 @@ public class ModelArg {
      * weights where, after normalizing, weight[k] is the
      * probability of selecting case k as a candidate when bootstrap = auto.
      * The default is to use uniform weights for selection.  It is generally better to use real
-     * weights rather than integers.  With larger values of nsize, the
-     * slightly different sampling algorithms depolyed in the two
+     * weights rather than integers.  With larger values of nSize, the
+     * slightly different sampling algorithms deployed in the two
      * scenarios can result in dramatically different execution times.
      */
     public void set_bootstrap(int ntree,
@@ -1707,6 +1706,50 @@ public class ModelArg {
         return mtry;
     }
 
+
+
+
+
+    /**
+     * Sets the maximum hypercube dimension to be considered in Greedy Splitting.  
+     * @param htry The maximum hypercube dimension to be considered in Greedy Splitting.
+     * If htry = 0, Standard Splitting is in effect.  If 1 &le; htry &le; 4, Greedy Splitting is in effect.
+     * If the value is out of range, the default value of zero (0) will be applied:
+     * <pre> <code> 
+     * <table class= "myColumnPadding">
+     *  <tr>
+     *    <th>htry</th>
+     *    <th>Protocol</th>
+     *  </tr>
+     *  <tr>
+     *    <td>0</td>
+     *    <td>standard splitting</td>
+     *  </tr>
+     *  <tr>
+     *    <td>1 &le htry &l. 4</td>     
+     *    <td>greedy splitting</td>
+     *  </tr>
+     * </table></p>
+     */
+    public void set_htry(int htry) {
+        if ((htry < 0) || (htry > 4)) {
+            this.htry = 0;
+        }
+        else {
+            this.htry = htry;
+        }
+    }
+
+    /** 
+     * Returns the maximum hypercube dimension to be considered in Greedy Splitting.
+     * @return The maximum hypercube dimension to be considered in Greedy Splitting.
+     * @see #set_htry(int)
+     */
+    public int get_htry() {
+        return htry;
+    }
+    
+
     /** 
      * Sets the number of iterations for the missing data algorithm.
      * @param nImpute The number of iterations for the missing data algorithm.
@@ -1781,37 +1824,43 @@ public class ModelArg {
 
     
     /**
-     * Experimental - Do Not Use.
+     * Sets the y-variable weight vector.  
+     * @param weight The y-variable weight vector.  This vector must
+     * be of length ySize ({@link #get_ySize}).  This is a vector of
+     * non-negative weights.  The vector has two purposes.  Purpose 1:
+     * After normalizing, weight[k] is the probability of selecting
+     * y-variable k to include in the multivariate split statistic.
+     * This is useful in big-r situations when ySize is very large and
+     * the user desires to restrict the split statistic calculation to
+     * ytry ({@link #get_ytry}) y-variables instead of all ySize
+     * y-variables.  Purpose 2: All y-variables with weight zero
+     * define a special feature matrix.  This feature matrix is
+     * presented to the user when custom splitting is in effect.  All
+     * y-variables with non-zero weight arrive in the custom split
+     * rule as usual.  In both uses, the default is to use uniform
+     * weights.  For Purpose 1, it is generally better to use real
+     * weights rather than integers.  With larger values of ySize, the
+     * slightly different sampling algorithms deployed in the two
+     * scenarios can result in dramatically different execution times.
+     * For Purpose 2, the only value that matters is the presence of
+     * zero.
      */
     public void set_yWeight(double[] weight) {
-        if (family.equals("RF-S")) {
-            RFLogger.log(Level.SEVERE, "yWeight cannot be specified when family is RF-S.");
-            throw new IllegalArgumentException();
-        }
-        if (ytry == 0) {
-            RFLogger.log(Level.SEVERE, "yWeight cannot be specified when ytry equals zero (0).");
-            throw new IllegalArgumentException();
-        }
         yWeight = setWeight(weight, ySize);
     }
 
-    /**
-     * Experimental - Do Not Use.
+    /** 
+     * Set the y-variable weight vector to uniform weights.
+     * @see #set_yWeight(double[])
      */
     public void set_yWeight() {
-        if (family.equals("RF-S")) {
-            RFLogger.log(Level.SEVERE, "yWeight cannot be specified when family is RF-S.");
-            throw new IllegalArgumentException();
-        }
-        if (ytry == 0) {
-            RFLogger.log(Level.SEVERE, "yWeight cannot be specified when ytry equals zero (0).");
-            throw new IllegalArgumentException();
-        }
         yWeight = setWeight(null, ySize);
     }
 
     /**
-     * Experimental - Do Not Use.
+     * Returns the y-variable weight vector.
+     * @return The y-variable weight vector.
+     * @see #set_yWeight(double[])
      */
     public double[] get_yWeight() {
         return yWeight;
@@ -1824,8 +1873,8 @@ public class ModelArg {
      * weights where, after normalizing, weight[k] is the
      * probability of selecting x-variable k as a candidate for splitting a node.
      * The default is to use uniform weights for selection.  It is generally better to use real
-     * weights rather than integers.  With larger values of nsize, the
-     * slightly different sampling algorithms depolyed in the two
+     * weights rather than integers.  With larger values of xSize, the
+     * slightly different sampling algorithms deployed in the two
      * scenarios can result in dramatically different execution times.
      */
     public void set_xWeight(double[] weight) {
@@ -2095,18 +2144,19 @@ public class ModelArg {
      * default split rule is applied when the user does not specify a
      * split rule. Survival and Competing Risk both have two split
      * rules. Regression has three flavours of split rules based on
-     * mean-squared error. Classification also has three flavours of
-     * split rules based on the Gini index. The Multivariate and
-     * Unsupervised split rules are a composite rule based on
-     * Regression and Classification. Each component of the composite
-     * is normalized so that the magnitude of any one y-variable does
-     * not influence the statistic. All families also allow the user
-     * to define a custom split rule statistic. Some basic
-     * C-programming skills are required. Examples for all the
-     * families reside in the C source code directory of the package
-     * in the file <code>src/main/c/splitCustom.c</code>. Note that
-     * recompiling and re-installing the package is necessary after
-     * modifying the source code.
+     * mean-squared error. Classification has three flavours of split
+     * rules based on the Gini index, and one additional rule for
+     * ordinal outcomes. The Multivariate and Unsupervised split rules
+     * are a composite rule based on Regression and
+     * Classification. Each component of the composite is normalized
+     * so that the magnitude of any one y-variable does not influence
+     * the statistic. All families also allow the user to define a
+     * custom split rule statistic. Some basic C-programming skills
+     * are required. Examples for all the families reside in the C
+     * source code directory of the package in the file
+     * <code>src/main/c/splitCustom.c</code>. Note that recompiling
+     * and re-installing the package is necessary after modifying the
+     * source code.
      * 
      * <pre> <code> 
      * <table class= "myColumnPadding">
@@ -2167,6 +2217,11 @@ public class ModelArg {
      *  <tr style="background-color:#eaeaea">
      *    <td>Gini index heavy weighted </td>
      *    <td>gini.hvwt</td>
+     *  </tr>
+     *
+     *  <tr style="background-color:#eaeaea">
+     *    <td>Ranked Probability Score </td>
+     *    <td>rps</td>
      *  </tr>
      *
      *  <tr style="background-color:#d6d6d6">
@@ -2249,7 +2304,7 @@ public class ModelArg {
             }
         }
         else if (family.equals("RF-C")) {
-            if (splitRule.equals("gini") || splitRule.equals("gini.unwt") || splitRule.equals("gini.hvwt")) {
+            if (splitRule.equals("gini") || splitRule.equals("gini.unwt") || splitRule.equals("gini.hvwt") || splitRule.equals("rps")) {
                 this.splitRule = splitRule;
                     result = true;
             }
@@ -2640,12 +2695,14 @@ public class ModelArg {
       
      *  <tr>
      *    <td>weight</td>
-     *    <td><b>no</b>, inbag, oob</td>
+     *    <td><i>Grow or Restore Only:</i><br><b>no</b>, inbag, oob<br>
+     *        <i>Predict Only:</i><br><b>no</b>, yes</td>
      *  </tr>
 
      *  <tr>
      *    <td>proximity</td>
-     *    <td><b>no</b>, inbag, oob</td>
+     *    <td><i>Grow or Restore Only:</i><br><b>no</b>, inbag, oob<br>
+     *        <i>Predict Only:</i><br><b>no</b>, yes</td>
      *  </tr>
      *  
      *  <tr>
@@ -2675,7 +2732,20 @@ public class ModelArg {
      *
      *  <tr>
      *    <td>errorType</td>
-     *    <td><i>For RF-C, RF-C+ Families Only:</i><br><b>default</b>, brier, g.mean, g.mean.drc</td>
+     *    <td><i>For RF-C, RF-C+ Families Only:</i><br><b>misclass</b>, brier, g.mean, no<br>
+     *        <i>For RF-R, RF-R+ Families Only:</i><br><b>mse</b>, no<br>
+     *        <i>For RF-M+ Family Only:</i><br><b>default</b>, no<br>
+     *        <i>For RF-S  Family Only:</i><br><b>c-index</b>, no<br>
+     *        <i>For RF-U  Family Only:</i><br><b>no</b><br></td>
+     *  </tr>
+     *
+     *  <tr>
+     *    <td>predictionType</td>
+     *    <td><i>For RF-C, RF-C+ Families Only:</i><br><b>max.vote</b>, rfq<br>
+     *        <i>For RF-R, RF-R+ Families Only:</i><br><b>mean</b><br>
+     *        <i>For RF-M+ Family Only:</i><br><b>default</b><br>
+     *        <i>For RF-S  Family Only:</i><br><b>default</b><br>
+     *        <i>For RF-U  Family Only:</i><br><b>no</b><br></td>
      *  </tr>
      *
      * </table>

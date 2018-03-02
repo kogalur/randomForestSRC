@@ -156,6 +156,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP splitRule,
                SEXP nsplit,
                SEXP mtry,
+               SEXP htry,
                SEXP ytry,
                SEXP nodeSize,
                SEXP nodeDepth,
@@ -189,6 +190,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_splitRule            = INTEGER(splitRule)[0];
   RF_nsplit               = INTEGER(nsplit)[0];
   RF_mtry                 = INTEGER(mtry)[0];
+  RF_htry                 = INTEGER(htry)[0];
   RF_ytry                 = INTEGER(ytry)[0];
   RF_nodeSize             = INTEGER(nodeSize)[0];
   RF_nodeDepth            = INTEGER(nodeDepth)[0];
@@ -233,8 +235,6 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP observationSize,
                   SEXP ySize,
                   SEXP rType,
-                  SEXP rTarget,
-                  SEXP rTargetCount,
                   SEXP rLevels,
                   SEXP rData,
                   SEXP xSize,
@@ -246,25 +246,36 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP caseWeight,
                   SEXP timeInterestSize,
                   SEXP timeInterest,
+                  SEXP totalNodeCount,
+                  SEXP seed,
                   SEXP treeID,
                   SEXP nodeID,
+                  SEXP htry,
+                  SEXP hcMeta,
                   SEXP parmID,
                   SEXP contPT,
                   SEXP mwcpSZ,
                   SEXP mwcpPT,
+                  SEXP hcSplit2,
+                  SEXP hcSplit3,
+                  SEXP hcSplit4,
                   SEXP tnRMBR,
                   SEXP tnAMBR,
                   SEXP tnRCNT,
                   SEXP tnACNT,
-                  SEXP totalNodeCount,
-                  SEXP seed,
-                  SEXP numThreads,
+                  SEXP tnSURV,
+                  SEXP tnMORT,
+                  SEXP tnNLSN,
+                  SEXP tnCSHZ,
+                  SEXP tnCIFN,
+                  SEXP tnREGR,
+                  SEXP tnCLAS,
+                  SEXP rTarget,
+                  SEXP rTargetCount,
                   SEXP ptnCount,
+                                  
                   SEXP intrPredictorSize,
                   SEXP intrPredictor,
-                  SEXP sobservationSize,
-                  SEXP sobservationIndv,
-                                  
                   SEXP partialType,
                   SEXP partialXvar,
                   SEXP partialLength,
@@ -272,17 +283,13 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP partialLength2,
                   SEXP partialXvar2,
                   SEXP partialValue2,
+                  SEXP sobservationSize,
+                  SEXP sobservationIndv,
                   SEXP fobservationSize,
                   SEXP frSize,
                   SEXP frData,
                   SEXP fxData,
-                  SEXP tnSURV,
-                  SEXP tnMORT,
-                  SEXP tnNLSN,
-                  SEXP tnCSHZ,
-                  SEXP tnCIFN,
-                  SEXP tnREGR,
-                  SEXP tnCLAS) {
+                  SEXP numThreads) {
   setUserTraceFlag(INTEGER(traceFlag)[0]);
   setNativeGlobalEnv();
   int seedValue           = INTEGER(seedPtr)[0];
@@ -305,12 +312,76 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_caseWeight           = REAL(caseWeight);  RF_caseWeight--;
   RF_timeInterestSize     = INTEGER(timeInterestSize)[0];
   RF_timeInterest         = REAL(timeInterest);  RF_timeInterest --;
+  RF_htry                 = INTEGER(htry)[0];
   RF_treeID_              = (uint *) INTEGER(treeID);  RF_treeID_ --;
   RF_nodeID_              = (uint *) INTEGER(nodeID);  RF_nodeID_ --;
   RF_parmID_              = (uint *) INTEGER(parmID);  RF_parmID_ --;
-  RF_contPT_              = REAL(contPT);  RF_contPT_ --;
+  RF_contPT_              =          REAL(contPT);     RF_contPT_ --;
   RF_mwcpSZ_              = (uint *) INTEGER(mwcpSZ);  RF_mwcpSZ_ --;
   RF_mwcpPT_              = (uint *) INTEGER(mwcpPT);  RF_mwcpPT_ --;
+  if (RF_htry > 0) {
+    RF_hcDim_             = (uint *) INTEGER(VECTOR_ELT(hcMeta, 0));  RF_hcDim_ --;
+    RF_hcPartDim_         = (uint *) INTEGER(VECTOR_ELT(hcMeta, 1));  RF_hcPartDim_ --;
+    RF_hcPartIdx_         = (uint *) INTEGER(VECTOR_ELT(hcMeta, 2));  RF_hcPartIdx_ --;
+    RF_osPartIdx_         = (uint *) INTEGER(VECTOR_ELT(hcMeta, 3));  RF_osPartIdx_ --;
+  }
+  else {
+    RF_hcDim_     = NULL;
+    RF_hcPartDim_ = NULL;
+    RF_hcPartIdx_ = NULL;
+    RF_hcPartIdx_ = NULL;
+  }
+  if (RF_htry > 1) {
+    RF_parmID2_           = (uint *) INTEGER(VECTOR_ELT(hcSplit2, 0));  RF_parmID2_ --;
+    RF_contPT2_           =          REAL(VECTOR_ELT(hcSplit2, 1));     RF_contPT2_ --;
+    RF_mwcpSZ2_           = (uint *) INTEGER(VECTOR_ELT(hcSplit2, 2));  RF_mwcpSZ2_ --;
+    if (VECTOR_ELT(hcSplit2, 3) == NULL) {
+      RF_mwcpPT2_           = (uint *) INTEGER(VECTOR_ELT(hcSplit2, 3));  RF_mwcpPT2_ --;
+    }
+    else {
+      RF_mwcpPT2_ = NULL;
+    }
+  }
+  else {
+    RF_parmID2_ = NULL;
+    RF_contPT2_ = NULL;
+    RF_mwcpSZ2_ = NULL;
+    RF_mwcpPT2_ = NULL;
+  }
+  if (RF_htry > 2) {
+    RF_parmID3_           = (uint *) INTEGER(VECTOR_ELT(hcSplit3, 0));  RF_parmID3_ --;
+    RF_contPT3_           =          REAL(VECTOR_ELT(hcSplit3, 1));     RF_contPT3_ --;
+    RF_mwcpSZ3_           = (uint *) INTEGER(VECTOR_ELT(hcSplit3, 2));  RF_mwcpSZ3_ --;
+    if (VECTOR_ELT(hcSplit3, 3) == NULL) {
+      RF_mwcpPT3_           = (uint *) INTEGER(VECTOR_ELT(hcSplit3, 3));  RF_mwcpPT3_ --;
+    }
+    else {
+      RF_mwcpPT3_ = NULL;
+    }
+  }
+  else {
+    RF_parmID3_ = NULL;
+    RF_contPT3_ = NULL;
+    RF_mwcpSZ3_ = NULL;
+    RF_mwcpPT3_ = NULL;
+  }
+  if (RF_htry > 3) {
+    RF_parmID4_           = (uint *) INTEGER(VECTOR_ELT(hcSplit4, 0));  RF_parmID4_ --;
+    RF_contPT4_           =          REAL(VECTOR_ELT(hcSplit4, 1));     RF_contPT4_ --;
+    RF_mwcpSZ4_           = (uint *) INTEGER(VECTOR_ELT(hcSplit4, 2));  RF_mwcpSZ4_ --;
+    if (VECTOR_ELT(hcSplit2, 3) == NULL) {
+      RF_mwcpPT4_           = (uint *) INTEGER(VECTOR_ELT(hcSplit4, 3));  RF_mwcpPT4_ --;
+    }
+    else {
+      RF_mwcpPT4_ = NULL;
+    }
+  }
+  else {
+    RF_parmID4_ = NULL;
+    RF_contPT4_ = NULL;
+    RF_mwcpSZ4_ = NULL;
+    RF_mwcpPT4_ = NULL;
+  }
   RF_RMBR_ID_             = (uint *) INTEGER(tnRMBR);
   RF_AMBR_ID_             = (uint *) INTEGER(tnAMBR);
   RF_TN_RCNT_             = (uint *) INTEGER(tnRCNT);
@@ -448,6 +519,12 @@ void free_2DObject(void *arr, char type, char flag, uint row, uint col) {
   }
 }
 void initProtect(uint  stackCount) {
+  if ((stackCount >> 6) > 0) {
+          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+          RF_nativeError("\nRF-SRC:  S.E.X.P. vector list limit exceeded:  %20d", stackCount);
+          RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+          RF_nativeExit();
+  }
   PROTECT(RF_sexpVector[RF_OUTP_ID] = allocVector(VECSXP, stackCount));
   PROTECT(RF_sexpVector[RF_STRG_ID] = allocVector(STRSXP, stackCount));
   setAttrib(RF_sexpVector[RF_OUTP_ID], R_NamesSymbol, RF_sexpVector[RF_STRG_ID]);

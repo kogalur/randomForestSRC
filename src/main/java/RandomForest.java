@@ -45,6 +45,7 @@ public class RandomForest {
                                                            modelArg.get_nSplit(),
 
                                                            modelArg.get_mtry(),
+                                                           modelArg.get_htry(),
                                                            modelArg.get_ytry(),
 
                                                            modelArg.get_nodeSize(),
@@ -94,22 +95,68 @@ public class RandomForest {
         // We trim, in particular, treeID, nodeID, parmID, contPT, mwcpSZ, and mwcpPT (iff necessary).
 
         Ensemble ensb;
-        ensb = (Ensemble) ensembleList.get("leafCount");
-        int[] leafCount = (int[]) ensb.ensembleVector;
-
-        ensb = (Ensemble) ensembleList.get("mwcpCount");
-        int[] mwcpCount = (int[]) ensb.ensembleVector;
 
         int trimmedPrimarySize = 0;
-        int trimmedSecondarySize = 0;
+
+        int[] trimmedFactorSize;
+
+        int[] mwcpCT, mwcpCT2, mwcpCT3, mwcpCT4;
+
+        mwcpCT = mwcpCT2 = mwcpCT3 = mwcpCT4 = null;
+        
+        ensb = (Ensemble) ensembleList.get("leafCount");
+        int[] leafCount = (int[]) ensb.ensembleVector;
+        
+        if (modelArg.get_htry() == 0) {
+            trimmedFactorSize = new int[1];
+            trimmedFactorSize[0] = 0;
+            ensb = (Ensemble) ensembleList.get("mwcpCT");
+            mwcpCT = (int[]) ensb.ensembleVector;
+        }
+        else {
+            trimmedFactorSize = new int[modelArg.get_htry()];
+            for (int k = 0; k < modelArg.get_htry(); k++) {
+                trimmedFactorSize[k] = 0;
+            }
+
+            ensb = (Ensemble) ensembleList.get("mwcpCT");
+            mwcpCT = (int[]) ensb.ensembleVector;
+            
+            if (modelArg.get_htry() > 1) {
+                ensb = (Ensemble) ensembleList.get("mwcpCT2");
+                mwcpCT2 = (int[]) ensb.ensembleVector;
+            }
+            if (modelArg.get_htry() > 2) {
+                ensb = (Ensemble) ensembleList.get("mwcpCT3");
+                mwcpCT3 = (int[]) ensb.ensembleVector;
+            }
+            if (modelArg.get_htry() > 3) {
+                ensb = (Ensemble) ensembleList.get("mwcpCT4");
+                mwcpCT4 = (int[]) ensb.ensembleVector;
+            }
+        }
         
         for (int b = 0; b < modelArg.get_ntree(); b++) {
             if (leafCount[b] > 0) {
-                // The tree was not rejected.  Count the number of
-                // internal and external (terminal) nodes in the
-                // forest.
+                // The tree was not rejected.
+
+                // Count the number of internal and external
+                // (terminal) nodes in the forest.
                 trimmedPrimarySize = trimmedPrimarySize + (2 * leafCount[b]) - 1;
-                trimmedSecondarySize += mwcpCount[b];
+
+                // Count the total number of mwcp words in the forest.
+                trimmedFactorSize[0] += mwcpCT[b];
+
+                if (modelArg.get_htry() > 1) {
+                    trimmedFactorSize[1] += mwcpCT2[b];
+                }                    
+                if (modelArg.get_htry() > 2) {
+                    trimmedFactorSize[2] += mwcpCT3[b];
+                }                    
+                if (modelArg.get_htry() > 3) {
+                    trimmedFactorSize[3] += mwcpCT4[b];
+                }                    
+                
             }
             else {
                 // The tree was rejected.  However, it acts as a
@@ -121,7 +168,6 @@ public class RandomForest {
 
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
         @RF_TRACE_OFF@    RFLogger.log(Level.INFO, "Trimmed primary size:   " + trimmedPrimarySize);
-        @RF_TRACE_OFF@    RFLogger.log(Level.INFO, "Trimmed secondary size: " + trimmedSecondarySize);
         @RF_TRACE_OFF@  }
         
         ensb = (Ensemble) ensembleList.get("treeID");        
@@ -131,7 +177,27 @@ public class RandomForest {
         ensb = (Ensemble) ensembleList.get("nodeID");        
         ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
         ensb.size = trimmedPrimarySize;
-        
+
+        // Greedy only generic objects.
+        if (modelArg.get_htry() > 0) {
+            ensb = (Ensemble) ensembleList.get("hcDim");        
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+
+            ensb = (Ensemble) ensembleList.get("hcPartDim");        
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+            
+            ensb = (Ensemble) ensembleList.get("hcPartIdx");
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+
+            ensb = (Ensemble) ensembleList.get("osPartIdx");
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+        }
+
+        // Non-Greedy objects.
         ensb = (Ensemble) ensembleList.get("parmID");        
         ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
         ensb.size = trimmedPrimarySize;
@@ -145,14 +211,87 @@ public class RandomForest {
         ensb.size = trimmedPrimarySize;
 
         ensb = (Ensemble) ensembleList.get("mwcpPT");        
-        if (trimmedSecondarySize > 0) {
-            ensb.ensembleVector = Arrays.copyOfRange((int[]) ensb.ensembleVector, 0, trimmedSecondarySize);
-            ensb.size = trimmedSecondarySize;
+        if (trimmedFactorSize[0] > 0) {
+            ensb.ensembleVector = Arrays.copyOfRange((int[]) ensb.ensembleVector, 0, trimmedFactorSize[0]);
+            ensb.size = trimmedFactorSize[0];
         }
         else {
             // mwcpPT will be a vector of nominal length zero (0) with meta info of size zero (0).  Leave it as is.
         }
 
+        if (modelArg.get_htry() > 1) {
+
+            ensb = (Ensemble) ensembleList.get("parmID2");        
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+        
+            ensb = (Ensemble) ensembleList.get("contPT2");        
+            ensb.ensembleVector = Arrays.copyOf((double[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+
+            ensb = (Ensemble) ensembleList.get("mwcpSZ2");
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+
+            ensb = (Ensemble) ensembleList.get("mwcpPT2");        
+            if (trimmedFactorSize[1] > 0) {
+                ensb.ensembleVector = Arrays.copyOfRange((int[]) ensb.ensembleVector, 0, trimmedFactorSize[1]);
+                ensb.size = trimmedFactorSize[1];
+            }
+            else {
+                // mwcpPT will be a vector of nominal length zero (0) with meta info of size zero (0).  Leave it as is.
+            }
+        }
+        
+        if (modelArg.get_htry() > 2) {
+
+            ensb = (Ensemble) ensembleList.get("parmID3");        
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+        
+            ensb = (Ensemble) ensembleList.get("contPT3");        
+            ensb.ensembleVector = Arrays.copyOf((double[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+
+            ensb = (Ensemble) ensembleList.get("mwcpSZ3");
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+
+            ensb = (Ensemble) ensembleList.get("mwcpPT3");        
+            if (trimmedFactorSize[2] > 0) {
+                ensb.ensembleVector = Arrays.copyOfRange((int[]) ensb.ensembleVector, 0, trimmedFactorSize[2]);
+                ensb.size = trimmedFactorSize[2];
+            }
+            else {
+                // mwcpPT will be a vector of nominal length zero (0) with meta info of size zero (0).  Leave it as is.
+            }
+        }
+        
+        if (modelArg.get_htry() > 3) {
+
+            ensb = (Ensemble) ensembleList.get("parmID4");        
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+        
+            ensb = (Ensemble) ensembleList.get("contPT4");        
+            ensb.ensembleVector = Arrays.copyOf((double[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+
+            ensb = (Ensemble) ensembleList.get("mwcpSZ4");
+            ensb.ensembleVector = Arrays.copyOf((int[]) ensb.ensembleVector, trimmedPrimarySize);
+            ensb.size = trimmedPrimarySize;
+
+            ensb = (Ensemble) ensembleList.get("mwcpPT4");        
+            if (trimmedFactorSize[3] > 0) {
+                ensb.ensembleVector = Arrays.copyOfRange((int[]) ensb.ensembleVector, 0, trimmedFactorSize[3]);
+                ensb.size = trimmedFactorSize[3];
+            }
+            else {
+                // mwcpPT will be a vector of nominal length zero (0) with meta info of size zero (0).  Leave it as is.
+            }
+        }
+        
+        
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
         @RF_TRACE_OFF@    RFLogger.log(Level.INFO, "Train (trimmed) Ensemble HashMap of length " + ensembleList.size());
         @RF_TRACE_OFF@    RandomForestModel temporaryModel = new RandomForestModel(modelArg, ensembleList);
@@ -220,16 +359,38 @@ public class RandomForest {
 
                                                               (int[]) (model.getEnsembleObj("treeID")).ensembleVector,
                                                               (int[]) (model.getEnsembleObj("nodeID")).ensembleVector,
-                                                              (int[]) (model.getEnsembleObj("parmID")).ensembleVector,
+
+                                                              modelArg.get_htry(),
+                                                              
+                                                              (model.getEnsembleObj("hcDim") != null)     ? (int[]) (model.getEnsembleObj("hcDim")).ensembleVector     : null,
+                                                              (model.getEnsembleObj("hcPartDim") != null) ? (int[]) (model.getEnsembleObj("hcPartDim")).ensembleVector : null,
+                                                              (model.getEnsembleObj("hcPartIdx") != null) ? (int[]) (model.getEnsembleObj("hcPartIdx")).ensembleVector : null,
+                                                              (model.getEnsembleObj("osPartIdx") != null) ? (int[]) (model.getEnsembleObj("osPartIdx")).ensembleVector : null,
+                                                              
+                                                              (int[])    (model.getEnsembleObj("parmID")).ensembleVector,
                                                               (double[]) (model.getEnsembleObj("contPT")).ensembleVector,
-                                                              (int[]) (model.getEnsembleObj("mwcpSZ")).ensembleVector,
+                                                              (int[])    (model.getEnsembleObj("mwcpSZ")).ensembleVector,
                                                               (model.getEnsembleObj("mwcpPT").size > 0) ? (int[]) (model.getEnsembleObj("mwcpPT")).ensembleVector : null,
+
+                                                              (model.getEnsembleObj("parmID2") != null) ? (int[])    (model.getEnsembleObj("parmID2")).ensembleVector : null,
+                                                              (model.getEnsembleObj("contPT2") != null) ? (double[]) (model.getEnsembleObj("contPT2")).ensembleVector : null,
+                                                              (model.getEnsembleObj("mwcpSZ2") != null) ? (int[])    (model.getEnsembleObj("mwcpSZ2")).ensembleVector : null,
+                                                              (model.getEnsembleObj("mwcpPT2") != null) ? (int[])    (model.getEnsembleObj("mwcpPT2")).ensembleVector : null,
+
+                                                              (model.getEnsembleObj("parmID3") != null) ? (int[])    (model.getEnsembleObj("parmID3")).ensembleVector : null,
+                                                              (model.getEnsembleObj("contPT3") != null) ? (double[]) (model.getEnsembleObj("contPT3")).ensembleVector : null,
+                                                              (model.getEnsembleObj("mwcpSZ3") != null) ? (int[])    (model.getEnsembleObj("mwcpSZ3")).ensembleVector : null,
+                                                              (model.getEnsembleObj("mwcpPT3") != null) ? (int[])    (model.getEnsembleObj("mwcpPT3")).ensembleVector : null,
+
+                                                              (model.getEnsembleObj("parmID4") != null) ? (int[])    (model.getEnsembleObj("parmID4")).ensembleVector : null,
+                                                              (model.getEnsembleObj("contPT4") != null) ? (double[]) (model.getEnsembleObj("contPT4")).ensembleVector : null,
+                                                              (model.getEnsembleObj("mwcpSZ4") != null) ? (int[])    (model.getEnsembleObj("mwcpSZ4")).ensembleVector : null,
+                                                              (model.getEnsembleObj("mwcpPT4") != null) ? (int[])    (model.getEnsembleObj("mwcpPT4")).ensembleVector : null,
 
                                                               (model.getEnsembleObj("rmbrMembership") != null) ? (int[]) (model.getEnsembleObj("rmbrMembership")).ensembleVector : null,  // TBD TBD rename
                                                               (model.getEnsembleObj("ambrMembership") != null) ? (int[]) (model.getEnsembleObj("ambrMembership")).ensembleVector : null,  // TBD TBD rename
                                                               (model.getEnsembleObj("tnRCNT") != null) ? (int[]) (model.getEnsembleObj("tnRCNT")).ensembleVector : null,
                                                               (model.getEnsembleObj("tnACNT") != null) ? (int[]) (model.getEnsembleObj("tnACNT")).ensembleVector : null,
-
                                                               
                                                               (model.getEnsembleObj("tnSURV") != null) ? (double[]) (model.getEnsembleObj("tnSURV")).ensembleVector : null,
                                                               (model.getEnsembleObj("tnMORT") != null) ? (double[]) (model.getEnsembleObj("tnMORT")).ensembleVector : null,
@@ -249,7 +410,6 @@ public class RandomForest {
 
                                                               model.getImportanceSize(),
                                                               model.getImportanceIndex(),
-
                              
                                                               0,    // xPartialType   invalid
                                                               0,    // xPartialIndex  invalid

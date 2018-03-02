@@ -33,8 +33,12 @@ extern void registerThis (double (*func) (unsigned int    n,
                                           double         *response,
                                           double          mean,
                                           double          variance,
-                                          unsigned int    maxLevel),
+                                          unsigned int    maxLevel,
 
+                                          double        **feature,
+                                          unsigned int    featureCount),
+
+                          
                           unsigned int family,
                           unsigned int slot);
 
@@ -47,22 +51,26 @@ extern void registerThis (double (*func) (unsigned int    n,
 
 
 /*
-   Declare your custom funtions below:
+   Declare your custom functions below:
 */
 
-double getCustomSplitStatisticMultivariateRegression (unsigned int  n,
-                                                      char         *membership,
-                                                      double       *time,
-                                                      double       *event,
+double getCustomSplitStatisticMultivariateRegression  (unsigned int  n,
+                                                       char         *membership,
+                                                       double       *time,
+                                                       double       *event,
+                                                       
+                                                       unsigned int  eventTypeSize,
+                                                       unsigned int  eventTimeSize,
+                                                       double       *eventTime,
+                                                       
+                                                       double       *response,
+                                                       double        mean,
+                                                       double        variance,
+                                                       unsigned int  maxLevel,
+                                                       
+                                                       double      **feature,
+                                                       unsigned int  featureCount);
 
-                                                      unsigned int  eventTypeSize,
-                                                      unsigned int  eventTimeSize,
-                                                      double       *eventTime,
-
-                                                      double       *response,
-                                                      double        mean,
-                                                      double        variance,
-                                                      unsigned int  maxLevel);
 
 double getCustomSplitStatisticMultivariateClassification (unsigned int  n,
                                                           char         *membership,
@@ -76,7 +84,11 @@ double getCustomSplitStatisticMultivariateClassification (unsigned int  n,
                                                           double       *response,
                                                           double        mean,
                                                           double        variance,
-                                                          unsigned int  maxLevel);
+                                                          unsigned int  maxLevel,
+                                                      
+                                                          double      **feature,
+                                                          unsigned int  featureCount);
+
 
 double getCustomSplitStatisticSurvival (unsigned int  n,
                                         char         *membership,
@@ -90,7 +102,11 @@ double getCustomSplitStatisticSurvival (unsigned int  n,
                                         double       *response,
                                         double        mean,
                                         double        variance,
-                                        unsigned int  maxLevel);
+                                        unsigned int  maxLevel,
+
+                                        double      **feature,
+                                        unsigned int  featureCount);
+
 
 double getCustomSplitStatisticCompetingRisk (unsigned int  n,
                                              char         *membership,
@@ -104,7 +120,10 @@ double getCustomSplitStatisticCompetingRisk (unsigned int  n,
                                              double       *response,
                                              double        mean,
                                              double        variance,
-                                             unsigned int  maxLevel);
+                                             unsigned int  maxLevel,
+
+                                             double      **feature,
+                                             unsigned int  featureCount);
 
 
 unsigned int *alloc_uivector(unsigned int nh);

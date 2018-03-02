@@ -40,8 +40,8 @@ struct jniEnsembleInfo {
   jboolean isCopyDim;
 };
 void setNativeGlobalEnv(JNIEnv *env, jobject obj);
-void *jvvector(unsigned long long nl, unsigned long long nh, enum alloc_type type);
-void free_jvvector(void *v, unsigned long long nl, unsigned long long nh, enum alloc_type type);
+void *jvvector(unsigned long long nl, unsigned long long nh, enum alloc_jtype type);
+void free_jvvector(void *v, unsigned long long nl, unsigned long long nh, enum alloc_jtype type);
 jboolean *jbvector(unsigned long long nl, unsigned long long nh);
 void free_jbvector(jboolean *v, unsigned long long nl, unsigned long long nh);
 jarray *jvector(unsigned long long nl, unsigned long long nh);

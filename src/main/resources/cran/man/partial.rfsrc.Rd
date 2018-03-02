@@ -6,16 +6,16 @@
   Acquire the partial effect of a variable on the ensembles.
 }
 \usage{
-partial.rfsrc(object, outcome.target = NULL,
+partial.rfsrc(object, m.target = NULL,
   partial.type = NULL, partial.xvar = NULL, partial.values = NULL,
   partial.xvar2 = NULL, partial.values2 = NULL,
   partial.time = NULL, oob = TRUE, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)}.}
-  \item{outcome.target}{Character value for multivariate families
-    specifying the target outcome to be used. The default is to use the
-    first coordinate.}
+  \item{m.target}{Character value for multivariate families
+    specifying the target outcome to be used.  If left unspecified, the
+    algorithm will choose a default target.}
   \item{partial.type}{Character value of the type of predicted value.
     See details below.}
   \item{partial.xvar}{Character value specifying the single primary
@@ -41,9 +41,16 @@ partial.rfsrc(object, outcome.target = NULL,
 }
 \details{
 
+  A list of length equal to the number of outcomes (length is one for
+  univariate families) with entries depending on the underlying family:
+  
   \enumerate{
-    \item For regression, the predicted response is used.
+    \item For regression, the predicted response is returned
+    of dim \code{[n] x  [length(partial.values)]}.
     
+    \item For classification, the predicted probabilities are returned
+    of dim \code{[n] x [1 + yvar.nlevels[.]] x [length(partial.values)]}.
+
     \item For survival, the choices are:
     \itemize{
       \item Relative frequency of mortality (\code{rel.freq}) or
@@ -70,8 +77,6 @@ partial.rfsrc(object, outcome.target = NULL,
         x [length(partial.values)]}.
     }
 
-    \item For regression, it is of dim \code{[n] x [length(partial.values)]}.
-    \item For classification, it is of dim \code{[n] x [1 + yvar.nlevels[.]] x [length(partial.values)]}.
   }
 }
 \author{

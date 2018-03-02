@@ -278,7 +278,6 @@
       <arg line="CMD INSTALL"/>
       <arg line="--clean"/>
       <arg line="--preclean"/>
-      <arg line="-l ${env.R_LIBS}"/>
       <arg line="--build"/>
       <arg line="${project.pkg.name}"/>
     </exec>

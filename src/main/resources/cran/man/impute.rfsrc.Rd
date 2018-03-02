@@ -7,7 +7,7 @@
   missing data.  No ensemble estimates or error rates are calculated.
 }
 \usage{\method{impute}{rfsrc}(formula, data, ntree = 500, mtry = NULL,
-  xvar.wt = NULL, nodesize = 1, splitrule = NULL, nsplit = 1,
+  xvar.wt = NULL, nodesize = 1, splitrule = NULL, nsplit = 10,
   
   na.action = c("na.impute"),
   
@@ -24,7 +24,10 @@
   \item{ntree}{Number of trees to grow.}
   \item{mtry}{Number of variables randomly sampled at each split.}
   \item{nodesize}{Forest average terminal node size.}
-  \item{splitrule}{Splitting rule used to grow trees.}
+  \item{splitrule}{Splitting rule used to grow trees.  Do not use for
+    unsupervised or multivariate splitting unless
+    \code{splitrule}="random" (used as a strategy for speeding up
+    calculations).}
   \item{nsplit}{Non-negative integer value used to specify random splitting.}
   \item{na.action}{Missing value action. See details below.}
   \item{nimpute}{Number of iterations of the missing data algorithm.
@@ -62,14 +65,12 @@
     calculations such as ensemble calculations, error rates, etc. are
     turned off.  Use this function if your only interest is imputing the
     data.
-    
-    \item By default, prior to splitting a node, if there is missing
-    data for a variable, the missing data is imputed by randomly drawing
-    values from non-missing in-bag data.  The purpose of this is to make
-    it possible to assign cases to daughter nodes in the event the node
-    is split on a variable with missing data.  Imputed data is however
-    not used to calculate the split-statistic, which uses non-missing
-    data only.
+
+    \item Split statistics are calculated using non-misssing data only.
+    If a node splits on a variable with missing data, the variable's
+    missing data is imputed by randomly drawing values from non-missing
+    in-bag data.  The purpose of this is to make it possible to assign
+    cases to daughter nodes based on the split.
     
     \item If no formula is specified, unsupervised splitting is
     implemented using a \code{ytry} value of sqrt(\code{p}) where
@@ -81,19 +82,21 @@
     the \code{mtry} multivariate regression problems and the node split
     on the variable leading to the best split (Tang and Ishwaran, 2017).
     
-    \item If \code{mf.q} is specified, then a multivariate version of
+    \item If \code{mf.q} is specified, a multivariate version of
     missForest imputation (Stekhoven and Buhlmann, 2012) is applied.  A
-    fraction \code{mf.q} of the variables are used as multivariate
-    responses and split on the remaining variables using a multivariate
-    composite splitting rule (Tang and Ishwaran, 2017).  Missing data for
-    responses are imputed by prediction.  This is repeated with a new
-    set of variables used as responses (mutually exclusive to the
-    previous), until all variables have been imputed.  The entire
-    process is repeated, and the algorithm is iterated until a
+    fraction \code{mf.q} of variables are used as multivariate responses
+    and split by the remaining variables using multivariate composite
+    splitting (Tang and Ishwaran, 2017).  Missing data for responses are
+    imputed by prediction.  The process is repeated using a new set of
+    variables for responses (mutually exclusive to the previous fit),
+    until all variables have been imputed.  This is one iteration.  The
+    entire process is repeated, and the algorithm iterated until a
     convergence criteria is met (specified using options \code{max.iter}
-    and \code{eps}).  Using an integer value for \code{mf.q} is allowed,
-    in which case a total of \code{mf.q} variables are used as
-    multivariate responses.
+    and \code{eps}).  Integer values for \code{mf.q} are allowed and
+    interpreted as a request that \code{mf.q} variables be selected for
+    the multivariate response.  This is generally the most accurate of
+    all the imputation procedures, but also the most computationally
+    demanding.
     
     \item Prior to imputation, the data is processed and records with
     all values missing are removed, as are variables having all missing
@@ -132,7 +135,7 @@
   \emph{Bioinformatics}, 28(1):112-118.
   
   Tang F. and Ishwaran H. (2017).  Random forest missing data
-  algorithms.  To appear in \emph{Statistical Analysis and Data Mining}.
+  algorithms.  \emph{Statistical Analysis and Data Mining}, 10, 363-377.
 }
 \seealso{
   \command{\link{rfsrc}}
@@ -145,37 +148,45 @@
 
 ## unsupervised splitting
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-pbc1.d <- impute(data = pbc, nodesize = 1, nsplit = 10, nimpute = 5)
+pbc1.d <- impute(data = pbc, nimpute = 5)
 
 #imputation using outcome splitting
-pbc2.d <- impute(Surv(days, status) ~ ., data = pbc, nsplit = 3)
+f <- as.formula(Surv(days, status) ~ .)
+pbc2.d <- impute(f, data = pbc, nsplit = 3)
 
 #random splitting can be reasonably good
-pbc4.d <- impute(Surv(days, status) ~ ., data = pbc,
-          splitrule = "random", nodesize = 1, nimpute = 5)
+pbc4.d <- impute(f, data = pbc, splitrule = "random", nimpute = 5)
 
 ## ------------------------------------------------------------
 ## example of regression imputation
 ## ------------------------------------------------------------
 
-air1.d <- impute(data = airquality, nimpute = 5, nodesize = 1)
+air1.d <- impute(data = airquality, nimpute = 5)
 air2.d <- impute(Ozone ~ ., data = airquality, nimpute = 5)
 air3.d <- impute(Ozone ~ ., data = airquality, nimpute = 5,
            splitrule = "random", nodesize = 1)
 
 ## ------------------------------------------------------------
-## multivariate missForest imputation -- slow!!
+## multivariate missForest imputation
 ## ------------------------------------------------------------
 
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 
 ## use 10 percent of variables as responses
 ## i.e. multivariate missForest
-pbc.d <- impute(data = pbc, mf.q = .01, nodesize = 1)
+pbc.d <- impute(data = pbc, mf.q = .01)
 
 ## use 1 variable as the response
 ## i.e. original missForest algorithm
-pbc.d <- impute(data = pbc, mf.q = 1, nodesize = 1)
+pbc.d <- impute(data = pbc, mf.q = 1)
+
+## faster call by using random splitting
+pbc.d <- impute(data = pbc, mf.q = 1, splitrule = "random")
+
+## faster call by increasing nodesize
+pbc.d <- impute(data = pbc, mf.q = 1, nodesize = 20, splitrule = "random")
+
+
 }
 }
 \keyword{missing data}

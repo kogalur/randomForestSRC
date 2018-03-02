@@ -3,9 +3,9 @@
 \alias{quantileReg.rfsrc}
 \title{Quantile Regression Forests}
 \description{
-  Determines the conditional quantiles for a regression forest.  Applies to both
-  univariate and multivariate forests.  Can be used for both training
-  and testing purposes.
+  Determines the conditional quantiles and conditional density for a
+  regression forest.  Applies to both univariate and multivariate
+  forests.  Can be used for both training and testing purposes.
 }
 \usage{\method{quantileReg}{rfsrc}(obj, oob = TRUE, prob = (1:10) / 10, newdata = NULL)
 }
@@ -25,11 +25,12 @@
   deviation.  
 }
 \value{
-  Conditional quantiles and densitites are returned for each data point
-  in the training set, or if a test set is provided, the values are
-  returned for each data point in the test data.  If more than one
-  target outcome is available, the returned object will be a list of
-  length equal to the number of targets.
+  Quantiles for each of the requested probabilities, conditional density
+  (and conditional cdf) for each unique y-value, are returned for each
+  data point in the training set, or if a test set is provided, the
+  values are returned for each data point in the test data.  If more
+  than one target outcome is available, the returned object will be a
+  list of length equal to the number of target outcomes.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -119,6 +120,31 @@ if (library("mlbench", logical.return = TRUE)) {
   abline(0, 1, lty = 2, col = 2)
 
 }
+
+## ------------------------------------------------------------
+## example of quantile regression for ordinal data
+## ------------------------------------------------------------
+
+## use the wine data for illustration
+dta <- read.table("https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-white.csv",
+     header = TRUE, sep = ";")
+
+## regression call - request forest weights
+o <- rfsrc(quality ~ ., dta, nsplit = 10, ntree = 100, forest.wt = "oob")
+
+## run quantile regression/extract "probabilities" = density values
+oq <- quantileReg(o, prob = (1:100)/100)
+yunq <- oq$yunq
+yvar <- factor(cut(o$yvar, c(-1, yunq), labels = yunq)) 
+oq.dens <- oq$density
+colnames(oq.dens) <- yunq 
+oq.class <- _PROJECT_PACKAGE_NAME_:::bayes.rule(oq.dens)
+oq.confusion <- table(yvar, oq.class)
+oq.err <- 1-diag(oq.confusion)/rowSums(oq.confusion)
+oq.confusion <- cbind(oq.confusion, oq.err)
+
+print(oq.confusion)
+cat("Normalized Brier:", 100 * _PROJECT_PACKAGE_NAME_:::brier(yvar, oq.dens), "\n")
 
 
 

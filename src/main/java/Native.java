@@ -71,6 +71,7 @@ class Native {
                           int          nSplit,
 
                           int          mtry,
+                          int          htry,
                           int          ytry,
 
                           int          nodeSize,
@@ -138,10 +139,33 @@ class Native {
 
                              int[]        treeID,
                              int[]        nodeID,
+
+                             int          htry,
+                             
+                             int[]        hcDim,
+                             int[]        hcPartDim,
+                             int[]        hcPartIdx,
+                             int[]        osPartIdx,
+                                                                       
                              int[]        parmID,
                              double[]     contPT,
                              int[]        mwcpSZ,
                              int[]        mwcpPT,
+                                                                       
+                             int[]        parmID2,
+                             double[]     contPT2,
+                             int[]        mwcpSZ2,
+                             int[]        mwcpPT2,
+
+                             int[]        parmID3,
+                             double[]     contPT3,
+                             int[]        mwcpSZ3,
+                             int[]        mwcpPT3,
+
+                             int[]        parmID4,
+                             double[]     contPT4,
+                             int[]        mwcpSZ4,
+                             int[]        mwcpPT4,
 
                              int[]        tnRMBR,
                              int[]        tnAMBR,

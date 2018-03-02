@@ -1,6 +1,6 @@
 vimp.rfsrc <- function(object,
                        xvar.names,
-                       outcome.target = NULL,
+                       m.target = NULL,
                        importance = c("permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"),
                        joint = FALSE,
                        subset,
@@ -71,7 +71,7 @@ vimp.rfsrc <- function(object,
     }
   ## make the call to generic predict
   result <- generic.predict.rfsrc(object,
-                                  outcome.target = outcome.target,
+                                  m.target = m.target,
                                   importance = importance,
                                   importance.xvar = xvar.names,
                                   seed = seed,

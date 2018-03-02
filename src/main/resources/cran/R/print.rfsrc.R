@@ -1,5 +1,5 @@
 print.rfsrc <- function(x, outcome.target = NULL, ...) {
-  ## Default Printing:
+  ## default printing
   if (sum(inherits(x, c("rfsrc", "forest"), TRUE) == c(1, 2)) == 2) {
     print.default(x)
     return()
@@ -12,8 +12,8 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     print.default(x)
     return()
   }
+  ## deal with synthetic forests        
   sf.flag <- FALSE
-  ## is this a synthetic forest?
   if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
     if (sum(inherits(x, c("rfsrc", "synthetic", "oob"), TRUE) == c(1, 2, 3)) != 3) {
       sf.flag <- TRUE
@@ -34,10 +34,10 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     else {
       grow.mode <- FALSE
     }
-  ## Save the original family.
+  ## save the original family.
   family.org <- x$family
   yvar.dim <- ncol(x$yvar)
-  ## Coerce the (potentially) multivariate object if necessary.
+  ## coerce the (potentially) multivariate object if necessary.
   outcome.target <- get.univariate.target(x, outcome.target)
   x <- coerce.multivariate(x, outcome.target)
   ## survival: event frequencies
@@ -54,7 +54,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         }
     }
   }
-  ## classification: outcome frequency/confusion matrix/Brier score
+  ## classification: outcome frequency/confusion matrix/brier
   if (x$family == "class") {
     if (!is.null(x$yvar)) {
       event.freq <- paste(tapply(x$yvar, x$yvar, length), collapse = ", ")
@@ -67,11 +67,17 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       conf.matx <- cbind(conf.matx,  class.error = round(1 - diag(conf.matx)/rowSums(conf.matx, na.rm = TRUE), 4))
       names(dimnames(conf.matx)) <- c("  observed", "predicted")
       brierS <- brier(x$yvar, if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
-      ## rfq related adjustments
-      if (!is.null(x$forest$perf.type) && (x$forest$perf.type == "g.mean" || x$forest$perf.type == "g.mean.rfq")) {
-        ##gmeanS <- round(1 - x$err.rate[nrow(x$err.rate), 1], 2)
-        gmeanS <- round(gmean(x$yvar, if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted, x$forest$perf.type), 2)
-        iratio <- round(max(x$pi.hat, na.rm  = TRUE) / min(x$pi.hat, na.rm  = TRUE), 2)
+      ## special processing needed to handle class imbalanced rfq classifier
+      if (grow.mode) {
+        rfqO <- list(rfq = x$forest$rfq, perf.type = x$forest$perf.type)
+      }
+      else {
+        rfqO <- list(rfq = x$forest$rfq, perf.type = x$perf.type)
+      }
+      if (!is.null(rfqO$perf.type) && (rfqO$perf.type == "g.mean")) {
+        gmeanS <- round(1 - x$err.rate[nrow(x$err.rate), 1], 2)
+        pi.hat <- table(x$yvar) / length(x$yvar)
+        iratio <- round(max(pi.hat, na.rm  = TRUE) / min(pi.hat, na.rm  = TRUE), 2)
       }
       else {
         gmeanS <- NULL
@@ -87,37 +93,37 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     if (grepl("surv", x$family)) {
       err.rate <- paste(round(100 * err.rate[nrow(err.rate), ], 2), "%", collapse=", ", sep = "")
     }
-      else if (x$family == "class") {
-        overall.err.rate <- paste(round(100 * err.rate[nrow(err.rate), 1], 2), "%", sep = "")
-        brierS <- round(100 * brierS, 2)
-        ## rfq related adjustments
-        if (!is.null(gmeanS)) {
-          err.rate <- round(err.rate[nrow(err.rate), 1], 2)          
-        }
-        else {
-          err.rate <- paste(round(err.rate[nrow(err.rate), ], 2), collapse=", ", sep = "")
-        }
+    else if (x$family == "class") {
+      brierS <- round(100 * brierS, 2)
+      overall.err.rate <- paste(round(100 * err.rate[nrow(err.rate), 1], 2), "%", sep = "")
+      ## rfq related adjustments
+      if (!is.null(gmeanS)) {
+        err.rate <- round(err.rate[nrow(err.rate), 1], 2)          
       }
-        else if (x$family == "regr") {
-          per.var <- round(100 * (1 - err.rate[nrow(err.rate), ] / var(x$yvar, na.rm = TRUE)), 2)
-          err.rate <- round(err.rate[nrow(err.rate), ], 2)
-        }
-          else {
-            err.rate <- NULL
-          }
-  }
+      else {
+        err.rate <- paste(round(err.rate[nrow(err.rate), ], 2), collapse=", ", sep = "")
+      }
+    }
+    else if (x$family == "regr") {
+      per.var <- round(100 * (1 - err.rate[nrow(err.rate), ] / var(x$yvar, na.rm = TRUE)), 2)
+      err.rate <- round(err.rate[nrow(err.rate), ], 2)
+    }
     else {
       err.rate <- NULL
     }
+  }
+  else {
+    err.rate <- NULL
+  }
   ## ensure backward compatibility for nsplit
   if (is.null(x$nsplit)) {
     x$nsplit <- 0
   }
-#################################################################################
+  #################################################################################
   ##
   ## grow mode
   ##
-################################################################################# 
+  ################################################################################# 
   if (grow.mode) {
     cat("                         Sample size: ", x$n,                 "\n", sep="")
     if (grepl("surv", x$family)) {
@@ -133,8 +139,8 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     }
     if (!is.null(x$imputed.indv)) {
       cat("                    Was data imputed: ", "yes",               "\n", sep="")
-                                        #cat("                         Missingness: ",
-                                        #    round(100*length(x$imputed.indv)/x$n,2), "%\n", sep="")      
+      #cat("                         Missingness: ",
+      #    round(100*length(x$imputed.indv)/x$n,2), "%\n", sep="")      
     }
     cat("                     Number of trees: ", x$ntree,                "\n",sep="")
     cat("           Forest terminal node size: ", x$nodesize,             "\n", sep="")
@@ -171,82 +177,72 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       if (!is.null(x$predicted.oob) && any(is.na(x$predicted.oob))) {
         cat("Confusion matrix (cases with missing OOB predicted values have been removed):\n\n")
       }
-        else {
-          cat("Confusion matrix:\n\n")
-        }
-      print(conf.matx)
-      if (is.null(gmeanS)) {
-        cat("\n\tOverall error rate:", overall.err.rate, "\n")
-      }
       else {
-        cat("\n")
+        cat("Confusion matrix:\n\n")
       }
+      print(conf.matx)
+      cat("\n\tOverall error rate:", overall.err.rate, "\n")
     }
   }
-#################################################################################
+  #################################################################################
   ##
   ## predict mode
   ##
-################################################################################# 
-    else {
-      ## cat("\nCall:\n", deparse(x$call),                   "\n\n")
-      cat("  Sample size of test (predict) data: ", x$n,  "\n", sep="")
-      if (grepl(x$family, "surv") && !is.null(event)) {
-        if (n.event > 1) {
-          cat("       Number of events in test data: ", event.freq,  "\n", sep="")
-        }
-          else {
-            cat("       Number of deaths in test data: ", unlist(event.freq),   "\n", sep="")
-          }
+  ################################################################################# 
+  else {
+    ## cat("\nCall:\n", deparse(x$call),                   "\n\n")
+    cat("  Sample size of test (predict) data: ", x$n,  "\n", sep="")
+    if (grepl(x$family, "surv") && !is.null(event)) {
+      if (n.event > 1) {
+        cat("       Number of events in test data: ", event.freq,  "\n", sep="")
       }
-      if (!is.null(x$imputed.data)) {
-        cat("               Was test data imputed: ", "yes",               "\n", sep="")
-                                        #cat("                         Missingness: ",
-                                        #    round(100*length(x$imputed.indv)/x$n,2), "%\n", sep="")      
-      }
-      cat("                Number of grow trees: ", x$ntree,             "\n",sep="")
-      cat("  Average no. of grow terminal nodes: ", mean(x$leaf.count),  "\n", sep="")
-      cat("         Total no. of grow variables: ", length(x$xvar.names), "\n", sep="")  
-      if (!x$univariate) { 
-        cat("         Total no. of grow responses: ", yvar.dim,   "\n", sep="")
-        cat("         User has requested response: ", outcome.target,        "\n", sep="")
-      }
-      cat("                            Analysis: ", family.pretty(family.org),"\n", sep="")
-      cat("                              Family: ", family.org,               "\n", sep="")
-      if (!is.null(err.rate)) {
-        if (x$family == "regr") {
-          cat("                % variance explained: ", per.var, "\n", sep="")
-        }
-        if (x$family == "class" && !is.null(brierS)) {
-          cat("       Test set Normalized Brier score:", brierS, "\n")
-        }
-        if (x$family == "class" && !is.null(gmeanS)) {
-          cat("                     Test set G-mean: ", gmeanS, "\n", sep="")
-          cat("                    Imbalanced ratio: ", iratio, "\n", sep="")
-        }
-        cat("                 Test set error rate: ", err.rate, "\n\n", sep="")
-      }
-      if (x$family == "class" && !is.null(conf.matx)) {
-        if (!is.null(x$predicted.oob) && any(is.na(x$predicted.oob))) {
-          cat("Confusion matrix (cases with missing OOB predicted values have been removed):\n\n")
-        }
-          else {
-            cat("Confusion matrix:\n\n")
-          }
-        print(conf.matx)
-        if (is.null(gmeanS)) {
-          cat("\n\tOverall error rate:", overall.err.rate, "\n")
-        }
-        else {
-          cat("\n")
-        }
+      else {
+        cat("       Number of deaths in test data: ", unlist(event.freq),   "\n", sep="")
       }
     }
-#################################################################################
+    if (!is.null(x$imputed.data)) {
+      cat("               Was test data imputed: ", "yes",               "\n", sep="")
+      #cat("                         Missingness: ",
+      #    round(100*length(x$imputed.indv)/x$n,2), "%\n", sep="")      
+    }
+    cat("                Number of grow trees: ", x$ntree,             "\n",sep="")
+    cat("  Average no. of grow terminal nodes: ", mean(x$leaf.count),  "\n", sep="")
+    cat("         Total no. of grow variables: ", length(x$xvar.names), "\n", sep="")  
+    if (!x$univariate) { 
+      cat("         Total no. of grow responses: ", yvar.dim,   "\n", sep="")
+      cat("         User has requested response: ", outcome.target,        "\n", sep="")
+    }
+    cat("                            Analysis: ", family.pretty(family.org),"\n", sep="")
+    cat("                              Family: ", family.org,               "\n", sep="")
+    if (!is.null(err.rate)) {
+      if (x$family == "regr") {
+        cat("                % variance explained: ", per.var, "\n", sep="")
+      }
+      if (x$family == "class" && !is.null(brierS)) {
+        cat("       Test set Normalized Brier score:", brierS, "\n")
+      }
+      if (x$family == "class" && !is.null(gmeanS)) {
+        cat("                     Test set G-mean: ", gmeanS, "\n", sep="")
+        cat("                    Imbalanced ratio: ", iratio, "\n", sep="")
+      }
+      cat("                 Test set error rate: ", err.rate, "\n\n", sep="")
+    }
+    if (x$family == "class" && !is.null(conf.matx)) {
+      if (!is.null(x$predicted.oob) && any(is.na(x$predicted.oob))) {
+        cat("Confusion matrix (cases with missing OOB predicted values have been removed):\n\n")
+      }
+      else {
+        cat("Confusion matrix:\n\n")
+      }
+      print(conf.matx)
+      cat("\n\tOverall error rate:", overall.err.rate, "\n")
+    }
+  }
+  #################################################################################
   ##
   ## synthetic forest flag
   ##
-################################################################################# 
+  ################################################################################# 
   if (sf.flag) {
     message(sf.message)
   }

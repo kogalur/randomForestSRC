@@ -140,8 +140,11 @@ public class HelloRandomForestSRC {
         modelArg.set_seed(-1);
 
         // We set ntree here.
-        modelArg.set_bootstrap(10, "auto", "swr", 0, null, null);
-            
+        modelArg.set_bootstrap(4, "auto", "swr", 0, null, null);
+
+        // Set htry explicitly.
+        modelArg.set_htry(3);
+        
         // Native-code trace.
         modelArg.set_trace(15 + (1<<13));
        
@@ -165,8 +168,16 @@ public class HelloRandomForestSRC {
         if (!false) {
 
             growModel.set_trace(15 + (1<<13));
-            growModel.setEnsembleArg("importance", "permute");
-            growModel.set_xImportance();
+
+            if (growModel.getModelArg().get_htry() == 0) {
+                growModel.setEnsembleArg("importance", "permute");
+            }
+            else {
+                growModel.setEnsembleArg("importance", "no");
+                growModel.set_xImportance();
+            }
+            
+
             growModel.setEnsembleArg("proximity", "oob");
 
             growModel.setEnsembleArg("error", "every.tree");

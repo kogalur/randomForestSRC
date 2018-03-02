@@ -6,7 +6,7 @@
   Calculate variable importance (VIMP) for a single variable or group of
   variables for training or test data.
 }
-\usage{\method{vimp}{rfsrc}(object, xvar.names, outcome.target=NULL, 
+\usage{\method{vimp}{rfsrc}(object, xvar.names, m.target=NULL, 
   importance = c("permute", "random", "anti",
                   "permute.ensemble", "random.ensemble", "anti.ensemble"),
   joint = FALSE, subset, seed = NULL, do.trace = FALSE, ...)
@@ -17,9 +17,9 @@
     original \command{rfsrc} call.}
   \item{xvar.names}{Names of the x-variables to be used.  If not
     specified all variables are used.}
-  \item{outcome.target}{Character vector for multivariate families
-    specifying the target outcomes to be used. The default is to use all
-    coordinates.}
+  \item{m.target}{Character value for multivariate families
+    specifying the target outcome to be used.  If left unspecified, the
+    algorithm will choose a default target.}
   \item{importance}{Type of VIMP.}
   \item{joint}{Individual or joint VIMP?}
   \item{subset}{Vector indicating which rows of the grow data to

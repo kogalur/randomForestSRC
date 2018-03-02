@@ -135,13 +135,13 @@ bayes.rule <- function(prob, pi.hat = NULL) {
       }
     })], levels = class.labels)
   }
-  ## added to handle drc classifier
+  ## added to handle the rfq classifier
   else {
     minority <- which.min(pi.hat)
     majority <- setdiff(1:2, minority)      
-    drc.rule <- rep(majority, nrow(prob))
-    drc.rule[prob[, minority] >= min(pi.hat, na.rm = TRUE)] <- minority
-    class.labels[drc.rule]
+    rfq.rule <- rep(majority, nrow(prob))
+    rfq.rule[prob[, minority] >= min(pi.hat, na.rm = TRUE)] <- minority
+    class.labels[rfq.rule]
   }
 }
 ## normalized brier (normalized to one for strawman coin toss)
@@ -261,99 +261,6 @@ finalizeData <- function(fnames, data, na.action, miss.flag = TRUE) {
     stop("data types cannot be character: please convert all characters to factors")
   }
   return (data)
-}
-get.importance.xvar <- function(importance.xvar, importance, object) {
-  ## Check that importance has been requested
-  if (!is.null(importance)) {
-    ## Map vimp names to columns of GROW x-matrix
-    ## Ensure names are coherent
-    if (missing(importance.xvar) || is.null(importance.xvar)) {
-      importance.xvar <- object$xvar.names
-    }
-      else {
-        importance.xvar <- unique(importance.xvar)
-        importance.xvar <- intersect(importance.xvar, object$xvar.names)
-      }
-    if (length(importance.xvar) == 0) {
-      stop("xvar names do not match object xvar matrix")
-    }
-  }
-    else {
-      ## This was previously zero.  We set this so as to get length zero to the native code.
-      importance.xvar <- NULL
-    }
-  return (importance.xvar)
-}
- 
-get.nmiss <- function(xvar, yvar = NULL) {
-  if (!is.null(yvar)) {
-    sum(apply(yvar, 1, function(x){any(is.na(x))}) | apply(xvar, 1, function(x){any(is.na(x))}))
-  }
-    else {
-      sum(apply(xvar, 1, function(x){any(is.na(x))}))
-    }
-}
-get.outcome.target <- function(family, yvar.names, outcome.target) {
-  if (family == "regr" | family == "regr+" | family == "class" | family == "class+" | family == "mix+") {
-    if (is.null(outcome.target)) {
-      outcome.target <- yvar.names
-    }
-    ## Map target names to outcome names and ensure coherency.
-    outcome.target <- unique(outcome.target)
-    outcome.target <- intersect(outcome.target, yvar.names)
-    if (length(outcome.target) == 0) {
-      stop("yvar target names do not match object yvar names")
-    }
-    outcome.target <- match(outcome.target, yvar.names)
-  }
-    else {
-      ## This is surv or surv-CR
-      outcome.target <- 0
-    }
-}
-get.grow.nodesize <- function(fmly, nodesize) {
-  ## Default node size for right-censored survival
-  if (fmly == "surv"){
-    if (is.null(nodesize)) {
-      nodesize <- 3
-    }
-  }
-  ## Default node size for competing risks
-    else if (fmly == "surv-CR"){
-      if (is.null(nodesize)) {
-        nodesize <- 6
-      }
-    }
-  ## Default node size for classification
-      else if (fmly == "class" | fmly == "class+") {
-        if (is.null(nodesize)) {
-          nodesize <- 1
-        }
-      }
-  ## Default node size for regression
-        else if (fmly == "regr" | fmly == "regr+") {
-          if (is.null(nodesize)) {
-            nodesize <- 5
-          }
-        }
-  ## Default node size for mixed outcomes
-          else if (fmly == "mix+") {
-            if (is.null(nodesize)) {
-              nodesize <- 3
-            }
-          }
-  ## Default node size for unsupervised splitting
-            else if (fmly == "unsupv") {
-              if (is.null(nodesize)) {
-                nodesize <- 3
-              }
-            }
-  ## The family is misspecified
-              else if (is.null(nodesize)) {
-                stop("family is misspecified")
-              }
-  ## Nodesize should be rounded if non-integer
-  nodesize <- round(nodesize)
 }
 get.coerced.survival.fmly <- function(fmly, event.type, splitrule = NULL) {
   if (grepl("surv", fmly)) {
@@ -481,7 +388,66 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
               time.interest = time.interest,
               time = time, r.dim = r.dim))
 }
-get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
+get.grow.mtry <- function (mtry = NULL, n.xvar, fmly) {
+  if (!is.null(mtry)) {
+    mtry <- round(mtry)
+    if (mtry < 1 | mtry > n.xvar) mtry <- max(1, min(mtry, n.xvar))
+  }
+    else {
+      if (grepl("regr", fmly)) {
+        mtry <- max(ceiling(n.xvar/3), 1)
+      }
+        else {
+          mtry <- max(ceiling(sqrt(n.xvar)), 1)
+        }
+    }
+  return (mtry)
+}
+get.grow.nodesize <- function(fmly, nodesize) {
+  ## Default node size for right-censored survival
+  if (fmly == "surv"){
+    if (is.null(nodesize)) {
+      nodesize <- 3
+    }
+  }
+  ## Default node size for competing risks
+    else if (fmly == "surv-CR"){
+      if (is.null(nodesize)) {
+        nodesize <- 6
+      }
+    }
+  ## Default node size for classification
+      else if (fmly == "class" | fmly == "class+") {
+        if (is.null(nodesize)) {
+          nodesize <- 1
+        }
+      }
+  ## Default node size for regression
+        else if (fmly == "regr" | fmly == "regr+") {
+          if (is.null(nodesize)) {
+            nodesize <- 5
+          }
+        }
+  ## Default node size for mixed outcomes
+          else if (fmly == "mix+") {
+            if (is.null(nodesize)) {
+              nodesize <- 3
+            }
+          }
+  ## Default node size for unsupervised splitting
+            else if (fmly == "unsupv") {
+              if (is.null(nodesize)) {
+                nodesize <- 3
+              }
+            }
+  ## The family is misspecified
+              else if (is.null(nodesize)) {
+                stop("family is misspecified")
+              }
+  ## Nodesize should be rounded if non-integer
+  nodesize <- round(nodesize)
+}
+get.grow.splitinfo <- function (formula.detail, splitrule, htry, nsplit, event.type) {
   ## CAUTION:  HARD CODED ON NATIVE SIDE
   splitrule.names <- c("logrank",              ##  1
                        "logrankscore",         ##  2
@@ -502,11 +468,29 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
                        "l2.impute",            ## 17
                        "rps")                  ## 18
   fmly <- formula.detail$family
-  ## Preliminary check for consistency.
-  nsplit <- round(nsplit)
-  if (nsplit < 0) {
-    stop("Invalid nsplit value specified.")
-  }
+    ## Preliminary check for consistency.
+    if (htry > 0) {
+        if(!is.null(nsplit)) {
+            nsplit <- round(nsplit)    
+            if (nsplit <= 0) {
+                stop("Invalid nsplit value.  Set nsplit > 0.")
+            }
+        }
+        else {
+            nsplit = 1
+        }
+    }
+    else {
+        if(!is.null(nsplit)) {
+            nsplit <- round(nsplit)    
+            if (nsplit < 0) {
+                stop("Invalid nsplit value.  Set nsplit >= 0.")
+            }
+        }
+        else {
+            nsplit = 0
+        }
+    }
   cust.idx <- NULL
   splitpass <- FALSE
   if (!is.null(splitrule)) {
@@ -645,59 +629,47 @@ get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.type) {
   splitinfo <- list(name = splitrule, index = splitrule.idx, cust = cust.idx, nsplit = nsplit)
   return (splitinfo)
 }
-get.weight <- function(weight, n) {
-  ## set the default weight
-  if (!is.null(weight)) {
-    if (any(weight < 0)      ||
-        all(weight == 0)     ||
-        length(weight) != n  ||
-        any(is.na(weight))) {
-      stop("Invalid weight vector specified.")
+get.importance.xvar <- function(importance.xvar, importance, object) {
+  ## Check that importance has been requested
+  if (!is.null(importance)) {
+    ## Map vimp names to columns of GROW x-matrix
+    ## Ensure names are coherent
+    if (missing(importance.xvar) || is.null(importance.xvar)) {
+      importance.xvar <- object$xvar.names
     }
-  }
-    else {
-      weight <- rep(1, n)
-    }
-  return (weight)
-}
-get.grow.mtry <- function (mtry = NULL, n.xvar, fmly) {
-  if (!is.null(mtry)) {
-    mtry <- round(mtry)
-    if (mtry < 1 | mtry > n.xvar) mtry <- max(1, min(mtry, n.xvar))
-  }
-    else {
-      if (grepl("regr", fmly)) {
-        mtry <- max(ceiling(n.xvar/3), 1)
+      else {
+        importance.xvar <- unique(importance.xvar)
+        importance.xvar <- intersect(importance.xvar, object$xvar.names)
       }
-        else {
-          mtry <- max(ceiling(sqrt(n.xvar)), 1)
-        }
+    if (length(importance.xvar) == 0) {
+      stop("xvar names do not match object xvar matrix")
     }
-  return (mtry)
-}
-get.ytry <- function(f) {
-}
-get.xvar.type <- function(generic.types, xvar.names, coerce.factor = NULL) {
-  xvar.type <- generic.types
-  if (!is.null(coerce.factor$xvar.names)) {
-    xvar.type[is.element(xvar.names, coerce.factor$xvar.names)] <- "C"
   }
-  xvar.type
+    else {
+      ## This was previously zero.  We set this so as to get length zero to the native code.
+      importance.xvar <- NULL
+    }
+  return (importance.xvar)
 }
+ 
 get.mv.error <- function(obj, std = FALSE) {
   c(sapply(obj$yvar.names, function(nn) {
     o.coerce <- coerce.multivariate(obj, nn)
-    if (o.coerce$family == "class") {
-      utils::tail(o.coerce$err.rate[, 1], 1)
-    }
-    else {
-      if (std) {
-        utils::tail(o.coerce$err.rate, 1) / var(o.coerce$yvar, na.rm = TRUE)
+    err <- o.coerce$err.rate
+    if (!is.null(err)) {
+      if (o.coerce$family == "class") {
+        err <- utils::tail(err[, 1], 1)
       }
       else {
-        utils::tail(o.coerce$err.rate, 1)
+        if (std) {
+          err <- utils::tail(err, 1) / var(o.coerce$yvar, na.rm = TRUE)
+        }
+        else {
+          err <- utils::tail(err, 1)
+        }
       }
     }
+    err
   }))
 }
 get.mv.predicted <- function(obj, oob = FALSE) {
@@ -721,27 +693,151 @@ get.mv.predicted <- function(obj, oob = FALSE) {
   pred
 }
 get.mv.vimp <- function(obj, std = FALSE) {
-  vimp <- do.call(cbind, lapply(obj$yvar.names, function(nn) {
+  vmp <- do.call(cbind, lapply(obj$yvar.names, function(nn) {
     o.coerce <- coerce.multivariate(obj, nn)
-    if (o.coerce$family == "class") {
-      o.coerce$importance[, 1]
-    }
-    else {
-      if (std) {
-        o.coerce$importance / var(o.coerce$yvar, na.rm = TRUE)
+    v <- o.coerce$importance
+    if (!is.null(v)) {
+      if (o.coerce$family == "class") {
+        v <- v[, 1]
       }
       else {
-        o.coerce$importance
+        if (std) {
+          v <- v / var(o.coerce$yvar, na.rm = TRUE)
+        }        
       }
     }
+    v
   }))
-  if (!is.null(vimp)) {
-    colnames(vimp) <- obj$yvar.names
-    return(vimp)
+  if (!is.null(vmp)) {
+    colnames(vmp) <- obj$yvar.names
+    return(vmp)
   }
   else {
     NULL
   }
+}
+get.nmiss <- function(xvar, yvar = NULL) {
+  if (!is.null(yvar)) {
+    sum(apply(yvar, 1, function(x){any(is.na(x))}) | apply(xvar, 1, function(x){any(is.na(x))}))
+  }
+    else {
+      sum(apply(xvar, 1, function(x){any(is.na(x))}))
+    }
+}
+get.outcome.target <- function(family, yvar.names, outcome.target) {
+  if (family == "regr" | family == "regr+" | family == "class" | family == "class+" | family == "mix+") {
+    if (is.null(outcome.target)) {
+      outcome.target <- yvar.names
+    }
+    ## Map target names to outcome names and ensure coherency.
+    outcome.target <- unique(outcome.target)
+    outcome.target <- intersect(outcome.target, yvar.names)
+    if (length(outcome.target) == 0) {
+      stop("yvar target names do not match object yvar names")
+    }
+    outcome.target <- match(outcome.target, yvar.names)
+  }
+    else {
+      ## This is surv or surv-CR
+      outcome.target <- 0
+    }
+}
+get.univariate.target <- function(x, outcome.target = NULL) {
+  ## This function takes a grow, grow-equivalent, or predict object and returns a single coherent target.
+  ## That is, if no target has been specified, the first regression outcome with statistics is chosen.
+  ## If no regression outcome exists, the first classification outcome with statistics is chosen.
+  ## If the target is specified, the object is verified to contain the target outcome statistics
+  ## for that y-var.  If none exist, the function will error.
+  if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
+    if (is.null(outcome.target)) {
+      ## Check the y-vars against regression and then classification.
+      ## We choose the "first" variable, favoring regression, then
+      ## classification.
+      target <- match(c("regrOutput", "classOutput"), names(x))
+      target <- target[!is.na(target)]
+      if(length(target) > 0) {
+        do.break <- FALSE
+        for (i in target) {
+          for (j in 1:length(x[[i]])) {
+            if (length(x[[i]][[j]]) > 0) {
+              ## This is a non-null output.
+              outcome.target <- names(x[[i]][j])
+              ## Exit the loop.
+              do.break <- TRUE
+              break
+            }
+          }
+          if (do.break == TRUE) {
+            break
+          }
+        }
+      }
+      else {
+        ## Something would have to be seriously wrong for this to happen.
+        stop("No outcomes found in object.  Please contact technical support.")
+      }
+    }
+    else {
+      ## Check that one and only one target has been specified.
+      if (sum(is.element(outcome.target, x$yvar.names)) != 1) {
+        stop("Specified target was not found or too many target outcomes were supplied (only one is allowed).")
+      }
+      ## A target outcome has been specified.  Verify that it contains outcome statistics.
+      target <- match(c("regrOutput", "classOutput"), names(x))
+      target <- target[!is.na(target)]
+      found = FALSE
+      if(length(target) > 0) {
+        do.break <- FALSE
+        for (i in target) {
+          for (j in 1:length(x[[i]])) {
+            if (length(x[[i]][[j]]) > 0) {
+              ## This is a non-null output.
+              if (outcome.target == names(x[[i]][j])) {
+                found = TRUE
+                ## Exit the loop.
+                do.break <- TRUE
+                break
+              }
+            }
+          }
+          if (do.break == TRUE) {
+            break
+          }
+        }     
+      }
+      if (!found) {
+        stop("Target outcome has been correctly specified but it did not contain outcome statistics.")
+      }
+    }
+  }
+  ## This function will return NULL if the function is not
+  ## multivariate.  Otherwise, the outcome and its associated statistics is
+  ## guaranteed to exist in the object.
+  outcome.target
+}
+get.weight <- function(weight, n) {
+  ## set the default weight
+  if (!is.null(weight)) {
+    if (any(weight < 0)      ||
+        all(weight == 0)     ||
+        length(weight) != n  ||
+        any(is.na(weight))) {
+      stop("Invalid weight vector specified.")
+    }
+  }
+    else {
+      weight <- rep(1, n)
+    }
+  return (weight)
+}
+get.ytry <- function(f) {
+}
+get.xvar.type <- function(generic.types, xvar.names, coerce.factor = NULL) {
+  xvar.type <- generic.types
+  if (!is.null(coerce.factor$xvar.names)) {
+    xvar.type[is.element(xvar.names, coerce.factor$xvar.names)] <- "C"
+  }
+  xvar.type
 }
 get.xvar.nlevels <- function(nlevels, xvar.names, xvar, coerce.factor = NULL) {
   xvar.nlevels <- nlevels
@@ -782,14 +878,14 @@ get.yvar.nlevels <- function(fmly, nlevels, yvar.names, yvar, coerce.factor = NU
   }
     yvar.nlevels
 }
-gmean <- function(y, prob, perf.type = NULL, robust = FALSE) {
+gmean <- function(y, prob, rfq = FALSE, robust = FALSE) {
   ## determine frequencies: exit if this is not a two-class problem
   frq <- table(y)  
   if (length(frq) > 2) {
     return(NULL)
   }
   ## determine threshold
-  if (!is.null(perf.type) && perf.type == "g.mean.rfq") {
+  if (rfq) {
     threshold <- min(frq, na.rm = TRUE) / sum(frq, na.rm = TRUE)
   }
   else {

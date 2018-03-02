@@ -2,7 +2,7 @@ find.interaction.rfsrc <- function(
   object, 
   xvar.names,
   cause,
-  outcome.target = NULL,
+  m.target = NULL,
   importance = c("permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"),
   method = c("maxsubtree", "vimp"),
   sorted = TRUE,
@@ -40,14 +40,14 @@ find.interaction.rfsrc <- function(
   event.info <- get.event.info(object)
   n.event <- max(1, length(event.info$event.type))
   ## acquire the target outcome (if there is one)
-  outcome.target <- get.univariate.target(object, outcome.target)
+  m.target <- get.univariate.target(object, m.target)
   ## extract the importance
   if (n.event > 1) {
     object.imp <- NULL
     interact.imp.list.names <- paste("event.", 1:length(event.info$event.type), sep = "")
   }
     else {
-      object.imp <- cbind(coerce.multivariate(object, outcome.target)$importance)[, cause, drop = FALSE]
+      object.imp <- cbind(coerce.multivariate(object, m.target)$importance)[, cause, drop = FALSE]
     }
   ## pull the original xvariable names
   xvar.org.names <- object$xvar.names
@@ -105,14 +105,14 @@ find.interaction.rfsrc <- function(
           }
           for (m in 1:nrep) {
             imp.indv.m <- c(cbind(coerce.multivariate(vimp(object, xvar.names[c(k,l)],
-                                                           outcome.target = outcome.target,
+                                                           m.target = m.target,
                                                            importance = importance, joint = FALSE, 
                                                            na.action = na.action, subset = subset, seed = seed, 
-                                                           do.trace = do.trace), outcome.target)$importance)[, target.dim])
-            imp.joint.m <- coerce.multivariate(vimp(object, xvar.names[c(k,l)], outcome.target = outcome.target,
+                                                           do.trace = do.trace), m.target)$importance)[, target.dim])
+            imp.joint.m <- coerce.multivariate(vimp(object, xvar.names[c(k,l)], m.target = m.target,
                                                     importance = importance, joint = TRUE,
                                                     na.action = na.action, subset = subset, seed = seed,
-                                                    do.trace = do.trace), outcome.target)$importance[target.dim]
+                                                    do.trace = do.trace), m.target)$importance[target.dim]
             imp[1] <- imp[1] + imp.indv.m[1]
             imp[l-k+1] <- imp[l-k+1] + imp.indv.m[2]
             imp.joint[l-k] <- imp.joint[l-k] + imp.joint.m
@@ -144,7 +144,7 @@ find.interaction.rfsrc <- function(
       cat("                    No. of variables: ", n.interact,                   "\n", sep="")
       if (family.org == "regr+" | family.org == "class+" | family.org == "mix+") {
         cat("              Total no. of responses: ", yvar.dim,                 "\n", sep="")
-        cat("         User has requested response: ", outcome.target,           "\n", sep="")
+        cat("         User has requested response: ", m.target,           "\n", sep="")
       }
       cat("           Variables sorted by VIMP?: ", sorted,                       "\n", sep="")
       cat("   No. of variables used for pairing: ", n.interact,                   "\n", sep="")

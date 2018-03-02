@@ -56,6 +56,7 @@ quantileReg.rfsrc <- function(obj, oob = TRUE, prob = (1:10) / 10, newdata = NUL
     }))
     ## return the object
     list(quantiles = quant,
+         cdf = cdf,
          prob = prob,
          density = t(apply(cbind(0,cdf), 1, diff)),
          yunq = yunq)

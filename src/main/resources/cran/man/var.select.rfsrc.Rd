@@ -9,7 +9,7 @@
   data,
   object,
   cause,
-  outcome.target,
+  m.target,
   method = c("md", "vh", "vh.vimp"),
   conservative = c("medium", "low", "high"),
   ntree = (if (method == "md") 1000 else 500),
@@ -38,9 +38,9 @@
 	  the number of event types (this option applies only to
 	  competing risk families).  The default is to use the first
 	  event type.}
-  \item{outcome.target}{Character vector for multivariate families
-    specifying the target outcomes to be used when VIMP is utilized.
-    The default is to use the first coordinate.} 
+  \item{m.target}{Character value for multivariate families
+    specifying the target outcome to be used.  If left unspecified, the
+    algorithm will choose a default target.}
   \item{method}{Variable selection method:
     \describe{  
       \item{\code{md}:}{minimal depth (default).}

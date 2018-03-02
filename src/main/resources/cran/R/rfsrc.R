@@ -8,7 +8,7 @@ rfsrc <- function(formula,
                   nodesize = NULL,
                   nodedepth = NULL,
                   splitrule = NULL,
-                  nsplit = 0,
+                  nsplit = NULL,
                   importance = c(FALSE, TRUE, "none", "permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"),
                   
                   na.action = c("na.omit", "na.impute"),
@@ -44,6 +44,8 @@ rfsrc <- function(formula,
   terminal.quants <- is.hidden.terminal.quants(user.option)
   ## TBD TBD make perf.type visible TBD TBD
   perf.type <- is.hidden.perf.type(user.option)
+  rfq <- is.hidden.rfq(user.option)
+  htry <- is.hidden.htry(user.option)
   ## verify key options
   bootstrap <- match.arg(bootstrap, c("by.root", "by.node", "none", "by.user"))
   importance <- match.arg(as.character(importance), c(FALSE, TRUE, "none", "permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"))
@@ -199,11 +201,7 @@ rfsrc <- function(formula,
   ## multivariate/mixed, it defaults to length(yvar.types).  In the case
   ## of survival and competing risk, it assumes the value of two (2) for
   ## coherency, though it is ignored in the native-code.
-  if (family == "surv") {
-    ## Override any incoming weights.
-    yvar.wt <- NULL
-  }
-  else if (family == "unspv") {
+  if (family == "unspv") {
     ## Override any incoming weights.
     yvar.wt <- NULL
   }
@@ -239,7 +237,7 @@ rfsrc <- function(formula,
   ## Get event information and dimensioning for families
   event.info <- get.grow.event.info(yvar, family, ntime = ntime)
   ## Initialize nsplit, noting that it may be been overridden.
-  splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, nsplit, event.info$event.type)
+  splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, htry, nsplit, event.info$event.type)
   ## Set the cause weights for the split statistic calculation.
   if (family == "surv" || family == "surv-CR") {
     if (length(event.info$event.type) > 1) {
@@ -285,17 +283,15 @@ rfsrc <- function(formula,
   }
   ## Nodesize determination
   nodesize <- get.grow.nodesize(family, nodesize)
-  ## Initialize the performance option
-  perf <- NULL
   ## Turn ensemble outputs off unless bootstrapping by root or user.
   if ((bootstrap != "by.root") && (bootstrap != "by.user")) {
     importance <- "none"
-    perf <- "none"
+    perf.type <- "none"
   }
   ## Turn ensemble outputs off for unsupervised mode only
   if (family == "unsupv") {
     importance <- "none"
-    perf <- "none"
+    perf.type <- "none"
   }
   ## Impute only mode
   ## Some of this may be redundant
@@ -306,7 +302,7 @@ rfsrc <- function(formula,
     var.used     <- FALSE
     split.depth  <- FALSE
     membership   <- FALSE
-    perf         <- "none"
+    perf.type    <- "none"
     importance   <- "none"
     terminal.qualts <- FALSE
     terminal.quants <- FALSE
@@ -334,9 +330,11 @@ rfsrc <- function(formula,
   membership.bits <-  get.membership(membership)
   statistics.bits <- get.statistics(statistics)
   split.cust.bits <- get.split.cust(splitinfo$cust)
-  ## This is dependent on impute.only and the family being initialized.
-  perf <- get.perf(perf, impute.only, family, perf.type)
-  perf.bits <-  get.perf.bits(perf)
+  ## get performance and rfq bits
+  perf.type <- get.perf(perf.type, impute.only, family)
+  perf.bits <-  get.perf.bits(perf.type)
+  rfq <- get.rfq(rfq)
+  rfq.bits <- get.rfq.bits(rfq, family)
   ## Assign high bits for the native code
   samptype.bits <- get.samptype(samptype)
   forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
@@ -350,26 +348,28 @@ rfsrc <- function(formula,
                                   as.integer(do.trace),
                                   as.integer(seed),
                                   as.integer(impute.only.bits +
-                                               var.used.bits +
-                                                 split.depth.bits +
-                                                   importance.bits +
-                                                     bootstrap.bits +
-                                                       forest.bits +
-                                                         proximity.bits +
-                                                             perf.bits +
-                                                               statistics.bits),
+                                             var.used.bits +
+                                             split.depth.bits +
+                                             importance.bits +
+                                             bootstrap.bits +
+                                             forest.bits +
+                                             proximity.bits +
+                                             perf.bits +
+                                             rfq.bits +
+                                             statistics.bits),
                                   as.integer(samptype.bits +
-                                               forest.wt.bits +
-                                                  
-                                                   na.action.bits +
-                                                     split.cust.bits +
-                                                       tree.err.bits +
-                                                         membership.bits +
-                                                           terminal.qualts.bits +
-                                                             terminal.quants.bits),
+                                             forest.wt.bits +
+                                              
+                                             na.action.bits +
+                                             split.cust.bits +
+                                             tree.err.bits +
+                                             membership.bits +
+                                             terminal.qualts.bits +
+                                             terminal.quants.bits),
                                   as.integer(splitinfo$index),
                                   as.integer(splitinfo$nsplit),
                                   as.integer(mtry),
+                                  as.integer(htry),
                                   as.integer(formulaDetail$ytry),
                                   as.integer(nodesize),
                                   as.integer(nodedepth),
@@ -480,6 +480,11 @@ rfsrc <- function(formula,
       yvar <- amatrix.remove.names(map.factor(yvar, yfactor))
     }
   }
+  ## class imbalanced processing
+  pi.hat <- NULL
+  if (family == "class" && rfq) {
+    pi.hat <- table(yvar) / length(yvar)
+  }
   ## map imputed data factors back to original values
   ## does NOT apply for y under unsupervised mode
   if ((n.miss > 0) & (nimpute < 2)) {
@@ -490,41 +495,96 @@ rfsrc <- function(formula,
   }
   ## Define the forest.
   if (forest) {
-    ## In the native code, de-allocation of a tree after it is grown
-    ## rather than after the  entire forest has been grown saves us a
-    ## lot of memory.  However, we  do not know the size of the forest
-    ## before hand.  We thus, in the native code, we allocate the native array to its
-    ## theoretical maximum.  This is trimmed  below to the actual size.
-    nativeArraySize = 0
-    mwcpPTSize = 0
-    for (b in 1:ntree) {
-      if (nativeOutput$leafCount[b] > 0) {
-        ## The tree was not rejected.  Count the number of internal
-        ## and external (terminal) nodes in the forest.
-        nativeArraySize = nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
-        mwcpPTSize = mwcpPTSize + nativeOutput$mwcpCount[b]
+      ## In the native code, de-allocation of a tree after it is grown
+      ## rather than after the entire forest has been grown saves us a
+      ## lot of memory.  However, we  do not know the size of the forest
+      ## before hand.  We thus allocate, in the native code, the native array 
+      ## to its theoretical maximum.  This is trimmed  below to the actual size.
+      nativeArraySize = 0
+      if (htry == 0) {
+          mwcpPTSize = rep (0, 1)
+          nativeFactorArray <- vector("list", 1)
       }
-        else {
-          ## The tree was rejected.  However, it acts as a
-          ## placeholder, being a stump topologically and thus adds to
-          ## the total node count.
-          nativeArraySize = nativeArraySize + 1
-        }
-    }
-    nativeArray <- as.data.frame(cbind(nativeOutput$treeID[1:nativeArraySize],
-                                       nativeOutput$nodeID[1:nativeArraySize],
-                                       nativeOutput$parmID[1:nativeArraySize],
-                                       nativeOutput$contPT[1:nativeArraySize],
-                                       nativeOutput$mwcpSZ[1:nativeArraySize]))
-    names(nativeArray) <- c("treeID", "nodeID", "parmID", "contPT", "mwcpSZ")
-    if (mwcpPTSize > 0) {
-      ## This can be NULL if there are no factor splits.
-      ## TBD TBD Adjust the XML header or just make it go away.  TBD TBD
-      nativeFactorArray <- nativeOutput$mwcpPT[1:mwcpPTSize]
-    }
       else {
-        nativeFactorArray <- NULL
+          mwcpPTSize = rep (0, htry)
+          nativeFactorArray <- vector("list", htry)
       }
+      for (b in 1:ntree) {
+          if (nativeOutput$leafCount[b] > 0) {
+              ## The tree was not rejected.  Count the number of internal
+              ## and external (terminal) nodes in the forest.
+              nativeArraySize = nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
+              mwcpPTSize[1]               <- mwcpPTSize[1] + nativeOutput$mwcpCT[b]
+              if (htry > 1) mwcpPTSize[2] <- mwcpPTSize[2] + nativeOutput$mwcpCT2[b]
+              if (htry > 2) mwcpPTSize[3] <- mwcpPTSize[3] + nativeOutput$mwcpCT3[b]
+              if (htry > 3) mwcpPTSize[3] <- mwcpPTSize[3] + nativeOutput$mwcpCT3[b]
+          }
+          else {
+              ## The tree was rejected.  However, it acts as a
+              ## placeholder, being a stump topologically and thus adds to
+              ## the total node count.
+              nativeArraySize <- nativeArraySize + 1
+          }
+      }
+      nativeArray <- as.data.frame(cbind(nativeOutput$treeID[1:nativeArraySize],
+                                         nativeOutput$nodeID[1:nativeArraySize]))
+      nativeArrayHeader <- c("treeID", "nodeID")
+      if (htry > 0) {
+          nativeArray <- as.data.frame(cbind(nativeArray,
+                                             nativeOutput$hcDim[1:nativeArraySize],
+                                             nativeOutput$hcPartDim[1:nativeArraySize],
+                                             nativeOutput$hcPartIdx[1:nativeArraySize],
+                                             nativeOutput$osPartIdx[1:nativeArraySize]))
+          nativeArrayHeader <- c(nativeArrayHeader, "hcDim", "hcPartDim", "hcPartIdx", "osPartIdx")
+      }
+      nativeArray <- as.data.frame(cbind(nativeArray,
+                                         nativeOutput$parmID[1:nativeArraySize],
+                                         nativeOutput$contPT[1:nativeArraySize],
+                                         nativeOutput$mwcpSZ[1:nativeArraySize]))
+      nativeArrayHeader <- c(nativeArrayHeader, "parmID", "contPT", "mwcpSZ") 
+      if (mwcpPTSize[1] > 0) {
+          ## This can be NULL if there are no factor splits along this dimension.
+          nativeFactorArray[[1]] <- nativeOutput$mwcpPT[1:mwcpPTSize[1]]
+      }
+      nativeFactorArrayHeader <- "mwcpPT"
+      if (htry > 1) {
+          nativeArray <- as.data.frame(cbind(nativeArray,
+                                             nativeOutput$parmID2[1:nativeArraySize],
+                                             nativeOutput$contPT2[1:nativeArraySize],
+                                             nativeOutput$mwcpSZ2[1:nativeArraySize]))
+          nativeArrayHeader <- c(nativeArrayHeader, "parmID2", "contPT2", "mwcpSZ2") 
+          if (mwcpPTSize[2] > 0) {
+              ## This can be NULL if there are no factor splits along this dimension.
+              nativeFactorArray[[2]] <- nativeOutput$mwcpPT2[1:mwcpPTSize[2]]
+          }
+          nativeFactorArrayHeader <- c(nativeFactorArrayHeader, "mwcpPT2")
+      }
+      if (htry > 2) {
+          nativeArray <- as.data.frame(cbind(nativeArray,
+                                             nativeOutput$parmID3[1:nativeArraySize],
+                                             nativeOutput$contPT3[1:nativeArraySize],
+                                             nativeOutput$mwcpSZ3[1:nativeArraySize]))
+          nativeArrayHeader <- c(nativeArrayHeader, "parmID3", "contPT3", "mwcpSZ3") 
+          if (mwcpPTSize[3] > 0) {
+              ## This can be NULL if there are no factor splits along this dimension.
+              nativeFactorArray[[3]] <- nativeOutput$mwcpPT3[1:mwcpPTSize[3]]
+          }
+          nativeFactorArrayHeader <- c(nativeFactorArrayHeader, "mwcpPT3")
+      }
+      if (htry > 3) {
+          nativeArray <- as.data.frame(cbind(nativeArray,
+                                             nativeOutput$parmID3[1:nativeArraySize],
+                                             nativeOutput$contPT3[1:nativeArraySize],
+                                             nativeOutput$mwcpSZ3[1:nativeArraySize]))
+          nativeArrayHeader <- c(nativeArrayHeader, "parmID4", "contPT4", "mwcpSZ4") 
+          if (mwcpPTSize[4] > 0) {
+              ## This can be NULL if there are no factor splits along this dimension.
+              nativeFactorArray[[4]] <- nativeOutput$mwcpPT4[1:mwcpPTSize[4]]
+          }
+          nativeFactorArrayHeader <- c(nativeFactorArrayHeader, "mwcpPT4")
+      }
+      names(nativeArray) <- nativeArrayHeader
+      names(nativeFactorArray) <- nativeFactorArrayHeader
     if (terminal.qualts | terminal.quants) {
       ## The terminal node qualitative and quantitative outputs
       ## are allocated to their theoretical maximum.
@@ -617,7 +677,8 @@ rfsrc <- function(formula,
       else {
         nativeArrayTNDS <- NULL
       }
-    forest.out <- list(nativeArray = nativeArray,
+    forest.out <- list(htry = htry,
+                       nativeArray = nativeArray,
                        nativeFactorArray = nativeFactorArray,
                        totalNodeCount = dim(nativeArray)[1],
                        nodesize = nodesize,
@@ -1045,7 +1106,7 @@ rfsrc <- function(formula,
                         array(nativeOutput$allEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                               c(n, levels.count[i]), dimnames=ens.names) else NULL)
           classOutput[[i]] <- list(predicted = predicted)
-          response <- (if (!is.null(predicted)) bayes.rule(predicted) else NULL)
+          response <- (if (!is.null(predicted)) bayes.rule(predicted, pi.hat) else NULL)
           classOutput[[i]] <- c(classOutput[[i]], class = list(response))
           remove(predicted)
           remove(response)
@@ -1053,7 +1114,7 @@ rfsrc <- function(formula,
                             array(nativeOutput$oobEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                   c(n, levels.count[i]), dimnames=ens.names) else NULL)
           classOutput[[i]] <- c(classOutput[[i]], predicted.oob = list(predicted.oob))
-          response.oob <- (if (!is.null(predicted.oob)) bayes.rule(predicted.oob) else NULL)
+          response.oob <- (if (!is.null(predicted.oob)) bayes.rule(predicted.oob, pi.hat) else NULL)
           classOutput[[i]] <- c(classOutput[[i]], class.oob = list(response.oob))
           remove(predicted.oob)
           remove(response.oob)

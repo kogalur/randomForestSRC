@@ -5,7 +5,7 @@ impute.rfsrc <- function(formula,
                          xvar.wt = NULL,
                          nodesize = 1,
                          splitrule = NULL,
-                         nsplit = 1,
+                         nsplit = 10,
                          
                          na.action = c("na.impute"),
                          
@@ -150,10 +150,10 @@ impute.rfsrc <- function(formula,
                                  mtry = mtry,
                                  nodesize = nodesize,
                                  nsplit = nsplit)$data
-    ## #############################################################
+    ###############################################################
     ## main loop: data blocks/groups of variables
     ## we use lapply to avoid for-looping
-    ## #############################################################
+    ###############################################################
     ## set flags
     diff.err <- Inf
     check <- TRUE
@@ -198,6 +198,7 @@ impute.rfsrc <- function(formula,
                                                  na.action =  na.action,
                                                  mtry = mtry,
                                                  nodesize = nodesize,
+                                                 splitrule = splitrule,
                                                  nsplit = nsplit)}, error = function(e) {NULL})
           ## confirm that the impute object is non-null in order to proceed
           if (!is.null(retO)) {

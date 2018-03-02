@@ -115,8 +115,8 @@ class EnsembleArg {
                               new NativeOpt("weight",
                                             new String[] {"no", "inbag", "oob"},
                                             new int[] {0,
-                                                       (1 << 0),
-                                                       (1 << 0) + (1 << 1)}));
+                                                       (1 << 0) + (1 << 1),
+                                                       (1 << 0) + (1 << 2)}));
 
 
             ensembleArg.put("proximity", "no");
@@ -144,20 +144,16 @@ class EnsembleArg {
             ensembleArg.put("weight", "no");
             ensembleList.put("weight",
                               new NativeOpt("weight",
-                                            new String[] {"no", "inbag", "oob", "all"},
+                                            new String[] {"no", "all"},
                                             new int[] {0,
-                                                       (1 << 0),
-                                                       (1 << 0) + (1 << 1),
-                                                       (1 << 0) + (1 << 2)}));
+                                                       (1 << 0) + (1 << 1) +(1 << 2)}));
 
 
             ensembleArg.put("proximity", "no");
             ensembleList.put("proximity",
                               new NativeOpt("proximity",
-                                            new String[] {"no", "inbag", "oob", "all"},
+                                            new String[] {"no", "all"},
                                             new int[] {0,
-                                                       (1 << 28) + (1 << 29),
-                                                       (1 << 28) + (1 << 30),
                                                        (1 << 28) + (1 << 29) + (1 << 30)}));
 
             ensembleArg.put("importance", "no");
@@ -181,11 +177,12 @@ class EnsembleArg {
                           new NativeOpt("membership",
                                         new String[] {"no", "yes"},
                                         new int[] {0, (1 << 6)}));
-        
+
+        // This option is subordinate to errorType, and is ignored if errorType is suppressed.
         ensembleArg.put("error", "last.tree");
         ensembleList.put("error",
                           new NativeOpt("error",
-                                        new String[] {"every.tree", "last.tree"},
+                                        new String[] {"last.tree", "every.tree"},
                                         new int[] {0, (1 << 13)}));
 
         ensembleArg.put("varUsed", "no");
@@ -200,20 +197,76 @@ class EnsembleArg {
                                         new String[] {"no", "every.tree", "sum.tree"},
                                         new int[] {0, (1 << 23), (1 << 22)}));
 
-        // Note that RF-M+ also supports this option on the native-side, but it not curretly enabled from the Java-side. 
+        
         if (family.equals("RF-C") || family.equals("RF-C+")) {
-                ensembleArg.put("errorType", "default");
+                ensembleArg.put("errorType", "misclass");
                 ensembleList.put("errorType",
                                  new NativeOpt("errorType",
-                                               new String[] {"default", "brier", "g.mean", "g.mean.drc"},
-                                               new int[] {(1 << 2) + (0), (1 << 2) + (1 << 3), (1 << 2) + (1 << 14), (1 << 2) + (1 << 15)}));
+                                               new String[] {"no", "misclass", "brier", "g.mean"},
+                                               new int[] {0, (1 << 2) + (0), (1 << 2) + (1 << 3), (1 << 2) + (1 << 14)}));
+
+                ensembleArg.put("predictionType", "max.vote");
+                ensembleList.put("predictionType",
+                                 new NativeOpt("predictionType",
+                                               new String[] {"max.vote", "rfq"},
+                                               new int[] {0, (1 << 14)}));
+
         }
-        else {
+        else if (family.equals("RF-R") || family.equals("RF-R+")) {
+            ensembleArg.put("errorType", "mse");
+            ensembleList.put("errorType",
+                             new NativeOpt("errorType",
+                                           new String[] {"no", "mse"},
+                                           new int[] {0, (1 << 2) + (0)}));
+
+            ensembleArg.put("predictionType", "mean");
+            ensembleList.put("predictionType",
+                             new NativeOpt("predictionType",
+                                           new String[] {"mean"},
+                                           new int[] {0}));
+
+        }
+        else if (family.equals("RF-S")) {
+            ensembleArg.put("errorType", "c-index");
+            ensembleList.put("errorType",
+                             new NativeOpt("errorType",
+                                           new String[] {"no", "c-index"},
+                                           new int[] {0, (1 << 2) + (0)}));
+
+            ensembleArg.put("predictionType", "default");
+            ensembleList.put("predictionType",
+                             new NativeOpt("predictionType",
+                                           new String[] {"default"},
+                                           new int[] {0}));
+
+        }
+        else if (family.equals("RF-M+")) {
             ensembleArg.put("errorType", "default");
             ensembleList.put("errorType",
                              new NativeOpt("errorType",
+                                           new String[] {"no", "default"},
+                                           new int[] {0, (1 << 2) + (0)}));
+
+            ensembleArg.put("predictionType", "default");
+            ensembleList.put("predictionType",
+                             new NativeOpt("predictionType",
                                            new String[] {"default"},
-                                           new int[] {(1 << 2) + (0)}));
+                                           new int[] {0}));
+
+        }
+        else if (family.equals("RF-U")) {
+            ensembleArg.put("errorType", "no");
+            ensembleList.put("errorType",
+                             new NativeOpt("errorType",
+                                           new String[] {"no"},
+                                           new int[] {0}));
+
+            ensembleArg.put("predictionType", "no");
+            ensembleList.put("predictionType",
+                             new NativeOpt("predictionType",
+                                           new String[] {"no"},
+                                           new int[] {0}));
+
         }
         
     }

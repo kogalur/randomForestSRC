@@ -5,7 +5,7 @@
 \description{
   Find pairwise interactions between variables.
 }
-\usage{\method{find.interaction}{rfsrc}(object, xvar.names, cause, outcome.target,
+\usage{\method{find.interaction}{rfsrc}(object, xvar.names, cause, m.target,
   importance = c("permute", "random", "anti",
                  "permute.ensemble", "random.ensemble", "anti.ensemble"),
   method = c("maxsubtree", "vimp"), sorted = TRUE, nvar, nrep = 1, subset, 
@@ -21,9 +21,9 @@
     and \code{J} indicating the event of interest, where \code{J} is
     the number of event types. The default is to use the first event
     type.}
-  \item{outcome.target}{Character value multivariate families
-    specifying the target outcome to be used. The default is to use
-    the first coordinate.}
+  \item{m.target}{Character value for multivariate families
+    specifying the target outcome to be used.  If left unspecified, the
+    algorithm will choose a default target.}
   \item{importance}{Type of variable importance (VIMP). See
     \command{rfsrc} for details.}
   \item{method}{Method of analysis: maximal subtree or VIMP.  See details

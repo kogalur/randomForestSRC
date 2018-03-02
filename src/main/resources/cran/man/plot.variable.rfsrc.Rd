@@ -28,9 +28,9 @@
     the number of event types.  The default is to use the first event
     type.}
   \item{m.target}{Character value for multivariate families
-    specifying the target outcome to be used. The default is to use the
-    first coordinate.}
-  \item{time}{For survival families, the time at which the predicted
+    specifying the target outcome to be used.  If left unspecified, the
+    algorithm will choose a default target.}
+   \item{time}{For survival families, the time at which the predicted
     survival value is evaluated at (depends on \code{surv.type}).}
   \item{surv.type}{For survival families, specifies the predicted value.
     See details below.}
@@ -49,7 +49,10 @@
     plots for continuous variables.}
   \item{smooth.lines}{Use lowess to smooth partial plots.}
   \item{subset}{Vector indicating which rows of the x-variable matrix
-    \code{x$xvar} to use. All rows are used if not specified.}
+    \code{x$xvar} to use. All rows are used if not specified.  Do not
+    define subset based on the original data (which could have been processed
+    due to missing values or for other reasons in the previous forest call) but
+    define subset based on the rows of \code{x$xvar}.}
   \item{...}{Further arguments passed to or from other methods.}
 }
 \details{
@@ -111,6 +114,11 @@
   
   Partial plots can be slow.  Setting \option{npts} to a smaller number
   can help.
+
+  For greater customization and flexibility in partial plot calls,
+  consider using the function \code{partial.rfsrc} which provides a
+  direct interface for calculating partial plot data.
+  
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -127,13 +135,14 @@
     Statist.}, 2:841-860.
   
   Ishwaran H., Gerds T.A., Kogalur U.B., Moore R.D., Gange S.J. and Lau
-  B.M. (2014). Random survival forests for competing risks.  To appear
-  in \emph{Biostatistics}.
+  B.M. (2014). Random survival forests for competing risks.
+  \emph{Biostatistics}, 15(4):757-773.
+  
 }
 \seealso{
   \command{\link{rfsrc}},
   \command{\link{rfsrcSyn}},
-   
+  \command{\link{partial.rfsrc}},
   \command{\link{predict.rfsrc}}
 }
 \examples{
@@ -167,9 +176,10 @@ plot.variable(follic.obj, target = 2)
 ## regression
 ## ------------------------------------------------------------
 
-## airquality
+## airquality 
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)
 plot.variable(airq.obj, partial = TRUE, smooth.lines = TRUE)
+plot.variable(airq.obj, partial = TRUE, subset = airq.obj$xvar$Solar.R < 200)
 
 ## motor trend cars
 mtcars.obj <- rfsrc(mpg ~ ., data = mtcars)

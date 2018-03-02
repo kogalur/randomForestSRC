@@ -5,7 +5,7 @@
   Obtain predicted values using a forest.  Also returns performance
   values if the test data contains y-outcomes.
 }
-\usage{\method{predict}{rfsrc}(object, newdata, outcome.target = NULL,
+\usage{\method{predict}{rfsrc}(object, newdata, m.target = NULL,
   importance = c(FALSE, TRUE, "none", "permute", "random", "anti",
                  "permute.ensemble", "random.ensemble", "anti.ensemble")[1],
   na.action = c("na.omit", "na.impute"), outcome = c("train", "test"),
@@ -22,12 +22,12 @@
 	    forest)}.}
   \item{newdata}{Test data. If missing, the original grow
     (training) data is used.}
-  \item{outcome.target}{Character vector for multivariate families
+  \item{m.target}{Character vector for multivariate families
     specifying the target outcomes to be used. The default is to use all
     coordinates.}
-  \item{importance}{Method for computing variable importance (VIMP).
-    See \command{rfsrc} for details. Only applies when the test data
-    contains y-outcome values.}
+  \item{importance}{Method for computing variable importance (VIMP) when
+    test data contains y-outcomes values.  Also see \command{vimp} for more
+    flexibility, including joint vimp calculations.}
   \item{na.action}{Missing value action. The default
     \code{na.omit} removes the entire record if
     even one of its entries is \code{NA}.  Selecting \option{na.impute} 

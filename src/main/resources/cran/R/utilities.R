@@ -1,3 +1,34 @@
+coerce.multivariate <- function(x, outcome.target) {
+  ## Warning:  This functon assumes that get.univariate.target has been called first, to
+  ## verify the coherency of the target.  This means that the target exists in the forest object, and that
+  ## it contains outcome statistics.
+  ## If this is a multivarate family, we coerce the object, based on outcome.target
+  ## into a univaritate regression or classification object.
+  x$univariate <- TRUE
+  if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
+    ##  Coerce the mulitvariate object into a univariate object.
+    x.coerced <- unlist(list(x$classOutput, x$regrOutput), recursive = FALSE)[[outcome.target]]
+    x$univariate <- FALSE
+    x$yvar <- x$yvar[, outcome.target]
+    ## Test for factors.  Ordered factors are treated as factors!
+    if (is.factor(x$yvar) || is.ordered(x$yvar)) {
+      x$family <- "class"
+    }
+    else {
+      x$family <- "regr"
+    }
+    ## Make various assignments to the coerced object.
+    x$predicted <- x.coerced$predicted
+    x$predicted.oob <- x.coerced$predicted.oob
+    x$class <- x.coerced$class
+    x$class.oob <- x.coerced$class.oob
+    x$err.rate <- x.coerced$err.rate
+    x$importance <- x.coerced$importance
+    x$yvar.names <- outcome.target
+  }
+  x$outcome.target <- outcome.target
+  x
+}
 get.bootstrap <- function (bootstrap) {
   ## Convert bootstrap option into native code parameter.
   if (bootstrap == "by.root") {
@@ -50,7 +81,6 @@ get.na.action <- function (na.action) {
       ## the following statement:
       ## na.action <- 0
     }
-      
     else {
         stop("Invalid choice for 'na.action' option:  ", na.action)
       }
@@ -75,52 +105,47 @@ get.forest <- function (forest) {
   return (forest)
 }
 get.forest.wt <- function (grow.equivalent, bootstrap, weight) {
-  ## Convert weight option into native code parameter.
-  if (!is.null(weight)) {
-    if (weight == FALSE) {
-      weight <- 0
-    }
-      else if (grow.equivalent == TRUE) {
-        if ((bootstrap != "by.root") && (bootstrap != "by.user")) {
-          weight <- 2^0 + 2^2
+    ## Convert weight option into native code parameter.
+    if (!is.null(weight)) {
+        if (weight == FALSE) {
+            wght.bits <- 0
         }
-          else {
+        else if (grow.equivalent == TRUE) {
             if (weight == TRUE) {
-              weight <- 2^0
+                wght.bits <- 2^0 + 2^1
             }
-              else if (weight == "inbag") {
-                weight <- 2^0
-              }
-                else if (weight == "oob") {
-                  weight <- 2^0 + 2^1
-                }
-                  else if (weight == "all") {
-                    weight <- 2^0 + 2^2
-                  }
-                    else {
-                      stop("Invalid choice for 'weight' option:  ", weight)
-                    }
-          }
-      }
-        else if (grow.equivalent == FALSE) {
-            if (weight == TRUE) {
-                weight <- 2^0 + 2^2
+            else if (weight == "inbag") {
+                wght.bits <- 2^0 + 2^1
+            }
+            else if (weight == "oob") {
+                wght.bits <- 2^0 + 2^2
             }
             else if (weight == "all") {
-                weight <- 2^0 + 2^2
+                wght.bits <- 2^0 + 2^1 + 2^2
+            }
+            else {
+                stop("Invalid choice for 'weight' option:  ", weight)
+            }
+        }
+        else if (grow.equivalent == FALSE) {
+            if (weight == TRUE) {
+                wght.bits <- 2^0 + 2^1 + 2^2
+            }
+            else if (weight == "all") {
+                wght.bits <- 2^0 + 2^1 + 2^2
             }
             else {
                 stop("Invalid choice for 'weight' option:  ", weight)
             }
         }
         else {
-            stop("Invalid choice for 'weight' option:  ", weight)
+            stop("Invalid choice for 'grow.equivalent' in weight:  ", grow.equivalent)
         }
     }
-  else {
-      stop("Invalid choice for 'weight' option:  ", weight)
-  }
-  return (weight)
+    else {
+        stop("Invalid choice for 'weight' option:  ", weight)
+    }
+    return (wght.bits)
 }
 get.importance <-  function (importance) {
   ## Convert importance option into native code parameter.
@@ -206,58 +231,60 @@ get.outcome <- function (outcome) {
       }
   return (outcome)
 }
-get.perf <-  function (perf, impute.only, family, perf.type) {
-    ## Entry value is typically "none" or NULL.  But we handle the
-    ## case when it is "default" as well.
-    if (impute.only == TRUE) {
-        result = "none"
+get.perf <-  function (perf, impute.only, family) {
+  ## first deal with impute.only where there is no performance
+  if (impute.only == TRUE) {
+    return("none")
+  }
+  ## now deal with non-classification
+  if (family != "class") {
+    if (is.null(perf)) {
+      return("default")
     }
-    else {
-        if (is.null(perf)) {
-            result = "default"
-        }
-        else {
-            result = perf
-        }
+    perf <- match.arg(perf, c("none", "default", "standard"))##only allowed values
+    if (perf == "standard") {
+      perf <- "default"
     }
-    if (result == "default") {
-        if (family == "class") {
-            if (!is.null(perf.type)) {
-                if (perf.type == "g.mean") {
-                    result = "g.mean"
-                }
-                if (perf.type == "g.mean.rfq") {
-                    result = "g.mean.rfq"
-                }
-                if (perf.type == "brier") {
-                    result = "brier"
-                }
-            }
-        }
-    }
-    else {
-        ## Ingore any other incoming values of perf other than NULL,
-        ## "none", or "default".
-        result = "none"
-    }
-    return (result)
+    return(perf)
+  }
+  ## now deal with classification
+  if (is.null(perf)) {
+    return("default")
+  }
+  perf <- match.arg(perf, c("none", "default", "standard", "misclass", "brier", "g.mean"))##only allowed values
+  if (perf == "standard" || perf == "misclass") {
+    perf <- "default"
+  }
+  perf
 }
 get.perf.bits <- function (perf) {
-    if (perf == "default") {
-        return (2^2)
+  if (perf == "default") {
+    return (2^2)
+  }
+  else if (perf == "g.mean") {
+    return (2^2 + 2^14)
+  }
+  else if (perf == "brier") {
+    return (2^2 + 2^3)
+  }
+  else {#everything else becomes "none"
+    return (0)
+  }
+}
+get.rfq <- function(rfq) {
+  if (is.null(rfq)) {
+    rfq <- FALSE
+  }
+  rfq
+}
+get.rfq.bits <- function (rfq, family) {
+    result <- 0
+    if (family == "class") {
+        if (rfq) {
+            result <- 2^15
+        }
     }
-    else if (perf == "g.mean") {
-        return (2^2 + 2^14)
-    }
-    else if (perf == "g.mean.rfq") {
-        return (2^2 + 2^15)
-    }
-    else if (perf == "brier") {
-        return (2^2 + 2^3)
-    }
-    else {
-        return (0)
-    }
+    return (result)
 }
 get.proximity <- function (grow.equivalent, proximity) {
   ## Convert proximity option into native code parameter.
@@ -303,6 +330,22 @@ get.proximity <- function (grow.equivalent, proximity) {
     return (prox.bits)
   }
  
+  get.membership <- function (membership) {
+    ## Convert option into native code parameter.
+    bits <- 0
+    if (!is.null(membership)) {
+      if (membership == TRUE) {
+        bits <- 2^6
+      }
+        else if (membership != FALSE) {
+          stop("Invalid choice for 'membership' option:  ", membership)
+        }
+    }
+      else {
+        stop("Invalid choice for 'membership' option:  ", membership)
+      }
+    return (bits)
+  }
   get.rf.cores <- function () {
     if (is.null(getOption("rf.cores"))) {
       if(!is.na(as.numeric(Sys.getenv("RF_CORES")))) {
@@ -391,75 +434,6 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (statistics)
   }
-  get.trace <- function (do.trace) {
-    ## Convert trace into native code parameter.
-    if (!is.logical(do.trace)) {
-      if (do.trace >= 1) {
-        do.trace <- round(do.trace)
-      }
-        else {
-          do.trace <- 0
-        }
-    }
-      else {
-        do.trace <- 1 * do.trace
-      }
-    return (do.trace)
-  }
-  get.var.used <- function (var.used) {
-    ## Convert var.used option into native code parameter.
-    if (!is.null(var.used)) {
-      if (var.used == "all.trees") {
-        var.used <- 2^12
-      }
-        else if (var.used == "by.tree") {
-          var.used <- 2^13
-        }
-          else if (var.used == FALSE) {
-            var.used <- 0
-          }
-            else {
-              stop("Invalid choice for 'var.used' option:  ", var.used)
-            }
-    }
-      else {
-        stop("Invalid choice for 'var.used' option:  ", var.used)
-      }
-    return (var.used)
-  }
-  get.vimp.only <-  function (vimp.only) {
-    ## Convert vimp.only option into native code parameter.
-    if (!is.null(vimp.only)) {
-      if (vimp.only) {
-        return (2^27)
-      }
-        else if (!vimp.only) {
-          return (0)
-        }
-          else {
-            stop("Invalid choice for 'vimp.only' option:  ", vimp.only)
-          }
-    }
-      else {
-        stop("Invalid choice for 'vimp.only' option:  ", vimp.only)
-      }
-  }
-  get.membership <- function (membership) {
-    ## Convert option into native code parameter.
-    bits <- 0
-    if (!is.null(membership)) {
-      if (membership == TRUE) {
-        bits <- 2^6
-      }
-        else if (membership != FALSE) {
-          stop("Invalid choice for 'membership' option:  ", membership)
-        }
-    }
-      else {
-        stop("Invalid choice for 'membership' option:  ", membership)
-      }
-    return (bits)
-  }
   get.terminal.qualts <- function (terminal.qualts, incoming.flag) {
     ## Convert option into native code parameter.  This 
     ## is sensitive to incoming and outgoing data 
@@ -510,14 +484,29 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (bits)
   }
+  get.trace <- function (do.trace) {
+    ## Convert trace into native code parameter.
+    if (!is.logical(do.trace)) {
+      if (do.trace >= 1) {
+        do.trace <- round(do.trace)
+      }
+        else {
+          do.trace <- 0
+        }
+    }
+      else {
+        do.trace <- 1 * do.trace
+      }
+    return (do.trace)
+  }
   get.tree.err <- function (tree.err) {
     ## Convert tree.err option into native code parameter.
     if (!is.null(tree.err)) {
       if (tree.err == FALSE) {
-        tree.err <- 2^13
+          tree.err <- 0
       }
         else if (tree.err == TRUE) {
-          tree.err <- 0
+            tree.err <- 2^13
         }
           else {
             stop("Invalid choice for 'tree.err' option:  ", tree.err)
@@ -527,6 +516,44 @@ get.proximity <- function (grow.equivalent, proximity) {
         stop("Invalid choice for 'tree.err' option:  ", tree.err)
       }
     return (tree.err)
+  }
+  get.var.used <- function (var.used) {
+    ## Convert var.used option into native code parameter.
+    if (!is.null(var.used)) {
+      if (var.used == "all.trees") {
+        var.used <- 2^12
+      }
+        else if (var.used == "by.tree") {
+          var.used <- 2^13
+        }
+          else if (var.used == FALSE) {
+            var.used <- 0
+          }
+            else {
+              stop("Invalid choice for 'var.used' option:  ", var.used)
+            }
+    }
+      else {
+        stop("Invalid choice for 'var.used' option:  ", var.used)
+      }
+    return (var.used)
+  }
+  get.vimp.only <-  function (vimp.only) {
+    ## Convert vimp.only option into native code parameter.
+    if (!is.null(vimp.only)) {
+      if (vimp.only) {
+        return (2^27)
+      }
+        else if (!vimp.only) {
+          return (0)
+        }
+          else {
+            stop("Invalid choice for 'vimp.only' option:  ", vimp.only)
+          }
+    }
+      else {
+        stop("Invalid choice for 'vimp.only' option:  ", vimp.only)
+      }
   }
   ## HIDDEN VARIABLES FOLLOW:
   is.hidden.impute.only <-  function (user.option) {
@@ -564,115 +591,31 @@ get.proximity <- function (grow.equivalent, proximity) {
         as.character(user.option$perf.type)
       }
   }
-  is.hidden.ytry <-  function (user.option) {
-    if (is.null(user.option$ytry)) {
+  is.hidden.rfq <-  function (user.option) {
+    if (is.null(user.option$rfq)) {
       NULL
     }
+      else {
+        as.logical(as.character(user.option$rfq))
+      }
+  }
+is.hidden.ytry <-  function (user.option) {
+    if (is.null(user.option$ytry)) {
+        NULL
+    }
     else {
-      as.integer(user.option$ytry)
+        as.integer(user.option$ytry)
     }
-  }
-  get.univariate.target <- function(x, outcome.target = NULL) {
-    ## This function takes a grow, grow-equivalent, or predict object and returns a single coherent target.
-    ## That is, if no target has been specified, the first regression outcome with statistics is chosen.
-    ## If no regression outcome exists, the first classification outcome with statistics is chosen.
-    ## If the target is specified, the object is verified to contain the target outcome statistics
-    ## for that y-var.  If none exist, the function will error.
-    if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
-      if (is.null(outcome.target)) {
-        ## Check the y-vars against regression and then classification.
-        ## We choose the "first" variable, favoring regression, then
-        ## classification.
-        target <- match(c("regrOutput", "classOutput"), names(x))
-        target <- target[!is.na(target)]
-        if(length(target) > 0) {
-          do.break <- FALSE
-          for (i in target) {
-            for (j in 1:length(x[[i]])) {
-              if (length(x[[i]][[j]]) > 0) {
-                ## This is a non-null output.
-                outcome.target <- names(x[[i]][j])
-                ## Exit the loop.
-                do.break <- TRUE
-                break
-              }
-            }
-            if (do.break == TRUE) {
-              break
-            }
-          }
-        }
-          else {
-            ## Something would have to be seriously wrong for this to happen.
-            stop("No outcomes found in object.  Please contact technical support.")
-          }
-      }
-      else {
-        ## Check that one and only one target has been specified.
-        if (sum(is.element(outcome.target, x$yvar.names)) != 1) {
-          stop("User must specify one and only one outcome.target for multivariate families.")
-        }
-        ## A target outcome has been specified.  Verify that it contains outcome statistics.
-        target <- match(c("regrOutput", "classOutput"), names(x))
-        target <- target[!is.na(target)]
-        found = FALSE
-        if(length(target) > 0) {
-          do.break <- FALSE
-          for (i in target) {
-            for (j in 1:length(x[[i]])) {
-              if (length(x[[i]][[j]]) > 0) {
-                ## This is a non-null output.
-                if (outcome.target == names(x[[i]][j])) {
-                  found = TRUE
-                  ## Exit the loop.
-                  do.break <- TRUE
-                  break
-                }
-              }
-            }
-            if (do.break == TRUE) {
-              break
-            }
-          }     
-        }
-        if (!found) {
-          stop("Target outcome not found in object.  Re-run analysis with target outcome specified.")
-        }
-      }
+}
+is.hidden.htry <-  function (user.option) {
+    if (is.null(user.option$htry)) {
+        htry = 0
     }
-    ## This function will return NULL if the function is not
-    ## multivariate.  Otherwise, the outcome and its associated statistics is
-    ## guaranteed to exist in the object.
-    outcome.target
-  }
-  coerce.multivariate <- function(x, outcome.target) {
-    ## Warning:  This functon assumes that get.univariate.target has been called first, to
-    ## verify the coherency of the target.  This means that the target exists in the forest object, and that
-    ## it contains outcome statistics.
-    ## If this is a multivarate family, we coerce the object, based on outcome.target
-    ## into a univaritate regression or classification object.
-    x$univariate <- TRUE
-    if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
-      ##  Coerce the mulitvariate object into a univariate object.
-      x.coerced <- unlist(list(x$classOutput, x$regrOutput), recursive = FALSE)[[outcome.target]]
-      x$univariate <- FALSE
-      x$yvar <- x$yvar[, outcome.target]
-      ## Test for factors.  Ordered factors are treated as factors!
-      if (is.factor(x$yvar) || is.ordered(x$yvar)) {
-        x$family <- "class"
-      }
-      else {
-        x$family <- "regr"
-      }
-      ## Make various assignments to the coerced object.
-      x$predicted <- x.coerced$predicted
-      x$predicted.oob <- x.coerced$predicted.oob
-      x$class <- x.coerced$class
-      x$class.oob <- x.coerced$class.oob
-      x$err.rate <- x.coerced$err.rate
-      x$importance <- x.coerced$importance
-      x$yvar.names <- outcome.target
+    else {
+        htry = as.integer(user.option$htry)
+        if (htry < 0) {
+            stop("Invalid choice for 'htry' option:  ", user.option$htry)
+        }
     }
-    x$outcome.target <- outcome.target
-    x
-  }
+    return (htry)
+}

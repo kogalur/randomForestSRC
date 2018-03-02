@@ -7,6 +7,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
                                                                     jint         splitRule,
                                                                     jint         nsplit,
                                                                     jint         mtry,
+                                                                    jint         htry,
                                                                     jint         ytry,
                                                                     jint         nodeSize,
                                                                     jint         nodeDepth,
@@ -40,6 +41,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
   RF_splitRule            = (uint) splitRule;
   RF_nsplit               = (uint) nsplit;
   RF_mtry                 = (uint) mtry;
+  RF_htry                 = (uint) htry;
   RF_ytry                 = (uint) ytry;
   RF_nodeSize             = (uint) nodeSize;
   RF_nodeDepth            = (int)  nodeDepth;
@@ -101,10 +103,27 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
                                                                        jint         totalNodeCount,
                                                                        jintArray    treeID,
                                                                        jintArray    nodeID,
+                                                                       jint         htry,
+                                                                       jintArray    hcDim,
+                                                                       jintArray    hcPartDim,
+                                                                       jintArray    hcPartIdx,
+                                                                       jintArray    osPartIdx,
                                                                        jintArray    parmID,
                                                                        jdoubleArray contPT,
                                                                        jintArray    mwcpSZ,
                                                                        jintArray    mwcpPT,
+                                                                       jintArray    parmID2,
+                                                                       jdoubleArray contPT2,
+                                                                       jintArray    mwcpSZ2,
+                                                                       jintArray    mwcpPT2,
+                                                                       jintArray    parmID3,
+                                                                       jdoubleArray contPT3,
+                                                                       jintArray    mwcpSZ3,
+                                                                       jintArray    mwcpPT3,
+                                                                       jintArray    parmID4,
+                                                                       jdoubleArray contPT4,
+                                                                       jintArray    mwcpSZ4,
+                                                                       jintArray    mwcpPT4,
                                                                        jintArray    tnRMBR,
                                                                        jintArray    tnAMBR,
                                                                        jintArray    tnRCNT,
@@ -145,7 +164,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   RF_observationSize      = (uint) observationSize;
   RF_ySize                = (uint) ySize;
   RF_rType                = (char *) copy1DObject(rType, NATIVE_TYPE_CHARACTER, &RF_jni1DInfoListSize, TRUE);
-  RF_rLevels              = (int*) copy1DObject(rLevels, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
+  RF_rLevels              = (uint*) copy1DObject(rLevels, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
   RF_responseIn           = (double **) copy2DObject(rData, NATIVE_TYPE_NUMERIC, &RF_jni2DInfoListSize);
   RF_xSize                = (uint) xSize;
   RF_xType                = (char *) copy1DObject(xType, NATIVE_TYPE_CHARACTER, &RF_jni1DInfoListSize, TRUE);
@@ -159,11 +178,28 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   RF_seed_                = (int *) copy1DObject(seed, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
   RF_totalNodeCount       = (uint) totalNodeCount;
   RF_treeID_              = (uint *)   copy1DObject(treeID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_nodeID_              = (uint *)   copy1DObject(nodeID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE); 
+  RF_nodeID_              = (uint *)   copy1DObject(nodeID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_htry                 = (uint) htry;
+  RF_hcDim_               = (uint *)   copy1DObject(hcDim, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_hcPartDim_           = (uint *)   copy1DObject(hcPartDim, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_hcPartIdx_           = (uint *)   copy1DObject(hcPartIdx, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_osPartIdx_           = (uint *)   copy1DObject(osPartIdx, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_parmID_              = (uint *)   copy1DObject(parmID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_contPT_              = (double *) copy1DObject(contPT, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
   RF_mwcpSZ_              = (uint *)   copy1DObject(mwcpSZ, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_mwcpPT_              = (uint *)   copy1DObject(mwcpPT, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_parmID2_              = (uint *)   copy1DObject(parmID2, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_contPT2_              = (double *) copy1DObject(contPT2, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
+  RF_mwcpSZ2_              = (uint *)   copy1DObject(mwcpSZ2, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_mwcpPT2_              = (uint *)   copy1DObject(mwcpPT2, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_parmID3_              = (uint *)   copy1DObject(parmID3, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_contPT3_              = (double *) copy1DObject(contPT3, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
+  RF_mwcpSZ3_              = (uint *)   copy1DObject(mwcpSZ3, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_mwcpPT3_              = (uint *)   copy1DObject(mwcpPT3, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_parmID4_              = (uint *)   copy1DObject(parmID4, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_contPT4_              = (double *) copy1DObject(contPT4, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
+  RF_mwcpSZ4_              = (uint *)   copy1DObject(mwcpSZ4, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_mwcpPT4_              = (uint *)   copy1DObject(mwcpPT4, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_RMBR_ID_             = (uint *)   copy1DObject(tnRMBR, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_AMBR_ID_             = (uint *)   copy1DObject(tnAMBR, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_TN_RCNT_             = (uint *)   copy1DObject(tnRCNT, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
@@ -320,7 +356,7 @@ void setNativeGlobalEnv(JNIEnv *env, jobject obj) {
   RF_jniEnsembleInfoListSize = 0;
   RF_nativeIndex = RF_stackCount = 0;
 }
-void *jvvector(unsigned long long nl, unsigned long long nh, enum alloc_type type) {
+void *jvvector(unsigned long long nl, unsigned long long nh, enum alloc_jtype type) {
   void *v;
   v = NULL;  
   switch(type){
@@ -340,7 +376,7 @@ void *jvvector(unsigned long long nl, unsigned long long nh, enum alloc_type typ
   }
   return v;
 }
-void free_jvvector(void *v, unsigned long long nl, unsigned long long nh, enum alloc_type type) {
+void free_jvvector(void *v, unsigned long long nl, unsigned long long nh, enum alloc_jtype type) {
   switch(type){
   case NRUTIL_J1D_PTR:
     free_gvector((JNI1DInfo *) (v+nl-NR_END), nl, nh, sizeof(JNI1DInfo *));
@@ -381,6 +417,12 @@ void *copy1DObject(jarray arr, char type, uint *index, char actual) {
   JNI1DInfo *incomingInfo;
   copy = NULL;
   if (! (*RF_java_env) -> IsSameObject(RF_java_env, arr, NULL)) {
+    if (((*index) >> 6) > 0) {
+      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+      RF_nativeError("\nRF-SRC:  copy1DObject() list limit exceeded:  %20d", *index);
+      RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+      RF_nativeExit();
+    }
     RF_jni1DInfoList[*index] = incomingInfo = (JNI1DInfo*) gblock((size_t) sizeof(JNI1DInfo));
     len = (*RF_java_env) -> GetArrayLength(RF_java_env, arr);
     if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
@@ -466,7 +508,7 @@ void *copy1DObject(jarray arr, char type, uint *index, char actual) {
     }
     (*index) ++;
   }
-  return copy;
+  return copy;    
 }
 void free_jni1DList(uint size) {
   JNI1DInfo *incomingInfo;
@@ -521,9 +563,17 @@ void free_jni1DList(uint size) {
 }
 void *copy2DObject(jobject obj, char type, uint *index) {
   JNI2DInfo *incomingInfo;
+  void *result;
   uint outLen;
   jboolean isCopy;
+  result = NULL;
   if (! (*RF_java_env) -> IsSameObject(RF_java_env, obj, NULL)) {
+    if (((*index) >> 6) > 0) {
+      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+      RF_nativeError("\nRF-SRC:  copy2DObject() list limit exceeded:  %20d", *index);
+      RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+      RF_nativeExit();
+    }
     RF_jni2DInfoList[*index] = incomingInfo = (JNI2DInfo*) gblock((size_t) sizeof(JNI2DInfo));
     outLen = (*RF_java_env) -> GetArrayLength(RF_java_env, obj);
     if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
@@ -531,10 +581,10 @@ void *copy2DObject(jobject obj, char type, uint *index) {
     }
     switch (type) {
     case NATIVE_TYPE_NUMERIC:
-      (incomingInfo -> outerPtr) = (double **) new_vvector(1, outLen, NRUTIL_DPTR);
+      result = (incomingInfo -> outerPtr) = (double **) new_vvector(1, outLen, NRUTIL_DPTR);
       break;
     case NATIVE_TYPE_INTEGER:
-      (incomingInfo -> outerPtr) = (uint **) new_vvector(1, outLen, NRUTIL_UPTR);
+      result = (incomingInfo -> outerPtr) = (uint **) new_vvector(1, outLen, NRUTIL_UPTR);
       break;
     }
     (incomingInfo -> outLen)   = outLen;
@@ -569,7 +619,7 @@ void *copy2DObject(jobject obj, char type, uint *index) {
     }
     (*index) ++;
   }
-  return (incomingInfo -> outerPtr);
+  return result;
 }
 void free_jni2DList(uint size) {
   JNI2DInfo *incomingInfo;
@@ -650,7 +700,7 @@ void *stackAndProtect(uint  *index,
   if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
     RF_nativeExit();
   }
-  thisDimPtr = (uint *) (*RF_java_env) -> GetIntArrayElements(RF_java_env, thisDim, &isCopy);
+  thisDimPtr = (int *) (*RF_java_env) -> GetIntArrayElements(RF_java_env, thisDim, &isCopy);
   if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
     RF_nativeExit();
   }

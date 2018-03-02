@@ -2,7 +2,7 @@ plot.variable.rfsrc <- function(
   x,
   xvar.names,
   target,
-  m.target=NULL,
+  m.target = NULL,
   time,
   surv.type = c("mort", "rel.freq", "surv", "years.lost", "cif", "chf"),
   class.type = c("prob", "bayes"),
@@ -192,8 +192,10 @@ plot.variable.rfsrc <- function(
         if (npts < 1) npts <- 1 else npts <- round(npts)
         ## Loop over all x-variables.
         prtl <- lapply(1:nvar, function(k) {
-          ## We do not currently subset the x-values or n in the partial mode call. 
-          x <- na.omit(object$xvar[, object$xvar.names == xvar.names[k]])
+          ## We now allow subsetting of the x-values in the partial mode call.
+          ## x <- na.omit(object$xvar[, object$xvar.names == xvar.names[k]])
+          ## Bug reported by Amol Pande 16/11/2017
+          x <- na.omit(xvar[, object$xvar.names == xvar.names[k]])
           if (is.factor(x)) x <- factor(x, exclude = NULL)          
           n.x <- length(unique(x))
           if (!is.factor(x) & n.x > npts) {
@@ -212,10 +214,9 @@ plot.variable.rfsrc <- function(
                                                           partial.values = x.uniq,
                                                           partial.time = time,
                                                           oob = oob),
-##                                                        seed = -1
-##                                                        do.trace = 15 + 2^4 + 2^8
                                             pred.type,
-                                            1:n,
+                                            ## 1:n,
+                                            subset,##we now allow subsetting
                                             m.target,
                                             target)
           ## Results in the mean along an x-value over n.
@@ -426,6 +427,7 @@ plot.variable.rfsrc <- function(
   ## Return the plot.variable object for reuse
   invisible(plot.variable.obj)
 }
+## extraction function when partial=FALSE
 extract.pred <- function(obj, type, subset, time, m.target, target, oob = oob) {
     ## Coerce the (potentially) multivariate object if necessary.
     obj <- coerce.multivariate(obj, m.target)
@@ -494,6 +496,7 @@ extract.pred <- function(obj, type, subset, time, m.target, target, oob = oob) {
           }
       }
   }
+## extraction function when partial=TRUE
 ## Note that currently only one (1) time point is requested via the
 ## plot.variable() R-wrapper.  Only one (1) is allowed.
 ## Additional time points can be specified
@@ -505,7 +508,9 @@ extract.partial.pred <- function(obj, type, subset, m.target, target) {
   ## Survival families
   if (grepl("surv", obj$family)) {
     n <- dim(obj$survOutput)[1]
-    if (missing(subset)) subset <- 1:n
+    if (missing(subset)) {
+      subset <- 1:n
+    }
     time.idx <-  1
     ## Competing risks:
     if (obj$family == "surv-CR") {

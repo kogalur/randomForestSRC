@@ -255,13 +255,14 @@
               </source>
             </sources>
             <compilerProvider>generic-classic</compilerProvider>
-            <compilerExecutable>gcc-7</compilerExecutable>
-            <linkerExecutable>gcc-7</linkerExecutable> 
+            <compilerExecutable>gcc</compilerExecutable>
+            <linkerExecutable>gcc</linkerExecutable> 
 
 					  <compilerStartOptions>
               <compilerStartOption>-std=gnu99</compilerStartOption>
 					    <compilerStartOption>-I${env.JAVA_HOME}/include</compilerStartOption>
               <compilerStartOption>-I${env.JAVA_HOME}/include/darwin</compilerStartOption>
+              <compilerStartOption>-I${env.JAVA_HOME}/include/linux</compilerStartOption>
               <compilerStartOption>-fPIC</compilerStartOption>
               <compilerStartOption>-O</compilerStartOption>
 					  </compilerStartOptions>
