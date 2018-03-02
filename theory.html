@@ -1610,9 +1610,9 @@ two daughter nodes containing two new sets of competing risk data. The
 subscripts \(l\) and \(r\) refer to the left and
 right daughter node, respectively, and denote \(\alpha_{jl}(t)\) and
 \(\alpha_{jr}(t)\) for the cause-\(j\) specific hazard rate, given by
-\mref{eqn:csh}, in the left and
+\eqref{eqn:csh}, in the left and
 the right daughter node. Similarly define \(F_{jl}(t)\) and \(F_{jr}(t)\)
-to be the cs-CIF, given by \mref{eqn:cif}, for the left and the right daughter node.
+to be the cs-CIF, given by \eqref{eqn:cif}, for the left and the right daughter node.
 </p>
 
 <p>
@@ -1693,7 +1693,7 @@ maximizing \(|L^{\mathrm{LR}}(x,c)|\) over \(x\) and \(c\).
 
 <h4>Modified log-rank splitting</h4>
 <p>
-The cause-\(j\) specific log-rank split rule \mref{eqn:cr.logrank} is
+The cause-\(j\) specific log-rank split rule \eqref{eqn:cr.logrank} is
 useful if the main purpose is to detect variables that affect the
 cause-\(j\) specific hazard. It may not be optimal if the purpose is
 also prediction of cumulative event probabilities. In this case better
@@ -1716,7 +1716,7 @@ to \(t\) in addition to those individuals who have experienced an event
 The split rule based
 on the score statistic which uses the modified risk sets, is denoted
 \(L^{\mathrm{G}}_j(x,c)\) and given by substituting \(Y^*_j\) for \(Y_j\)
-and \(Y^*_{jl}\) for \(Y_l\) in \mref{eqn:cr.logrank}. Note that if the
+and \(Y^*_{jl}\) for \(Y_l\) in \eqref{eqn:cr.logrank}. Note that if the
 censoring time is not known for those cases that have an event before
 the end of follow-up, the largest observed time is used, and the
 statistic \(L^{\mathrm{G}}_j(x,c)\) is still a good (and computationally
@@ -1744,8 +1744,8 @@ maximizing \(|L^{\mathrm{G}}(x,c)|\) over \(x\) and \(c\).
 Let \(t_1 < t_2 <\cdots < t_m\) be the distinct non-censored event times in the terminal node
 \(h\), and let \(d_j(t_k)\) equal the number of events of
 type \(j\) at time \(t_k\). Let \(Y(t_k)\) be the number of bootstrap cases at
-risk at time \(t_k\).  Both of these are is in \mref{eqn:event.count}
-and \mref{eqn:at.risk}.  Let individual \(i\) have feature \({\bf X}_i\) and reside in terminal
+risk at time \(t_k\).  Both of these are is in \eqref{eqn:event.count}
+and \eqref{eqn:at.risk}.  Let individual \(i\) have feature \({\bf X}_i\) and reside in terminal
 node \(h\). Denote the number of events of type \(j\) in \([0, t_j]\) as
 
 \begin{equation*}
@@ -1754,7 +1754,7 @@ N_{j}(t| {\bf X}_i)=\sum_{t_{k} \le t} d_j(t | {\bf X}_i) .
 
 The cause-specific hazard for individual \(i\) in node \(h\) and event \(j\)
 is defined by \(\alpha_j(t|{\bf X}_i)\) and given by
-\mref{eqn:csh}.  The cause-specific cumulative hazard function
+\eqref{eqn:csh}.  The cause-specific cumulative hazard function
 (cs-CHF) is given by 
 
 \begin{equation*}
@@ -1771,7 +1771,7 @@ t} \frac{d_j(t_k | {\bf X}_i)}{Y(t_k | {\bf X}_i)} .
 \end{equation}
 
 The cs-CIF is given by
-\mref{eqn:cif} and can be written as
+\eqref{eqn:cif} and can be written as
 
 \begin{equation*}
 F_j(t|{\bf X}_i) 
@@ -1789,7 +1789,7 @@ We have adopted the estimator for \(F_j(t)\) given in
 \label{eqn:cause.specific.cif}
 \end{equation}
 
-where \(\hat{S}(t)\) is given by \mref{eqn:kaplan.meier}.
+where \(\hat{S}(t)\) is given by \eqref{eqn:kaplan.meier}.
 
 
 The predicted value for event \(j\) is the integrated cs-CIF
