@@ -66,7 +66,7 @@
   \command{\link{rfsrc}}
 }
 \examples{
-\dontrun{
+\donttest{
 ## ------------------------------------------------------------
 ## classification example
 ## showcase different vimp

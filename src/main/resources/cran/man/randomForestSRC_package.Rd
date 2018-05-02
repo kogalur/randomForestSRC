@@ -4,6 +4,7 @@
 \alias{extract.bootsample}
 \alias{extract.subsample}
 \alias{get.mv.error}
+\alias{get.mv.formula}
 \alias{get.mv.predicted}
 \alias{get.mv.vimp}
 \alias{perf.metric}

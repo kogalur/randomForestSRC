@@ -6,7 +6,7 @@ import java.lang.Math;
 
 import java.util.Arrays;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Set;
 import java.util.Iterator;
 import java.util.Map;
@@ -27,7 +27,7 @@ public class RandomForestModel {
     
     // Model argument, ensemble list contained in this model.
     private ModelArg modelArg;
-    private HashMap ensembleList;
+    private LinkedHashMap ensembleList;
     // Type of model, grow, rest, or pred.
     private int type;
     
@@ -63,7 +63,7 @@ public class RandomForestModel {
     private EnsembleArg ensembleArg;
     
     // Constructor used by RandomForest.train(..) to create MAXI model.
-    RandomForestModel(ModelArg modelArg, HashMap ensembleList) {
+    RandomForestModel(ModelArg modelArg, LinkedHashMap ensembleList) {
         this.modelArg = modelArg;
         this.ensembleList = ensembleList;
         modelType = ModelType.MAXI;
@@ -91,7 +91,7 @@ public class RandomForestModel {
 
 
     // Constructor used by RandomForest.predict(..) to create MAXI model.
-    RandomForestModel(RandomForestModel model, HashMap ensembleList) {
+    RandomForestModel(RandomForestModel model, LinkedHashMap ensembleList) {
         this.modelArg = model.getModelArg();
         this.ensembleList = ensembleList;
         this.modelType = ModelType.REST;
@@ -136,7 +136,7 @@ public class RandomForestModel {
 
     // Available to package only.  Not for end use.  Returns the
     // massaged Ensemble:ensembleVector object.  No error handling,
-    // null object returned. TBD TBD remove public TBD TBD
+    // null object possibly returned. TBD TBD remove public TBD TBD
     public Object getEnsemble(String name) {
         Ensemble ensb = (Ensemble) ensembleList.get(name);
         Object value = null;

@@ -98,7 +98,7 @@ partial.rfsrc(object, m.target = NULL,
   \command{\link{plot.variable.rfsrc}}
 }
 \examples{
-\dontrun{
+\donttest{
 ## ------------------------------------------------------------
 ## survival/competing risk
 ## ------------------------------------------------------------

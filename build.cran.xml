@@ -145,6 +145,13 @@
         </tokenfilter>
       </filterchain>
 
+      <!-- This targets rfsrc.news.R -->
+      <filterchain>
+        <tokenfilter>
+          <replacestring from="_PROJECT_PACKAGE_NAME_" to="${project.pkg.name}"/>
+        </tokenfilter>
+      </filterchain>
+      
     </copy>
   
     <concat destfile="${pptc}/src/randomForestSRC.h" append="false">
@@ -208,7 +215,7 @@
     </copy>
     
 
-    
+    <delete dir="target/cran/staged"/>    
     <mkdir dir="target/cran/staged"/>
       
     <copy todir="target/cran/staged/${project.pkg.name}">
@@ -240,7 +247,7 @@
 
     <copy file="target/cran/staged/${project.pkg.name}_${project.version}.tar.gz" todir="target/cran"/>
 
-    <delete dir="target/cran/staged"/>
+    <!-- delete dir="target/cran/staged"/-->
     
   </target>
 

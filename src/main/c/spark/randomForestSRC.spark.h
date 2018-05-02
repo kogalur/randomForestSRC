@@ -57,9 +57,12 @@ void *stackAndProtect(uint  *index,
                       uint   identity,
                       ulong  size,
                       double value,
-                      char **sexpString,
+                      char  *sexpString,
                       void  *auxiliaryArrayPtr,
                       uint   auxiliaryDimSize,
                       ...);
 void setUserTraceFlag (uint traceFlag);
 uint getUserTraceFlag ();
+void populatePartialObject(jobject obj);
+void populateHyperZeroObject(jobject obj);
+void populateHyperOneObject(jobject obj);

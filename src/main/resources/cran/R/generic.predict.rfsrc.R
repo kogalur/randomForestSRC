@@ -1,8 +1,9 @@
 generic.predict.rfsrc <-
   function(object,
            newdata,
-           m.target = NULL, 
+           m.target = NULL,
            importance = FALSE,
+           err.block = NULL,
            importance.xvar,
            subset = NULL,
            na.action = c("na.omit", "na.impute"),
@@ -16,7 +17,6 @@ generic.predict.rfsrc <-
            seed = NULL,
            do.trace = FALSE,
            membership = FALSE,
-           tree.err = FALSE,
            statistics = FALSE,
            ...)
 {
@@ -34,7 +34,7 @@ generic.predict.rfsrc <-
     stop("object is missing!")
   }
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2    &
-      sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2)  
+      sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2)
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
   ## verify the importance option
   importance <- match.arg(as.character(importance), c(FALSE, TRUE,
@@ -76,7 +76,7 @@ generic.predict.rfsrc <-
       grow.equivalent <- FALSE
     }
   ## hereafter we only need the forest and reassign "object" to the forest
-  ## (TBD) memory management "big.data" not currently implemented: TBD 
+  ## (TBD) memory management "big.data" not currently implemented: TBD
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.null(object$forest)) {
       stop("The forest is empty.  Re-run rfsrc (grow) call with forest=TRUE")
@@ -114,7 +114,7 @@ generic.predict.rfsrc <-
       minimum.version <- as.integer(unlist(strsplit("@MINIMUM_VERSION@", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
-      minimum.version.adj <- minimum.version[1] + (minimum.version[2]/10) + (minimum.version[3]/100) 
+      minimum.version.adj <- minimum.version[1] + (minimum.version[2]/10) + (minimum.version[3]/100)
       ## Minimum object version must be satisfied for us to proceed.  This is the only way
       ## terminal node restoration is guaranteed, due to RNG coherency.
       if (object.version.adj >= minimum.version.adj) {
@@ -363,12 +363,12 @@ generic.predict.rfsrc <-
   ## Initialize the low bits
   importance.bits <- get.importance(importance)
   proximity.bits <- get.proximity(grow.equivalent, proximity)
-    
+   
   split.depth.bits <- get.split.depth(split.depth)
   var.used.bits <- get.var.used(var.used)
   outcome.bits <- get.outcome(outcome)
   ## get performance and rfq bits
-  perf.type <- get.perf(perf.type, FALSE, family)    
+  perf.type <- get.perf(perf.type, FALSE, family)
   perf.bits <-  get.perf.bits(perf.type)
   rfq <- get.rfq(rfq)
   rfq.bits <- get.rfq.bits(rfq, family)
@@ -381,11 +381,11 @@ generic.predict.rfsrc <-
   membership.bits <-  get.membership(membership)
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
-  tree.err.bits <- get.tree.err(tree.err)
+  err.block <- get.err.block(err.block, ntree)
   ## Turn off partial option.
   partial.bits <- get.partial(0)
   ## na.action in the native code is only revelant to the training data.
-  ## Unless outcome == "test", we send in the protocol used for the training data. 
+  ## Unless outcome == "test", we send in the protocol used for the training data.
   if (outcome == "test") {
     ## respect the user defined protocol
   }
@@ -416,8 +416,14 @@ generic.predict.rfsrc <-
   else {
     htry <- object$htry
   }
-  do.trace <- get.trace(do.trace)
-  nativeOutput <- tryCatch({.Call("rfsrcPredict",
+    do.trace <- get.trace(do.trace)
+    ## Marker for start of native forest topology.  This can change with the outputs requested.
+    ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
+    ## particular, stackForestOutputObjects().
+    pivot <- which(names(object$nativeArray) == "treeID")
+    ## WARNING:  Note that the maximum number of slots in the following foreign function call is 64.
+    ## Ensure that this limit is not exceeded.  Otherwise, the program will error on the call.
+    nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
                                   as.integer(importance.bits +
@@ -435,7 +441,6 @@ generic.predict.rfsrc <-
                                        
                                         samptype.bits +
                                         na.action.bits +
-                                        tree.err.bits +
                                         membership.bits +
                                         terminal.qualts.bits +
                                         terminal.quants.bits),
@@ -457,49 +462,32 @@ generic.predict.rfsrc <-
                                   as.double(event.info$time.interest),
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
+                                  as.integer(htry),
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
-                                  as.integer(htry),
-                                  if (htry > 0) {
-                                      list((object$nativeArray)$hcDim,
-                                      (object$nativeArray)$hcPartDim,
-                                      (object$nativeArray)$hcPartIdx,
-                                      (object$nativeArray)$osPartIdx)
-                                  }
-                                  else {
-                                      NULL
-                                  },
-                                  as.integer((object$nativeArray)$parmID),
+                                  list(as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
-                                  as.integer((object$nativeFactorArray)$mwcpPT),
+                                  as.integer((object$nativeFactorArray)$mwcpPT)),
+                                  if (htry > 0) {
+                                      list(as.integer((object$nativeArray)$hcDim),
+                                      as.double((object$nativeArray)$contPTR))
+                                  } else { NULL },
                                   if (htry > 1) {
-                                      list((object$nativeArray)$parmID2,
-                                      (object$nativeArray)$contPT2,
-                                      (object$nativeArray)$mwcpSZ2,
-                                      (object$nativeFactorArray)$mwcpPT2)
-                                  }
-                                  else {
-                                      NULL
-                                  },
-                                  if (htry > 2) {
-                                      list((object$nativeArray)$parmID3,
-                                      (object$nativeArray)$contPT3,
-                                      (object$nativeArray)$mwcpSZ3,
-                                      (object$nativeFactorArray)$mwcpPT3)
-                                  }
-                                  else {
-                                      NULL
-                                  },
-                                  if (htry > 3) {
-                                      list((object$nativeArray)$parmID4,
-                                      (object$nativeArray)$contPT4,
-                                      (object$nativeArray)$mwcpSZ4,
-                                      (object$nativeFactorArray)$mwcpPT4)
-                                  }
-                                  else {
-                                      NULL
-                                  },
+                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (0 * htry) + x]])})
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.double(object$nativeArray[[pivot + 9 + (1 * htry) + x]])})
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.double(object$nativeArray[[pivot + 9 + (2 * htry) + x]])})
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (3 * htry) + x]])})
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (4 * htry) + x]])})
+                                  } else { NULL },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
                                   as.integer(object$nativeArrayTNDS$tnRCNT),
@@ -519,19 +507,14 @@ generic.predict.rfsrc <-
                                   as.integer(length(importance.xvar.idx)),
                                   as.integer(importance.xvar.idx),
                                   ## Partial variables disabled.
-                                  as.integer(0),
-                                  as.integer(0),
-                                  as.integer(0),
-                                  as.double(NULL),
-                                  as.integer(0),
-                                  as.integer(NULL),
-                                  as.double(NULL),
+                                  list(as.integer(0), as.integer(0), as.integer(0), NULL, as.integer(0), NULL, NULL),
                                   as.integer(length(subset)),
                                   as.integer(subset),
                                   as.integer(n.newdata),
                                   as.integer(r.dim.newdata),
                                   as.double(if (outcome != "test") yvar.newdata else NULL),
                                   as.double(if (outcome != "test") xvar.newdata else NULL),
+                                  as.integer(err.block),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -603,7 +586,7 @@ generic.predict.rfsrc <-
     else {
       proximity.out <- NULL
     }
-    
+   
   ## forest weight matrix
   if (forest.wt != FALSE) {
     if (grow.equivalent) {
@@ -705,7 +688,7 @@ generic.predict.rfsrc <-
     imputed.data = (if (n.miss>0) imputed.data else NULL),
     split.depth  = split.depth.out,
     node.stats = node.stats,
-    tree.err = tree.err,
+    err.block = err.block,
     perf.type = perf.type
   )
   ## memory management
@@ -764,7 +747,7 @@ generic.predict.rfsrc <-
     ## -> of dim [length(event.info$event.type)] x [RF_sortedTimeInterestSize] x [n]
     ##    where [length(event.info$event.type)] may be equal to [1].
     ## To the R code:
-    ## -> of dim [n] x [RF_sortedTimeInterestSize] x [length(event.info$event.type)]  
+    ## -> of dim [n] x [RF_sortedTimeInterestSize] x [length(event.info$event.type)]
     chf <- (if (!is.null(nativeOutput$allEnsbCHF))
               adrop3d.last(array(nativeOutput$allEnsbCHF,
                                  c(n.observed, length(event.info$time.interest), length(event.info$event.type)),
@@ -784,7 +767,7 @@ generic.predict.rfsrc <-
     ##   "oobEnsbMRT"
     ## -> of dim [length(event.info$event.type)] x [n]
     ## To the R code:
-    ## -> of dim [n] x [length(event.info$event.type)] 
+    ## -> of dim [n] x [length(event.info$event.type)]
     predicted <- (if (!is.null(nativeOutput$allEnsbMRT))
                     adrop2d.last(array(nativeOutput$allEnsbMRT,
                                        c(n.observed, length(event.info$event.type)), dimnames=mortality.names), coerced.event.count) else NULL)
@@ -840,7 +823,7 @@ generic.predict.rfsrc <-
     ##   -> of dim [ntree] x length(event.info$event.type)]
     ## To the R code:
     ##   -> of dim [ntree] x length(event.info$event.type)]
-    if (!is.null(nativeOutput$perfSurv)) {      
+    if (!is.null(nativeOutput$perfSurv)) {
       err.rate <- adrop2d.first(array(nativeOutput$perfSurv,
                                       c(length(event.info$event.type), ntree),
                                       dimnames=err.names),
@@ -910,9 +893,9 @@ generic.predict.rfsrc <-
         classOutput <- vector("list", class.count)
         ## Names of the classification outputs.
         names(classOutput) <- yvar.names[class.index]
-        ## Vector to hold the number of levels in each factor response. 
+        ## Vector to hold the number of levels in each factor response.
         levels.count <- array(0, class.count)
-        ## List to hold the names of levels in each factor response. 
+        ## List to hold the names of levels in each factor response.
         levels.names <- vector("list", class.count)
         counter <- 0
         for (i in class.index) {
@@ -932,20 +915,20 @@ generic.predict.rfsrc <-
             }
         }
         ## Incoming error rates: T=tree R=response L=level
-        ## T1R1L0 T1R1L1 T1R1L2 T1R1L3 T1R2L0 T1R2L1 T1R2L2, T2R1L0 T2R1L1 T2R1L2 T2R1L3 T2R2L0 T2R2L1 T2R2L2, ... 
+        ## T1R1L0 T1R1L1 T1R1L2 T1R1L3 T1R2L0 T1R2L1 T1R2L2, T2R1L0 T2R1L1 T2R1L2 T2R1L3 T2R2L0 T2R2L1 T2R2L2, ...
         ## In GROW mode, all class objects are represented in the tree offset calculation.
         ## In PRED mode, the offsets are dependent on the only those targets that are requested!
-        ## Yeilds tree.offset = c(1, 8, ...) 
+        ## Yeilds tree.offset = c(1, 8, ...)
         tree.offset <- array(1, ntree)
         ## Sum of all level counts targetted classification.  For example,
         ## if R1 has 3 levels, and R2 has 2 levels, and R3 has 6 levels, and
         ## only R1 and R3 and targetted, then levels.total = 9 + 3
-        levels.total <- 0 
+        levels.total <- 0
         if (ntree > 1) {
           ## Iterate over all the target outcomes and map them to the class list.
           for (i in 1:length(m.target.idx)) {
             ## This is the slot in the class list.  The class list spans all the classification
-            ## outputs, some of which may be NULL.  
+            ## outputs, some of which may be NULL.
             target.idx <- which (class.index == m.target.idx[i])
             ## Is the target a classification y-variable.
             if (length(target.idx) > 0) {
@@ -956,8 +939,8 @@ generic.predict.rfsrc <-
         }
         tree.offset <-  cumsum(tree.offset)
         ## Incoming vimp rates: V=xvar R=response L=level
-        ## V1R1L0 V1R1L1 V1R1L2 V1R1L3 V1R1L0 V1R2L1 V1R2L2, V2R1L0 V2R1L1 V2R1L2 V2R1L3 V2R2L0 V2R2L1 V2R2L2, ... 
-        ## Yeilds vimp.offset = c(1, 8, ...) 
+        ## V1R1L0 V1R1L1 V1R1L2 V1R1L3 V1R1L0 V1R2L1 V1R2L2, V2R1L0 V2R1L1 V2R1L2 V2R1L3 V2R2L0 V2R2L1 V2R2L2, ...
+        ## Yeilds vimp.offset = c(1, 8, ...)
         vimp.offset <- array(1, vimp.count)
         if (vimp.count > 1) {
           vimp.offset[2:vimp.count] <- levels.total
@@ -976,14 +959,14 @@ generic.predict.rfsrc <-
         ## where the slot [.] x [.] x [1] holds the unconditional error rate.
         ## Note that this is a ragged array.
         ## To the R code:
-        ## -> of dim [[class.count]] x [ntree] x [1 + levels.count[]] 
+        ## -> of dim [[class.count]] x [ntree] x [1 + levels.count[]]
         ## From the native code:
         ##   "vimpClas"
         ## -> of dim [n.xvar] x [class.count] x [1 + levels.count]
         ## where the slot [.] x [.] x [1] holds the unconditional vimp.
         ## Note that this is a ragged array.
         ## To the R code:
-        ## -> of dim [[class.count]] x [1 + levels.count] x [n.xvar] 
+        ## -> of dim [[class.count]] x [1 + levels.count] x [n.xvar]
         for (i in 1:length(m.target.idx)) {
           target.idx <- which (class.index == m.target.idx[i])
           if (length(target.idx) > 0) {
@@ -1051,16 +1034,16 @@ generic.predict.rfsrc <-
         regrOutput <- vector("list", regr.count)
         names(regrOutput) <- yvar.names[regr.index]
         ## Incoming: T=tree R=response
-        ## T1R1 T1R2, T2R1 T2R2, T3R1 T3R2, ... 
-        ## Yeilds tree.offset = c(1, 3, 5) 
+        ## T1R1 T1R2, T2R1 T2R2, T3R1 T3R2, ...
+        ## Yeilds tree.offset = c(1, 3, 5)
         tree.offset <- array(1, ntree)
         if (ntree > 1) {
           tree.offset[2:ntree] <- length(regr.index)
         }
         tree.offset <-  cumsum(tree.offset)
         ## Incoming vimp rates: V=xvar R=response L=level
-        ## V1R1 V1R2, V2R1 V2R2, V3R1 V3R2, ... 
-        ## Yeilds vimp.offset = c(1, 3, 5, ...) 
+        ## V1R1 V1R2, V2R1 V2R2, V3R1 V3R2, ...
+        ## Yeilds vimp.offset = c(1, 3, 5, ...)
         vimp.offset <- array(1, vimp.count)
         if (vimp.count > 1) {
           vimp.offset[2:vimp.count] <- length(regr.index)

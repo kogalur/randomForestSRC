@@ -47,6 +47,7 @@ public class HelloRandomForestSRC {
 
         boolean regr, clas, mult1, mult2, unsp, surv;
 
+        // Flags for diagnostic printing.
         regr = clas = mult1 = mult2 = unsp = surv = false;
         
         // Java-side trace.
@@ -143,7 +144,7 @@ public class HelloRandomForestSRC {
         modelArg.set_bootstrap(4, "auto", "swr", 0, null, null);
 
         // Set htry explicitly.
-        modelArg.set_htry(3);
+        modelArg.set_htry(0);
         
         // Native-code trace.
         modelArg.set_trace(15 + (1<<13));
@@ -171,6 +172,7 @@ public class HelloRandomForestSRC {
 
             if (growModel.getModelArg().get_htry() == 0) {
                 growModel.setEnsembleArg("importance", "permute");
+                growModel.set_xImportance();
             }
             else {
                 growModel.setEnsembleArg("importance", "no");

@@ -10,6 +10,14 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Serious improvements to OpenMP performance after addressing issues
+related to the blocking of threads during a number of calculations
+involving ensembles, importance, forest weights, and partial plots
+mostly in big-n data sets.
+  
+---------------------------------------------------------------------------------
+RELEASE 2.5.1
+---------------------------------------------------------------------------------
 Addition of configure file to source package allowing more accessible OpenMP
 parallel execution on systems that support it.
   

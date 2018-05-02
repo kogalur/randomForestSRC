@@ -14,6 +14,7 @@ class Ensemble {
        These are mapped to the native types in src/main/global.h 
        <<< CAUTION
     */
+
     enum EnsembleType {
     
         CHAR   ((byte) 0),
@@ -58,6 +59,9 @@ class Ensemble {
     // Generic object containing the ensemble vector.  This will be of type (double) or (int).
     Object ensembleVector;
 
+    // Constructor called from native-code from entry.c.  There, we
+    // loop over a list and populate each ensemble and it's associated
+    // fields.
     void Ensemble(String name,
                   byte nativeType,
                   int identity,

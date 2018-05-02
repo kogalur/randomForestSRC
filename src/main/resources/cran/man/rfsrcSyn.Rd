@@ -96,7 +96,7 @@
   \command{\link{impute.rfsrc}}
 }
 \examples{
-\dontrun{
+\donttest{
 ## ------------------------------------------------------------
 ## compare synthetic forests to regular forest (classification)
 ## ------------------------------------------------------------

@@ -8,7 +8,7 @@ importFrom("graphics", "abline", "axis", "box", "boxplot", "legend",
 importFrom("stats", "as.formula", "dlnorm", "formula", "lowess",
            "median", "na.omit", "optim", "pgamma", "plnorm", "predict",
            "quantile", "runif", "sd", "supsmu", "var",
-           "hclust", "as.dist", "cutree", "model.matrix", "qnorm")
+           "hclust", "as.dist", "cutree", "model.matrix", "qnorm", "pnorm")
 importFrom("utils", "installed.packages", "write.table",
            "txtProgressBar", "setTxtProgressBar")
 importFrom("grDevices", "gray")
@@ -18,6 +18,7 @@ export(cindex,
        find.interaction,
        find.interaction.rfsrc,
        get.mv.error,
+       get.mv.formula,
        get.mv.predicted,
        get.mv.vimp,
         

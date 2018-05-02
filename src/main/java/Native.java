@@ -3,7 +3,7 @@ package com.kogalur.randomforest;
 import com.kogalur.randomforest.RFLogger;
 
 import java.io.File;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 
 import java.util.logging.Level;
 import java.io.IOException;
@@ -61,153 +61,131 @@ class Native {
         }
     }
 
-    native HashMap   grow(int          traceFlag,
-                          int          seedDynamic,
+    native LinkedHashMap   grow(int          traceFlag,
+                                int          seedDynamic,
 
-                          int          optLow,
-                          int          optHigh,
+                                int          optLow,
+                                int          optHigh,
 
-                          int          splitRule,
-                          int          nSplit,
+                                int          splitRule,
+                                int          nSplit,
 
-                          int          mtry,
-                          int          htry,
-                          int          ytry,
+                                int          mtry,
+                                int          htry,
+                                int          ytry,
 
-                          int          nodeSize,
-                          int          nodeDepth,
+                                int          nodeSize,
+                                int          nodeDepth,
 
-                          int          eventCount,
-                          double[]     eventWeight,
+                                int          eventCount,
+                                double[]     eventWeight,
                             
-                          int          ntree,
-                          int          nSize,
-                          int          ySize,
-                          char[]       yType,
-                          int[]        yLevel,
-                          double[][]   yData,
+                                int          ntree,
+                                int          nSize,
+                                int          ySize,
+                                char[]       yType,
+                                int[]        yLevel,
+                                double[][]   yData,
 
-                          int          xSize,
-                          char[]       xType,
-                          int[]        xLevel,
+                                int          xSize,
+                                char[]       xType,
+                                int[]        xLevel,
 
-                          int          sampleSize,
-                          int[][]      sample,
-                          double[]     caseWeight,
+                                int          sampleSize,
+                                int[][]      sample,
+                                double[]     caseWeight,
 
-                          double[]     xStatisticalWeight,
-                          double[]     yWeight,
+                                double[]     xStatisticalWeight,
+                                double[]     yWeight,
 
-                          double[]     xWeight,
-                          double[][]   xData,
+                                double[]     xWeight,
+                                double[][]   xData,
 
-                          int          timeInterestSize,
-                          double[]     timeInterest,
-                          int          nImpute,
-                          int          numThreads);
+                                int          timeInterestSize,
+                                double[]     timeInterest,
+                                int          nImpute,
+                                int          numThreads);
 
 
-    native HashMap   predict(int          traceFlag,
-                             int          seedDynamic,
+    native LinkedHashMap   predict(int          traceFlag,
+                                   int          seedDynamic,
 
-                             int          optLow,
-                             int          optHigh,
+                                   int          optLow,
+                                   int          optHigh,
 
-                             // >>>> start of maxi forest object >>>>
-                             int          ntree,
-                             int          nSize,
+                                   // >>>> start of maxi forest object >>>>
+                                   int          ntree,
+                                   int          nSize,
 
-                             int          ySize,
-                             char[]       yType,
-                             int[]        yLevel,
-                             double[][]   yData,
+                                   int          ySize,
+                                   char[]       yType,
+                                   int[]        yLevel,
+                                   double[][]   yData,
 
-                             int          xSize,
-                             char[]       xType,
-                             int[]        xLevel,
-                             double[][]   xData,
+                                   int          xSize,
+                                   char[]       xType,
+                                   int[]        xLevel,
+                                   double[][]   xData,
                              
-                             int          sampleSize,
-                             int[][]      sample,
-                             double[]     caseWeight,
+                                   int          sampleSize,
+                                   int[][]      sample,
+                                   double[]     caseWeight,
 
-                             int          timeInterestSize,
-                             double[]     timeInterest,
+                                   int          timeInterestSize,
+                                   double[]     timeInterest,
 
-                             int[]        seed,
-                             int          totalNodeCount,
+                                   int[]        seed,
+                                   int          totalNodeCount,
 
-                             int[]        treeID,
-                             int[]        nodeID,
+                                   int[]        treeID,
+                                   int[]        nodeID,
 
-                             int          htry,
+                                   int          htry,
                              
-                             int[]        hcDim,
-                             int[]        hcPartDim,
-                             int[]        hcPartIdx,
-                             int[]        osPartIdx,
-                                                                       
-                             int[]        parmID,
-                             double[]     contPT,
-                             int[]        mwcpSZ,
-                             int[]        mwcpPT,
-                                                                       
-                             int[]        parmID2,
-                             double[]     contPT2,
-                             int[]        mwcpSZ2,
-                             int[]        mwcpPT2,
+                                   HCzero      hc_zero,
+                                   HCmulti     hc_multi,
 
-                             int[]        parmID3,
-                             double[]     contPT3,
-                             int[]        mwcpSZ3,
-                             int[]        mwcpPT3,
+                                   int         parmID,
+                                   int         contPT,
+                                   int         contPTR,
+                                   int         mwcpSZ,
+                                   int         mwcpPT,
 
-                             int[]        parmID4,
-                             double[]     contPT4,
-                             int[]        mwcpSZ4,
-                             int[]        mwcpPT4,
+                                   int[]        tnRMBR,
+                                   int[]        tnAMBR,
+                                   int[]        tnRCNT,
+                                   int[]        tnACNT,
 
-                             int[]        tnRMBR,
-                             int[]        tnAMBR,
-                             int[]        tnRCNT,
-                             int[]        tnACNT,
+                                   double[]     tnSURV,
+                                   double[]     tnMORT,
+                                   double[]     tnNLSN,
+                                   double[]     tnCSHZ,
+                                   double[]     tnCIFN,
+                                   double[]     tnREGR,
+                                   int[]        tnCLAS,
+                                   // <<<< end of maxi forest object <<<<
 
-                             double[]     tnSURV,
-                             double[]     tnMORT,
-                             double[]     tnNLSN,
-                             double[]     tnCSHZ,
-                             double[]     tnCIFN,
-                             double[]     tnREGR,
-                             int[]        tnCLAS,
-                             // <<<< end of maxi forest object <<<<
-
-                             int          yTargetSize,
-                             int[]        yTargetIndex,
+                                   int          yTargetSize,
+                                   int[]        yTargetIndex,
                              
-                             int          ptnCount,
+                                   int          ptnCount,
                              
-                                             
+                                                   
 
-                             int          xImportanceSize,
-                             int[]        xImportanceIndex,
+                                   int          xImportanceSize,
+                                   int[]        xImportanceIndex,
                              
-                             int          xPartialType,
-                             int          xPartialIndex,
-                             int          xPartialSize,
-                             double[]     xPartialValue,
-                             int          x2PartialSize,
-                             int[]        x2PartialIndex,
-                             double[]     x2PartialValue,
+                                   Partial      partial,
 
-                             int          subsetSize,
-                             int[]        subsetIndex,
+                                   int          subsetSize,
+                                   int[]        subsetIndex,
 
-                             int          fnSize,
-                             int          fySize,
-                             double[]     fyData,
-                             double[]     fxData,
+                                   int          fnSize,
+                                   int          fySize,
+                                   double[]     fyData,
+                                   double[]     fxData,
 
-                             int          numThreads);
+                                   int          numThreads);
 
     
 

@@ -104,30 +104,14 @@ typedef unsigned long ulong;
 #define RF_TREE_ID   60  
 #define RF_NODE_ID   61  
 #define RF_HC_DIM    62  
-#define RF_HC_PDIM   63  
-#define RF_HC_PIDX   64  
-#define RF_OS_PIDX   65  
-#define RF_PARM_ID   66  
-#define RF_CONT_PT   67  
-#define RF_MWCP_SZ   68  
-#define RF_MWCP_PT   69  
-#define RF_MWCP_CT   70  
-#define RF_PARM_ID2  71  
-#define RF_CONT_PT2  72  
-#define RF_MWCP_SZ2  73  
-#define RF_MWCP_PT2  74  
-#define RF_MWCP_CT2  75  
-#define RF_PARM_ID3  76  
-#define RF_CONT_PT3  77  
-#define RF_MWCP_SZ3  78  
-#define RF_MWCP_PT3  79  
-#define RF_MWCP_CT3  80  
-#define RF_PARM_ID4  81  
-#define RF_CONT_PT4  82  
-#define RF_MWCP_SZ4  83  
-#define RF_MWCP_PT4  84  
-#define RF_MWCP_CT4  85  
-#define RF_SEXP_CNT  86  
+#define RF_PARM_ID   63  
+#define RF_CONT_PT   64  
+#define RF_CONT_PTR  65  
+#define RF_MWCP_SZ   66  
+#define RF_MWCP_PT   67  
+#define RF_MWCP_CT   68  
+#define RF_SEXP_CNT  69  
+#define RF_SEXP_ASCII_SIZE 8  
 #define OPT_FENS      0x00000001 
 #define OPT_OENS      0x00000002 
 #define OPT_PERF      0x00000004 
@@ -225,7 +209,7 @@ typedef unsigned long ulong;
 #define EXACT 1
 #define MAX_EXACT_LEVEL sizeof(uint) * 8
 #define SAFE_FACTOR_SIZE 16
-#define MAX_HYPER_SIZE 16
+#define MAX_HYPER_SIZE 15
 #define MARGINAL_SIZE 8
 #define RF_WGHT_UNIFORM 1
 #define RF_WGHT_INTEGER 2
@@ -282,6 +266,7 @@ struct virtualSplitInfo {
   double **splitArray;
   uint    *splitArrayLength;
   void **randomPts;
+  void **randomPtsRight;
   uint randomIdx;
   uint hcDim;
   uint hcPartDim;
@@ -297,6 +282,7 @@ struct splitInfo {
   uint    *mwcpSizeAbs;
   uint    *randomVar;
   void   **randomPts;
+  void   **randomPtsRight;
   uint     hcPartDim;
   uint     hcPartIdx;
   uint     osPartIdx;
@@ -350,7 +336,7 @@ void getMultiClassProb (uint       treeID,
                            uint      *rmbrIterator);
 void updateEnsembleMultiClass(char     mode,
                               uint     treeID,
-                              uint     serialTreeID,
+                              char     perfFlag,
                               char     omitDenominator);
 double getBrierScore(uint     obsSize,
                      uint     rTarget,
@@ -637,7 +623,9 @@ enum alloc_type{
   NRUTIL_XPTR,   
   NRUTIL_HPTR,   
   NRUTIL_OPTR,   
-  NRUTIL_VPTR    
+  NRUTIL_VPTR,   
+  NRUTIL_OMPLPTR,  
+  NRUTIL_OMPLPTR2  
 };
 unsigned int upower (unsigned int x, unsigned int n);
 unsigned int upower2 (unsigned int n);
@@ -673,6 +661,10 @@ double ***dmatrix3(unsigned long long n3l, unsigned long long n3h, unsigned long
 void free_dmatrix3(double ***v, unsigned long long n3l, unsigned long long n3h, unsigned long long nrl, unsigned long long nrh, unsigned long long ncl, unsigned long long nch);
 double ****dmatrix4(unsigned long long n4l, unsigned long long n4h, unsigned long long n3l, unsigned long long n3h, unsigned long long nrl, unsigned long long nrh, unsigned long long ncl, unsigned long long nch);
 void free_dmatrix4(double ****v, unsigned long long n4l, unsigned long long n4h, unsigned long long n3l, unsigned long long n3h, unsigned long long nrl, unsigned long long nrh, unsigned long long ncl, unsigned long long nch);
+#ifdef _OPENMP
+omp_lock_t *ompvector(unsigned long long nl, unsigned long long nh);
+void free_ompvector(omp_lock_t *v, unsigned long long nl, unsigned long long nh);
+#endif
 void *new_vvector(unsigned long long nl, unsigned long long nh, enum alloc_type type);
 void free_new_vvector(void *v, unsigned long long nl, unsigned long long nh, enum alloc_type type);
 void nrCopyMatrix(
@@ -719,7 +711,7 @@ void getMeanResponse(uint       treeID,
                      uint      *rmbrIterator);
 void updateEnsembleMean(char     mode,
                         uint     treeID,
-                        uint     serialTreeID,
+                        char     perfFlag,
                         char     omitDenominator);
 double getMeanSquareError(uint    size,
                           double *responsePtr,
@@ -752,7 +744,11 @@ char stackAndImputePerfResponse(char      mode,
                                 uint      treeID,
                                 uint      serialID,
                                 double ***responsePtr);
-double **stackAndImputeGenericResponse(char flag, char mode, uint obsSize, uint treeID, uint serialID, double **responsePtr);
+double **stackAndImputeGenericResponse(char flag,
+                                       char mode,
+                                       uint obsSize,
+                                       uint serialID,
+                                       double **responsePtr);
 void unstackImputeResponse(char flag, uint obsSize, double **mResponsePtr);
 void getPerformance(uint      serialTreeID,
                     char      mode,
@@ -1027,6 +1023,8 @@ void saveTree(uint    b,
 void restoreTree(char    mode,
                  uint    b,
                  Node   *parent);
+void integerToHexString(uint n, char *s);
+uint numHexDigits(unsigned n);
 char logRankNCR(uint    treeID,
                 Node   *parent,
                 uint   *repMembrIndx,
@@ -1368,7 +1366,7 @@ char updateMaximumSplit(uint    treeID,
                         char  **splitIndicator);
 void updateNodeStatistics(Node *parent, double delta, uint candidateCovariateCount, uint covariate);
 void initializeTimeArrays(char mode);
-void stackFactorArrays();
+void stackFactorArrays(char mode);
 void stackFactorGeneric(char    respFlag,
                         uint    size,
                         char   *type,
@@ -1379,7 +1377,7 @@ void stackFactorGeneric(char    respFlag,
                         uint  **p_nonfactorMap,
                         uint   *nonfactorCount,
                         uint  **p_nonfactorIndex);
-void unstackFactorArrays();
+void unstackFactorArrays(char mode);
 void initializeFactorArrays(char mode);
 char stackMissingArrays(char mode);
 void unstackMissingArrays(char mode);
@@ -1525,7 +1523,7 @@ void getCSH (uint treeID, Terminal *parent);
 void getCIF (uint treeID, Terminal *parent);
 void updateEnsembleSurvival(char mode,
                             uint treeID,
-                            uint serialTreeID);
+                            char perfFlag);
 void getEnsembleMortality(char      mode, 
                           uint      treeID,
                           uint      obsSize,

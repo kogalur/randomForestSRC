@@ -499,23 +499,20 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (do.trace)
   }
-  get.tree.err <- function (tree.err) {
-    ## Convert tree.err option into native code parameter.
-    if (!is.null(tree.err)) {
-      if (tree.err == FALSE) {
-          tree.err <- 0
-      }
-        else if (tree.err == TRUE) {
-            tree.err <- 2^13
-        }
-          else {
-            stop("Invalid choice for 'tree.err' option:  ", tree.err)
+  get.err.block <- function (err.block, ntree) {
+      ## Check for user silliness.
+      if (!is.null(err.block)) {
+          if ((err.block < 1) || (err.block > ntree)) {
+              err.block <- ntree
           }
-    }
-      else {
-        stop("Invalid choice for 'tree.err' option:  ", tree.err)
+          else {
+              err.block <- round(err.block)
+          }
       }
-    return (tree.err)
+      else {
+          err.block <- ntree
+      }
+      return (err.block)
   }
   get.var.used <- function (var.used) {
     ## Convert var.used option into native code parameter.

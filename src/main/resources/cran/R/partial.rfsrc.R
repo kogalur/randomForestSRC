@@ -104,6 +104,18 @@ partial.rfsrc <- function(
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
   seed <- get.seed(seed)
   do.trace <- get.trace(do.trace)
+  ## Check that htry is initialized.  If not, set it zero.
+  ## This is necessary for backwards compatibility with 2.3.0
+    if (is.null(object$htry)) {
+        htry <- 0
+    }
+    else {
+        htry <- object$htry
+    }
+    ## Marker for start of native forest topology.  This can change with the outputs requested.
+    ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
+    ## particular, stackForestOutputObjects().
+    pivot <- which(names(object$nativeArray) == "treeID")
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
@@ -135,49 +147,32 @@ partial.rfsrc <- function(
                                   as.double(event.info$time.interest),
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
+                                  as.integer(htry),
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
-                                  as.integer(object$htry),
-                                  if (object$htry > 0) {
-                                      list((object$nativeArray)$hcDim,
-                                      (object$nativeArray)$hcPartDim,
-                                      (object$nativeArray)$hcPartIdx,
-                                      (object$nativeArray)$osPartIdx)
-                                  }
-                                  else {
-                                      NULL
-                                  },
-                                  as.integer((object$nativeArray)$parmID),
+                                  list(as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
-                                  as.integer((object$nativeFactorArray)$mwcpPT),
-                                  if (object$htry > 1) {
-                                      list((object$nativeArray)$parmID2,
-                                      (object$nativeArray)$contPT2,
-                                      (object$nativeArray)$mwcpSZ2,
-                                      (object$nativeFactorArray)$mwcpPT2)
-                                  }
-                                  else {
-                                      NULL
-                                  },
-                                  if (object$htry > 2) {
-                                      list((object$nativeArray)$parmID3,
-                                      (object$nativeArray)$contPT3,
-                                      (object$nativeArray)$mwcpSZ3,
-                                      (object$nativeFactorArray)$mwcpPT3)
-                                  }
-                                  else {
-                                      NULL
-                                  },
-                                  if (object$htry > 3) {
-                                      list((object$nativeArray)$parmID4,
-                                      (object$nativeArray)$contPT4,
-                                      (object$nativeArray)$mwcpSZ4,
-                                      (object$nativeFactorArray)$mwcpPT4)
-                                  }
-                                  else {
-                                      NULL
-                                  },
+                                  as.integer((object$nativeFactorArray)$mwcpPT)),
+                                  if (htry > 0) {
+                                      list(as.integer((object$nativeArray)$hcDim),
+                                      as.double((object$nativeArray)$contPTR))
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (0 * htry) + x]])})
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.double(object$nativeArray[[pivot + 9 + (1 * htry) + x]])})
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.double(object$nativeArray[[pivot + 9 + (2 * htry) + x]])})
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (3 * htry) + x]])})
+                                  } else { NULL },
+                                  if (htry > 1) {
+                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (4 * htry) + x]])})
+                                  } else { NULL },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
                                   as.integer(object$nativeArrayTNDS$tnRCNT),
@@ -196,20 +191,21 @@ partial.rfsrc <- function(
                                     
                                   as.integer(0),     ## Importance disabled
                                   as.integer(NULL),  ## Importance disabled
-                                  ## Partial variables enabled.
-                                  as.integer(get.type(family, partial.type)),
-                                  as.integer(which(xvar.names == partial.xvar)),
-                                  as.integer(length(partial.values)),
-                                  as.double(partial.values),
-                                  as.integer(length(partial.xvar2)),
-                                  as.integer(match(partial.xvar2, xvar.names)),
-                                  as.double(partial.values2),
+                                  ## Partial variables enabled.  Note the as.integer is needed.
+                                  list(as.integer(get.type(family, partial.type)),
+                                       as.integer(which(xvar.names == partial.xvar)),
+                                       as.integer(length(partial.values)),
+                                       as.double(partial.values),
+                                       as.integer(length(partial.xvar2)),
+                                       if (length(partial.xvar2) == 0) NULL else as.integer(match(partial.xvar2, xvar.names)),
+                                       as.double(partial.values2)),
                                   as.integer(0),     ## Subsetting disabled.
                                   as.integer(NULL),  ## Subsetting disabled.
                                   as.integer(0),    ## New data disabled.
                                   as.integer(0),    ## New data disabled.
                                   as.double(NULL),  ## New data disabled.
                                   as.double(NULL),  ## New data disabled.
+                                  as.integer(ntree), ## err.block is hard-coded.
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})

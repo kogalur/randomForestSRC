@@ -32,6 +32,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
                                                                     jint         timeInterestSize,
                                                                     jdoubleArray timeInterest,
                                                                     jint         nImpute,
+                                                                    jint         perfBlock,
                                                                     jint         numThreads) {
   setUserTraceFlag((uint) traceFlag);
   setNativeGlobalEnv(env, obj);
@@ -66,6 +67,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
   RF_timeInterestSize     = (uint) timeInterestSize;
   RF_timeInterest         = (double *) copy1DObject(timeInterest, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_nImpute              = (uint) nImpute;
+  RF_perfBlock            = (uint) perfBlock;
   RF_numThreads           = (int)  numThreads;
   processDefaultGrow();
   rfsrc(RF_GROW, seedValue);
@@ -104,26 +106,13 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
                                                                        jintArray    treeID,
                                                                        jintArray    nodeID,
                                                                        jint         htry,
-                                                                       jintArray    hcDim,
-                                                                       jintArray    hcPartDim,
-                                                                       jintArray    hcPartIdx,
-                                                                       jintArray    osPartIdx,
-                                                                       jintArray    parmID,
-                                                                       jdoubleArray contPT,
-                                                                       jintArray    mwcpSZ,
-                                                                       jintArray    mwcpPT,
-                                                                       jintArray    parmID2,
-                                                                       jdoubleArray contPT2,
-                                                                       jintArray    mwcpSZ2,
-                                                                       jintArray    mwcpPT2,
-                                                                       jintArray    parmID3,
-                                                                       jdoubleArray contPT3,
-                                                                       jintArray    mwcpSZ3,
-                                                                       jintArray    mwcpPT3,
-                                                                       jintArray    parmID4,
-                                                                       jdoubleArray contPT4,
-                                                                       jintArray    mwcpSZ4,
-                                                                       jintArray    mwcpPT4,
+                                                                       jobject      hc_zero,
+                                                                       jobject      hc_one,
+                                                                       jobject      hc_parmID,
+                                                                       jobject      hc_contPT,
+                                                                       jobject      hc_contPTR,
+                                                                       jobject      hc_mwcpSZ,
+                                                                       jobject      hc_mwcpPT,
                                                                        jintArray    tnRMBR,
                                                                        jintArray    tnAMBR,
                                                                        jintArray    tnRCNT,
@@ -141,20 +130,17 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
                                                                                        
                                                                        jint         xImportanceSize,
                                                                        jintArray    xImportanceIndex,
-                                                                       jint         xPartialType,
-                                                                       jint         xPartialIndex,
-                                                                       jint         xPartialSize,
-                                                                       jdoubleArray xPartialValue,
-                                                                       jdouble      x2PartialSize,
-                                                                       jintArray    x2PartialIndex,
-                                                                       jdoubleArray x2PartialValue,
+                                                                       jobject      partial,
                                                                        jint         subsetSize,
                                                                        jintArray    subsetIndex,
                                                                        jint         fnSize,
                                                                        jint         fySize,
                                                                        jdoubleArray fyData,
                                                                        jdoubleArray fxData,
-                                                                       jint          numThreads) {
+                                                                       jint         perfBlock,
+                                                                       jint         numThreads) {
+  char mode;
+  uint i;
   setUserTraceFlag((uint) traceFlag);
   setNativeGlobalEnv(env, obj);
   int seedValue           = (int)  seedDynamic;
@@ -175,35 +161,30 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   RF_caseWeight           = (double *) copy1DObject(caseWeight, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_timeInterestSize     = (uint) timeInterestSize;
   RF_timeInterest         = (double *) copy1DObject(timeInterest, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
-  RF_seed_                = (int *) copy1DObject(seed, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
   RF_totalNodeCount       = (uint) totalNodeCount;
+  RF_seed_                = (int *) copy1DObject(seed, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
+  RF_htry                 = (uint) htry;
   RF_treeID_              = (uint *)   copy1DObject(treeID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_nodeID_              = (uint *)   copy1DObject(nodeID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_htry                 = (uint) htry;
-  RF_hcDim_               = (uint *)   copy1DObject(hcDim, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_hcPartDim_           = (uint *)   copy1DObject(hcPartDim, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_hcPartIdx_           = (uint *)   copy1DObject(hcPartIdx, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_osPartIdx_           = (uint *)   copy1DObject(osPartIdx, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_parmID_              = (uint *)   copy1DObject(parmID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_contPT_              = (double *) copy1DObject(contPT, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
-  RF_mwcpSZ_              = (uint *)   copy1DObject(mwcpSZ, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_mwcpPT_              = (uint *)   copy1DObject(mwcpPT, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_parmID2_              = (uint *)   copy1DObject(parmID2, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_contPT2_              = (double *) copy1DObject(contPT2, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
-  RF_mwcpSZ2_              = (uint *)   copy1DObject(mwcpSZ2, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_mwcpPT2_              = (uint *)   copy1DObject(mwcpPT2, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_parmID3_              = (uint *)   copy1DObject(parmID3, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_contPT3_              = (double *) copy1DObject(contPT3, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
-  RF_mwcpSZ3_              = (uint *)   copy1DObject(mwcpSZ3, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_mwcpPT3_              = (uint *)   copy1DObject(mwcpPT3, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_parmID4_              = (uint *)   copy1DObject(parmID4, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_contPT4_              = (double *) copy1DObject(contPT4, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
-  RF_mwcpSZ4_              = (uint *)   copy1DObject(mwcpSZ4, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
-  RF_mwcpPT4_              = (uint *)   copy1DObject(mwcpPT4, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_RMBR_ID_             = (uint *)   copy1DObject(tnRMBR, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_AMBR_ID_             = (uint *)   copy1DObject(tnAMBR, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_TN_RCNT_             = (uint *)   copy1DObject(tnRCNT, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_TN_ACNT_             = (uint *)   copy1DObject(tnACNT, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+  RF_perfBlock            = (uint) perfBlock;
+  RF_numThreads           = (int)  numThreads;
+  RF_ptnCount             = (uint) ptnCount;
+  RF_rTargetCount         = (uint) yTargetSize;
+  RF_rTarget              = (uint *) copy1DObject(yTargetIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
+  RF_intrPredictorSize    = (uint) xImportanceSize;
+  RF_intrPredictor        = (uint *) copy1DObject(xImportanceIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
+  RF_sobservationSize     = (uint) subsetSize;
+  RF_sobservationIndv     = (uint *) copy1DObject(subsetIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
+   
+  populatePartialObject(partial);
+  RF_fobservationSize     = (uint) fnSize;
+  RF_frSize               = (uint) fySize;
+  RF_fresponseIn          = (double **) copy2DObject(fyData, NATIVE_TYPE_NUMERIC, &RF_jni2DInfoListSize);
+  RF_fobservationIn       = (double **) copy2DObject(fxData, NATIVE_TYPE_NUMERIC, &RF_jni2DInfoListSize);
   RF_TN_SURV_             = (double *) copy1DObject(tnSURV, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_TN_MORT_             = (double *) copy1DObject(tnMORT, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_TN_NLSN_             = (double *) copy1DObject(tnNLSN, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
@@ -211,28 +192,13 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   RF_TN_CIFN_             = (double *) copy1DObject(tnCIFN, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_TN_REGR_             = (double *) copy1DObject(tnREGR, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_TN_CLAS_             = (uint *)   copy1DObject(tnCLAS, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
-  RF_rTargetCount         = (uint) yTargetSize;
-  RF_rTarget              = (uint *) copy1DObject(yTargetIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
-  RF_ptnCount             = (uint) ptnCount;
-   
-  RF_intrPredictorSize    = (uint) xImportanceSize;
-  RF_intrPredictor        = (uint *) copy1DObject(xImportanceIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
-  RF_partialType          = (uint) xPartialType;
-  RF_partialXvar          = (uint) xPartialIndex;
-  RF_partialLength        = (uint) xPartialSize;
-  RF_partialValue         = (double *) copy1DObject(xPartialValue, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
-  RF_partialLength2       = (uint) x2PartialSize;
-  RF_partialXvar2         = (uint *) copy1DObject(x2PartialIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
-  RF_partialValue2        = (double *) copy1DObject(x2PartialValue, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
-  RF_sobservationSize     = (uint) subsetSize;
-  RF_sobservationIndv     = (uint *) copy1DObject(subsetIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
-  RF_fobservationSize     = (uint) fnSize;
-  RF_frSize               = (uint) fySize;
-  RF_fresponseIn          = (double **) copy2DObject(fyData, NATIVE_TYPE_NUMERIC, &RF_jni2DInfoListSize);
-  RF_fobservationIn       = (double **) copy2DObject(fxData, NATIVE_TYPE_NUMERIC, &RF_jni2DInfoListSize);
-  RF_numThreads           = (int)  numThreads;
   processDefaultPredict();
-  rfsrc((RF_fobservationSize > 0)? RF_PRED : RF_REST, seedValue);
+  mode = (RF_fobservationSize > 0)? RF_PRED : RF_REST;
+  stackAuxForestObjects(mode);
+  populateHyperZeroObject(hc_zero);
+  populateHyperOneObject(hc_one);
+  rfsrc(mode, seedValue);
+  unstackAuxForestObjects(mode);
   put_jniEnsembleInfoList(RF_nativeIndex);
   free_jvvector(RF_jniEnsembleInfoList, 0, 1 << 6, NRUTIL_JEN_PTR);
   free_jni1DList(RF_jni1DInfoListSize);
@@ -312,9 +278,9 @@ void setNativeGlobalEnv(JNIEnv *env, jobject obj) {
     printf("\nRF-SRC:  The application will now exit.\n");
     exit(1);
   }
-  RF_java_hshmap_cls = (*RF_java_env) -> FindClass(RF_java_env, "java/util/HashMap");
+  RF_java_hshmap_cls = (*RF_java_env) -> FindClass(RF_java_env, "java/util/LinkedHashMap");
   if (RF_java_hshmap_cls == NULL) {
-    RF_nativeError("\nRF-SRC:  Unable to access class for java/util/HashMap.\n");
+    RF_nativeError("\nRF-SRC:  Unable to access class for java/util/LinkedHashMap.\n");
     RF_nativeError("\nRF-SRC:  The application will now exit.\n");
     RF_nativeExit();
   }
@@ -326,13 +292,13 @@ void setNativeGlobalEnv(JNIEnv *env, jobject obj) {
   }
   RF_java_hshmap_put    = (*RF_java_env) -> GetMethodID(RF_java_env, RF_java_hshmap_cls, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;");
   if (RF_java_hshmap_put == NULL) {
-    RF_nativeError("\nRF-SRC:  Unable to access method java/util/HashMap::put().\n");
+    RF_nativeError("\nRF-SRC:  Unable to access method java/util/LinkedHashMap::put().\n");
     RF_nativeError("\nRF-SRC:  The application will now exit.\n");
     RF_nativeExit();
   }
   RF_java_hshmap_obj = (*RF_java_env) -> NewObject(RF_java_env, RF_java_hshmap_cls, RF_java_hshmap_constr, 1 << 6);
   if (RF_java_hshmap_obj == NULL) {
-    RF_nativeError("\nRF-SRC:  Unable to instantiate object java/util/HashMap.\n");
+    RF_nativeError("\nRF-SRC:  Unable to instantiate object java/util/LinkedHashMap.\n");
     RF_nativeError("\nRF-SRC:  The application will now exit.\n");
     RF_nativeExit();
   }
@@ -340,7 +306,7 @@ void setNativeGlobalEnv(JNIEnv *env, jobject obj) {
   if (RF_java_ens_cls == NULL) {
     RF_nativeError("\nRF-SRC:  Unable to access class com/kogalur/randomforest/Ensemble.\n");
     RF_nativeError("\nRF-SRC:  The application will now exit.\n");
-    exit(1);
+    RF_nativeExit();
   }
   RF_java_ens_mid = (*RF_java_env) -> GetMethodID(RF_java_env, RF_java_ens_cls, "Ensemble", "(Ljava/lang/String;BIJZI[ILjava/lang/Object;)V");
   if (RF_java_ens_mid == NULL) {
@@ -668,7 +634,7 @@ void *stackAndProtect(uint  *index,
                       uint   identity,
                       ulong  size,
                       double value,
-                      char **sexpString,
+                      char  *sexpString,
                       void  *auxiliaryArrayPtr,
                       uint   auxiliaryDimSize,
                       ...) {
@@ -690,7 +656,7 @@ void *stackAndProtect(uint  *index,
       if (TRUE) {
         RF_nativePrint("\nRF-SRC:  *** WARNING *** ");
         RF_nativePrint("\nRF-SRC:  S.E.X.P. vector element length exceeds 32-bits:  %20lu", size);
-        RF_nativePrint("\nRF-SRC:  S.E.X.P. ALLOC:  %s ", sexpString[identity]);
+        RF_nativePrint("\nRF-SRC:  S.E.X.P. ALLOC:  %s ", sexpString);
         RF_nativePrint("\nRF-SRC:  Please Reduce Dimensionality If Possible.");
       }
     }
@@ -843,9 +809,9 @@ void put_jniEnsembleInfoList(uint size) {
       RF_nativeExit();
     }
     if (FALSE) {
-      RF_nativePrint("\nRF-SRC:  Unable to put ensemble object to java/util/HashMap.\n");
+      RF_nativePrint("\nRF-SRC:  Unable to put ensemble object to java/util/LinkedHashMap.\n");
       RF_nativePrint("\nRF-SRC:  The application will now exit.\n");
-      exit(1);
+      RF_nativeExit();
     }
     (*RF_java_env) -> DeleteLocalRef(RF_java_env, ensembleInfo -> dim);      
     (*RF_java_env) -> DeleteLocalRef(RF_java_env, ensembleInfo -> array);      
@@ -856,3 +822,168 @@ void setUserTraceFlag (uint traceFlag) {
   RF_userTraceFlag = traceFlag;
 }
 uint getUserTraceFlag () { return RF_userTraceFlag; }
+void populateHyperZeroObject(jobject obj) {
+  jclass objClass;
+  jfieldID objFieldID;
+  if ((*RF_java_env) -> IsSameObject(RF_java_env, obj, NULL)) {
+    RF_nativeError("\nRF-SRC:  Incoming object com/kogalur/randomforest/HCzero is NULL. \n");
+    RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+    RF_nativeExit();
+  }
+  else {
+    objClass = (*RF_java_env) -> GetObjectClass(RF_java_env, obj);
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "parmID", "[I");
+    if (objFieldID != NULL) {
+      jintArray arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+      RF_parmID_[1] = (uint *) copy1DObject(arr, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+    }
+    else {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/HCzero : parmID \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "contPT", "[D");
+    if (objFieldID != NULL) {
+      jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+      RF_contPT_[1] = (double *) copy1DObject(arr, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
+    }
+    else {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/HCzero : contPT \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "mwcpSZ", "[I");
+    if (objFieldID != NULL) {
+      jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+      RF_mwcpSZ_[1] = (uint *) copy1DObject(arr, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+    }
+    else {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/HCzero : mwcpSZ \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "mwcpPT", "[I");
+    if (objFieldID != NULL) {
+      jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+      RF_mwcpPT_[1] = (uint *) copy1DObject(arr, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+    }
+    else {
+      RF_mwcpPT_[1] = NULL;      
+    }
+  }
+}
+void populateHyperOneObject(jobject obj) {
+  jclass objClass;
+  jfieldID objFieldID;
+  if (RF_htry > 0) {
+    if ((*RF_java_env) -> IsSameObject(RF_java_env, obj, NULL)) {
+      RF_nativeError("\nRF-SRC:  Incoming object com/kogalur/randomforest/HCone is NULL. \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    else {
+      objClass = (*RF_java_env) -> GetObjectClass(RF_java_env, obj);
+      objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "hcDim", "[I");
+      if (objFieldID != NULL) {
+        jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+        RF_hcDim_ = (uint *) copy1DObject(arr, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
+      }
+      else {
+        RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/HCone : hcDim \n");
+        RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+        RF_nativeExit();
+      }
+      objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "contPTR", "[D");
+      if (objFieldID != NULL) {
+        jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+        RF_contPTR_[1] = (double *) copy1DObject(arr, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, TRUE);
+      }
+      else {
+        RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/HCone : contPTR \n");
+        RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+        RF_nativeExit();
+      }
+    }
+  }
+  else {
+    RF_hcDim_      = NULL;
+    RF_contPTR_[1] = NULL;
+  }
+}
+void populatePartialObject(jobject obj) {
+  jclass objClass;
+  jfieldID objFieldID;
+  if (! (*RF_java_env) -> IsSameObject(RF_java_env, obj, NULL)) {
+    objClass = (*RF_java_env) -> GetObjectClass(RF_java_env, obj);
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "partialType", "I");
+    if (objFieldID == NULL) {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/Partial : partialType \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    RF_partialType = (uint) (*RF_java_env) -> GetIntField(RF_java_env, objClass, objFieldID);
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "partialXvar", "I");
+    if (objFieldID == NULL) {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/Partial : partialXvar \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    RF_partialXvar = (uint) (*RF_java_env) -> GetIntField(RF_java_env, objClass, objFieldID);
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "partialLength", "I");
+    if (objFieldID == NULL) {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/Partial : partialLength \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    RF_partialLength = (uint) (*RF_java_env) -> GetIntField(RF_java_env, objClass, objFieldID);
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "partialValue", "[D");
+    if (objFieldID == NULL) {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/Partial : partialLength \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+    if (RF_partialLength != (*RF_java_env) -> GetArrayLength(RF_java_env, arr)) {
+      RF_nativeError("\nRF-SRC:  Incoming length of array in class com/kogalur/randomforest/Partial : partialValue \n");
+      RF_nativeError("\nRF-SRC:  is inconsistent with specified length:  %10d vs %10d \n", RF_partialLength, (*RF_java_env) -> GetArrayLength(RF_java_env, arr));
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    RF_partialValue = (double *) copy1DObject(arr, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "partialLength2", "I");
+    if (objFieldID != NULL) {
+      RF_partialLength2 = (uint) (*RF_java_env) -> GetIntField(RF_java_env, objClass, objFieldID);
+    }
+    else {
+      RF_partialLength2 = 0;
+    }
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "partialxVar2", "[I");
+    if (objFieldID != NULL) {
+      jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+      if (RF_partialLength2 != (*RF_java_env) -> GetArrayLength(RF_java_env, arr)) {
+        RF_nativeError("\nRF-SRC:  Incoming length of array in class com/kogalur/randomforest/Partial : partialXvar2 \n");
+        RF_nativeError("\nRF-SRC:  is inconsistent with specified length:  %10d vs %10d \n", RF_partialLength2, (*RF_java_env) -> GetArrayLength(RF_java_env, arr));
+        RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+        RF_nativeExit();
+      }
+      RF_partialXvar2 = (uint *) copy1DObject(arr, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
+    }
+    else {
+      RF_partialXvar2 = NULL;
+    }
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "partialxVar2", "[D");
+    if (objFieldID != NULL) {
+      jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+      if (RF_partialLength2 != (*RF_java_env) -> GetArrayLength(RF_java_env, arr)) {
+        RF_nativeError("\nRF-SRC:  Incoming length of array in class com/kogalur/randomforest/Partial : partialValue2 \n");
+        RF_nativeError("\nRF-SRC:  is inconsistent with specified length:  %10d vs %10d \n", RF_partialLength2, (*RF_java_env) -> GetArrayLength(RF_java_env, arr));
+        RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+        RF_nativeExit();
+      }
+      RF_partialValue2 = (double *) copy1DObject(arr, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
+    }
+    else {
+      RF_partialValue2 = NULL;
+    }
+  }
+}

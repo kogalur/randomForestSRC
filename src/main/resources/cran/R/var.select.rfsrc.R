@@ -15,16 +15,12 @@ var.select.rfsrc <-
            xvar.wt = NULL,
            refit = (method != "md"),
            fast = FALSE,
-           
            na.action = c("na.omit", "na.impute"),
-           
-            
            always.use = NULL,  
            nrep = 50,        
            K = 5,             
            nstep = 1,         
            prefit =  list(action = (method != "md"), ntree = 100, mtry = 500, nodesize = 3, nsplit = 1),
-           do.trace = 0,       
            verbose = TRUE,
            ...
            )
@@ -57,8 +53,8 @@ var.select.rfsrc <-
                                nodesize = nodesize,
                                cause = cause,
                                na.action = na.action,
-                               do.trace = do.trace,
-                               importance="permute")
+                               importance=TRUE,
+                               err.block = err.block, perf.type = perf.type)
     ## set the target dimension for CR families
     if (rfsrc.filter.obj$family == "surv-CR") {
       target.dim <- max(1, min(cause, max(get.event.info(rfsrc.filter.obj)$event.type)), na.rm = TRUE)
@@ -151,8 +147,8 @@ var.select.rfsrc <-
                         splitrule = splitrule,
                         nsplit = nsplit,
                         cause = cause,
-                        na.action = na.action,                  
-                        do.trace = do.trace)
+                        na.action = na.action,
+                        perf.type = perf.type)
     return(list(rfsrc.obj=rfsrc.obj, sig.vars=rfsrc.obj$xvar.names, forest.depth=forest.depth, m.depth=m.depth))
   }
   ## --------------------------------------------------------------
@@ -190,6 +186,7 @@ var.select.rfsrc <-
   }
   ## rearrange the data
   ## need to handle unsupervised families carefully: minimal depth is the only permissible method
+  ## pull performance parameters 
   if (missing(object)) {
     ## parse the formula
     formulaDetail <- finalizeFormula(parseFormula(rfsrc.all.f, data), data)
@@ -205,7 +202,10 @@ var.select.rfsrc <-
         data <- data[, match(xvar.names, names(data))]
         yvar.dim <- 0
         method <- "md"
-      }
+    }
+    dots <- list(...)
+    err.block <- dots$err.block
+    perf.type <- is.hidden.perf.type(dots)
   }
     else {
       ## parse the object
@@ -222,7 +222,9 @@ var.select.rfsrc <-
           data <- object$xvar
           yvar.dim <- 0
           method <- "md"
-        }
+      }
+    err.block <- object$err.block
+    perf.type <- object$forest$perf.type
     }
   ## specify the default event type for CR
   if (missing(cause)) {
@@ -297,7 +299,8 @@ var.select.rfsrc <-
                                  nsplit = prefit$nsplit,
                                  cause = cause,
                                  na.action = na.action,
-                                 importance="permute")
+                                 importance = TRUE,
+                                 err.block = err.block, perf.type = perf.type)
       ## set the target dimension for CR families
       if (rfsrc.prefit.obj$family == "surv-CR") {
         target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
@@ -345,9 +348,9 @@ var.select.rfsrc <-
                            nsplit = nsplit,
                            cause = cause,
                            na.action = na.action,
-                           do.trace = do.trace,
                            xvar.wt = xvar.wt,
-                           importance="permute")
+                           importance = TRUE,
+                           err.block = err.block, perf.type = perf.type)
         ## set the target dimension for CR families
         if (rfsrc.obj$family == "surv-CR") {
           target.dim <- max(1, min(cause, max(get.event.info(rfsrc.obj)$event.type)), na.rm = TRUE)
@@ -388,7 +391,7 @@ var.select.rfsrc <-
                                 splitrule = splitrule,
                                 nsplit = nsplit,
                                 na.action = na.action,
-                                do.trace = do.trace)
+                                perf.type = perf.type)
       ## for multivariate families we must manually extract the importance and error rate
       rfsrc.refit.obj <- coerce.multivariate(rfsrc.refit.obj, m.target)
     }
@@ -459,7 +462,8 @@ var.select.rfsrc <-
                                nsplit = prefit$nsplit,
                                cause = cause,
                                splitrule = splitrule,
-                               na.action = na.action)
+                               na.action = na.action,
+                               perf.type = perf.type)
     ## set the target dimension for CR families
     if (rfsrc.prefit.obj$family == "surv-CR") {
       target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
@@ -504,7 +508,8 @@ var.select.rfsrc <-
                                    cause = cause,
                                    splitrule = splitrule,
                                    na.action = na.action,
-                                   importance = "permute")
+                                   importance = TRUE,
+                                   err.block = err.block, perf.type = perf.type)
         ## set the target dimension for CR families
         if (rfsrc.prefit.obj$family == "surv-CR") {
           target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
@@ -542,7 +547,7 @@ var.select.rfsrc <-
     }
     ## RFSRC prediction
     ## for multivariate families we must manually extract the importance and error rate
-    pred.out <- coerce.multivariate(predict(rfsrc.obj, data[test.id, ], importance = "none"), m.target)
+    pred.out <- coerce.multivariate(predict(rfsrc.obj, data[test.id, ]), m.target)
     pred.results[m] <- get.varselect.err(pred.out)[target.dim] 
     dim.results[m] <- length(sig.vars)
     var.signature <- c(var.signature, sig.vars)
@@ -588,7 +593,7 @@ var.select.rfsrc <-
                               nsplit = nsplit,
                               cause = cause,
                               splitrule = splitrule,
-                              do.trace = do.trace)
+                              err.block = err.block, perf.type = perf.type)
   }
     else {
       rfsrc.refit.obj <- NULL

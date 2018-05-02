@@ -15,7 +15,7 @@
   nutrigenomic study. \emph{Hepatology}, 45(3), 767--777.
 }
 \examples{
-\dontrun{
+\donttest{
 ## ------------------------------------------------------------
 ## multivariate mixed forests
 ## lipids used as the multivariate y-responses
@@ -24,13 +24,8 @@
 ## load the data
 data(nutrigenomic, package = "_PROJECT_PACKAGE_NAME_")
 
-## nice wrapper for making multivariate formula
-get.mv.f <- function(ynames) {
-  as.formula(paste("Multivar(", paste(ynames, collapse = ","),paste(") ~ ."), sep = ""))
-}
-
 ## multivariate mixed forest call
-mv.obj <- rfsrc(get.mv.f(colnames(nutrigenomic$lipids)),
+mv.obj <- rfsrc(get.mv.formula(colnames(nutrigenomic$lipids)),
             data.frame(do.call(cbind, nutrigenomic)),
             importance=TRUE, nsplit = 10)
 

@@ -30,7 +30,7 @@
   bench, \emph{Clin Diagn Lab Immunol}, 12(9):1013-1019.
 }
 \examples{
-\dontrun{
+\donttest{
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
 wihs.obj <- rfsrc(Surv(time, status) ~ ., wihs, nsplit = 3, ntree = 100)
 }

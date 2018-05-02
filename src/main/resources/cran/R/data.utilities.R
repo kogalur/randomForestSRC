@@ -672,6 +672,9 @@ get.mv.error <- function(obj, std = FALSE) {
     err
   }))
 }
+get.mv.formula <- function(ynames) {
+  as.formula(paste("Multivar(", paste(ynames, collapse = ","),paste(") ~ ."), sep = ""))
+}
 get.mv.predicted <- function(obj, oob = FALSE) {
   nms <- NULL
   pred <- do.call(cbind, lapply(obj$yvar.names, function(nn) {
@@ -682,7 +685,8 @@ get.mv.predicted <- function(obj, oob = FALSE) {
     else {
       nms <<- c(nms, paste(nn))
     }
-    if (oob) {
+    ## user may request OOB when it doesn't exist: noted 04/04/2018
+    if (oob && !is.null(o.coerce$predicted.oob)) {
       o.coerce$predicted.oob
     }
     else {

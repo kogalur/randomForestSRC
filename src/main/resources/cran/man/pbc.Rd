@@ -17,7 +17,7 @@
     and Survival Analysis.} New York: Wiley.
 }
 \examples{
-\dontrun{
+\donttest{
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 3)
 }

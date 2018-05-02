@@ -21,7 +21,7 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList();
-  v = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, 1, 0, sexpString, NULL, 1, 1);
+  v = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, 1, 0, sexpString[2], NULL, 1, 1);
   *v = getConcordanceIndex( 1,
                             size,
                             time,
@@ -45,7 +45,7 @@ SEXP rfsrcTestSEXP(SEXP sexp_size) {
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList();
-  v = (char*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_CHARACTER, 2, size, 0, sexpString, NULL, 1, size);
+  v = (char*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_CHARACTER, 2, size, 0, sexpString[2], NULL, 1, size);
   v --;
   unstackAuxiliaryInfoAndList();
   memoryCheck();
@@ -120,7 +120,7 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList();
-  dist = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, sizeIJ, 0, sexpString, NULL, 1, sizeIJ);
+  dist = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, sizeIJ, 0, sexpString[2], NULL, 1, sizeIJ);
   dist --;
   xMatrix = (double **) new_vvector(1, p, NRUTIL_DPTR);
   for (i = 1; i <= p; i++) {
@@ -181,6 +181,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP timeInterestSize,
                SEXP timeInterest,
                SEXP nImpute,
+               SEXP perfBlock,
                SEXP numThreads) {
   setUserTraceFlag(INTEGER(traceFlag)[0]);
   setNativeGlobalEnv();
@@ -215,6 +216,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_timeInterestSize     = INTEGER(timeInterestSize)[0];
   RF_timeInterest         = REAL(timeInterest);  RF_timeInterest--;
   RF_nImpute              = INTEGER(nImpute)[0];
+  RF_perfBlock            = INTEGER(perfBlock)[0];
   RF_numThreads           = INTEGER(numThreads)[0];
   processDefaultGrow();
   rfsrc(RF_GROW, seedValue);
@@ -248,17 +250,16 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP timeInterest,
                   SEXP totalNodeCount,
                   SEXP seed,
+                  SEXP htry,
                   SEXP treeID,
                   SEXP nodeID,
-                  SEXP htry,
-                  SEXP hcMeta,
-                  SEXP parmID,
-                  SEXP contPT,
-                  SEXP mwcpSZ,
-                  SEXP mwcpPT,
-                  SEXP hcSplit2,
-                  SEXP hcSplit3,
-                  SEXP hcSplit4,
+                  SEXP hc_zero,
+                  SEXP hc_one,
+                  SEXP hc_parmID,
+                  SEXP hc_contPT,
+                  SEXP hc_contPTR,
+                  SEXP hc_mwcpSZ,
+                  SEXP hc_mwcpPT,
                   SEXP tnRMBR,
                   SEXP tnAMBR,
                   SEXP tnRCNT,
@@ -276,20 +277,17 @@ SEXP rfsrcPredict(SEXP traceFlag,
                                   
                   SEXP intrPredictorSize,
                   SEXP intrPredictor,
-                  SEXP partialType,
-                  SEXP partialXvar,
-                  SEXP partialLength,
-                  SEXP partialValue,
-                  SEXP partialLength2,
-                  SEXP partialXvar2,
-                  SEXP partialValue2,
+                  SEXP partial,
                   SEXP sobservationSize,
                   SEXP sobservationIndv,
                   SEXP fobservationSize,
                   SEXP frSize,
                   SEXP frData,
                   SEXP fxData,
+                  SEXP perfBlock,
                   SEXP numThreads) {
+  char mode;
+  uint i;
   setUserTraceFlag(INTEGER(traceFlag)[0]);
   setNativeGlobalEnv();
   int seedValue           = INTEGER(seedPtr)[0];
@@ -299,8 +297,6 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_observationSize      = INTEGER(observationSize)[0];
   RF_ySize                = INTEGER(ySize)[0];
   RF_rType                = (char *) copy1DObject(rType, NATIVE_TYPE_CHARACTER, RF_ySize, TRUE);
-  RF_rTarget              = (uint *) INTEGER(rTarget); RF_rTarget --;
-  RF_rTargetCount         = INTEGER(rTargetCount)[0];
   RF_rLevels              = (uint *) INTEGER(rLevels); RF_rLevels--;
   RF_responseIn           = (double **) copy2DObject(rData, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
   RF_xSize                = INTEGER(xSize)[0];
@@ -312,96 +308,47 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_caseWeight           = REAL(caseWeight);  RF_caseWeight--;
   RF_timeInterestSize     = INTEGER(timeInterestSize)[0];
   RF_timeInterest         = REAL(timeInterest);  RF_timeInterest --;
+  RF_totalNodeCount       = INTEGER(totalNodeCount)[0];
+  RF_seed_                = INTEGER(seed); RF_seed_ --;
   RF_htry                 = INTEGER(htry)[0];
   RF_treeID_              = (uint *) INTEGER(treeID);  RF_treeID_ --;
   RF_nodeID_              = (uint *) INTEGER(nodeID);  RF_nodeID_ --;
-  RF_parmID_              = (uint *) INTEGER(parmID);  RF_parmID_ --;
-  RF_contPT_              =          REAL(contPT);     RF_contPT_ --;
-  RF_mwcpSZ_              = (uint *) INTEGER(mwcpSZ);  RF_mwcpSZ_ --;
-  RF_mwcpPT_              = (uint *) INTEGER(mwcpPT);  RF_mwcpPT_ --;
-  if (RF_htry > 0) {
-    RF_hcDim_             = (uint *) INTEGER(VECTOR_ELT(hcMeta, 0));  RF_hcDim_ --;
-    RF_hcPartDim_         = (uint *) INTEGER(VECTOR_ELT(hcMeta, 1));  RF_hcPartDim_ --;
-    RF_hcPartIdx_         = (uint *) INTEGER(VECTOR_ELT(hcMeta, 2));  RF_hcPartIdx_ --;
-    RF_osPartIdx_         = (uint *) INTEGER(VECTOR_ELT(hcMeta, 3));  RF_osPartIdx_ --;
-  }
-  else {
-    RF_hcDim_     = NULL;
-    RF_hcPartDim_ = NULL;
-    RF_hcPartIdx_ = NULL;
-    RF_hcPartIdx_ = NULL;
-  }
-  if (RF_htry > 1) {
-    RF_parmID2_           = (uint *) INTEGER(VECTOR_ELT(hcSplit2, 0));  RF_parmID2_ --;
-    RF_contPT2_           =          REAL(VECTOR_ELT(hcSplit2, 1));     RF_contPT2_ --;
-    RF_mwcpSZ2_           = (uint *) INTEGER(VECTOR_ELT(hcSplit2, 2));  RF_mwcpSZ2_ --;
-    if (VECTOR_ELT(hcSplit2, 3) == NULL) {
-      RF_mwcpPT2_           = (uint *) INTEGER(VECTOR_ELT(hcSplit2, 3));  RF_mwcpPT2_ --;
-    }
-    else {
-      RF_mwcpPT2_ = NULL;
-    }
-  }
-  else {
-    RF_parmID2_ = NULL;
-    RF_contPT2_ = NULL;
-    RF_mwcpSZ2_ = NULL;
-    RF_mwcpPT2_ = NULL;
-  }
-  if (RF_htry > 2) {
-    RF_parmID3_           = (uint *) INTEGER(VECTOR_ELT(hcSplit3, 0));  RF_parmID3_ --;
-    RF_contPT3_           =          REAL(VECTOR_ELT(hcSplit3, 1));     RF_contPT3_ --;
-    RF_mwcpSZ3_           = (uint *) INTEGER(VECTOR_ELT(hcSplit3, 2));  RF_mwcpSZ3_ --;
-    if (VECTOR_ELT(hcSplit3, 3) == NULL) {
-      RF_mwcpPT3_           = (uint *) INTEGER(VECTOR_ELT(hcSplit3, 3));  RF_mwcpPT3_ --;
-    }
-    else {
-      RF_mwcpPT3_ = NULL;
-    }
-  }
-  else {
-    RF_parmID3_ = NULL;
-    RF_contPT3_ = NULL;
-    RF_mwcpSZ3_ = NULL;
-    RF_mwcpPT3_ = NULL;
-  }
-  if (RF_htry > 3) {
-    RF_parmID4_           = (uint *) INTEGER(VECTOR_ELT(hcSplit4, 0));  RF_parmID4_ --;
-    RF_contPT4_           =          REAL(VECTOR_ELT(hcSplit4, 1));     RF_contPT4_ --;
-    RF_mwcpSZ4_           = (uint *) INTEGER(VECTOR_ELT(hcSplit4, 2));  RF_mwcpSZ4_ --;
-    if (VECTOR_ELT(hcSplit2, 3) == NULL) {
-      RF_mwcpPT4_           = (uint *) INTEGER(VECTOR_ELT(hcSplit4, 3));  RF_mwcpPT4_ --;
-    }
-    else {
-      RF_mwcpPT4_ = NULL;
-    }
-  }
-  else {
-    RF_parmID4_ = NULL;
-    RF_contPT4_ = NULL;
-    RF_mwcpSZ4_ = NULL;
-    RF_mwcpPT4_ = NULL;
-  }
   RF_RMBR_ID_             = (uint *) INTEGER(tnRMBR);
   RF_AMBR_ID_             = (uint *) INTEGER(tnAMBR);
   RF_TN_RCNT_             = (uint *) INTEGER(tnRCNT);
   RF_TN_ACNT_             = (uint *) INTEGER(tnACNT);
-  RF_totalNodeCount       = INTEGER(totalNodeCount)[0];
-  RF_seed_                = INTEGER(seed); RF_seed_ --;
+  RF_perfBlock            = INTEGER(perfBlock)[0];
   RF_numThreads           = INTEGER(numThreads)[0];
   RF_ptnCount             = INTEGER(ptnCount)[0];
+  RF_rTarget              = (uint *) INTEGER(rTarget); RF_rTarget --;
+  RF_rTargetCount         = INTEGER(rTargetCount)[0];
   RF_intrPredictorSize    = INTEGER(intrPredictorSize)[0];
   RF_intrPredictor        = (uint *) INTEGER(intrPredictor);  RF_intrPredictor --;
   RF_sobservationSize     = INTEGER(sobservationSize)[0];
   RF_sobservationIndv     = (uint *) INTEGER(sobservationIndv);  RF_sobservationIndv --;
    
-  RF_partialType          = INTEGER(partialType)[0];
-  RF_partialXvar          = INTEGER(partialXvar)[0];
-  RF_partialLength        = INTEGER(partialLength)[0];
-  RF_partialValue         = REAL(partialValue); RF_partialValue --;
-  RF_partialLength2       = INTEGER(partialLength2)[0];
-  RF_partialXvar2         = (uint *) INTEGER(partialXvar2); RF_partialXvar2 --;
-  RF_partialValue2        = REAL(partialValue2); RF_partialValue2 --;
+  RF_partialType          = INTEGER(VECTOR_ELT(partial, 0))[0];
+  RF_partialXvar          = INTEGER(VECTOR_ELT(partial, 1))[0];
+  RF_partialLength        = INTEGER(VECTOR_ELT(partial, 2))[0];
+  if (VECTOR_ELT(partial, 3) != R_NilValue) {
+    RF_partialValue         = REAL(VECTOR_ELT(partial, 3)); RF_partialValue --;
+  }
+  else {
+    RF_partialValue = NULL;
+  }
+  RF_partialLength2       = INTEGER(VECTOR_ELT(partial, 4))[0];
+  if (VECTOR_ELT(partial, 5) != R_NilValue) {
+    RF_partialXvar2         = (uint *) INTEGER(VECTOR_ELT(partial, 5)); RF_partialXvar2 --;
+  }
+  else {
+    RF_partialXvar2 = NULL;
+  }
+  if (VECTOR_ELT(partial, 6) != R_NilValue) {
+    RF_partialValue2        = REAL(VECTOR_ELT(partial, 6)); RF_partialValue2 --;
+  }
+  else {
+    RF_partialValue2 = NULL;
+  }
   RF_fobservationSize     = INTEGER(fobservationSize)[0];
   RF_frSize               = INTEGER(frSize)[0];
   RF_fresponseIn          = (double **) copy2DObject(frData, NATIVE_TYPE_NUMERIC, RF_frSize > 0, RF_frSize, RF_fobservationSize);
@@ -414,7 +361,36 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_TN_REGR_ = REAL(tnREGR);
   RF_TN_CLAS_ = (uint *) INTEGER(tnCLAS);
   processDefaultPredict();
-  rfsrc((RF_fobservationSize > 0)? RF_PRED : RF_REST, seedValue);
+  mode = (RF_fobservationSize > 0)? RF_PRED : RF_REST;  
+  stackAuxForestObjects(mode);
+  RF_parmID_[1]              = (uint *) INTEGER(VECTOR_ELT(hc_zero, 0));  RF_parmID_[1]  --;
+  RF_contPT_[1]              =             REAL(VECTOR_ELT(hc_zero, 1));  RF_contPT_[1]  --;
+  RF_mwcpSZ_[1]              = (uint *) INTEGER(VECTOR_ELT(hc_zero, 2));  RF_mwcpSZ_[1]  --;
+  if (VECTOR_ELT(hc_zero, 3) != R_NilValue) {
+    RF_mwcpPT_[1]            = (uint *) INTEGER(VECTOR_ELT(hc_zero, 3));  RF_mwcpPT_[1]  --;
+  }
+  else {
+    RF_mwcpPT_[1] = NULL;
+  }
+  if (RF_htry > 0) {
+    RF_hcDim_                = (uint *) INTEGER(VECTOR_ELT(hc_one, 0));  RF_hcDim_[1] --;
+    RF_contPTR_[1]           =          REAL(VECTOR_ELT(hc_one, 1));     RF_contPTR_[1] --;
+  }
+  else {
+    RF_hcDim_      = NULL;
+    RF_contPTR_[1] = NULL;
+  }
+  if (RF_htry > 1) {
+    for (i = 2; i <= RF_htry; i++) {
+      RF_parmID_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_parmID, i-2));  RF_parmID_[i] --;
+      RF_contPT_[i]            =          REAL(VECTOR_ELT(hc_contPT, i-2));     RF_contPT_[i] --;
+      RF_contPTR_[i]           =          REAL(VECTOR_ELT(hc_contPTR, i-2));    RF_contPTR_[i] --;
+      RF_mwcpSZ_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_mwcpSZ, i-2));  RF_mwcpSZ_[i] --;
+      RF_mwcpPT_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_mwcpPT, i-2));  RF_mwcpPT_[i] --;
+    }
+  }
+  rfsrc(mode, seedValue);
+  unstackAuxForestObjects(mode);
   free_1DObject(RF_rType, NATIVE_TYPE_CHARACTER, RF_ySize);
   free_1DObject(RF_xType, NATIVE_TYPE_CHARACTER, RF_xSize);
   free_2DObject(RF_responseIn, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
@@ -534,7 +510,7 @@ void *stackAndProtect(uint  *sexpIndex,
                       uint   sexpIdentity,
                       ulong  size,
                       double value,
-                      char **sexpString,
+                      char  *sexpString,
                       void  *auxiliaryPtr,
                       uint   auxiliaryDimSize,
                       ...) {
@@ -552,7 +528,7 @@ void *stackAndProtect(uint  *sexpIndex,
       if (TRUE) {
         RF_nativePrint("\nRF-SRC:  *** WARNING *** ");
         RF_nativePrint("\nRF-SRC:  S.E.X.P. vector element length exceeds 32-bits:  %20lu", size);
-        RF_nativePrint("\nRF-SRC:  S.E.X.P. ALLOC:  %s ", sexpString[sexpIdentity]);
+        RF_nativePrint("\nRF-SRC:  S.E.X.P. ALLOC:  %s ", sexpString);
         RF_nativePrint("\nRF-SRC:  Please Reduce Dimensionality If Possible.");
       }
     }
@@ -582,7 +558,7 @@ void *stackAndProtect(uint  *sexpIndex,
     break;
   }
   SET_VECTOR_ELT(RF_sexpVector[RF_OUTP_ID], *sexpIndex, thisVector);
-  SET_STRING_ELT(RF_sexpVector[RF_STRG_ID], *sexpIndex, mkChar(sexpString[sexpIdentity]));
+  SET_STRING_ELT(RF_sexpVector[RF_STRG_ID], *sexpIndex, mkChar(sexpString));
   switch(sexpType) {
   case NATIVE_TYPE_NUMERIC:
     v = (double*) NUMERIC_POINTER(thisVector);

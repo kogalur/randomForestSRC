@@ -10,10 +10,8 @@ rfsrc <- function(formula,
                   splitrule = NULL,
                   nsplit = NULL,
                   importance = c(FALSE, TRUE, "none", "permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"),
-                  
+                  err.block = NULL,
                   na.action = c("na.omit", "na.impute"),
-                  
-                   
                   nimpute = 1,
                   ntime,
                   cause,
@@ -33,7 +31,6 @@ rfsrc <- function(formula,
                   do.trace = FALSE,
                   membership = FALSE,
                   statistics = FALSE,
-                  tree.err = FALSE,
                    ...)
 {
   univariate.nomenclature = TRUE
@@ -339,7 +336,7 @@ rfsrc <- function(formula,
   samptype.bits <- get.samptype(samptype)
   forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
   na.action.bits <- get.na.action(na.action)
-  tree.err.bits <- get.tree.err(tree.err)
+  err.block <- get.err.block(err.block, ntree)
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, FALSE)
   terminal.quants.bits <- get.terminal.quants(terminal.quants, FALSE)
   ## Set the trace
@@ -362,7 +359,6 @@ rfsrc <- function(formula,
                                               
                                              na.action.bits +
                                              split.cust.bits +
-                                             tree.err.bits +
                                              membership.bits +
                                              terminal.qualts.bits +
                                              terminal.quants.bits),
@@ -394,6 +390,7 @@ rfsrc <- function(formula,
                                   as.integer(length(event.info$time.interest)),
                                   as.double(event.info$time.interest),
                                   as.integer(nimpute),
+                                  as.integer(err.block),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -495,96 +492,93 @@ rfsrc <- function(formula,
   }
   ## Define the forest.
   if (forest) {
-      ## In the native code, de-allocation of a tree after it is grown
-      ## rather than after the entire forest has been grown saves us a
-      ## lot of memory.  However, we  do not know the size of the forest
-      ## before hand.  We thus allocate, in the native code, the native array 
-      ## to its theoretical maximum.  This is trimmed  below to the actual size.
+      ## We allocate, in the native code, the native array to its
+      ## theoretical maximum.  This is trimmed below to the actual
+      ## size.
       nativeArraySize = 0
       if (htry == 0) {
-          mwcpPTSize = rep (0, 1)
+          mwcpCountSummary = rep (0, 1)
           nativeFactorArray <- vector("list", 1)
       }
       else {
-          mwcpPTSize = rep (0, htry)
+          mwcpCountSummary = rep (0, htry)
           nativeFactorArray <- vector("list", htry)
       }
-      for (b in 1:ntree) {
-          if (nativeOutput$leafCount[b] > 0) {
-              ## The tree was not rejected.  Count the number of internal
-              ## and external (terminal) nodes in the forest.
-              nativeArraySize = nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
-              mwcpPTSize[1]               <- mwcpPTSize[1] + nativeOutput$mwcpCT[b]
-              if (htry > 1) mwcpPTSize[2] <- mwcpPTSize[2] + nativeOutput$mwcpCT2[b]
-              if (htry > 2) mwcpPTSize[3] <- mwcpPTSize[3] + nativeOutput$mwcpCT3[b]
-              if (htry > 3) mwcpPTSize[3] <- mwcpPTSize[3] + nativeOutput$mwcpCT3[b]
+    ## Marker for start of native forest topology.  This can change with the outputs requested.
+    ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
+    ## particular, stackForestOutputObjects().
+    pivot <- which(names(nativeOutput) == "treeID")
+    nullO <- lapply(1:ntree, function(b) {
+      if (nativeOutput$leafCount[b] > 0) {
+        ## The tree was not rejected.  Count the number of internal
+        ## and external (terminal) nodes in the forest.
+        nativeArraySize <<- nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
+        mwcpCountSummary[1] <<- mwcpCountSummary[1] + nativeOutput$mwcpCT[b]
+        if (htry > 1) {
+          for (i in 0:(htry-2)) {
+            mwcpCountSummary[i] <<- mwcpCountSummary[i] + nativeOutput[[pivot + 9 + (5 * htry) + i]][b]
           }
-          else {
-              ## The tree was rejected.  However, it acts as a
-              ## placeholder, being a stump topologically and thus adds to
-              ## the total node count.
-              nativeArraySize <- nativeArraySize + 1
-          }
+        }
       }
-      nativeArray <- as.data.frame(cbind(nativeOutput$treeID[1:nativeArraySize],
-                                         nativeOutput$nodeID[1:nativeArraySize]))
-      nativeArrayHeader <- c("treeID", "nodeID")
-      if (htry > 0) {
-          nativeArray <- as.data.frame(cbind(nativeArray,
-                                             nativeOutput$hcDim[1:nativeArraySize],
-                                             nativeOutput$hcPartDim[1:nativeArraySize],
-                                             nativeOutput$hcPartIdx[1:nativeArraySize],
-                                             nativeOutput$osPartIdx[1:nativeArraySize]))
-          nativeArrayHeader <- c(nativeArrayHeader, "hcDim", "hcPartDim", "hcPartIdx", "osPartIdx")
+      else {
+        ## The tree was rejected.  However, it acts as a
+        ## placeholder, being a stump topologically and thus
+        ## adds to the total node count.
+        nativeArraySize <<- nativeArraySize + 1
       }
+      NULL
+    })
+    rm(nullO)##memory saving device
+    nativeArray <- as.data.frame(cbind(nativeOutput$treeID[1:nativeArraySize],
+                                       nativeOutput$nodeID[1:nativeArraySize]))
+    nativeArrayHeader <- c("treeID", "nodeID")
+    nativeArray <- as.data.frame(cbind(nativeArray,
+                                       nativeOutput$parmID[1:nativeArraySize],
+                                       nativeOutput$contPT[1:nativeArraySize],
+                                       nativeOutput$mwcpSZ[1:nativeArraySize]))
+    nativeArrayHeader <- c(nativeArrayHeader, "parmID", "contPT", "mwcpSZ") 
+    if (mwcpCountSummary[1] > 0) {
+      ## This can be NULL if there are no factor splits along this dimension.
+      nativeFactorArray[[1]] <- nativeOutput$mwcpPT[1:mwcpCountSummary[1]]
+    }
+    nativeFactorArrayHeader <- "mwcpPT"
+    if (htry > 0) {
       nativeArray <- as.data.frame(cbind(nativeArray,
-                                         nativeOutput$parmID[1:nativeArraySize],
-                                         nativeOutput$contPT[1:nativeArraySize],
-                                         nativeOutput$mwcpSZ[1:nativeArraySize]))
-      nativeArrayHeader <- c(nativeArrayHeader, "parmID", "contPT", "mwcpSZ") 
-      if (mwcpPTSize[1] > 0) {
+                                         nativeOutput[[pivot + 7]][1:nativeArraySize]))
+      nativeArrayHeader <- c(nativeArrayHeader, "hcDim")
+      nativeArray <- as.data.frame(cbind(nativeArray,
+                                         nativeOutput[[pivot + 8]][1:nativeArraySize]))
+      nativeArrayHeader <- c(nativeArrayHeader, "contPTR1")
+    }
+    if (htry > 1) {
+      for (i in 0:(htry-2)) {
+        nativeArray <- as.data.frame(cbind(nativeArray,
+                                           nativeOutput[[pivot + 9 + (0 * htry) + i]][1:nativeArraySize]))
+        nativeArrayHeader <- c(nativeArrayHeader, paste("hcDim", i+2, sep=""))
+        nativeArray <- as.data.frame(cbind(nativeArray,
+                                           nativeOutput[[pivot + 9 + (1 * htry) + i]][1:nativeArraySize]))
+        nativeArrayHeader <- c(nativeArrayHeader, paste("parmID", i+2, sep=""))
+        nativeArray <- as.data.frame(cbind(nativeArray,
+                                           nativeOutput[[pivot + 9 + (2 * htry) + i]][1:nativeArraySize]))
+        nativeArrayHeader <- c(nativeArrayHeader, paste("contPT", i+2, sep=""))
+        nativeArray <- as.data.frame(cbind(nativeArray,
+                                           nativeOutput[[pivot + 9 + (3 * htry) + i]][1:nativeArraySize]))
+        nativeArrayHeader <- c(nativeArrayHeader, paste("contPTR", i+2, sep=""))
+        nativeArray <- as.data.frame(cbind(nativeArray,
+                                           nativeOutput[[pivot + 9 + (4 * htry) + i]][1:nativeArraySize]))
+        nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpSZ", i+2, sep=""))
+        nativeArray <- as.data.frame(cbind(nativeArray,
+                                           nativeOutput[[pivot + 9 + (5 * htry) + i]][1:nativeArraySize]))
+        nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpPT", i+2, sep=""))
+        if (mwcpCountSummary[i+2] > 0) {
           ## This can be NULL if there are no factor splits along this dimension.
-          nativeFactorArray[[1]] <- nativeOutput$mwcpPT[1:mwcpPTSize[1]]
+          nativeFactorArray[[i+2]] <- nativeOutput[[pivot + 9 + (6 * htry) + i]][1:mwcpCountSummary[i+2]]
+        }
+        nativeFactorArrayHeader <- c(nativeFactorArrayHeader, paste("mwcpPT", i+2, sep=""))
       }
-      nativeFactorArrayHeader <- "mwcpPT"
-      if (htry > 1) {
-          nativeArray <- as.data.frame(cbind(nativeArray,
-                                             nativeOutput$parmID2[1:nativeArraySize],
-                                             nativeOutput$contPT2[1:nativeArraySize],
-                                             nativeOutput$mwcpSZ2[1:nativeArraySize]))
-          nativeArrayHeader <- c(nativeArrayHeader, "parmID2", "contPT2", "mwcpSZ2") 
-          if (mwcpPTSize[2] > 0) {
-              ## This can be NULL if there are no factor splits along this dimension.
-              nativeFactorArray[[2]] <- nativeOutput$mwcpPT2[1:mwcpPTSize[2]]
-          }
-          nativeFactorArrayHeader <- c(nativeFactorArrayHeader, "mwcpPT2")
-      }
-      if (htry > 2) {
-          nativeArray <- as.data.frame(cbind(nativeArray,
-                                             nativeOutput$parmID3[1:nativeArraySize],
-                                             nativeOutput$contPT3[1:nativeArraySize],
-                                             nativeOutput$mwcpSZ3[1:nativeArraySize]))
-          nativeArrayHeader <- c(nativeArrayHeader, "parmID3", "contPT3", "mwcpSZ3") 
-          if (mwcpPTSize[3] > 0) {
-              ## This can be NULL if there are no factor splits along this dimension.
-              nativeFactorArray[[3]] <- nativeOutput$mwcpPT3[1:mwcpPTSize[3]]
-          }
-          nativeFactorArrayHeader <- c(nativeFactorArrayHeader, "mwcpPT3")
-      }
-      if (htry > 3) {
-          nativeArray <- as.data.frame(cbind(nativeArray,
-                                             nativeOutput$parmID3[1:nativeArraySize],
-                                             nativeOutput$contPT3[1:nativeArraySize],
-                                             nativeOutput$mwcpSZ3[1:nativeArraySize]))
-          nativeArrayHeader <- c(nativeArrayHeader, "parmID4", "contPT4", "mwcpSZ4") 
-          if (mwcpPTSize[4] > 0) {
-              ## This can be NULL if there are no factor splits along this dimension.
-              nativeFactorArray[[4]] <- nativeOutput$mwcpPT4[1:mwcpPTSize[4]]
-          }
-          nativeFactorArrayHeader <- c(nativeFactorArrayHeader, "mwcpPT4")
-      }
-      names(nativeArray) <- nativeArrayHeader
-      names(nativeFactorArray) <- nativeFactorArrayHeader
+    }
+    names(nativeArray) <- nativeArrayHeader
+    names(nativeFactorArray) <- nativeFactorArrayHeader
     if (terminal.qualts | terminal.quants) {
       ## The terminal node qualitative and quantitative outputs
       ## are allocated to their theoretical maximum.
@@ -601,65 +595,71 @@ rfsrc <- function(formula,
         }
       forestTheoreticalMaximum <- treeTheoreticalMaximum * ntree
       offset <- 0
-      valid.mcnt.indices <- NULL
-      for (b in 1:ntree) {
-        valid.mcnt.indices = c(valid.mcnt.indices, (offset + 1):(offset + nativeOutput$leafCount[b]))
-        offset <- offset + treeTheoreticalMaximum
-      }
+      valid.mcnt.indices <- unlist(lapply(1:ntree, function(b) {
+        if (b > 1) {
+          offset <<- offset + treeTheoreticalMaximum
+        }
+        (offset + 1):(offset + nativeOutput$leafCount[b])
+      }))
       if (terminal.quants) {
         ## family specific additions to the grow object
         if (grepl("surv", family)) {
           offset <- 0
-          valid.2D.surv.indices <- NULL
-          for (b in 1:ntree) {
-            valid.2D.surv.indices = c(valid.2D.surv.indices, (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$event.type) * length(event.info$time.interest)))
-            offset <- offset + (treeTheoreticalMaximum * length(event.info$event.type) * length(event.info$time.interest))
-          }
+          valid.2D.surv.indices <- unlist(lapply(1:ntree, function(b) {
+            if (b > 1) {
+              offset <<- offset + (treeTheoreticalMaximum * length(event.info$event.type) * length(event.info$time.interest))
+            }
+            (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$event.type) * length(event.info$time.interest))
+          }))
           offset <- 0
-          valid.1D.surv.indices <- NULL
-          for (b in 1:ntree) {
-            valid.1D.surv.indices = c(valid.1D.surv.indices, (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$time.interest)))
-            offset <- offset + (treeTheoreticalMaximum * length(event.info$time.interest))
-          }
+          valid.1D.surv.indices <- unlist(lapply(1:ntree, function(b) {
+            if (b > 1) {
+              offset <<- offset + (treeTheoreticalMaximum * length(event.info$time.interest))
+            }
+            (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$time.interest))
+          }))
           offset <- 0
-          valid.mort.indices <- NULL
-          for (b in 1:ntree) {
-            valid.mort.indices = c(valid.mort.indices, (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$event.type)))
-            offset <- offset + (treeTheoreticalMaximum * length(event.info$event.type))
+          valid.mort.indices <- unlist(lapply(1:ntree, function(b) {
+            if (b > 1) {
+              offset <<- offset + (treeTheoreticalMaximum * length(event.info$event.type))
+            }
+            (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$event.type))
+          }))
+        }
+        else {
+          ## This will pick up all "C" and "I".
+          class.index <- which(yvar.types != "R")
+          class.count <- length(class.index)
+          regr.index <- which(yvar.types == "R")
+          regr.count <- length(regr.index)
+          if (class.count > 0) {
+            ## Vector to hold the number of levels in each factor response. 
+            levels.count <- array(0, class.count)
+            counter <- 0
+            for (i in class.index) {
+              counter <- counter + 1
+              ## Note that [i] is the actual index of the y-variables and not a sequential iterator.
+              ## The sequential iteratior is [counter]
+              levels.count[counter] <- yvar.nlevels[i]
+            }
+            offset <- 0
+            valid.clas.indices <- unlist(lapply(1:ntree, function(b) {
+              if (b > 1) {
+                offset <<- offset + (treeTheoreticalMaximum * sum(levels.count))
+              }
+              (offset + 1):(offset + nativeOutput$leafCount[b] * sum(levels.count))
+            }))
+          }
+          if (regr.count > 0) {
+            offset <- 0
+            valid.regr.indices <- unlist(lapply(1:ntree, function(b) {
+              if (b > 1) {
+                offset <<- offset + (treeTheoreticalMaximum * regr.count)
+              }
+              (offset + 1):(offset + nativeOutput$leafCount[b] * regr.count)
+            }))
           }
         }
-          else {
-            ## This will pick up all "C" and "I".
-            class.index <- which(yvar.types != "R")
-            class.count <- length(class.index)
-            regr.index <- which(yvar.types == "R")
-            regr.count <- length(regr.index)
-            if (class.count > 0) {
-              ## Vector to hold the number of levels in each factor response. 
-              levels.count <- array(0, class.count)
-              counter <- 0
-              for (i in class.index) {
-                counter <- counter + 1
-                ## Note that [i] is the actual index of the y-variables and not a sequential iterator.
-                ## The sequential iteratior is [counter]
-                levels.count[counter] <- yvar.nlevels[i]
-              }
-              offset <- 0
-              valid.clas.indices <- NULL
-              for (b in 1:ntree) {
-                valid.clas.indices = c(valid.clas.indices, (offset + 1):(offset + nativeOutput$leafCount[b] * sum(levels.count)))
-                offset <- offset + (treeTheoreticalMaximum * sum(levels.count))
-              }
-            }
-            if (regr.count > 0) {
-              offset <- 0
-              valid.regr.indices <- NULL
-              for (b in 1:ntree) {
-                valid.regr.indices = c(valid.regr.indices, (offset + 1):(offset + nativeOutput$leafCount[b] * regr.count))
-                offset <- offset + (treeTheoreticalMaximum * regr.count)
-              }
-            }
-          }
       }
       nativeArrayTNDS <- list(if(!is.null(nativeOutput$tnSURV)) nativeOutput$tnSURV[valid.1D.surv.indices] else NULL,
                               if(!is.null(nativeOutput$tnMORT)) nativeOutput$tnMORT[valid.mort.indices] else NULL,
@@ -674,9 +674,9 @@ rfsrc <- function(formula,
                               nativeOutput$tnACNT[valid.mcnt.indices]);
       names(nativeArrayTNDS) <- c("tnSURV","tnMORT","tnNLSN","tnCSHZ","tnCIFN","tnREGR","tnCLAS", "tnRMBR", "tnAMBR", "tnRCNT", "tnACNT")
     }
-      else {
-        nativeArrayTNDS <- NULL
-      }
+    else {
+      nativeArrayTNDS <- NULL
+    }
     forest.out <- list(htry = htry,
                        nativeArray = nativeArray,
                        nativeFactorArray = nativeFactorArray,
@@ -836,7 +836,7 @@ rfsrc <- function(formula,
     node.mtry.stats = node.mtry.stats,
     node.mtry.index = node.mtry.index,
     node.ytry.index = node.ytry.index,
-    tree.err = tree.err
+    err.block = err.block
   )
   ## memory management
   remove(yvar)

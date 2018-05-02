@@ -8,6 +8,7 @@
 \usage{\method{predict}{rfsrc}(object, newdata, m.target = NULL,
   importance = c(FALSE, TRUE, "none", "permute", "random", "anti",
                  "permute.ensemble", "random.ensemble", "anti.ensemble")[1],
+  err.block = NULL,
   na.action = c("na.omit", "na.impute"), outcome = c("train", "test"),
   proximity = FALSE,
   forest.wt = FALSE,
@@ -28,6 +29,12 @@
   \item{importance}{Method for computing variable importance (VIMP) when
     test data contains y-outcomes values.  Also see \command{vimp} for more
     flexibility, including joint vimp calculations.}
+  \item{err.block}{Should the error rate be calculated on every tree?
+    When \code{NULL}, it will only be calculated on the last tree.  To
+    view the error rate on every nth tree, set the value to an integer
+    between \code{1} and \code{ntree}.  If Breiman-Cutler importance is
+    requested, this will also return blocked-VIMP where VIMP is 
+    calculated in "blocks" of size equal to \code{err.block}.}
   \item{na.action}{Missing value action. The default
     \code{na.omit} removes the entire record if
     even one of its entries is \code{NA}.  Selecting \option{na.impute} 
@@ -217,7 +224,7 @@ veteran.pred <- predict(veteran.grow, veteran[-train , ])
 print(veteran.grow)
 print(veteran.pred)
 
-\dontrun{
+\donttest{
 ## ------------------------------------------------------------
 ## predicted probability and predicted class labels are returned
 ## in the predict object for classification analyses

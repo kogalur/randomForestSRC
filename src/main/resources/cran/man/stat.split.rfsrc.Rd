@@ -71,7 +71,7 @@
   \emph{Machine Learning}, 99:75-118.
 }
 \examples{
-\dontrun{
+\donttest{
 ## run a forest, then make a call to stat.split
 grow.obj <- rfsrc(mpg ~., data = mtcars, membership=TRUE, statistics=TRUE)
 stat.obj <- stat.split(grow.obj)

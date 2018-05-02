@@ -31,13 +31,20 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
   if (all(is.na(x$err.rate)) & all(is.na(x$importance))) {
     stop("performance values are all NA")
   }
-  ## Check that the error rate vector is assigned for all trees.  If it is not,
-  ## fill in the slots for 1:(ntree-1).  This will result in the plot being a flat line.
-  if (x$tree.err == FALSE) {
-    colnames.err.rate <- colnames(x$err.rate)
-    x$err.rate <- cbind(x$err.rate)[x$ntree, ]
-    x$err.rate <- matrix(x$err.rate, x$ntree, length(x$err.rate), byrow = TRUE)
-    colnames(x$err.rate) <- colnames.err.rate
+  ## Check that the error rate vector is assigned for all trees.  If
+  ## it is not, fill in the slots for 1:ntree.  This will result in
+  ## the plot flat-lining between transitions or blocks.
+  if (x$err.block != 1) {
+      x$err.rate <- cbind(x$err.rate)
+      fill.err.row <-  x$err.block
+      nullO <- lapply(1:x$ntree, function(i) {
+        x$err.rate[i, ] <<- x$err.rate[fill.err.row, ]
+        if (i == fill.err.row) {
+          fill.err.row <<- min(fill.err.row + x$err.block, x$ntree)
+        }
+        NULL
+      })
+      rm(nullO)
   }
   ## convert drc two-classifier error rate to one column
   if (!is.null(x$forest$perf.type) && (x$forest$perf.type == "g.mean" || x$forest$perf.type == "g.mean.rfq")) {

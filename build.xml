@@ -7,8 +7,8 @@
 <project name="RF-SRC Public" basedir="." default="usage" >
 
   <property name="project.pkg.name"  value="randomForestSRC"/>
-  <property name="project.version"   value="2.5.1.15"/>
-  <property name="project.build"     value="bld20180302"/>
+  <property name="project.version"   value="2.6.0"/>
+  <property name="project.build"     value="bld20180425"/>
   <property name="minimum.version"   value="2.3.0"/>
   
   <property name="http.prefix"       value="http://"/>

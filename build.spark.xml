@@ -141,6 +141,9 @@
         <include name="Ensemble.java"/>        
         <include name="NativeOpt.java"/>
         <include name="ModelType.java"/>
+        <include name="HCzero.java"/>
+        <include name="HCmulti.java"/>
+        <include name="Partial.java"/>
       </fileset>
 
       <filterchain>
