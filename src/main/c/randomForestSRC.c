@@ -7221,6 +7221,7 @@ void rfsrc(char mode, int seedValue) {
         summarizePartialCalculations(0, p);
       }
     }
+    finalizeEnsembleEstimates(mode);
     if (RF_opt & OPT_MISS) {
       for (b = 1; b <= RF_ntree; b++) {
         for (j = 1; j <= RF_tLeafCount[b]; j++) {
