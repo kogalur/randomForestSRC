@@ -199,11 +199,11 @@ public class RandomForestModel {
     /** 
      * Sets the ensemble outputs desired when restoring the model or
      * using it to predict with new data.  These outputs are similar
-     * to those available when initially creating a model using {@link
-     * com.kogalur.randomforest.ModelArg#setEnsembleArg(String,
-     * String)}, but are context sensitive to restoration versus
-     * prediction.  These settings are in the form of &lt;key,
-     * value&gt; pairs, where the key is the name of the ensemble, and
+     * to those available when initially creating a model using 
+     * {@link com.kogalur.randomforest.ModelArg#setEnsembleArg(String, String)}, 
+     * but are context sensitive to restoration versus
+     * prediction.  These settings are in the form of &lt;key, value&gt; 
+     * pairs, where the key is the name of the ensemble, and
      * the value is the specific option for that ensemble.
      * <p> The default option for each key is in bold. </p>
      *
@@ -233,11 +233,6 @@ public class RandomForestModel {
      *  <tr>
      *    <td>importance</td>
      *    <td><b>no</b>, permute, random, anti, <br> permute.joint, random.joint, anti.joint <br> permute.ensemble, random.ensemble, anti.ensemble, <br> permute.joint.ensemble, random.joint.ensemble, anti.joint.ensemble </td>
-     *  </tr>
-     *
-     *  <tr>
-     *    <td>error</td>
-     *    <td><b>last.tree</b>, every.tree</td>
      *  </tr>
      *
      *  <tr>
@@ -293,6 +288,7 @@ public class RandomForestModel {
                 ensembleArg.getNative("splitDepth") +                 
                 ensembleArg.getNative("importance") + 
                 ensembleArg.getNative("proximity") +
+                ensembleArg.getNative("ensemble") +
                 ensembleArg.getNative("errorType")); 
     }
 
@@ -303,7 +299,7 @@ public class RandomForestModel {
                  
                  
                 
-                ensembleArg.getNative("error"));
+                0);
     }
 
     int getModelArgOptLow() {
@@ -657,7 +653,8 @@ public class RandomForestModel {
         return modelType;
     }
 
-    void printEnsembleList() {
+    // TBD TBD remove public option TBD TBD    
+    public void printEnsembleList() {
         Set entrySet = ensembleList.entrySet();
         Iterator itr = entrySet.iterator();
         int actLength = 0;

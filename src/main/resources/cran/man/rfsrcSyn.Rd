@@ -7,18 +7,12 @@
   features.  Applies only to regression and classification settings.
 }
 \usage{\method{rfsrcSyn}{rfsrc}(formula, data, object, newdata,
-  ntree = 1000,
-  mtry = NULL,
-  mtrySeq = NULL,
-  nodesize = 5,
-  nodesizeSeq = c(1:10,20,30,50,100),
-  nsplit = 0,
+  ntree = 1000, mtry = NULL, nodesize = 5, nsplit = 10,
+  mtrySeq = NULL, nodesizeSeq = c(1:10,20,30,50,100),
   min.node = 3,
+  fast = TRUE,
   use.org.features = TRUE,
-  
   na.action = c("na.omit", "na.impute"),
-  
-   
   oob = TRUE,
   verbose = TRUE,
   ...)
@@ -32,17 +26,18 @@
     Not required when \code{formula} and \code{data} are supplied.}
   \item{newdata}{Test data used for prediction (optional).}
   \item{ntree}{Number of trees.}
-  \item{mtry}{mtry value for synthetic forest.}
+  \item{mtry}{mtry value for over-arching synthetic forest.}
+  \item{nodesize}{Nodesize value for over-arching synthetic forest.}
+  \item{nsplit}{nsplit-randomized splitting for significantly increased speed.}
   \item{mtrySeq}{Sequence of mtry values used for fitting the
     collection of RF machines.  If \code{NULL}, set to the default
     value \code{p}/3.}
-  \item{nodesize}{Nodesize value for the synthetic forest.}
   \item{nodesizeSeq}{Sequence of nodesize values used for the fitting the
     collection of RF machines.}
-  \item{nsplit}{If non-zero, nsplit-randomized splitting is used which can
-    significantly increase speed.}
   \item{min.node}{Minimum forest averaged number of nodes a RF machine
     must exceed in order to be used as a synthetic feature.}
+  \item{fast}{Use fast random forests, \code{rfsrcFast}, in place of
+    \code{rfsrc}?  Improves speed but may be less accurate.}
   \item{use.org.features}{In addition to synthetic features, should
     the original features be used when fitting synthetic forests?}
   \item{na.action}{Missing value action. The default \code{na.omit}
@@ -93,7 +88,7 @@
 }
 \seealso{
   \command{\link{rfsrc}},
-  \command{\link{impute.rfsrc}}
+  \command{\link{rfsrcFast}}
 }
 \examples{
 \donttest{
@@ -108,13 +103,13 @@ if (library("mlbench", logical.return = TRUE)) {
   ring <- data.frame(mlbench.ringnorm(250, 20))
 
   ## classification forests
-  ringRF <- rfsrc(classes ~., data = ring)
+  ringRF <- rfsrc(classes ~., ring)
 
-  ## synthetic forests:
+  ## synthetic forests
   ## 1 = nodesize varied
   ## 2 = nodesize/mtry varied
-  ringSyn1 <- rfsrcSyn(classes ~., data = ring)
-  ringSyn2 <- rfsrcSyn(classes ~., data = ring, mtrySeq = c(1, 10, 20))
+  ringSyn1 <- rfsrcSyn(classes ~., ring)
+  ringSyn2 <- rfsrcSyn(classes ~., ring, mtrySeq = c(1, 10, 20))
 
   ## test-set performance
   ring.test <- data.frame(mlbench.ringnorm(500, 20))
@@ -145,16 +140,12 @@ dat <- data.frame(x = x, y = y)
 test <- (n+1):N
 
 ## regression forests
-regF <- rfsrc(y ~ ., data = dat[-test, ], )
+regF <- rfsrc(y ~ ., dat[-test, ], )
 pred.regF <- predict(regF, dat[test, ], importance = "none")
 
-## synthetic forests
-## we pass both the training and testing data
-## but this can be split into separate commands as in the
-## previous classification example
-synF1 <- rfsrcSyn(y ~ ., data = dat[-test, ],
-  newdata = dat[test, ])
-synF2 <- rfsrcSyn(y ~ ., data = dat[-test, ],
+## synthetic forests using fast rfsrc
+synF1 <- rfsrcSyn(y ~ ., dat[-test, ], fast = TRUE, newdata = dat[test, ])
+synF2 <- rfsrcSyn(y ~ ., dat[-test, ], fast = TRUE,
   newdata = dat[test, ], mtrySeq = c(1, 10, 20, 30, 40, 50))
 
 ## standardized MSE performance
@@ -172,7 +163,7 @@ mtcars.new <- mtcars
 mtcars.new$cyl <- factor(mtcars.new$cyl)
 mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
 trn <- sample(1:nrow(mtcars.new), nrow(mtcars.new)/2)
-mvSyn <- rfsrcSyn(cbind(carb, mpg, cyl) ~., data = mtcars.new[trn,])
+mvSyn <- rfsrcSyn(cbind(carb, mpg, cyl) ~., mtcars.new[trn,])
 mvSyn.pred <- rfsrcSyn(object = mvSyn, newdata = mtcars.new[-trn,])
 }
 }

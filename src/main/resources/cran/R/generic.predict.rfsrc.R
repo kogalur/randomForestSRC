@@ -1,9 +1,10 @@
 generic.predict.rfsrc <-
   function(object,
            newdata,
+           ensemble = NULL,
            m.target = NULL,
            importance = FALSE,
-           err.block = NULL,
+           block.size = NULL,
            importance.xvar,
            subset = NULL,
            na.action = c("na.omit", "na.impute"),
@@ -11,13 +12,14 @@ generic.predict.rfsrc <-
            proximity = FALSE,
            forest.wt = FALSE,
            ptn.count = 0,
-            
+           distance = FALSE,
            var.used = c(FALSE, "all.trees", "by.tree"),
            split.depth = c(FALSE, "all.trees", "by.tree"),
            seed = NULL,
            do.trace = FALSE,
            membership = FALSE,
            statistics = FALSE,
+                       
            ...)
 {
   univariate.nomenclature <- TRUE
@@ -37,11 +39,9 @@ generic.predict.rfsrc <-
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2)
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
   ## verify the importance option
-  importance <- match.arg(as.character(importance), c(FALSE, TRUE,
-                                                      "none", "permute", "random", "anti",
-                                                      "permute.ensemble", "random.ensemble", "anti.ensemble",
-                                                      "permute.joint", "random.joint", "anti.joint",
-                                                      "permute.joint.ensemble", "random.joint.ensemble", "anti.joint.ensemble"))
+  importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
+                                                         "none", "permute", "random", "anti",
+                                                         "permute.joint", "random.joint", "anti.joint"))
   if (grepl("joint", importance)) {
     vimp.joint <- TRUE
   }
@@ -57,7 +57,8 @@ generic.predict.rfsrc <-
   na.action <- match.arg(na.action, c("na.omit", "na.impute"))
   outcome <- match.arg(outcome, c("train", "test"))
   proximity <- match.arg(as.character(proximity), c(FALSE, TRUE, "inbag", "oob", "all"))
-  forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))
+  forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))  
+  distance <- match.arg(as.character(distance), c(FALSE, TRUE, "inbag", "oob", "all"))
    
   var.used <- match.arg(as.character(var.used), c("FALSE", "all.trees", "by.tree"))
   if (var.used == "FALSE") var.used <- FALSE
@@ -65,16 +66,45 @@ generic.predict.rfsrc <-
   if (split.depth == "FALSE") split.depth <- FALSE
   ## initialize the seed
   seed <- get.seed(seed)
-  ## if newdata is missing then we assume grow.equivalent
-  ## note that outcome = "test" is treated as grow.equivalent = FALSE for processing
-  ## but after processing the data, we switch this to grow.equivalent = TRUE
+  ## set restore.mode and the ensemble option
+  ## - if newdata is missing we assume restore.mode 
+  ## - outcome = "test" is treated as restore.mode = FALSE for R-processing
+  ##   but is then switched to restore.mode = TRUE for the native .Call
   if (missing(newdata)) {
-    outcome <- "train"
-    grow.equivalent <- TRUE
-  }
-    else {
-      grow.equivalent <- FALSE
+    restore.mode <- TRUE
+    outcome <- "train"    
+    if (is.null(ensemble)) {
+      ## default action assigns the grow forest ensemble option
+        if (!is.null(object$ensemble)) {
+            ensemble <- object$ensemble
+        }
+        else {
+            ## backwards compatibility with prior versions
+            ensemble <- "all"
+        }
     }
+    else {
+      ensemble <-  match.arg(ensemble, c("oob", "inbag", "all"))   
+    }
+  }
+  else {##there is test data present
+    restore.mode <- FALSE
+    ## special treatment for outcome=="test" (which is really restore mode)
+    if (outcome == "test") {
+      if (is.null(ensemble)) {
+        ## default action is to provide all ensembles
+        ensemble <- "all"
+      }
+      else {
+        ensemble <-  match.arg(ensemble, c("oob", "inbag", "all"))   
+      }
+    }
+    ## standard prediction scenario on new test data - there is no OOB
+    else {
+      ensemble <- "inbag"
+    }
+  }
+  ## REDUCES THE OBJECT TO THE FOREST -- REDUCTION STARTS HERE
   ## hereafter we only need the forest and reassign "object" to the forest
   ## (TBD) memory management "big.data" not currently implemented: TBD
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
@@ -190,8 +220,10 @@ generic.predict.rfsrc <-
   ## code to distinguish this case from the case of the restore
   ## with the original training data.
   ## ----------------------------------------------------------------
-  ## ------------ NON-RESTORE MODE --------------
-  if (!grow.equivalent) {
+  ##--------------------------------------------------------
+  ## NON-RESTORE MODE PROCESSING (includes outcome=="test")
+  ##--------------------------------------------------------
+  if (!restore.mode) {
     ## Filter the test data based on the formula
     newdata <- newdata[, is.element(names(newdata),
                                     c(yvar.names, xvar.names)), drop = FALSE]
@@ -297,25 +329,27 @@ generic.predict.rfsrc <-
     ## We don't need the test data anymore
     remove(newdata)
   }
+  ##--------------------------------------------------------
+  ## RESTORE MODE PROCESSING (excludes outcome=="test")
+  ##--------------------------------------------------------
+  else {
+    ## There cannot be test data in restore mode
+    ## The native code switches based on n.newdata being zero (0).  Be careful.
+    n.newdata <- 0
+    r.dim.newdata <- 0
+    xvar.newdata <- NULL
+    yvar.newdata <-  NULL
+    ## Outcome is set to train for the native code
+    ## Determine whether performance values are requested
+    outcome <- "train"
+    if (object$bootstrap == "none" || object$bootstrap == "by.node" || family == "unsupv") {
+      importance <- "none"
+      perf.type <- "none"
+    }
     else {
-      ## ------------ GROW MODE ONLY ----------------
-      ## There cannot be test data in restore mode
-      ## The native code switches based on n.newdata being zero (0).  Be careful.
-      n.newdata <- 0
-      r.dim.newdata <- 0
-      xvar.newdata <- NULL
-      yvar.newdata <-  NULL
-      ## Outcome is set to train for the native code
-      ## Determine whether performance values are requested
-      outcome <- "train"
-      if (object$bootstrap != "by.root" | family == "unsupv") {
-        importance <- "none"
-        perf.type <- "none"
-      }
-      else {
-        ## do nothing.
-      }
-    } ## ends grow.equivalent check
+      ## do nothing.
+    }
+  } ## ends restore.mode check
   ## ------------------------------------------------------------
   ## We have completed the restore/non-restore mode processing
   ## ------------------------------------------------------------
@@ -331,26 +365,26 @@ generic.predict.rfsrc <-
     case.wt <- object$case.wt
     samp <- object$samp
   }
-    else {
-      ## outcome=test
-      ## From the native code perspective we are in pseudo-restore mode
-      ## From the R side, it is convenient to now pretend we are
-      ## in restore mode, so we swap the training data out with the test data
-      ## Performance is always requested for this setting
-      ## Swap the data
-      xvar <- xvar.newdata
-      yvar <- yvar.newdata
-      grow.equivalent <- TRUE
-      ## Pretend there is no test data, but do *not* get rid of it
-      ## we need (and use) this data *after* the native code call
-      n.newdata <- 0
-      r.dim.newdata <- 0
-      ## Override the training options related to bootstrapping:
-      sampsize <- nrow(xvar)
-      case.wt <- get.weight(NULL, nrow(xvar))
-      samp <- NULL
-      ## (TBD TBD) We have not changed samptype.
-    }
+  else {
+    ## outcome=test
+    ## From the native code perspective we are in pseudo-restore mode
+    ## From the R side, it is convenient to now pretend we are
+    ## in restore mode, so we swap the training data out with the test data
+    ## Performance is always requested for this setting
+    ## Swap the data
+    xvar <- xvar.newdata
+    yvar <- yvar.newdata
+    restore.mode <- TRUE
+    ## Pretend there is no test data, but do *not* get rid of it
+    ## we need (and use) this data *after* the native code call
+    n.newdata <- 0
+    r.dim.newdata <- 0
+    ## Override the training options related to bootstrapping:
+    sampsize <- nrow(xvar)
+    case.wt <- get.weight(NULL, nrow(xvar))
+    samp <- NULL
+    ## (TBD TBD) We have not changed samptype.
+  }
   ## Set the y dimension
   r.dim <- ncol(cbind(yvar))
   ## Remove row and column names for proper processing by the native library
@@ -361,9 +395,10 @@ generic.predict.rfsrc <-
   ## Initialize the number of trees in the forest
   ntree <- object$ntree
   ## Initialize the low bits
+  ensemble.bits <- get.ensemble(ensemble)
   importance.bits <- get.importance(importance)
-  proximity.bits <- get.proximity(grow.equivalent, proximity)
-   
+  proximity.bits <- get.proximity(restore.mode, proximity)
+  distance.bits <- get.distance(restore.mode, distance)
   split.depth.bits <- get.split.depth(split.depth)
   var.used.bits <- get.var.used(var.used)
   outcome.bits <- get.outcome(outcome)
@@ -377,11 +412,11 @@ generic.predict.rfsrc <-
   ## Initalize the high bits
   samptype.bits <- get.samptype(object$samptype)
   ## forest weights
-  forest.wt.bits <- get.forest.wt(grow.equivalent, object$bootstrap, forest.wt)
+  forest.wt.bits <- get.forest.wt(restore.mode, object$bootstrap, forest.wt)
   membership.bits <-  get.membership(membership)
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
-  err.block <- get.err.block(err.block, ntree)
+  block.size <- get.block.size(block.size, ntree)
   ## Turn off partial option.
   partial.bits <- get.partial(0)
   ## na.action in the native code is only revelant to the training data.
@@ -420,13 +455,13 @@ generic.predict.rfsrc <-
     ## Marker for start of native forest topology.  This can change with the outputs requested.
     ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
     ## particular, stackForestOutputObjects().
-    pivot <- which(names(object$nativeArray) == "treeID")
     ## WARNING:  Note that the maximum number of slots in the following foreign function call is 64.
     ## Ensure that this limit is not exceeded.  Otherwise, the program will error on the call.
     nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
-                                  as.integer(importance.bits +
+                                  as.integer(ensemble.bits +
+                                             importance.bits +
                                              bootstrap.bits +
                                              proximity.bits +
                                              split.depth.bits +
@@ -438,7 +473,7 @@ generic.predict.rfsrc <-
                                              statistics.bits),
                                   as.integer(
                                     forest.wt.bits +
-                                       
+                                        distance.bits +
                                         samptype.bits +
                                         na.action.bits +
                                         membership.bits +
@@ -474,19 +509,19 @@ generic.predict.rfsrc <-
                                       as.double((object$nativeArray)$contPTR))
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (0 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeArray[, 8 + (4 * x)])})
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.double(object$nativeArray[[pivot + 9 + (1 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.double(object$nativeArray[, 9 +  (4 * x)])})
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.double(object$nativeArray[[pivot + 9 + (2 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.double(object$nativeArray[, 10 + (4 * x)])})
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (3 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeArray[, 11 + (4 * x)])})
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (4 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
                                   } else { NULL },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
@@ -514,7 +549,7 @@ generic.predict.rfsrc <-
                                   as.integer(r.dim.newdata),
                                   as.double(if (outcome != "test") yvar.newdata else NULL),
                                   as.double(if (outcome != "test") xvar.newdata else NULL),
-                                  as.integer(err.block),
+                                  as.integer(block.size),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -523,7 +558,7 @@ generic.predict.rfsrc <-
     stop("An error has occurred in prediction.  Please turn trace on for further analysis.")
   }
   ## determine missingness according to mode (REST vs. PRED)
-  if (grow.equivalent) {
+  if (restore.mode) {
     n.miss <- get.nmiss(xvar, yvar)
   }
     else {
@@ -544,7 +579,7 @@ generic.predict.rfsrc <-
   }
   ## post-process the test data
   ## for restore mode there is no test data *except* when outcome=TEST
-  if (!grow.equivalent | outcome == "test") {
+  if (!restore.mode | outcome == "test") {
     ## add row and column names to test xvar matrix
     xvar.newdata <- as.data.frame(xvar.newdata)
     rownames(xvar.newdata) <- newdata.row.names
@@ -568,7 +603,7 @@ generic.predict.rfsrc <-
   }
   ## proximity
   if (proximity != FALSE) {
-    if (grow.equivalent) {
+    if (restore.mode) {
       prox.n <- n
     }
       else {
@@ -586,10 +621,29 @@ generic.predict.rfsrc <-
     else {
       proximity.out <- NULL
     }
-   
+  ## distance
+  if (distance != FALSE) {
+    if (restore.mode) {
+      dist.n <- n
+    }
+      else {
+        dist.n <- n.newdata
+      }
+    distance.out <- matrix(0, dist.n, dist.n)
+    count <- 0
+    for (k in 1:dist.n) {
+      distance.out[k,1:k] <- nativeOutput$distance[(count+1):(count+k)]
+      distance.out[1:k,k] <- distance.out[k,1:k]
+      count <- count + k
+    }
+    nativeOutput$distance <- NULL
+  }
+    else {
+      distance.out <- NULL
+    }
   ## forest weight matrix
   if (forest.wt != FALSE) {
-    if (grow.equivalent) {
+    if (restore.mode) {
       forest.wt.n <- c(n, n)
     }
       else {
@@ -601,12 +655,12 @@ generic.predict.rfsrc <-
     else {
       forest.wt.out <- NULL
     }
-  n.observed = if (grow.equivalent) n else n.newdata
+  n.observed = if (restore.mode) n else n.newdata
   ## membership
   if (membership) {
     membership.out <- matrix(nativeOutput$nodeMembership, c(n.observed, ntree))
     nativeOutput$nodeMembership <- NULL
-    if (grow.equivalent) {
+    if (restore.mode) {
       inbag.out <- matrix(nativeOutput$bootMembership, c(n.observed, ntree))
       nativeOutput$bootMembership <- NULL
     }
@@ -668,17 +722,17 @@ generic.predict.rfsrc <-
     family = family,
     n = n.observed,
     ntree = ntree,
-    yvar = (if ((outcome == "train" & grow.equivalent) | (perf.type != "none")) {
-      if (outcome == "train" & grow.equivalent)
+    yvar = (if ((outcome == "train" & restore.mode) | (perf.type != "none")) {
+      if (outcome == "train" & restore.mode)
         amatrix.remove.names(object$yvar) else amatrix.remove.names(yvar.newdata)} else NULL),
     yvar.names = yvar.names,
-    xvar = (if(outcome != "test" & grow.equivalent) object$xvar else xvar.newdata),
+    xvar = (if(outcome != "test" & restore.mode) object$xvar else xvar.newdata),
     xvar.names = xvar.names,
     leaf.count = nativeOutput$leafCount,
     proximity = proximity.out,
     forest = object,
     forest.wt = forest.wt.out,
-     
+    distance = distance.out,
     ptn.membership = ptn.membership.out,
     membership = membership.out,
     splitrule = splitrule,
@@ -688,7 +742,7 @@ generic.predict.rfsrc <-
     imputed.data = (if (n.miss>0) imputed.data else NULL),
     split.depth  = split.depth.out,
     node.stats = node.stats,
-    err.block = err.block,
+    block.size = block.size,
     perf.type = perf.type
   )
   ## memory management
@@ -696,7 +750,7 @@ generic.predict.rfsrc <-
   remove(object)
   remove(proximity.out)
   remove(forest.wt.out)
-   
+  remove(distance.out)
   remove(ptn.membership.out)
   remove(membership.out)
   remove(inbag.out)
@@ -837,6 +891,25 @@ generic.predict.rfsrc <-
         }
       remove(err.rate)
     }
+      ## From the native code:
+      ##   "blockSurv"
+      ##   -> of dim [block.cnt] x length(event.info$event.type)]
+      ## To the R code:
+      ##   -> of dim [block.cnt] x length(event.info$event.type)]
+      if (!is.null(nativeOutput$blockSurv)) {
+          err.block.rate <- adrop2d.first(array(nativeOutput$blockSurv,
+                                                c(length(event.info$event.type), floor(ntree/block.size)),
+                                                dimnames=err.names),
+                                          coerced.event.count)
+          nativeOutput$blockSurv <- NULL
+          if (family == "surv-CR") {
+              survOutput = c(survOutput, err.block.rate = list(t(err.block.rate)))
+          }
+          else {
+              survOutput = c(survOutput, err.block.rate = list(err.block.rate))
+          }
+          remove(err.block.rate)
+      }
     ## From the native code:
     ##   "vimpSurv"
     ##   -> of dim [n.xvar] x length(event.info$event.type)]
@@ -859,7 +932,7 @@ generic.predict.rfsrc <-
     survOutput = c(
       survOutput, list(
         time.interest = event.info$time.interest,
-        ndead = (if (perf.type != "none") sum((if (grow.equivalent) yvar[, 2] else yvar.newdata[, 2]) !=0 , na.rm=TRUE) else NULL))
+        ndead = (if (perf.type != "none") sum((if (restore.mode) yvar[, 2] else yvar.newdata[, 2]) !=0 , na.rm=TRUE) else NULL))
     )
     ## When TRUE we revert to univariate nomenclature for all the outputs.
     if(univariate.nomenclature) {
@@ -938,6 +1011,12 @@ generic.predict.rfsrc <-
           tree.offset[2:ntree] <- levels.total
         }
         tree.offset <-  cumsum(tree.offset)
+        ## The block offset calculation mirrors the tree offset calculation, but differs in only the primary dimension.
+        block.offset <- array(1, floor(ntree/block.size))
+        if (floor(ntree/block.size) > 1) {
+          block.offset[2:floor(ntree/block.size)] <- levels.total
+        }
+        block.offset <-  cumsum(block.offset)
         ## Incoming vimp rates: V=xvar R=response L=level
         ## V1R1L0 V1R1L1 V1R1L2 V1R1L3 V1R1L0 V1R2L1 V1R2L2, V2R1L0 V2R1L1 V2R1L2 V2R1L3 V2R2L0 V2R2L1 V2R2L2, ...
         ## Yeilds vimp.offset = c(1, 8, ...)
@@ -960,6 +1039,13 @@ generic.predict.rfsrc <-
         ## Note that this is a ragged array.
         ## To the R code:
         ## -> of dim [[class.count]] x [ntree] x [1 + levels.count[]]
+        ## From the native code:
+        ##   "blockClas"
+        ## -> of dim [block.cnt] x [class.count] x [1 + levels.count[]]
+        ## where the slot [.] x [.] x [1] holds the unconditional error rate.
+        ## Note that this is a ragged array.
+        ## To the R code:
+        ## -> of dim [[class.count]] x [block.cnt] x [1 + levels.count[]]
         ## From the native code:
         ##   "vimpClas"
         ## -> of dim [n.xvar] x [class.count] x [1 + levels.count]
@@ -1001,6 +1087,16 @@ generic.predict.rfsrc <-
               classOutput[[target.idx]] <- c(classOutput[[target.idx]], err.rate = list(t(err.rate)))
               remove(err.rate)
             }
+            if (!is.null(nativeOutput$blockClas)) {
+              err.block.rate <- array(0, c(1 + levels.count[target.idx], floor(ntree/block.size)))
+              for (j in 1: (1 + levels.count[target.idx])) {
+                err.block.rate[j, ]  <- nativeOutput$blockClas[block.offset]
+                block.offset <- block.offset + 1
+              }
+              row.names(err.block.rate) <- err.names
+              classOutput[[target.idx]] <- c(classOutput[[target.idx]], err.block.rate = list(t(err.block.rate)))
+              remove(err.block.rate)
+            }
             if (!is.null(nativeOutput$vimpClas)) {
               importance <- array(0, c(1 + levels.count[target.idx], vimp.count), dimnames=vimp.names)
               for (j in 1: (1 + levels.count[target.idx])) {
@@ -1016,6 +1112,7 @@ generic.predict.rfsrc <-
         nativeOutput$oobEnsbCLS <- NULL
         nativeOutput$perfClas <- NULL
         nativeOutput$vimpClas <- NULL
+        nativeOutput$blockClas <- NULL
         ## When TRUE we revert to univariate nomenclature for all the outputs.
         if(univariate.nomenclature) {
           if ((class.count == 1) & (regr.count == 0)) {
@@ -1041,6 +1138,12 @@ generic.predict.rfsrc <-
           tree.offset[2:ntree] <- length(regr.index)
         }
         tree.offset <-  cumsum(tree.offset)
+        ## The block offset calculation mirrors the tree offset calculation, but differs in only the primary dimension.
+        block.offset <- array(1, floor(ntree/block.size))
+        if (floor(ntree/block.size) > 1) {
+          block.offset[2:floor(ntree/block.size)] <- length(regr.index)
+        }
+        block.offset <-  cumsum(block.offset)
         ## Incoming vimp rates: V=xvar R=response L=level
         ## V1R1 V1R2, V2R1 V2R2, V3R1 V3R2, ...
         ## Yeilds vimp.offset = c(1, 3, 5, ...)
@@ -1059,6 +1162,11 @@ generic.predict.rfsrc <-
         ## -> of dim [regr.count] x [ntree]
         ## To the R code:
         ## -> of dim  [[regr.count]] x [ntree]
+        ## From the native code:
+        ##   "blockRegr"
+        ## -> of dim [block.cnt] x [regr.count]
+        ## To the R code:
+        ## -> of dim [[regr.count]] x [block.cnt]
         ## From the native code:
         ##   "vimpRegr"
         ## -> of dim [n.vxar] x [regr.count]
@@ -1084,6 +1192,12 @@ generic.predict.rfsrc <-
               regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], err.rate = list(err.rate))
               remove(err.rate)
             }
+            if (!is.null(nativeOutput$blockRegr)) {
+              err.block.rate <- nativeOutput$blockRegr[block.offset]
+              block.offset <- block.offset + 1
+              regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], err.block.rate = list(err.block.rate))
+              remove(err.block.rate)
+            }
             if (!is.null(nativeOutput$vimpRegr)) {
               importance <- nativeOutput$vimpRegr[vimp.offset]
               names(importance) <- vimp.names
@@ -1097,6 +1211,7 @@ generic.predict.rfsrc <-
         nativeOutput$oobEnsbRGR <- NULL
         nativeOutput$perfRegr <- NULL
         nativeOutput$vimpRegr <- NULL
+        nativeOutput$blockRegr <- NULL
         ## When TRUE we revert to univariate nomenclature for all the outputs.
         if(univariate.nomenclature) {
           if ((class.count == 0) & (regr.count == 1)) {

@@ -1,35 +1,21 @@
-rfsrc <- function(formula,
-                  data,
-                  ntree = 1000,
+rfsrc <- function(formula, data, ntree = 1000,
+                  mtry = NULL, ytry = NULL,
+                  nodesize = NULL, nodedepth = NULL,
+                  splitrule = NULL, nsplit = 10,
+                  importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
+                  block.size = if (importance == "none" || as.character(importance) == "FALSE") NULL else 10,
+                  ensemble = c("all", "oob", "inbag"),
                   bootstrap = c("by.root", "by.node", "none", "by.user"),
-                  mtry = NULL,
-                  ytry = NULL,
-                  yvar.wt = NULL,
-                  nodesize = NULL,
-                  nodedepth = NULL,
-                  splitrule = NULL,
-                  nsplit = NULL,
-                  importance = c(FALSE, TRUE, "none", "permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"),
-                  err.block = NULL,
-                  na.action = c("na.omit", "na.impute"),
-                  nimpute = 1,
-                  ntime,
-                  cause,
-                  proximity = FALSE,
-                  sampsize = NULL,
-                  samptype = c("swr", "swor"),
-                  samp = NULL,
-                  case.wt = NULL,
-                  split.wt = NULL,
-                  forest.wt = FALSE,
-                   
-                  xvar.wt = NULL,
+                  samptype = c("swr", "swor"), sampsize = NULL, samp = NULL, membership = FALSE,
+                  na.action = c("na.omit", "na.impute"), nimpute = 1,
+                  ntime, cause,
+                  proximity = FALSE, distance = FALSE, forest.wt = FALSE,
+                  xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt = NULL, 
                   forest = TRUE,
                   var.used = c(FALSE, "all.trees", "by.tree"),
                   split.depth = c(FALSE, "all.trees", "by.tree"),
                   seed = NULL,
                   do.trace = FALSE,
-                  membership = FALSE,
                   statistics = FALSE,
                    ...)
 {
@@ -44,14 +30,15 @@ rfsrc <- function(formula,
   rfq <- is.hidden.rfq(user.option)
   htry <- is.hidden.htry(user.option)
   ## verify key options
+  ensemble <- match.arg(ensemble, c("all", "oob", "inbag"))  
   bootstrap <- match.arg(bootstrap, c("by.root", "by.node", "none", "by.user"))
-  importance <- match.arg(as.character(importance), c(FALSE, TRUE, "none", "permute", "random", "anti", "permute.ensemble", "random.ensemble", "anti.ensemble"))
-  
+  if (bootstrap == "by.node" || bootstrap == "none") {
+    ensemble <- "inbag"
+  }
+  importance <- match.arg(as.character(importance), c(FALSE, TRUE, "none", "permute", "random", "anti"))
   na.action <- match.arg(na.action, c("na.omit", "na.impute"))
-  
-   
   proximity <- match.arg(as.character(proximity), c(FALSE, TRUE, "inbag", "oob", "all"))
-     
+  distance <- match.arg(as.character(distance), c(FALSE, TRUE, "inbag", "oob", "all"))
   var.used <- match.arg(as.character(var.used), c("FALSE", "all.trees", "by.tree"))
   split.depth <- match.arg(as.character(split.depth),  c("FALSE", "all.trees", "by.tree"))
   if (var.used == "FALSE") var.used <- FALSE
@@ -162,27 +149,27 @@ rfsrc <- function(formula,
         sampsize <- min(sampsize, nrow(xvar))
       }
     }
-    samp = NULL
+    samp <- NULL
   }
-    else if (bootstrap == "by.user") {
-      ## Override sample type when bootstrapping by user.
-      samptype <- "swr"
-      ## Check for coherent sample.  It will of be dim [n] x [ntree].
-      if (is.null(samp)) {
-        stop("samp must not be NULL when bootstrapping by user")
-      }
-      sampsize <- apply(samp, 2, sum)
-      if (sum(sampsize == sampsize[1]) != ntree) {
-        stop("sampsize must identical for each tree")
-      }
-      sampsize <- sampsize[1]
+  else if (bootstrap == "by.user") {    
+    ## Check for coherent sample.  It will of be dim [n] x [ntree].
+    if (is.null(samp)) {
+      stop("samp must not be NULL when bootstrapping by user")
     }
-      else {
-        ## Override sample size when not bootstrapping by root or user.
-        sampsize = nrow(xvar)
-        ## Override sample type when not bootstrapping by root or user.
-        samptype <- "swr"
-      }
+    ## ntree should be coherent with the sample provided
+    ntree <- ncol(samp)
+    sampsize <- colSums(samp)
+    if (sum(sampsize == sampsize[1]) != ntree) {
+      stop("sampsize must be identical for each tree")
+    }
+    sampsize <- sampsize[1]
+  }
+  else {
+    ## Override sample size when not bootstrapping by root or user.
+    sampsize = nrow(xvar)
+    ## Override sample type when not bootstrapping by root or user.
+    samptype <- "swr"
+  }
   case.wt  <- get.weight(case.wt, n)
   forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))
   split.wt <- get.weight(split.wt, n.xvar)
@@ -295,7 +282,7 @@ rfsrc <- function(formula,
   if (impute.only) {
     forest       <- FALSE
     proximity    <- FALSE
-       
+    distance     <- FALSE
     var.used     <- FALSE
     split.depth  <- FALSE
     membership   <- FALSE
@@ -316,6 +303,7 @@ rfsrc <- function(formula,
     forest <- TRUE
   }
   ## Assign low bits for the native code
+  ensemble.bits <- get.ensemble(ensemble)
   impute.only.bits <- get.impute.only(impute.only, n.miss)
   var.used.bits <- get.var.used(var.used)
   split.depth.bits <- get.split.depth(split.depth)
@@ -323,7 +311,7 @@ rfsrc <- function(formula,
   bootstrap.bits <- get.bootstrap(bootstrap)
   forest.bits <- get.forest(forest)
   proximity.bits <- get.proximity(TRUE, proximity)
-     
+  distance.bits <- get.distance(TRUE, distance)
   membership.bits <-  get.membership(membership)
   statistics.bits <- get.statistics(statistics)
   split.cust.bits <- get.split.cust(splitinfo$cust)
@@ -336,7 +324,7 @@ rfsrc <- function(formula,
   samptype.bits <- get.samptype(samptype)
   forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
   na.action.bits <- get.na.action(na.action)
-  err.block <- get.err.block(err.block, ntree)
+  block.size <- get.block.size(block.size, ntree)
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, FALSE)
   terminal.quants.bits <- get.terminal.quants(terminal.quants, FALSE)
   ## Set the trace
@@ -344,7 +332,8 @@ rfsrc <- function(formula,
   nativeOutput <- tryCatch({.Call("rfsrcGrow",
                                   as.integer(do.trace),
                                   as.integer(seed),
-                                  as.integer(impute.only.bits +
+                                  as.integer(ensemble.bits +
+                                             impute.only.bits +
                                              var.used.bits +
                                              split.depth.bits +
                                              importance.bits +
@@ -356,7 +345,7 @@ rfsrc <- function(formula,
                                              statistics.bits),
                                   as.integer(samptype.bits +
                                              forest.wt.bits +
-                                              
+                                             distance.bits + 
                                              na.action.bits +
                                              split.cust.bits +
                                              membership.bits +
@@ -390,7 +379,7 @@ rfsrc <- function(formula,
                                   as.integer(length(event.info$time.interest)),
                                   as.double(event.info$time.interest),
                                   as.integer(nimpute),
-                                  as.integer(err.block),
+                                  as.integer(block.size),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -514,10 +503,10 @@ rfsrc <- function(formula,
         ## and external (terminal) nodes in the forest.
         nativeArraySize <<- nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
         mwcpCountSummary[1] <<- mwcpCountSummary[1] + nativeOutput$mwcpCT[b]
-        if (htry > 1) {
-          for (i in 0:(htry-2)) {
-            mwcpCountSummary[i] <<- mwcpCountSummary[i] + nativeOutput[[pivot + 9 + (5 * htry) + i]][b]
-          }
+          if (htry > 1) {
+            for (i in 0:(htry-2)) {
+              mwcpCountSummary[i+2] <<- mwcpCountSummary[i+2] + nativeOutput[[pivot + 9 + (5 *(htry-1)) + i]][b]
+            }
         }
       }
       else {
@@ -548,35 +537,29 @@ rfsrc <- function(formula,
       nativeArrayHeader <- c(nativeArrayHeader, "hcDim")
       nativeArray <- as.data.frame(cbind(nativeArray,
                                          nativeOutput[[pivot + 8]][1:nativeArraySize]))
-      nativeArrayHeader <- c(nativeArrayHeader, "contPTR1")
+      nativeArrayHeader <- c(nativeArrayHeader, "contPTR")
     }
-    if (htry > 1) {
-      for (i in 0:(htry-2)) {
-        nativeArray <- as.data.frame(cbind(nativeArray,
-                                           nativeOutput[[pivot + 9 + (0 * htry) + i]][1:nativeArraySize]))
-        nativeArrayHeader <- c(nativeArrayHeader, paste("hcDim", i+2, sep=""))
-        nativeArray <- as.data.frame(cbind(nativeArray,
-                                           nativeOutput[[pivot + 9 + (1 * htry) + i]][1:nativeArraySize]))
-        nativeArrayHeader <- c(nativeArrayHeader, paste("parmID", i+2, sep=""))
-        nativeArray <- as.data.frame(cbind(nativeArray,
-                                           nativeOutput[[pivot + 9 + (2 * htry) + i]][1:nativeArraySize]))
-        nativeArrayHeader <- c(nativeArrayHeader, paste("contPT", i+2, sep=""))
-        nativeArray <- as.data.frame(cbind(nativeArray,
-                                           nativeOutput[[pivot + 9 + (3 * htry) + i]][1:nativeArraySize]))
-        nativeArrayHeader <- c(nativeArrayHeader, paste("contPTR", i+2, sep=""))
-        nativeArray <- as.data.frame(cbind(nativeArray,
-                                           nativeOutput[[pivot + 9 + (4 * htry) + i]][1:nativeArraySize]))
-        nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpSZ", i+2, sep=""))
-        nativeArray <- as.data.frame(cbind(nativeArray,
-                                           nativeOutput[[pivot + 9 + (5 * htry) + i]][1:nativeArraySize]))
-        nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpPT", i+2, sep=""))
-        if (mwcpCountSummary[i+2] > 0) {
-          ## This can be NULL if there are no factor splits along this dimension.
-          nativeFactorArray[[i+2]] <- nativeOutput[[pivot + 9 + (6 * htry) + i]][1:mwcpCountSummary[i+2]]
-        }
-        nativeFactorArrayHeader <- c(nativeFactorArrayHeader, paste("mwcpPT", i+2, sep=""))
+      if (htry > 1) {
+          for (i in 0:(htry-2)) {
+              nativeArray <- as.data.frame(cbind(nativeArray,
+                                                 nativeOutput[[pivot + 9 + (0 * (htry-1)) + i]][1:nativeArraySize]))
+              nativeArrayHeader <- c(nativeArrayHeader, paste("parmID", i+2, sep=""))
+              nativeArray <- as.data.frame(cbind(nativeArray,
+                                                 nativeOutput[[pivot + 9 + (1 * (htry-1)) + i]][1:nativeArraySize]))
+              nativeArrayHeader <- c(nativeArrayHeader, paste("contPT", i+2, sep=""))
+              nativeArray <- as.data.frame(cbind(nativeArray,
+                                                 nativeOutput[[pivot + 9 + (2 * (htry-1)) + i]][1:nativeArraySize]))
+              nativeArrayHeader <- c(nativeArrayHeader, paste("contPTR", i+2, sep=""))
+              nativeArray <- as.data.frame(cbind(nativeArray,
+                                                 nativeOutput[[pivot + 9 + (3 * (htry-1)) + i]][1:nativeArraySize]))
+              nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpSZ", i+2, sep=""))
+              if (mwcpCountSummary[i+2] > 0) {
+                  ## This can be NULL if there are no factor splits along this dimension.
+                  nativeFactorArray[[i+2]] <- nativeOutput[[pivot + 9 + (4 * (htry-1)) + i]][1:mwcpCountSummary[i+2]]
+              }
+              nativeFactorArrayHeader <- c(nativeFactorArrayHeader, paste("mwcpPT", i+2, sep=""))
+          }
       }
-    }
     names(nativeArray) <- nativeArrayHeader
     names(nativeFactorArray) <- nativeFactorArrayHeader
     if (terminal.qualts | terminal.quants) {
@@ -701,7 +684,9 @@ rfsrc <- function(formula,
                        nativeArrayTNDS = nativeArrayTNDS,
                        version = "@PROJECT_VERSION@",
                        na.action = na.action,
-                       perf.type = perf.type)
+                       perf.type = perf.type,
+                       rfq = rfq,
+                       block.size = block.size)
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -730,7 +715,20 @@ rfsrc <- function(formula,
   else {
     proximity.out <- NULL
   }
-    
+  ## process the proximity matrix
+  if (distance != FALSE) {
+    distance.out <- matrix(0, n, n)
+    count <- 0
+    for (k in 1:n) {
+      distance.out[k,1:k] <- nativeOutput$distance[(count+1):(count+k)]
+      distance.out[1:k,k] <- distance.out[k,1:k]
+      count <- count + k
+    }
+    nativeOutput$distance <- NULL
+  }
+  else {
+    distance.out <- NULL
+  }
   ## process weight matrix
   if (forest.wt != FALSE) {
     forest.wt.out <- matrix(nativeOutput$weight, c(n, n), byrow = TRUE)
@@ -824,7 +822,7 @@ rfsrc <- function(formula,
     proximity = proximity.out,
     forest = forest.out,
     forest.wt = forest.wt.out,    
-     
+    distance = distance.out,
     membership = membership.out,
     splitrule = splitinfo$name,
     inbag = inbag.out,
@@ -836,7 +834,8 @@ rfsrc <- function(formula,
     node.mtry.stats = node.mtry.stats,
     node.mtry.index = node.mtry.index,
     node.ytry.index = node.ytry.index,
-    err.block = err.block
+    ensemble = ensemble,
+    block.size = block.size
   )
   ## memory management
   remove(yvar)
@@ -845,7 +844,7 @@ rfsrc <- function(formula,
   remove(proximity.out)
   remove(forest.out)
   remove(forest.wt.out)
-    
+  remove(distance.out)
   remove(membership.out)
   remove(inbag.out)
   remove(var.used.out)
@@ -981,6 +980,25 @@ rfsrc <- function(formula,
         remove(err.rate)
       }
       ## From the native code:
+      ##   "blockSurv"
+      ##   -> of dim [block.cnt] x length(event.info$event.type)]
+      ## To the R code:
+      ##   -> of dim [block.cnt] x length(event.info$event.type)]
+      if (!is.null(nativeOutput$blockSurv)) {
+        err.block.rate <- adrop2d.first(array(nativeOutput$blockSurv,
+                                              c(length(event.info$event.type), floor(ntree/block.size)),
+                                              dimnames=err.names),
+                                        coerced.event.count)
+        nativeOutput$blockSurv <- NULL
+        if (family == "surv-CR") {
+          survOutput = c(survOutput, err.block.rate = list(t(err.block.rate)))
+        }
+          else {
+            survOutput = c(survOutput, err.block.rate = list(err.block.rate))
+          }
+        remove(err.block.rate)
+      }
+      ## From the native code:
       ##   "vimpSurv"
       ##   -> of dim [n.xvar] x length(event.info$event.type)]
       ## To the R code:
@@ -1067,6 +1085,12 @@ rfsrc <- function(formula,
           tree.offset[2:ntree] <- sum(1 + levels.count)
         }
         tree.offset <-  cumsum(tree.offset)
+        ## The block offset calculation mirrors the tree offset calculation, but differs in only the primary dimension.
+        block.offset <- array(1, floor(ntree/block.size))
+        if (floor(ntree/block.size) > 1) {
+          block.offset[2:floor(ntree/block.size)] <- sum(1 + levels.count)
+        }
+        block.offset <-  cumsum(block.offset)
         ## Incoming vimp rates: V=xvar R=response L=level
         ## V1R1L0 V1R1L1 V1R1L2 V1R1L3 V1R1L0 V1R2L1 V1R2L2, V2R1L0 V2R1L1 V2R1L2 V2R1L3 V2R2L0 V2R2L1 V2R2L2, ... 
         ## Yields vimp.offset = c(1, 8, ...) 
@@ -1089,6 +1113,13 @@ rfsrc <- function(formula,
         ## Note that this is a ragged array.
         ## To the R code:
         ## -> of dim [[class.count]] x [ntree] x [1 + levels.count[]] 
+        ## From the native code:
+        ##   "blockClas"
+        ## -> of dim [block.cnt] x [class.count] x [1 + levels.count[]]
+        ## where the slot [.] x [.] x [1] holds the unconditional blocked error rate.
+        ## Note that this is a ragged array.
+        ## To the R code:
+        ## -> of dim [[class.count]] x [block.cnt] x [1 + levels.count[]] 
         ## From the native code:
         ##   "vimpClas"
         ## -> of dim [n.xvar] x [class.count] x [1 + levels.count[]]
@@ -1128,6 +1159,16 @@ rfsrc <- function(formula,
             classOutput[[i]] <- c(classOutput[[i]], err.rate = list(t(err.rate)))
             remove(err.rate)
           }
+          if (!is.null(nativeOutput$blockClas)) {
+            err.block.rate <- array(0, c(1 + levels.count[i], floor(ntree/block.size)))
+            for (j in 1: (1 + levels.count[i])) {
+              err.block.rate[j, ]  <- nativeOutput$blockClas[block.offset]
+              block.offset <- block.offset + 1
+            }
+            row.names(err.block.rate) <- err.names
+            classOutput[[i]] <- c(classOutput[[i]], err.block.rate = list(t(err.block.rate)))
+            remove(err.block.rate)
+          }
           if (!is.null(nativeOutput$vimpClas)) {
             importance <- array(0, c(1 + levels.count[i], n.xvar), dimnames=vimp.names)
             for (j in 1: (1 + levels.count[i])) {
@@ -1142,6 +1183,7 @@ rfsrc <- function(formula,
         nativeOutput$oobEnsbCLS <- NULL
         nativeOutput$perfClas <- NULL
         nativeOutput$vimpClas <- NULL
+        nativeOutput$blockClas <- NULL
         ## When TRUE we revert to univariate nomenclature for all the outputs.
         if(univariate.nomenclature) {
           if ((class.count == 1) & (regr.count == 0)) {
@@ -1167,6 +1209,12 @@ rfsrc <- function(formula,
           tree.offset[2:ntree] <- length(regr.index)
         }
         tree.offset <-  cumsum(tree.offset)
+        ## The block offset calculation mirrors the tree offset calculation, but differs in only the primary dimension.
+        block.offset <- array(1, floor(ntree/block.size))
+        if (floor(ntree/block.size) > 1) {
+          block.offset[2:floor(ntree/block.size)] <- length(regr.index)
+        }
+        block.offset <-  cumsum(block.offset)
         ## Incoming vimp rates: V=xvar R=response L=level
         ## V1R1 V1R2, V2R1 V2R2, V3R1 V3R2, ... 
         ## Yields vimp.offset = c(1, 3, 5, ...) 
@@ -1185,7 +1233,12 @@ rfsrc <- function(formula,
         ##   "perfRegr"
         ## -> of dim [ntree] x [regr.count]
         ## To the R code:
-        ## -> of dim [ntree] x [[regr.count]]
+        ## -> of dim [[regr.count]] x [ntree] 
+        ## From the native code:
+        ##   "blockRegr"
+        ## -> of dim [block.cnt] x [regr.count]
+        ## To the R code:
+        ## -> of dim [[regr.count]] x [block.cnt]
         ## From the native code:
         ##   "vimpRegr"
         ## -> of dim [n.vxar] x [regr.count]
@@ -1209,6 +1262,12 @@ rfsrc <- function(formula,
             regrOutput[[i]] <- c(regrOutput[[i]], err.rate = list(err.rate))
             remove(err.rate)
           }
+          if (!is.null(nativeOutput$blockRegr)) {
+            err.block.rate <- nativeOutput$blockRegr[block.offset]
+            block.offset <- block.offset + 1
+            regrOutput[[i]] <- c(regrOutput[[i]], err.block.rate = list(err.block.rate))
+            remove(err.block.rate)
+          }
           if (!is.null(nativeOutput$vimpRegr)) {
             importance <- nativeOutput$vimpRegr[vimp.offset]
             names(importance) <- xvar.names
@@ -1221,6 +1280,7 @@ rfsrc <- function(formula,
         nativeOutput$oobEnsbRGR <- NULL
         nativeOutput$perfRegr <- NULL
         nativeOutput$vimpRegr <- NULL
+        nativeOutput$blockRegr <- NULL
         ## When TRUE we revert to univariate nomenclature for all the outputs.
         if(univariate.nomenclature) {
           if ((class.count == 0) & (regr.count == 1)) {

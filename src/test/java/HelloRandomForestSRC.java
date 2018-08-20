@@ -49,11 +49,16 @@ public class HelloRandomForestSRC {
 
         // Flags for diagnostic printing.
         regr = clas = mult1 = mult2 = unsp = surv = false;
-        
+
+        modelArg = null;
+
         // Java-side trace.
         Trace.set(15);
+
+        // Set the family and data set here!
+        regr = true;
         
-        if (!true) {
+        if (clas) {
 
             Dataset<Row> irisDF = spark
                 .read()
@@ -67,11 +72,11 @@ public class HelloRandomForestSRC {
 
             modelArg = new ModelArg(formulaC, irisDF);
 
-            clas = true;
+
             
         }
 
-        if (true) {
+        if (regr) {
 
             Dataset<Row> mtcarsDF = spark
                 .read()
@@ -85,11 +90,9 @@ public class HelloRandomForestSRC {
 
             modelArg = new ModelArg(formulaR, mtcarsDF);
 
-            regr = true;
-
         }
 
-        if (!true) {
+        if (surv) {
 
             Dataset<Row> wihsDF = spark
                 .read()
@@ -103,8 +106,8 @@ public class HelloRandomForestSRC {
 
             modelArg = new ModelArg(formulaS, wihsDF);
 
-            surv = true;
-            
+
+            // Play with some custom options for survival.
             if (!true) {
 
                 double[] newTI = new double[(modelArg.get_timeInterest()).length - 20];
@@ -129,12 +132,9 @@ public class HelloRandomForestSRC {
             
         }
 
-        modelArg.setEnsembleArg("error", "every.tree");
+        // TBD TBD TBD we still need to trim the "quantitativeTerminalInfo" TBD TBD TBD
 
-        // TBD TBD TBD we still need to trim the quant TBD TBD TBD
-        modelArg.setEnsembleArg("quantitativeTerminalInfo", "no");
-
-        // Serial or parallel.
+        // Serial or parallel. Set it to serial so we can actually view coherent trace!
         modelArg.set_rfCores(1);
 
         // Repeatability.
@@ -143,21 +143,25 @@ public class HelloRandomForestSRC {
         // We set ntree here.
         modelArg.set_bootstrap(4, "auto", "swr", 0, null, null);
 
-        // Set htry explicitly.
-        modelArg.set_htry(0);
+        // Set blockSize explicitly.
+        modelArg.set_blockSize(1);
         
         // Native-code trace.
-        modelArg.set_trace(15 + (1<<13));
-       
-        RandomForestModel growModel = RandomForest.train(modelArg);
+        modelArg.set_trace(15);
+        modelArg.set_trace(15 + (1<<4) + (1<<5) + (1<<6) + (1<<7) + (1<<8) + (1<<16));
+        RFLogger.log(Level.INFO, "Native Code Trace: " + String.format("0x%32X", modelArg.get_trace()));
+        
 
+        RandomForestModel growModel = RandomForest.train(modelArg);
 
         //  int[][] rmbrMembership = (int[][]) growModel.getEnsemble("rmbrMembership");
         //  growModel.printEnsemble(rmbrMembership);
 
         if (regr) {
+
             double[][] perfRegr = (double[][]) growModel.getEnsemble("perfRegr");
             growModel.printEnsemble(perfRegr);
+
         }
         if (clas) {
             double[][][] perfClas = (double[][][]) growModel.getEnsemble("perfClas");
@@ -166,12 +170,14 @@ public class HelloRandomForestSRC {
         
         RFLogger.log(Level.INFO, "\n\nHelloRandomForestSRC() GROW nominal exit.\n\n");
 
+        // RESTORE with different options.
         if (!false) {
 
-            growModel.set_trace(15 + (1<<13));
+            growModel.set_trace(15 + (1<<4) + (1<<8) + (1<<16));
 
             if (growModel.getModelArg().get_htry() == 0) {
-                growModel.setEnsembleArg("importance", "permute");
+                // growModel.setEnsembleArg("importance", "permute");
+                growModel.setEnsembleArg("importance", "no");
                 growModel.set_xImportance();
             }
             else {
@@ -182,14 +188,12 @@ public class HelloRandomForestSRC {
 
             growModel.setEnsembleArg("proximity", "oob");
 
-            growModel.setEnsembleArg("error", "every.tree");
-            
             RandomForestModel restModel = RandomForest.predict(growModel);
 
-        if (regr) {
-            double[][] perfRegr = (double[][]) restModel.getEnsemble("perfRegr");
-            restModel.printEnsemble(perfRegr);
-        }
+            if (regr) {
+                double[][] perfRegr = (double[][]) restModel.getEnsemble("perfRegr");
+                restModel.printEnsemble(perfRegr);
+            }
 
             
             RFLogger.log(Level.INFO, "\n\nHelloRandomForestSRC() REST nominal exit.\n\n");

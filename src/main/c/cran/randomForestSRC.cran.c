@@ -20,7 +20,7 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
   };
   RF_stackCount = 1;
   initProtect(RF_stackCount);
-  stackAuxiliaryInfoList();
+  stackAuxiliaryInfoList(&RF_snpAuxiliaryInfoList, RF_stackCount);
   v = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, 1, 0, sexpString[2], NULL, 1, 1);
   *v = getConcordanceIndex( 1,
                             size,
@@ -28,28 +28,30 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
                             censoring,
                             predicted,
                             denom);
-  unstackAuxiliaryInfoAndList();
+  unstackAuxiliaryInfoAndList(RF_snpAuxiliaryInfoList, RF_stackCount);
   memoryCheck();
-  UNPROTECT(RF_stackCount + 2);
+  R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
+  R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
   return RF_sexpVector[RF_OUTP_ID];
 }
 SEXP rfsrcTestSEXP(SEXP sexp_size) {
   setNativeGlobalEnv();
   ulong size = (ulong) REAL(sexp_size)[0];
+  char *v;
   char  *sexpString[3] = {
     "",              
     "",              
     "dummy"          
   };
-  char *v;
   RF_stackCount = 1;
   initProtect(RF_stackCount);
-  stackAuxiliaryInfoList();
+  stackAuxiliaryInfoList(&RF_snpAuxiliaryInfoList, RF_stackCount);
   v = (char*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_CHARACTER, 2, size, 0, sexpString[2], NULL, 1, size);
   v --;
-  unstackAuxiliaryInfoAndList();
+  unstackAuxiliaryInfoAndList(RF_snpAuxiliaryInfoList, RF_stackCount);
   memoryCheck();
-  UNPROTECT(RF_stackCount + 2);
+  R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
+  R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
   return RF_sexpVector[RF_OUTP_ID];
 }
 SEXP rfsrcDistance(SEXP sexp_metricType,
@@ -119,7 +121,7 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
   }
   RF_stackCount = 1;
   initProtect(RF_stackCount);
-  stackAuxiliaryInfoList();
+  stackAuxiliaryInfoList(&RF_snpAuxiliaryInfoList, RF_stackCount);
   dist = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, sizeIJ, 0, sexpString[2], NULL, 1, sizeIJ);
   dist --;
   xMatrix = (double **) new_vvector(1, p, NRUTIL_DPTR);
@@ -132,9 +134,10 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
   for (k = 1; k <= sizeIJ; k++) {
     dist[k] = euclidean(n, p, rowI[k], rowJ[k], xMatrix);
   }
-  unstackAuxiliaryInfoAndList();
+  unstackAuxiliaryInfoAndList(RF_snpAuxiliaryInfoList, RF_stackCount);
   memoryCheck();
-  UNPROTECT(RF_stackCount + 2);
+  R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
+  R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
   return RF_sexpVector[RF_OUTP_ID];
 }
 double euclidean(uint n, uint p, uint i, uint j, double **x) {
@@ -226,8 +229,8 @@ SEXP rfsrcGrow(SEXP traceFlag,
   free_2DObject(RF_bootstrapIn, NATIVE_TYPE_INTEGER, (RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2), RF_ntree, RF_observationSize);
   free_2DObject(RF_observationIn, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);  
   memoryCheck();
-  UNPROTECT(RF_stackCount);
-  UNPROTECT(2);
+  R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
+  R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);  
   return RF_sexpVector[RF_OUTP_ID];
 }
 SEXP rfsrcPredict(SEXP traceFlag,
@@ -374,7 +377,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
     RF_mwcpPT_[1] = NULL;
   }
   if (RF_htry > 0) {
-    RF_hcDim_                = (uint *) INTEGER(VECTOR_ELT(hc_one, 0));  RF_hcDim_[1] --;
+    RF_hcDim_                = (uint *) INTEGER(VECTOR_ELT(hc_one, 0));  RF_hcDim_  --;
     RF_contPTR_[1]           =          REAL(VECTOR_ELT(hc_one, 1));     RF_contPTR_[1] --;
   }
   else {
@@ -400,8 +403,8 @@ SEXP rfsrcPredict(SEXP traceFlag,
   free_2DObject(RF_fresponseIn, NATIVE_TYPE_NUMERIC, RF_frSize > 0, RF_frSize, RF_fobservationSize);
   free_2DObject(RF_fobservationIn, NATIVE_TYPE_NUMERIC, RF_fobservationSize > 0 , RF_xSize, RF_fobservationSize);
   memoryCheck();
-  UNPROTECT(RF_stackCount);
-  UNPROTECT(2);
+  R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
+  R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
   return RF_sexpVector[RF_OUTP_ID];
 }
 void exit2R() {
@@ -497,15 +500,22 @@ void free_2DObject(void *arr, char type, char flag, uint row, uint col) {
   }
 }
 void initProtect(uint  stackCount) {
-  if ((stackCount >> 6) > 0) {
-          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-          RF_nativeError("\nRF-SRC:  S.E.X.P. vector list limit exceeded:  %20d", stackCount);
-          RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-          RF_nativeExit();
+  if (stackCount > 0) {
+    if ((stackCount >> 6) > 0) {
+      if (FALSE) {
+        RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+        RF_nativeError("\nRF-SRC:  S.E.X.P. vector list limit exceeded:  %20d", stackCount);
+        RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+        RF_nativeExit();
+      }
+    }
+    PROTECT(RF_sexpVector[RF_OUTP_ID] = allocVector(VECSXP, stackCount));
+    PROTECT(RF_sexpVector[RF_STRG_ID] = allocVector(STRSXP, stackCount));
+    setAttrib(RF_sexpVector[RF_OUTP_ID], R_NamesSymbol, RF_sexpVector[RF_STRG_ID]);
+    R_PreserveObject(RF_sexpVector[RF_OUTP_ID]);
+    R_PreserveObject(RF_sexpVector[RF_STRG_ID]);
+    UNPROTECT(2);
   }
-  PROTECT(RF_sexpVector[RF_OUTP_ID] = allocVector(VECSXP, stackCount));
-  PROTECT(RF_sexpVector[RF_STRG_ID] = allocVector(STRSXP, stackCount));
-  setAttrib(RF_sexpVector[RF_OUTP_ID], R_NamesSymbol, RF_sexpVector[RF_STRG_ID]);
 }
 void *stackAndProtect(uint  *sexpIndex,
                       char   sexpType,
@@ -519,12 +529,6 @@ void *stackAndProtect(uint  *sexpIndex,
   void *v;
   SEXP thisVector;
   thisVector = NULL;  
-  if (((*sexpIndex) >> 6) > 0) {
-          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-          RF_nativeError("\nRF-SRC:  S.E.X.P. vector list limit exceeded:  %20d", *sexpIndex);
-          RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-          RF_nativeExit();
-  }
   if (sizeof(ulong) > sizeof(uint)) {
     if (size > UINT_MAX) {
       if (TRUE) {
@@ -561,6 +565,7 @@ void *stackAndProtect(uint  *sexpIndex,
   }
   SET_VECTOR_ELT(RF_sexpVector[RF_OUTP_ID], *sexpIndex, thisVector);
   SET_STRING_ELT(RF_sexpVector[RF_STRG_ID], *sexpIndex, mkChar(sexpString));
+  UNPROTECT(1);
   switch(sexpType) {
   case NATIVE_TYPE_NUMERIC:
     v = (double*) NUMERIC_POINTER(thisVector);
@@ -585,7 +590,9 @@ void *stackAndProtect(uint  *sexpIndex,
     break;
   }
   allocateAuxiliaryInfo(sexpType,
-                        sexpIdentity,
+                        sexpString,
+                        RF_snpAuxiliaryInfoList,
+                        *sexpIndex,
                         v,
                         auxiliaryPtr,
                         auxiliaryDimSize,

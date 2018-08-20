@@ -1,60 +1,40 @@
-generic.impute.rfsrc <- function(formula,
-                                 data,
+generic.impute.rfsrc <- function(data,
                                  ntree = 250,
-                                 nimpute = 1,
-                                 bootstrap = c("by.root", "by.node", "none"),
-                                 mtry = NULL,
                                  nodesize = NULL,
-                                 splitrule = NULL,
                                  nsplit = 1,
-                                 
-                                 na.action = c("na.impute"),
-                                 
-                                  
-                                 xvar.wt = NULL,
-                                 seed = NULL,
-                                 do.trace = FALSE)
+                                 nimpute = 1,
+                                 fast = FALSE,
+                                 ...)
 {
-  ## set parameters accordingly
-  bootstrap <- match.arg(bootstrap, c("by.root", "by.node", "none"))
-  importance <- "none"
-  
-  na.action <- match.arg(na.action, c("na.impute"))
-  
-   
-  forest <- FALSE
-  proximity <- FALSE
-     
-  var.used <- FALSE
-  split.depth <- FALSE
-  impute.only <- TRUE
-  membership <- FALSE
   ## save the row and column names: later we will check if any rows or columns
   ## were deleted as part of the missing data preprocessing
   c.names <- colnames(data)
   r.names <- rownames(data)
-  ## rfsrc grow call
-  object <- rfsrc(formula = formula,
-                  data = data,
-                  ntree = ntree,
-                  bootstrap = bootstrap,
-                  mtry = mtry,
-                  nodesize = nodesize,
-                  splitrule = splitrule,
-                  nsplit = nsplit,
-                  nimpute = nimpute,
-                  xvar.wt = xvar.wt,
-                  seed = seed,
-                  do.trace = do.trace,
-                  importance = importance,
-                  na.action = na.action,
-                  forest = forest,
-                  proximity = proximity,
-                     
-                  var.used = var.used,
-                  split.depth = split.depth,
-                  membership = membership,
-                  impute.only = impute.only)
+  ## acquire the permissible hidden options
+  dots <- list(...)
+  dots$na.action <- dots$impute.only <- dots$forest <- NULL
+  ## rfsrc grow call 
+  if (!fast) {
+    object <- do.call("rfsrc",
+                    c(list(data = data,
+                           ntree = ntree,
+                           nodesize = nodesize,
+                           nsplit = nsplit,
+                           nimpute = nimpute,
+                           na.action = "na.impute",
+                           impute.only = TRUE,
+                           forest = FALSE), dots))
+  }
+  else {## user has requested the fast forest interface
+    object <- do.call("rfsrcFast",
+                    c(list(data = data,
+                           ntree = ntree,
+                           nodesize = nodesize,
+                           nsplit = nsplit,
+                           nimpute = nimpute,
+                           na.action = "na.impute",
+                           impute.only = TRUE), dots))
+  }
   ## confirm that no error has occured
   if (is.null(object)) {
     return(NULL)

@@ -1,5 +1,6 @@
 partial.rfsrc <- function(
   object,
+  oob = TRUE,
   m.target = NULL,
   partial.type = NULL,
   partial.xvar = NULL,
@@ -7,12 +8,11 @@ partial.rfsrc <- function(
   partial.xvar2 = NULL,
   partial.values2 = NULL,
   partial.time = NULL,
-  oob = TRUE,
   seed = NULL,
   do.trace = FALSE,
   ...)
 {
-  ## Hidden options.
+  ## hidden options
   user.option <- list(...)
   terminal.qualts <- is.hidden.terminal.qualts(user.option)
   terminal.quants <- is.hidden.terminal.quants(user.option)
@@ -25,27 +25,34 @@ partial.rfsrc <- function(
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2) {
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
   }
-  ## Acquire the forest.
+  ## acquire the forest
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.null(object$forest)) {
       stop("The forest is empty.  Re-run rfsrc (grow) call with forest=TRUE")
     }
     object <- object$forest
   }
-    else {
-      ## Object is already a forest.
-    }
-  ## Multivariate family details.
+  else {
+    ## object is already a forest.
+  }
+  ## convert oob to ensemble
+  if (oob) {
+    ensemble <- "oob"
+  }
+  else {
+    ensemble <- "inbag"
+  }
+  ## multivariate family details
   family <- object$family
   splitrule <- object$splitrule
-  ## Pull the x-variable and y-outcome names from the grow object.
+  ## pull the x-variable and y-outcome names from the grow object
   xvar.names <- object$xvar.names
   yvar.names <- object$yvar.names
-  ## Verify the x-var.
+  ## verify the x-var
   if (length(which(xvar.names == partial.xvar)) != 1) {
     stop("x-variable specified incorrectly:  ", partial.xvar)
   }
-  ## Verify the x-var2.
+  ## verify the x-var2
   if (!is.null(partial.xvar2)) {   
       if (length(partial.xvar2) != length(partial.values2)) {
           stop("second order x-variable and value vectors not of same length:  ", length(partial.xvar2), "vs", length(partial.values2))
@@ -94,7 +101,7 @@ partial.rfsrc <- function(
   ## There is no test data.
   outcome = "train"
   ## Initialize the low bits.
-  oob.bits <- get.oob(oob)
+  ensemble.bits <- get.ensemble(ensemble)
   bootstrap.bits <- get.bootstrap(object$bootstrap)
   na.action.bits <- get.na.action(na.action)
   ## Initalize the high bits
@@ -120,7 +127,7 @@ partial.rfsrc <- function(
                                   as.integer(do.trace),
                                   as.integer(seed),
                                   as.integer(
-                                      oob.bits +
+                                      ensemble.bits +
                                       bootstrap.bits +
                                       cr.bits), 
                                   as.integer(
@@ -159,19 +166,19 @@ partial.rfsrc <- function(
                                       as.double((object$nativeArray)$contPTR))
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (0 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeArray[, 8 + (4 * x)])})
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.double(object$nativeArray[[pivot + 9 + (1 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.double(object$nativeArray[, 9 +  (4 * x)])})
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.double(object$nativeArray[[pivot + 9 + (2 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.double(object$nativeArray[, 10 + (4 * x)])})
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (3 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeArray[, 11 + (4 * x)])})
                                   } else { NULL },
                                   if (htry > 1) {
-                                      lapply(0:htry-2, function(x) {as.integer(object$nativeArray[[pivot + 9 + (4 * htry) + x]])})
+                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
                                   } else { NULL },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
@@ -205,7 +212,7 @@ partial.rfsrc <- function(
                                   as.integer(0),    ## New data disabled.
                                   as.double(NULL),  ## New data disabled.
                                   as.double(NULL),  ## New data disabled.
-                                  as.integer(ntree), ## err.block is hard-coded.
+                                  as.integer(ntree), ## block.size is hard-coded.
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -480,22 +487,4 @@ get.type <- function (family, partial.type) {
     stop("Invalid choice for 'partial.type' option:  ", partial.type)
   }
   return (type)
-}
-get.oob <- function (oob) {
-  ## Convert forest option into native code parameter.
-  if (!is.null(oob)) {
-    if (oob == TRUE) {
-      oob <- 2^1
-    }
-      else if (oob == FALSE) {
-        oob <- 2^0
-      }
-        else {
-          stop("Invalid choice for 'oob' option:  ", oob)
-        }
-  }
-    else {
-      stop("Invalid choice for 'oob' option:  ", oob)
-    }
-  return (oob)
 }

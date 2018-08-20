@@ -23,11 +23,9 @@
   variable importance (VIMP) if available.  Note that the default
   settings are now such that the error rate is no longer calculated on
   every tree and VIMP is only calculated if requested.  To get OOB error
-  rates for ever tree, use the option \code{tree.err = TRUE} when
-  growing the forest or restore the model using the option
-  \code{tree.err = TRUE}.  Likewise, to view VIMP, use the option
-  \code{importance} when growing the forest or restore the forest using
-  the option \code{importance}.
+  rates for ever tree, use the option \code{block.size = 1} when
+  growing or restoring the forest.  Likewise, to view VIMP, use the option
+  \code{importance} when growing or restoring the forest.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -49,7 +47,7 @@
 ## ------------------------------------------------------------
 
 iris.obj <- rfsrc(Species ~ ., data = iris,
-     tree.err = TRUE, importance = TRUE)
+     block.size = 1, importance = TRUE)
 plot(iris.obj)
 
 ## ------------------------------------------------------------
@@ -61,7 +59,7 @@ plot(iris.obj)
 if (library("survival", logical.return = TRUE)) {
   data(pbc, package = "survival")
   pbc$id <- NULL
-  plot(rfsrc(Surv(time, status) ~ ., pbc, nsplit = 10, tree.err = TRUE))
+  plot(rfsrc(Surv(time, status) ~ ., pbc, block.size = 1))
 }
 
 ## ------------------------------------------------------------
@@ -71,7 +69,7 @@ if (library("survival", logical.return = TRUE)) {
 mtcars.new <- mtcars
 mtcars.new$cyl <- factor(mtcars.new$cyl)
 mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
-mv.obj <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new, tree.err = TRUE)
+mv.obj <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new, block.size = 1)
 plot(mv.obj, m.target = "carb")
 plot(mv.obj, m.target = "mpg")
 plot(mv.obj, m.target = "cyl")

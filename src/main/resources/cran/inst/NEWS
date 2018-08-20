@@ -10,11 +10,24 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Three primary additions:
+  (1) Subsample Forests for VIMP Confidence Intervals:
+  Uses subsampling to calculate confidence intervals and standard
+  errors for VIMP (variable importance). Applies to all families.
+  (2) Tune Random Forest for the optimal mtry and nodesize parameters:
+  Finds the optimal mtry and nodesize tuning parameter for a random
+  forest using out-of-bag (OOB) error.  Applies to all families. 
+  (3) Fast approximate random forests:  Uses subsampling with forest options
+  set to encourage computational speed.  Applies to all families.
+
+---------------------------------------------------------------------------------
+RELEASE 2.6.1
+---------------------------------------------------------------------------------
 Fix to predict() call not returning ensembles when y-vars not present.  Sorry
 about that.
   
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 2.6.0
+RELEASE 2.6.0
 ---------------------------------------------------------------------------------
 Serious improvements to OpenMP performance after addressing issues
 related to the blocking of threads during a number of calculations

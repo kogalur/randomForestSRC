@@ -6,56 +6,48 @@
   Fast imputation mode.  A random forest is grown and used to impute
   missing data.  No ensemble estimates or error rates are calculated.
 }
-\usage{\method{impute}{rfsrc}(formula, data, ntree = 500, mtry = NULL,
-  xvar.wt = NULL, nodesize = 1, splitrule = NULL, nsplit = 10,
-  
-  na.action = c("na.impute"),
-  
-   
-  nimpute = 2, mf.q, blocks,
-  always.use = NULL, max.iter = 10, eps = 0.01, verbose = TRUE,
-  do.trace = FALSE, ...)
+\usage{\method{impute}{rfsrc}(formula, data,
+  ntree = 500, nodesize = 1, nsplit = 10,
+  nimpute = 2, fast = FALSE, blocks, 
+  mf.q, max.iter = 10, eps = 0.01, 
+  ytry = NULL, always.use = NULL, verbose = TRUE,
+  ...)
 }
 \arguments{
   \item{formula}{A symbolic description of the model to be fit.  Can be
     left unspecified if there are no outcomes or we don't care to
-    distinguish between y-outcomes and x-variables in the imputation.}
+    distinguish between y-outcomes and x-variables in the imputation.
+    Ignored when using multivariate missForest imputation.}
   \item{data}{Data frame containing the data to be imputed.}
   \item{ntree}{Number of trees to grow.}
-  \item{mtry}{Number of variables randomly sampled at each split.}
   \item{nodesize}{Forest average terminal node size.}
-  \item{splitrule}{Splitting rule used to grow trees.  Do not use for
-    unsupervised or multivariate splitting unless
-    \code{splitrule}="random" (used as a strategy for speeding up
-    calculations).}
   \item{nsplit}{Non-negative integer value used to specify random splitting.}
-  \item{na.action}{Missing value action. See details below.}
   \item{nimpute}{Number of iterations of the missing data algorithm.
-	  Ignored for multivariate missForest; in which case the algorithm
-	  iterates until a convergence criteria is achieved (users can
+    Ignored for multivariate missForest; in which case the algorithm
+    iterates until a convergence criteria is achieved (users can
     however enforce a maximum number of iterations with the option
     \code{max.iter}).}
-  \item{mf.q}{Fraction of variables (between 0 and 1) used as responses
-    in multivariate missForest imputation.  By default, multivariate
-    missForest imputation is not performed if left unspecifed.  Can be
-    an integer, in which case this equals the number of multivariate
-    responses.}
+  \item{fast}{Use fast random forests, \code{rfsrcFast}, in place of
+    \code{rfsrc}?  Improves speed but is less accurate.}
   \item{blocks}{Integer value specifying the number of blocks the data
     should be broken up into (by rows).  This can improve computational
     efficiency when the sample size is large but imputation efficiency
     decreases.  By default, no action is taken if left unspecified.}
-  \item{always.use}{Character vector of variable names to always
-    be included as a response in multivariate missForest imputation.
-    Does not apply for other imputation methods.}
-  \item{xvar.wt}{Weights for selecting variables for splitting on.}
+  \item{mf.q}{Use this to turn on missForest (which is off by default).
+    Specifies fraction of variables (between 0 and 1) used as responses
+    in multivariate missForest imputation.  Can also be an integer, in
+    which case this equals the number of multivariate responses.}
   \item{max.iter}{Maximum number of iterations used when implementing
     multivariate missForest imputation.}
   \item{eps}{Tolerance value used to determine convergence of
     multivariate missForest imputation.}
+  \item{ytry}{Number of variables used as pseudo-responses in
+    unsupervised forests.  See details below.}
+  \item{always.use}{Character vector of variable names to always
+    be included as a response in multivariate missForest imputation.
+    Does not apply for other imputation methods.}
   \item{verbose}{Send verbose output to terminal (only applies to
     multivariate missForest imputation).}
-  \item{do.trace}{Number of seconds between updates to the user on
-    approximate time to completion.}
   \item{...}{Further arguments passed to or from other methods.}
 }
 \details{
@@ -96,8 +88,9 @@
     interpreted as a request that \code{mf.q} variables be selected for
     the multivariate response.  This is generally the most accurate of
     all the imputation procedures, but also the most computationally
-    demanding.
-    
+    demanding.  However see examples below for strategies to increase
+    speed.
+
     \item Prior to imputation, the data is processed and records with
     all values missing are removed, as are variables having all missing
     values.
@@ -117,7 +110,7 @@
     \item All options are the same as \command{rfsrc} and the user should
     consult the \command{rfsrc} help file for details.
   }
-}   
+}
 \value{
   Invisibly, the data frame containing the orginal data with imputed
   data overlayed.
@@ -139,6 +132,7 @@
 }
 \seealso{
   \command{\link{rfsrc}}
+  \command{\link{rfsrcFast}}
 }
 \examples{
 \donttest{
@@ -146,16 +140,16 @@
 ## example of survival imputation
 ## ------------------------------------------------------------
 
-## unsupervised splitting
+## default everything - unsupervised splitting
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-pbc1.d <- impute(data = pbc, nimpute = 5)
+pbc1.d <- impute(data = pbc)
 
-#imputation using outcome splitting
+## imputation using outcome splitting
 f <- as.formula(Surv(days, status) ~ .)
 pbc2.d <- impute(f, data = pbc, nsplit = 3)
 
-#random splitting can be reasonably good
-pbc4.d <- impute(f, data = pbc, splitrule = "random", nimpute = 5)
+## random splitting can be reasonably good
+pbc3.d <- impute(f, data = pbc, splitrule = "random", nimpute = 5)
 
 ## ------------------------------------------------------------
 ## example of regression imputation
@@ -163,8 +157,7 @@ pbc4.d <- impute(f, data = pbc, splitrule = "random", nimpute = 5)
 
 air1.d <- impute(data = airquality, nimpute = 5)
 air2.d <- impute(Ozone ~ ., data = airquality, nimpute = 5)
-air3.d <- impute(Ozone ~ ., data = airquality, nimpute = 5,
-           splitrule = "random", nodesize = 1)
+air3.d <- impute(Ozone ~ ., data = airquality, fast = TRUE)
 
 ## ------------------------------------------------------------
 ## multivariate missForest imputation
@@ -172,20 +165,21 @@ air3.d <- impute(Ozone ~ ., data = airquality, nimpute = 5,
 
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 
-## use 10 percent of variables as responses
+## missForest algorithm - uses 1 variable at a time for the response
+pbc.d <- impute(data = pbc, mf.q = 1)
+
+## multivariate missForest - use 10 percent of variables as responses
 ## i.e. multivariate missForest
 pbc.d <- impute(data = pbc, mf.q = .01)
 
-## use 1 variable as the response
-## i.e. original missForest algorithm
-pbc.d <- impute(data = pbc, mf.q = 1)
-
-## faster call by using random splitting
+## missForest but faster by using random splitting
 pbc.d <- impute(data = pbc, mf.q = 1, splitrule = "random")
 
-## faster call by increasing nodesize
+## missForest but faster by increasing nodesize
 pbc.d <- impute(data = pbc, mf.q = 1, nodesize = 20, splitrule = "random")
 
+## missForest but faster by using rfsrcFast
+pbc.d <- impute(data = pbc, mf.q = 1, fast = TRUE)
 
 }
 }

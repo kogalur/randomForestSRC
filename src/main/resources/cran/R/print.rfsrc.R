@@ -12,6 +12,10 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     print.default(x)
     return()
   }
+  if (sum(inherits(x, c("rfsrc", "sidClustering"), TRUE) == c(1, 2)) == 2) {
+    print.default(x)
+    return()
+  }
   ## deal with synthetic forests        
   sf.flag <- FALSE
   if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
@@ -21,7 +25,16 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     }
     x <- x$rfSyn
   }
-   
+  ## is this a subsampled object?
+  if (sum(inherits(x, c("rfsrc", "subsample"), TRUE) == c(1, 4)) == 2) {
+    print.subsample(x, ...)
+    return()
+  }
+  ## is this a subsampled-bootstrap object?
+  if (sum(inherits(x, c("rfsrc", "bootsample"), TRUE) == c(1, 4)) == 2) {
+    print.bootsample(x, ...)
+    return()
+  }
   ## check that the object is interpretable
   if (sum(inherits(x, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2 &
       sum(inherits(x, c("rfsrc", "predict"), TRUE) == c(1, 2)) != 2) {
@@ -31,11 +44,19 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   if (sum(inherits(x, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     grow.mode <- TRUE
   }
-    else {
-      grow.mode <- FALSE
-    }
-  ## save the original family.
-  family.org <- x$family
+  else {
+    grow.mode <- FALSE
+  }
+  ## specify the type of sampling
+  if (x$forest$bootstrap == "by.root") {
+    sampUsed <- x$forest$samptype
+  }
+  else {
+    sampUsed <- x$forest$bootstrap
+  }
+  ## x will be processed if it's multivariate - therefore save some values from it
+  familyPretty <- family.pretty(x)
+  familyOrg <- x$family
   yvar.dim <- ncol(x$yvar)
   ## coerce the (potentially) multivariate object if necessary.
   outcome.target <- get.univariate.target(x, outcome.target)
@@ -54,19 +75,20 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         }
     }
   }
-  ## classification: outcome frequency/confusion matrix/brier
+  ## classification: outcome frequency/confusion matrix/brier/auc/gmean
   if (x$family == "class") {
     if (!is.null(x$yvar)) {
       event.freq <- paste(tapply(x$yvar, x$yvar, length), collapse = ", ")
     }
-      else {
-        event.freq <- NA
-      }
+    else {
+      event.freq <- NA
+    }
     if (!is.null(x$err.rate)) {
       conf.matx <- table(x$yvar, if(!is.null(x$class.oob) && !all(is.na(x$class.oob))) x$class.oob else x$class)
       conf.matx <- cbind(conf.matx,  class.error = round(1 - diag(conf.matx)/rowSums(conf.matx, na.rm = TRUE), 4))
       names(dimnames(conf.matx)) <- c("  observed", "predicted")
       brierS <- brier(x$yvar, if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
+      aucS <- auc(x$yvar, if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
       ## special processing needed to handle class imbalanced rfq classifier
       if (grow.mode) {
         rfqO <- list(rfq = x$forest$rfq, perf.type = x$forest$perf.type)
@@ -84,7 +106,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       }
     }
     else {
-      conf.matx <- brierS <- gmeanS <- NULL
+      conf.matx <- brierS <- aucS <- gmeanS <- NULL
     }
   }
   ## error rates 
@@ -95,6 +117,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     }
     else if (x$family == "class") {
       brierS <- round(100 * brierS, 2)
+      aucS <- round(100 * aucS, 2)
       overall.err.rate <- paste(round(100 * err.rate[nrow(err.rate), 1], 2), "%", sep = "")
       ## rfq related adjustments
       if (!is.null(gmeanS)) {
@@ -149,23 +172,28 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     cat("              Total no. of variables: ", length(x$xvar.names),   "\n", sep="")
     if (!x$univariate) { 
       cat("              Total no. of responses: ", yvar.dim,   "\n", sep="")
-      cat("         User has requested response: ", outcome.target,        "\n", sep="")
+      cat("         User has requested response: ", outcome.target,         "\n", sep="")
     }
-    cat("                            Analysis: ", family.pretty(family.org),"\n", sep="")
-    cat("                              Family: ", family.org,               "\n", sep="")
+    cat("       Resampling used to grow trees: ", sampUsed,                 "\n",sep="")
+    cat("    Resample size used to grow trees: ", x$forest$sampsize,        "\n",sep="")
+    cat("                            Analysis: ", familyPretty,             "\n", sep="")
+    cat("                              Family: ", familyOrg,                "\n", sep="")
     if (x$nsplit > 0 & x$splitrule != "random") {
       cat("                      Splitting rule: ", paste(x$splitrule,"*random*"),"\n", sep="")
       cat("       Number of random split points: ", x$nsplit                   ,  "\n", sep="")
     }
       else {
-        cat("                      Splitting rule: ", x$splitrule,         "\n", sep="")
+        cat("                      Splitting rule: ", x$splitrule,          "\n", sep="")
       } 
     if (!is.null(err.rate)) {
       if (x$family == "regr") {
         cat("                % variance explained: ", per.var, "\n", sep="")
       }
       if (x$family == "class" && !is.null(brierS)) {
-        cat("              Normalized Brier score:", brierS, "\n")
+        cat("              Normalized brier score:", brierS, "\n")
+      }
+      if (x$family == "class" && !is.null(aucS)) {
+        cat("                                 AUC:", aucS, "\n")
       }
       if (x$family == "class" && !is.null(gmeanS)) {
         cat("                              G-mean: ", gmeanS,            "\n", sep="")
@@ -205,21 +233,26 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       #cat("                         Missingness: ",
       #    round(100*length(x$imputed.indv)/x$n,2), "%\n", sep="")      
     }
-    cat("                Number of grow trees: ", x$ntree,             "\n",sep="")
-    cat("  Average no. of grow terminal nodes: ", mean(x$leaf.count),  "\n", sep="")
+    cat("                Number of grow trees: ", x$ntree,              "\n",sep="")
+    cat("  Average no. of grow terminal nodes: ", mean(x$leaf.count),   "\n", sep="")
     cat("         Total no. of grow variables: ", length(x$xvar.names), "\n", sep="")  
     if (!x$univariate) { 
       cat("         Total no. of grow responses: ", yvar.dim,   "\n", sep="")
-      cat("         User has requested response: ", outcome.target,        "\n", sep="")
+      cat("         User has requested response: ", outcome.target,         "\n", sep="")
     }
-    cat("                            Analysis: ", family.pretty(family.org),"\n", sep="")
-    cat("                              Family: ", family.org,               "\n", sep="")
+    cat("       Resampling used to grow trees: ", sampUsed,                 "\n",sep="")
+    cat("    Resample size used to grow trees: ", x$forest$sampsize,        "\n",sep="")
+    cat("                            Analysis: ", familyPretty,             "\n", sep="")
+    cat("                              Family: ", familyOrg,                "\n", sep="")
     if (!is.null(err.rate)) {
       if (x$family == "regr") {
         cat("                % variance explained: ", per.var, "\n", sep="")
       }
       if (x$family == "class" && !is.null(brierS)) {
-        cat("       Test set Normalized Brier score:", brierS, "\n")
+        cat("     Test set Normalized brier score:", brierS, "\n")
+      }
+      if (x$family == "class" && !is.null(aucS)) {
+        cat("                        Test set AUC:", aucS, "\n")
       }
       if (x$family == "class" && !is.null(gmeanS)) {
         cat("                     Test set G-mean: ", gmeanS, "\n", sep="")

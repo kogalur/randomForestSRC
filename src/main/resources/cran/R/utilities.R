@@ -6,31 +6,32 @@ coerce.multivariate <- function(x, outcome.target) {
   ## into a univaritate regression or classification object.
   x$univariate <- TRUE
   if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
-    ##  Coerce the mulitvariate object into a univariate object.
+    ## coerce the mulitvariate object into a univariate object
     x.coerced <- unlist(list(x$classOutput, x$regrOutput), recursive = FALSE)[[outcome.target]]
     x$univariate <- FALSE
     x$yvar <- x$yvar[, outcome.target]
-    ## Test for factors.  Ordered factors are treated as factors!
+    ## test for factors - ordered factors are treated as factors!
     if (is.factor(x$yvar) || is.ordered(x$yvar)) {
       x$family <- "class"
     }
     else {
       x$family <- "regr"
     }
-    ## Make various assignments to the coerced object.
+    ## make various assignments to the coerced object.
     x$predicted <- x.coerced$predicted
     x$predicted.oob <- x.coerced$predicted.oob
     x$class <- x.coerced$class
     x$class.oob <- x.coerced$class.oob
     x$err.rate <- x.coerced$err.rate
+    x$err.block.rate <- x.coerced$err.block.rate
     x$importance <- x.coerced$importance
     x$yvar.names <- outcome.target
   }
   x$outcome.target <- outcome.target
   x
 }
+## convert bootstrap option into native code parameter.
 get.bootstrap <- function (bootstrap) {
-  ## Convert bootstrap option into native code parameter.
   if (bootstrap == "by.root") {
     bootstrap <- 0
   }
@@ -48,8 +49,24 @@ get.bootstrap <- function (bootstrap) {
         }
   return (bootstrap)
 }
+## convert ensemble option into native code parameter.
+get.ensemble <- function (ensemble) {
+  if (ensemble == "oob") {
+    ensemble <- 2^1
+  }
+  else if (ensemble == "inbag") {
+    ensemble <- 2^0
+  }
+  else if (ensemble == "all") {
+    ensemble <- 2^0 + 2^1
+  }    
+  else {
+    stop("Invalid choice for 'ensemble' option:  ", ensemble)
+  }
+  return (ensemble)
+}
+## convert samptype option into native code parameter.
 get.samptype <- function (samptype) {
-  ## Convert samptype option into native code parameter.
   if (samptype == "swr") {
     bits <- 0
   }
@@ -160,45 +177,27 @@ get.importance <-  function (importance) {
     if (importance == "none") {
       importance <- 0
     }
-      else if (importance == "anti.ensemble") {
+    else if (importance == "anti") {
         importance <- 2^25 + 0
-      }
-        else if (importance == "permute.ensemble") {
-          importance <- 2^25 + 2^8
-        }
-          else if (importance == "random.ensemble") {
-            importance <- 2^25 + 2^9
-          }
-            else if (importance == "anti.joint.ensemble") {
-              importance <- 2^25 + 2^10 + 0
-            }
-              else if (importance == "permute.joint.ensemble") {
-                importance <- 2^25 + 2^10 + 2^8
-              }
-                else if (importance == "random.joint.ensemble") {
-                  importance <- 2^25 + 2^10 + 2^9
-                }
-                  else if (importance == "anti") {
-                    importance <- 2^25 + 2^24 + 0
-                  }
-                    else if (importance == "permute") {
-                      importance <- 2^25 + 2^24 + 2^8
-                    }
-                      else if (importance == "random") {
-                        importance <- 2^25 + 2^24 + 2^9
-                      }
-                        else if (importance == "anti.joint") {
-                          importance <- 2^25 + 2^24 + 2^10 + 0
-                        }
-                          else if (importance == "permute.joint") {
-                            importance <- 2^25 + 2^24 + 2^10 + 2^8
-                          }
-                            else if (importance == "random.joint") {
-                              importance <- 2^25 + 2^24 + 2^10 + 2^9
-                            }
-                              else {
-                                stop("Invalid choice for 'importance' option:  ", importance)
-                              }
+    }
+    else if (importance == "permute") {
+        importance <- 2^25 + 2^8
+    }
+    else if (importance == "random") {
+        importance <- 2^25 + 2^9
+    }
+    else if (importance == "anti.joint") {
+        importance <- 2^25 + 2^10 + 0
+    }
+    else if (importance == "permute.joint") {
+        importance <- 2^25 + 2^10 + 2^8
+    }
+    else if (importance == "random.joint") {
+        importance <- 2^25 + 2^10 + 2^9
+    }
+    else {
+        stop("Invalid choice for 'importance' option:  ", importance)
+    }
   }
     else {
       stop("Invalid choice for 'importance' option:  ", importance)
@@ -329,7 +328,49 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (prox.bits)
   }
- 
+  get.distance <- function (grow.equivalent, distance) {
+    ## Convert distance option into native code parameter.
+    if (!is.null(distance)) {
+      if (distance == FALSE) {
+        dist.bits <- 0
+      }
+        else if (grow.equivalent == TRUE) {
+          if (distance == TRUE) {
+            dist.bits <- 2^20 + 2^21
+          }
+            else if (distance == "inbag") {
+              dist.bits <- 2^20 + 2^21
+            }
+              else if (distance == "oob") {
+                dist.bits <- 2^20 + 2^22
+              }
+                else if (distance == "all") {
+                  dist.bits <- 2^20 + 2^21 + 2^22
+                }
+                  else {
+                    stop("Invalid choice for 'distance' option:  ", distance)
+                  }
+        }
+          else if (grow.equivalent == FALSE) {
+            if (distance == TRUE) {
+              dist.bits <- 2^20 + 2^21 + 2^22
+            }
+              else if (distance == "all") {
+                dist.bits <- 2^20 + 2^21 + 2^22
+              }
+                else {
+                  stop("Invalid choice for 'distance' option:  ", distance)
+                }
+          }
+            else {
+              stop("Invalid choice for 'grow.equivalent' in distance:  ", grow.equivalent)
+            }
+    }
+      else {
+        stop("Invalid choice for 'distance' option:  ", distance)
+      }
+    return (dist.bits)
+  }
   get.membership <- function (membership) {
     ## Convert option into native code parameter.
     bits <- 0
@@ -499,20 +540,29 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (do.trace)
   }
-  get.err.block <- function (err.block, ntree) {
-      ## Check for user silliness.
-      if (!is.null(err.block)) {
-          if ((err.block < 1) || (err.block > ntree)) {
-              err.block <- ntree
-          }
-          else {
-              err.block <- round(err.block)
-          }
+  get.block.size <- function (block.size, ntree) {
+    ## Check for user silliness.
+    if (!is.null(block.size)) {
+      ## for backwards compatibility allow TRUE/FALSE
+      if (is.logical(block.size)) {
+        if (block.size) {
+          block.size <- 1
+        }
+        else {
+          block.size <- ntree
+        }
+      }
+      else if ((block.size < 1) || (block.size > ntree)) {
+        block.size <- ntree
       }
       else {
-          err.block <- ntree
+        block.size <- round(block.size)
       }
-      return (err.block)
+    }
+    else {
+      block.size <- ntree
+    }
+    return (block.size)
   }
   get.var.used <- function (var.used) {
     ## Convert var.used option into native code parameter.

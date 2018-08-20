@@ -104,6 +104,8 @@ class Native {
                                 int          timeInterestSize,
                                 double[]     timeInterest,
                                 int          nImpute,
+
+                                int          blockSize,
                                 int          numThreads);
 
 
@@ -184,6 +186,8 @@ class Native {
                                    int          fySize,
                                    double[]     fyData,
                                    double[]     fxData,
+
+                                   int          blockSize,                                   
 
                                    int          numThreads);
 

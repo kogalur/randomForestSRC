@@ -125,34 +125,24 @@ if (library("mlbench", logical.return = TRUE)) {
 ## example of quantile regression for ordinal data
 ## ------------------------------------------------------------
 
-## is there an internet connection? (needs RCurl)
-if (library("RCurl", logical.return = TRUE)) {
- if (!is.null(tryCatch({getURL("www.google.com")}, error = function(e) {NULL}))) {
-
  ## use the wine data for illustration
- wn.url <- "https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality"
- wn.url <- paste(wn.url, "/winequality-white.csv", sep ="")
- dta <- read.table(wn.url, header = TRUE, sep = ";")
+ data(wine, package = "_PROJECT_PACKAGE_NAME_")
 
- ## regression call - request forest weights
- o <- rfsrc(quality ~ ., dta, nsplit = 10, ntree = 100, forest.wt = "oob")
+ ## regression call -- request forest weights
+ o <- rfsrc(quality ~ ., wine, ntree = 100, forest.wt = "oob")
 
  ## run quantile regression/extract "probabilities" = density values
- oq <- quantileReg(o, prob = (1:100)/100)
- yunq <- oq$yunq
+ qo <- quantileReg(o, prob = (1:100)/100)
+ yunq <- qo$yunq
  yvar <- factor(cut(o$yvar, c(-1, yunq), labels = yunq)) 
- oq.dens <- oq$density
- colnames(oq.dens) <- yunq 
- oq.class <- _PROJECT_PACKAGE_NAME_:::bayes.rule(oq.dens)
- oq.confusion <- table(yvar, oq.class)
- oq.err <- 1-diag(oq.confusion)/rowSums(oq.confusion)
- oq.confusion <- cbind(oq.confusion, oq.err)
- print(oq.confusion)
- cat("Normalized Brier:", 100 * _PROJECT_PACKAGE_NAME_:::brier(yvar, oq.dens), "\n")
-
-}}
-
-
+ qo.dens <- qo$density
+ colnames(qo.dens) <- yunq 
+ qo.class <- _PROJECT_PACKAGE_NAME_:::bayes.rule(qo.dens)
+ qo.confusion <- table(yvar, qo.class)
+ qo.err <- 1-diag(qo.confusion)/rowSums(qo.confusion)
+ qo.confusion <- cbind(qo.confusion, qo.err)
+ print(qo.confusion)
+ cat("Normalized Brier:", 100 * _PROJECT_PACKAGE_NAME_:::brier(yvar, qo.dens), "\n")
 
 }}
 \keyword{quantile regression forests}

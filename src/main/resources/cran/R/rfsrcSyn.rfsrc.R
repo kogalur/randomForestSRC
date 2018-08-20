@@ -1,35 +1,25 @@
 rfsrcSyn.rfsrc <-
-  function(formula,          
-           data,
-           object,
-           newdata,
-           ntree = 1000,
-           mtry = NULL,
-           mtrySeq = NULL,
-           nodesize = 5,
-           nodesizeSeq = c(1:10,20,30,50,100),
-           nsplit = 0,
+  function(formula, data, object, newdata,
+           ntree = 1000, mtry = NULL, nodesize = 5, nsplit = 10,
+           mtrySeq = NULL, nodesizeSeq = c(1:10,20,30,50,100),
            min.node = 3,
+           fast = TRUE,
            use.org.features = TRUE,
-           
            na.action = c("na.omit", "na.impute"),
-           
-            
            oob = TRUE,
            verbose = TRUE,
-           ...
-           )
+           ...)
 {
   ## --------------------------------------------------------------
   ##   
   ##   preliminary processing
   ##
   ## --------------------------------------------------------------
-  ## Verify key options
-  
+  ## verify key options
   na.action <- match.arg(na.action, c("na.omit", "na.impute"))
-  
-   
+  ## set ensemble to "all" to avoid inbag/oob distinction
+  dots <- list(...)
+  dots$ensemble <- "all"
   if (!missing(object)) {
     ## incoming parameter check
     if (sum(inherits(object, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) != 2) {
@@ -50,20 +40,15 @@ rfsrcSyn.rfsrc <-
     if (missing(formula) || missing(data)) {
       stop("need to specify 'formula' and 'data' or provide a grow forest object")
     }
-    f <- as.formula(formula)
-    ## impute the data
-    
+    f.org <- as.formula(formula)
     if (na.action == "na.impute" && any(is.na(data))) {
-    
-     
-        if (verbose) {
+      if (verbose) {
         cat("\t imputing the data\n")
       }
-      data <- impute.rfsrc(data = data, ntree = ntree, nodesize = nodesize, nsplit = nsplit)
+      data <- impute(data = data, ntree = ntree, nodesize = nodesize, nsplit = nsplit, fast = TRUE)
     }
     ##use fast forests for parsing the data
-    preObj <- rfsrc(f, data, ntree = 1, importance = "none",
-                    nodesize = nrow(data), splitrule = "random")
+    preObj <- rfsrc(f.org, data, ntree = 1, nodesize = nrow(data), splitrule = "random")
     fmly <- preObj$family
     ##check coherence of families
     if (!(fmly == "regr" | fmly == "regr+" | fmly == "class" | fmly == "class+" | fmly == "mix+")) {
@@ -89,12 +74,14 @@ rfsrcSyn.rfsrc <-
     }
     ##sort the nodesize sequence
     nodesizeSeq <- sort(nodesizeSeq)
+    ## determine the grow interface - rfsrc or rfsrcFast?
+    if (!fast) {
+      rfsrc.grow <- "rfsrc"
+    }
+    else {
+      rfsrc.grow <- "rfsrcFast"
+    }
   }
-  ## verify key options
-  
-  na.action <- match.arg(na.action, c("na.omit", "na.impute"))
-  
-   
   ## --------------------------------------------------------------
   ##   
   ##   synthetic forests
@@ -103,9 +90,12 @@ rfsrcSyn.rfsrc <-
   if (missing(object)) {
     ## generate a fixed inbag sample if oob is in effect
     if (oob) {
-      ## fast forest to determine sample size (due to NA's this may not = nrow(data))
-      samp.size <- nrow(rfsrc(f, data, ntree = 1, nodesize = nrow(data), splitrule = "random")$xvar)
-      samp <- make.sample(ntree, samp.size)
+      ## use a rough forest to determine sample size (due to NA's this may not = nrow(data))
+      ## the resulting inbag sample depends on whether fast rfsrc is requested
+      roughO <- do.call(rfsrc.grow,
+                        c(list(formula = f.org, data = data, ntree = 1,
+                               nodesize = nrow(data), splitrule = "random")))
+      samp <- make.sample(ntree, roughO$n, roughO$forest$sampsize, roughO$forest$samptype == "swr")
     }
     ## construct RF machines for each nodesize
     rfMachines <- lapply(nodesizeSeq, function(nn) {
@@ -114,13 +104,15 @@ rfsrcSyn.rfsrc <-
           cat("\t RF nodesize:", nn, "mtry:", mm, "\r")
         }
         if (oob) {
-          rfsrc(f, data, ntree = ntree, mtry = mm, nodesize = nn,
-                bootstrap = "by.user", samp = samp, 
-                nsplit = nsplit, importance = "none")
+          do.call(rfsrc.grow,
+                  c(list(formula = f.org, data = data, ensemble = "all",
+                         ntree = ntree, mtry = mm, nodesize = nn, nsplit = nsplit,
+                         bootstrap = "by.user", samp = samp)))
         }
         else {
-          rfsrc(f, data, ntree = ntree, mtry = mm, nodesize = nn, 
-                nsplit = nsplit, importance = "none")
+          do.call(rfsrc.grow,
+                  c(list(formula = f.org, data = data, ensemble = "all",
+                         ntree = ntree, mtry = mm, nodesize = nn, nsplit = nsplit)))
         }
       })
     })
@@ -194,18 +186,20 @@ rfsrcSyn.rfsrc <-
       else {
         data <- data.frame(preObj$yvar, x.s = x.s)
       }
-    ## the synthetic forest call
+    ## the final forest call - make the over-arching synthetic forest
     ## for generality, the formula is specified as multivariate but this reverts to univariate families
     ## when there is only one y-variable
     rfSyn.f <- as.formula(paste("Multivar(", paste(yvar.names, collapse = ","), paste(") ~ ."), sep = ""))
     if (oob) {
-      rfSyn <- rfsrc(rfSyn.f, data, ntree = ntree, mtry = mtry, nodesize = nodesize,
-                     bootstrap = "by.user", samp = samp,                      
-                     nsplit = nsplit, ... )
+      rfSyn <- do.call(rfsrc.grow,
+                       c(list(formula = rfSyn.f, data = data,
+                              ntree = ntree, mtry = mtry, nodesize = nodesize, nsplit = nsplit,
+                              bootstrap = "by.user", samp = samp), dots))
     }
     else {
-      rfSyn <- rfsrc(rfSyn.f, data, ntree = ntree, mtry = mtry, nodesize = nodesize,
-                     nsplit = nsplit, ... )
+      rfSyn <- do.call(rfsrc.grow,
+                       c(list(formula = rfSyn.f, data = data,
+                              ntree = ntree, mtry = mtry, nodesize = nodesize, nsplit = nsplit), dots))
     }
   }
   ## --------------------------------------------------------------
@@ -214,15 +208,12 @@ rfsrcSyn.rfsrc <-
   ##
   ## --------------------------------------------------------------
   if (!missing(newdata)) {
-    ## impute the test data
-    
     if (na.action == "na.impute" && any(is.na(newdata))) {
-    
-     
       if (verbose) {
         cat("\t imputing the test data\n")
       }
-      newdata <- impute.rfsrc(data = newdata, ntree = ntree, nodesize = nodesize, nsplit = nsplit)
+      newdata <- impute(data = newdata, ntree = ntree,
+                  nodesize = nodesize, nsplit = nsplit, fast = TRUE)
     }
     if (verbose) {
       cat("\t making the test set synthetic features\n")

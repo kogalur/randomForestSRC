@@ -27,9 +27,8 @@ plot.variable.rfsrc <- function(
   object <- x
   remove(x)
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2 &
-      sum(inherits(object, c("rfsrc", "predict"), TRUE) == c(1, 2)) != 2 &
       sum(inherits(object, c("rfsrc", "plot.variable"), TRUE) == c(1,2)) != 2) {
-    stop("this function only works for objects of class `(rfsrc, grow)', '(rfsrc, predict)' or '(rfsrc, plot.variable)'")
+    stop("this function only works for objects of class `(rfsrc, grow)', '(rfsrc, synthetic)' or '(rfsrc, plot.variable)'")
   }
   if (object$family == "unsupv") {
     stop("this function does not apply to unsupervised forests")
@@ -179,7 +178,7 @@ plot.variable.rfsrc <- function(
     nvar <- length(xvar.names)
     if (!partial) {
       ## Marginal plot setup only.
-      yhat <- extract.pred(predict.rfsrc(object, m.target = m.target, importance = "none"),
+      yhat <- extract.pred(predict(object, m.target = m.target),
                            pred.type,
                            subset,
                            time,
@@ -427,75 +426,87 @@ plot.variable.rfsrc <- function(
   ## Return the plot.variable object for reuse
   invisible(plot.variable.obj)
 }
+## --------------------------------------------------------------------------------------------
+##
 ## extraction function when partial=FALSE
+##
+## --------------------------------------------------------------------------------------------
 extract.pred <- function(obj, type, subset, time, m.target, target, oob = oob) {
-    ## Coerce the (potentially) multivariate object if necessary.
-    obj <- coerce.multivariate(obj, m.target)
-    ## decide if OOB or in-bag values are requested
-    if (oob == FALSE) {
-        pred <- obj$predicted
-        surv <- obj$survival
-        chf <- obj$chf
-        cif <- obj$cif
+  ## Coerce the (potentially) multivariate object if necessary.
+  obj <- coerce.multivariate(obj, m.target)
+  ## decide if OOB or in-bag values are requested
+  if (oob == FALSE) {
+    if (is.null(obj$predicted)) {
+      stop("inbag requested but inbag values are not available in the grow object")
     }
-    else {
-        pred <- obj$predicted.oob
-        surv <- obj$survival.oob
-        chf <- obj$chf.oob
-        cif <- obj$cif.oob
-    }
-    ## Survival and competing risk families.
-    if (grepl("surv", obj$family)) {
-      ## Competing risks:
-      if (obj$family == "surv-CR") {
-        n <- dim(pred)[1]
-        if (missing(subset)) subset <- 1:n
-        ## Default is first event type.
-        if (missing(target)) target <- 1
-        type <- match.arg(type, c("years.lost", "cif", "chf"))
-        ## Get the index of the closest point of the grow time interest vector.
-        time.idx <-  max(which(obj$time.interest <= time))
-        return(switch(type,
-                      "years.lost" = pred[subset, target],
-                      "cif"        = cif[subset, time.idx, target],
-                      "chf"        = chf[subset, time.idx, target]
-                      ))
-      }
-      ## Right-censored:
-      else {
-        n <- length(pred)
-        if (missing(subset)) subset <- 1:n
-        type <- match.arg(type, c("rel.freq", "mort", "chf", "surv"))
-        ## Get the index of the closest point of the grow time interest vector.
-        time.idx <-  max(which(obj$time.interest <= time))
-        return(switch(type,
-                      "rel.freq" = pred[subset]/max(n, na.omit(pred)),
-                      "mort"     = pred[subset],
-                      "chf"      = 100 * chf[subset, time.idx],
-                      "surv"     = 100 * surv[subset, time.idx]
-                      ))
-      }
-    }
-    ## The object has been coerced.  It will be univariate.
-      else {
-        if (obj$family == "class") {
-          n <- dim(pred)[1]
-          if (missing(subset)) subset <- 1:n
-          type <- match.arg(type, c("prob", "bayes"))
-          ## The default is first class label.
-          if (missing(target)) target <- 1
-          prob <- pred[subset,, drop = FALSE]
-          return(switch(type,
-                        "prob" = prob[, target],
-                        "bayes" =  bayes.rule(prob)))
-        }
-          else {
-            n <- length(pred)
-            if (missing(subset)) subset <- 1:n
-            return(pred[subset])
-          }
-      }
+    pred <- obj$predicted
+    surv <- obj$survival
+    chf <- obj$chf
+    cif <- obj$cif
   }
+  else {
+    if (is.null(obj$predicted.oob)) {
+      stop("oob requested but oob values are not available in the grow object")
+    }
+    pred <- obj$predicted.oob
+    surv <- obj$survival.oob
+    chf <- obj$chf.oob
+    cif <- obj$cif.oob
+  }
+  ## Survival and competing risk families.
+  if (grepl("surv", obj$family)) {
+    ## Competing risks:
+    if (obj$family == "surv-CR") {
+      n <- dim(pred)[1]
+      if (missing(subset)) subset <- 1:n
+      ## Default is first event type.
+      if (missing(target)) target <- 1
+      type <- match.arg(type, c("years.lost", "cif", "chf"))
+      ## Get the index of the closest point of the grow time interest vector.
+      time.idx <-  max(which(obj$time.interest <= time))
+      return(switch(type,
+                    "years.lost" = pred[subset, target],
+                    "cif"        = cif[subset, time.idx, target],
+                    "chf"        = chf[subset, time.idx, target]
+                    ))
+    }
+    ## Right-censored:
+    else {
+      n <- length(pred)
+      if (missing(subset)) subset <- 1:n
+      type <- match.arg(type, c("rel.freq", "mort", "chf", "surv"))
+      ## Get the index of the closest point of the grow time interest vector.
+      time.idx <-  max(which(obj$time.interest <= time))
+      return(switch(type,
+                    "rel.freq" = pred[subset]/max(n, na.omit(pred)),
+                    "mort"     = pred[subset],
+                    "chf"      = 100 * chf[subset, time.idx],
+                    "surv"     = 100 * surv[subset, time.idx]
+                    ))
+    }
+  }
+  ## The object has been coerced.  It will be univariate.
+  else {
+    if (obj$family == "class") {
+      n <- dim(pred)[1]
+      if (missing(subset)) subset <- 1:n
+      type <- match.arg(type, c("prob", "bayes"))
+      ## The default is first class label.
+      if (missing(target)) target <- 1
+      prob <- pred[subset,, drop = FALSE]
+      return(switch(type,
+                    "prob" = prob[, target],
+                    "bayes" =  bayes.rule(prob)))
+    }
+    else {      
+      n <- length(pred)
+      if (missing(subset)) subset <- 1:n
+      return(pred[subset])
+    }
+  }
+}
+## --------------------------------------------------------------------------------------------
+##
 ## extraction function when partial=TRUE
 ## Note that currently only one (1) time point is requested via the
 ## plot.variable() R-wrapper.  Only one (1) is allowed.
@@ -504,6 +515,8 @@ extract.pred <- function(obj, type, subset, time, m.target, target, oob = oob) {
 ## additional calls to the native code.  The extract call
 ## is limited to only one (1) time point on each call.
 ## The same protocol holds for m.target.
+##
+## --------------------------------------------------------------------------------------------
 extract.partial.pred <- function(obj, type, subset, m.target, target) {
   ## Survival families
   if (grepl("surv", obj$family)) {

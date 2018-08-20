@@ -7,7 +7,7 @@ Maintainer: Udaya B. Kogalur <ubk@kogalur.com>
 BugReports: https://github.com/kogalur/randomForestSRC/issues/new
 Depends: R (>= 3.1.0),
 Imports: parallel
-Suggests: glmnet, survival, pec, prodlim, mlbench, RCurl 
-Description: A unified treatment of Breiman's random forests for survival, regression and classification problems based on Ishwaran and Kogalur's random survival forests (RSF) package.  Now extended to include multivariate and unsupervised forests.  Also includes quantile regression forests for univariate and multivariate training/testing settings.  The package runs in both serial and parallel (OpenMP) modes. 
+Suggests: glmnet, survival, pec, prodlim, mlbench, akima, caret  
+Description: Fast OpenMP parallel processing for Breiman's random forests for survival, competing risks, regression and classification based on Ishwaran and Kogalur's popular random survival forests (RSF) package.  Handles missing data and now includes multivariate, unsupervised forests and quantile regression.  New fast interface using subsampling. 
 License: GPL (>=3)
 URL: http://web.ccs.miami.edu/~hishwaran  http://www.kogalur.com  https://github.com/kogalur/randomForestSRC

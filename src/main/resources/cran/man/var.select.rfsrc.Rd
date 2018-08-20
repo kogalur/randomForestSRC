@@ -217,10 +217,11 @@
 ## ------------------------------------------------------------
 ## Minimal depth variable selection
 ## survival analysis
+## use larger node size which is better for minimal depth
 ## ------------------------------------------------------------
 
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 10, importance = TRUE)
+pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc, nodesize = 20, importance = TRUE)
 
 # default call corresponds to minimal depth selection
 vs.pbc <- var.select(object = pbc.obj)
@@ -237,20 +238,21 @@ var.select(object = pbc.obj, conservative = "high")
 ## ------------------------------------------------------------
 ## Minimal depth variable selection
 ## competing risk analysis
+## use larger node size which is better for minimal depth
 ## ------------------------------------------------------------
 
 ## competing risk data set involving AIDS in women
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
 vs.wihs <- var.select(Surv(time, status) ~ ., wihs, nsplit = 3, 
-                      ntree = 100, importance = TRUE)
+                      nodesize = 20, ntree = 100, importance = TRUE)
 
 ## competing risk analysis of pbc data from survival package
 ## implement cause-specific variable selection 
 if (library("survival", logical.return = TRUE)) {
   data(pbc, package = "survival")
   pbc$id <- NULL
-  var.select(Surv(time, status) ~ ., pbc, nsplit = 10, cause = 1)
-  var.select(Surv(time, status) ~ ., pbc, nsplit = 10, cause = 2)
+  var.select(Surv(time, status) ~ ., pbc, cause = 1)
+  var.select(Surv(time, status) ~ ., pbc, cause = 2)
 }
 
 ## ------------------------------------------------------------
@@ -259,63 +261,6 @@ if (library("survival", logical.return = TRUE)) {
 ## ------------------------------------------------------------
 
 vs.iris <- var.select(Species ~ ., iris)
-
-## ------------------------------------------------------------
-## Minimal depth variable selection
-## Regression analysis
-## ------------------------------------------------------------
-
-#Variable hunting (overkill for low dimensions)
-vh.air <- var.select(Ozone ~., airquality, method = "vh", nrep = 10, mvars = 5)
-
-#better analysis
-vs.air <- var.select(Ozone ~., airquality)
-
-## ------------------------------------------------------------
-## Minimal depth high-dimensional example
-## van de Vijver microarray breast cancer survival data
-## predefined weights for *selecting* a gene for node splitting
-## determined from a preliminary forest analysis
-## ------------------------------------------------------------
-
-data(vdv, package = "_PROJECT_PACKAGE_NAME_")
-md.breast <- var.select(Surv(Time, Censoring) ~ ., vdv,
-  prefit = list(action = TRUE))
-
-## same analysis, but with customization for the preliminary forest fit
-## note the large mtry and small nodesize values used
-md.breast.custom <- var.select(Surv(Time, Censoring) ~ ., vdv, 
-  prefit = list(action = TRUE, mtry = 500, nodesize = 1))
-
-## ------------------------------------------------------------
-## Minimal depth high-dimensional example
-## van de Vijver microarray breast cancer survival data
-## predefined weights for genes for *splitting* tree nodes
-## weights defined in terms of cox p-values
-## ------------------------------------------------------------
-
-if (library("survival", logical.return = TRUE) 
-    & library("parallel", logical.return = TRUE))
-{
-  cox.weights <- function(rfsrc.f, rfsrc.data) {
-    event.names <- all.vars(rfsrc.f)[1:2]
-    p <- ncol(rfsrc.data) - 2
-    event.pt <- match(event.names, names(rfsrc.data))
-    xvar.pt <- setdiff(1:ncol(rfsrc.data), event.pt)
-    unlist(mclapply(1:p, function(j) {
-      cox.out <- coxph(rfsrc.f, rfsrc.data[, c(event.pt, xvar.pt[j])])
-      pvalue <- summary(cox.out)$coef[5]
-      if (is.na(pvalue)) 1.0 else 1/(pvalue + 1e-100)
-    }))
-  }       
-  data(vdv, package = "_PROJECT_PACKAGE_NAME_")
-  rfsrc.f <- as.formula(Surv(Time, Censoring) ~ .)
-  cox.wts <- cox.weights(rfsrc.f, vdv)
-  breast.obj <- rfsrc(rfsrc.f, vdv, nsplit = 10, xvar.wt = cox.wts,
-                      importance = TRUE)
-  md.breast.splitwt <- var.select(object = breast.obj) 
-}
-
 
 ## ------------------------------------------------------------
 ## Variable hunting high-dimensional example
@@ -353,17 +298,6 @@ if (library("survival", logical.return = TRUE))
   vh.breast.cox <- var.select(rfsrc.f, vdv, method = "vh", nstep = 5,
     nrep = 10, xvar.wt = cox.wts)
 }
-
-## ------------------------------------------------------------
-## variable selection for multivariate mixed forests
-## ------------------------------------------------------------
-
-mtcars.new <- mtcars
-mtcars.new$cyl <- factor(mtcars.new$cyl)
-mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
-mv.obj <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new,
-              importance = TRUE)
-var.select(mv.obj, method = "vh.vimp", nrep = 10)
 
 }
 }

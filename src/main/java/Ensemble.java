@@ -39,16 +39,11 @@ class Ensemble {
     // Type of ensemble (char), (int), or (double).
     EnsembleType type;
 
-    // Identity of ensemble vector [2, ..., RF_SEXP_CNT) but in practice, we use [0, 1 << 6).
-    int identity;
+    // Position or slot in list.
+    int slot;
 
     // Size of ensemble vector;
     long size;
-
-    // Irregularity flag indicating ragged array.  In such cases, the
-    // multi-dimensional view must be explicitly constructed from what
-    // we know about the ensemble and data set.
-    boolean ragged;
 
     // Multi-dimensional view of the ensemble.  This is the number of dimensions.
     int auxDimSize;
@@ -64,9 +59,8 @@ class Ensemble {
     // fields.
     void Ensemble(String name,
                   byte nativeType,
-                  int identity,
+                  int slot,
                   long size,
-                  boolean ragged,
                   int auxDimSize,
                   int[] auxDim,
                   Object ensembleVector) {
@@ -91,8 +85,7 @@ class Ensemble {
 
 
         this.name = name;
-        this.identity = identity;
-        this.ragged = ragged;
+        this.slot = slot;
         this.size = size;
         this.auxDimSize = auxDimSize;
         this.auxDim = auxDim;
@@ -283,9 +276,9 @@ class Ensemble {
             // result = RF_tLeafCount[preIndex];
         }
         else {
-            // RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-            // RF_nativeError("\nRF-SRC:  Inconsistent internal dimension of auxiliary array in getAuxDim():  %10d", dim[postIndex]);
-            // RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RFLogger.log(Level.SEVERE, "Inconsistent internal dimension of auxiliary array in getAuxDim():  " + auxDim[postIndex]);
+            RFLogger.log(Level.SEVERE, "Please Contact Technical Support.");
+            throw new RuntimeException();
         }
         return result;
     }
@@ -298,9 +291,8 @@ class Ensemble {
         RFLogger.log(Level.INFO, "Ensemble Meta Info:  ");
         RFLogger.log(Level.INFO, "        name : " + name);
         RFLogger.log(Level.INFO, "        type : " + type);
-        RFLogger.log(Level.INFO, "    identity : " + identity);
+        RFLogger.log(Level.INFO, "        slot : " + slot);
         RFLogger.log(Level.INFO, "        size : " + size);
-        RFLogger.log(Level.INFO, "      ragged : " + ragged);
         RFLogger.log(Level.INFO, "  auxDimSize : " + auxDimSize);
         for (int i = 0; i < auxDimSize; i++) {
             RFLogger.log(Level.INFO, "   auxDim[" + i + "] : " + auxDim[i]);
@@ -326,6 +318,8 @@ class Ensemble {
         if ( (long) actLength != metaLength) {
             RFLogger.log(Level.WARNING, "Ensemble vector length and object meta info inconsistent:  " + actLength + " versus " + metaLength);
         }
+        // Blank line for readability.
+        RFLogger.log(Level.INFO, " ");        
     }
 
 }

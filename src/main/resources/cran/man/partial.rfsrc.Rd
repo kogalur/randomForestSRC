@@ -6,13 +6,15 @@
   Acquire the partial effect of a variable on the ensembles.
 }
 \usage{
-partial.rfsrc(object, m.target = NULL,
+partial.rfsrc(object, oob = TRUE, m.target = NULL,
   partial.type = NULL, partial.xvar = NULL, partial.values = NULL,
   partial.xvar2 = NULL, partial.values2 = NULL,
-  partial.time = NULL, oob = TRUE, seed = NULL, do.trace = FALSE, ...)
+  partial.time = NULL, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)}.}
+  \item{oob}{By default out-of-bag values are returned, but inbag
+    values can be requested by setting this option to \code{FALSE}.}
   \item{m.target}{Character value for multivariate families
     specifying the target outcome to be used.  If left unspecified, the
     algorithm will choose a default target.}
@@ -32,7 +34,6 @@ partial.rfsrc(object, m.target = NULL,
     a numeric element.}
   \item{partial.time}{For survival families, the time at which the predicted
     survival value is evaluated at (depends on \code{partial.type}).}
-  \item{oob}{OOB (TRUE)  or in-bag (FALSE) predicted values.}
   \item{seed}{Negative integer specifying seed for the random number
     generator.}
   \item{do.trace}{Number of seconds between updates to the user on
@@ -40,6 +41,8 @@ partial.rfsrc(object, m.target = NULL,
   \item{...}{Further arguments passed to or from other methods.}
 }
 \details{
+
+  Out-of-bag (OOB) values are returned by default.
 
   A list of length equal to the number of outcomes (length is one for
   univariate families) with entries depending on the underlying family:
@@ -89,10 +92,6 @@ partial.rfsrc(object, m.target = NULL,
   Ishwaran H., Kogalur U.B., Blackstone E.H. and Lauer M.S.
   (2008).  Random survival forests, \emph{Ann. App.
     Statist.}, 2:841-860.
-  
- Ishwaran H., Gerds T.A., Kogalur U.B., Moore R.D., Gange S.J. and Lau
-  B.M. (2014). Random survival forests for competing risks.
-  \emph{Biostatistics}, 15(4):757-773.
 }
 \seealso{
   \command{\link{plot.variable.rfsrc}}
@@ -119,8 +118,7 @@ partial.obj <- partial(follic.obj,
   partial.type = "cif",
   partial.xvar = "age",
   partial.values = follic.obj$xvar[, "age"],
-  partial.time = follic.obj$time.interest,
-  oob = TRUE)
+  partial.time = follic.obj$time.interest)
 
 ## regression
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)

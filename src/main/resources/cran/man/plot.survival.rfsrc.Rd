@@ -141,7 +141,7 @@ plot.survival(rfsrc(Surv(time, status)~ ., veteran), cens.model = "rfsrc")
 
 ## pbc data
 data(pbc, package = "_PROJECT_PACKAGE_NAME_") 
-pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 10)
+pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc)
 
 # default spline approach
 plot.survival(pbc.obj, subset = 3)

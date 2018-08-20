@@ -93,6 +93,8 @@ public class ModelArg {
     private int        timeInterestSize;
     private double[]   timeInterest;
     private double[]   ntime;
+
+    private int        blockSize;
     
     private int        rfCores;
 
@@ -1097,6 +1099,9 @@ public class ModelArg {
         // Default bootstrap.
         set_bootstrap();
 
+        // Default value of blockSize, called after ntree has been initialized above.
+        set_blockSize();
+            
         // Set x-weight, y-weight, and split weight.
         set_xWeight();
 
@@ -1654,6 +1659,43 @@ public class ModelArg {
 
 
     /**
+     * Returns the value for the block size associated with the
+     * reporting of the error rate.
+     * @return The value for the block size associated with the
+     * reporting of the error rate.
+     * @see #set_blockSize(int)
+     */
+    public int get_blockSize() {
+        return blockSize;
+    }
+
+    /**
+     * Sets the default value for the block size associated with the
+     * reporting of the error rate.  This value defaults to ntree.
+     * @see #set_blockSize(int)
+     */
+    public void set_blockSize() {
+        blockSize = get_ntree();
+    }
+
+    /**
+     * Sets the specified value for the block size associated with the
+     * reporting of the error rate.  If the value is out of range, the default value will be applied.
+     * @see #set_blockSize()
+     */
+    public void set_blockSize(int blockSize) {
+        if ((blockSize < 1) || (blockSize > get_ntree())) {
+            RFLogger.log(Level.WARNING, "Invalid value for parameter blockSize:  " + blockSize);
+            RFLogger.log(Level.WARNING, "Overriding blockSize with default value of ntree:  " + get_ntree());
+            set_blockSize();
+        }
+        else {
+            this.blockSize = blockSize;
+        }
+    }
+
+
+    /**
      * Sets the number of x-variables to be randomly selected as candidates for splitting a node.
      * @param mtry The number of x-variables to be randomly selected as candidates for splitting a node. 
      * This number must be such that 1 &le; mtry &le; xSize.
@@ -1713,8 +1755,8 @@ public class ModelArg {
     /**
      * Sets the maximum hypercube dimension to be considered in Greedy Splitting.  
      * @param htry The maximum hypercube dimension to be considered in Greedy Splitting.
-     * If htry = 0, Standard Splitting is in effect.  If 1 &le; htry &le; 4, Greedy Splitting is in effect.
-     * If the value is out of range, the default value of zero (0) will be applied:
+     * If htry = 0, Standard Splitting is in effect.  If htry &gt; 0, Greedy Splitting is in effect.
+     * If the value is out of range, the default value of zero will be applied:
      * <pre> <code> 
      * <table class= "myColumnPadding">
      *  <tr>
@@ -1726,19 +1768,20 @@ public class ModelArg {
      *    <td>standard splitting</td>
      *  </tr>
      *  <tr>
-     *    <td>1 &le htry &l. 4</td>     
+     *    <td>htry &gt; 0</td>     
      *    <td>greedy splitting</td>
      *  </tr>
      * </table></p>
      */
     public void set_htry(int htry) {
-        if ((htry < 0) || (htry > 4)) {
+        if (htry < 0) {
             this.htry = 0;
         }
         else {
             this.htry = htry;
         }
     }
+
 
     /** 
      * Returns the maximum hypercube dimension to be considered in Greedy Splitting.
@@ -2716,11 +2759,6 @@ public class ModelArg {
      *  </tr>
      *
      *  <tr>
-     *    <td>error</td>
-     *    <td><b>last.tree</b>, every.tree</td>
-     *  </tr>
-     *
-     *  <tr>
      *    <td>varUsed</td>
      *    <td><b>no</b>, every.tree, sum.tree</td>
      *  </tr>
@@ -2786,6 +2824,7 @@ public class ModelArg {
                 ensembleArg.getNative("importance") + 
                 ensembleArg.getNative("proximity") +
                 ensembleArg.getNative("forest") +
+                ensembleArg.getNative("ensemble") +
                 ensembleArg.getNative("errorType")); 
     }
 
@@ -2796,7 +2835,6 @@ public class ModelArg {
                  
                  
                 
-                ensembleArg.getNative("error") +
                 ensembleArg.getNative("qualitativeTerminalInfo") + 
                 ensembleArg.getNative("quantitativeTerminalInfo"));         
     }

@@ -5,15 +5,19 @@
   Obtain predicted values using a forest.  Also returns performance
   values if the test data contains y-outcomes.
 }
-\usage{\method{predict}{rfsrc}(object, newdata, m.target = NULL,
-  importance = c(FALSE, TRUE, "none", "permute", "random", "anti",
-                 "permute.ensemble", "random.ensemble", "anti.ensemble")[1],
-  err.block = NULL,
-  na.action = c("na.omit", "na.impute"), outcome = c("train", "test"),
+\usage{\method{predict}{rfsrc}(object,
+  newdata,
+  m.target = NULL,
+  importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
+  block.size = NULL,
+  ensemble = NULL,
+  na.action = c("na.omit", "na.impute"),
+  outcome = c("train", "test"),
   proximity = FALSE,
   forest.wt = FALSE,
   ptn.count = 0,
    
+  distance = FALSE,
   var.used = c(FALSE, "all.trees", "by.tree"),
   split.depth = c(FALSE, "all.trees", "by.tree"), seed = NULL,
   do.trace = FALSE, membership = FALSE, statistics = FALSE, ...)
@@ -23,18 +27,23 @@
 	    forest)}.}
   \item{newdata}{Test data. If missing, the original grow
     (training) data is used.}
+  \item{ensemble}{Optional parameter for specifying the type of
+    ensemble.  Can be \code{oob}, \code{inbag} or \code{all}, although
+    not all choices will be applicable depending on the setting (e.g.
+    when predicting on newdata there is no notion of out-of-bag).}
   \item{m.target}{Character vector for multivariate families
     specifying the target outcomes to be used. The default is to use all
     coordinates.}
   \item{importance}{Method for computing variable importance (VIMP) when
     test data contains y-outcomes values.  Also see \command{vimp} for more
     flexibility, including joint vimp calculations.}
-  \item{err.block}{Should the error rate be calculated on every tree?
+  \item{block.size}{Should the error rate be calculated on every tree?
     When \code{NULL}, it will only be calculated on the last tree.  To
     view the error rate on every nth tree, set the value to an integer
-    between \code{1} and \code{ntree}.  If Breiman-Cutler importance is
-    requested, this will also return blocked-VIMP where VIMP is 
-    calculated in "blocks" of size equal to \code{err.block}.}
+    between \code{1} and \code{ntree}.  If importance is requested, VIMP is
+    calculated in "blocks" of size equal to \code{block.size}, thus
+    resulting in a useful compromise between ensemble and permutation
+    VIMP.}
   \item{na.action}{Missing value action. The default
     \code{na.omit} removes the entire record if
     even one of its entries is \code{NA}.  Selecting \option{na.impute} 
@@ -52,7 +61,11 @@
     \code{"all"}, \code{TRUE}, or \code{FALSE} --- but some options may
     not be valid and will depend on the context of the predict call.
     The safest choice is \code{TRUE} if proximity is desired.}
-   
+  \item{distance}{Should distance between test observations
+    be calculated?  Possible choices are \code{"inbag"}, \code{"oob"},
+    \code{"all"}, \code{TRUE}, or \code{FALSE} --- but some options may
+    not be valid and will depend on the context of the predict call.
+    The safest choice is \code{TRUE} if distance is desired.}
   \item{forest.wt}{Should the forest weight matrix for test observations
     be calculated?  Choices are the same as proximity.}
   \item{ptn.count}{The number of terminal nodes that each tree in the
@@ -187,7 +200,7 @@
   values, VIMP, error rate, and performance values are stored in the
   lists \code{regrOutput} and \code{clasOutput}.
   
-  For detailed definitions of returned values (such as \code{predicted})
+  For more detailed information regarding returned values (such as \code{predicted})
   see the \command{rfsrc} help file.
 }
 \author{
@@ -231,7 +244,7 @@ print(veteran.pred)
 ## ------------------------------------------------------------
 
 data(breast, package = "_PROJECT_PACKAGE_NAME_")
-breast.obj <- rfsrc(status ~ ., data = breast[(1:100), ], nsplit = 10)
+breast.obj <- rfsrc(status ~ ., data = breast[(1:100), ])
 breast.pred <- predict(breast.obj, breast[-(1:100), ])
 print(head(breast.pred$predicted))
 print(breast.pred$class)
@@ -293,7 +306,7 @@ print(veteran.f.pred)
 
 # first we make the grow call
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-pbc.grow <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 10)
+pbc.grow <- rfsrc(Surv(days, status) ~ ., pbc)
 
 # now use predict with outcome = TEST
 pbc.pred <- predict(pbc.grow, pbc, outcome = "test")
@@ -329,8 +342,7 @@ print(predict.rfsrc(iris.obj, iris, outcome = "test"))
 set.seed(542899)
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 train <- sample(1:nrow(pbc), round(nrow(pbc) * 0.50))
-pbc.out <- rfsrc(Surv(days, status) ~ .,  data=pbc[train, ],
-        nsplit = 10)
+pbc.out <- rfsrc(Surv(days, status) ~ .,  data=pbc[train, ])
 
 # standard predict call
 pbc.train <- predict(pbc.out, pbc[-train, ], outcome = "train")
@@ -350,13 +362,13 @@ matlines(Time, t(exp(-pbc.test$chf)[1:3,]), col = 2)
 
 # fit the pbc data using RSF
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-rsf.obj <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 10)
+rsf.obj <- rfsrc(Surv(days, status) ~ ., pbc)
 yvar <- rsf.obj$yvar
 
 # fit a mixed outcome forest using days and status as y-variables
 pbc.mod <- pbc
 pbc.mod$status <- factor(pbc.mod$status)
-mix.obj <- rfsrc(Multivar(days, status) ~., pbc.mod, nsplit = 10)
+mix.obj <- rfsrc(Multivar(days, status) ~., pbc.mod)
 
 # compare oob predicted values
 rsf.pred <- rsf.obj$predicted.oob

@@ -4,6 +4,7 @@
 \alias{extract.bootsample}
 \alias{extract.subsample}
 \alias{get.mv.error}
+\alias{get.mv.error.block}
 \alias{get.mv.formula}
 \alias{get.mv.predicted}
 \alias{get.mv.vimp}
@@ -13,24 +14,25 @@
   Random Forests for Survival, Regression, and Classification (RF-SRC)
 }
 \description{
-  This package provides a unified treatment of Breiman's random forests
-  (Breiman 2001) for a variety of data settings.  Regression and
+
+  Fast OpenMP parallel processing unified treatment of Breiman's random
+  forests (Breiman 2001) for a variety of data settings.  Regression and
   classification forests are grown when the response is numeric or
   categorical (factor), while survival and competing risk forests
   (Ishwaran et al. 2008, 2012) are grown for right-censored survival
   data.  Multivariate regression and classification responses as well as
   mixed outcomes (regression/classification responses) are also handled.
-  Also includes unsupervised forests and quantile regression forests.
-  Different splitting rules invoked under deterministic or random
-  splitting are available for all families.  Variable predictiveness can
-  be assessed using variable importance (VIMP) measures for single, as
-  well as grouped variables.  Variable selection is implemented using
-  minimal depth variable selection (Ishwaran et al. 2010). Missing data
-  (for x-variables and y-outcomes) can be imputed on both training and
-  test data.  The underlying code is based on Ishwaran and Kogalur's now
-  retired \pkg{randomSurvivalForest} package (Ishwaran and Kogalur
+  Also includes unsupervised forests and quantile regression forests,
+  \command{\link{quantileReg}}.  Different splitting rules invoked under
+  deterministic or random splitting are available for all families.
+  Variable predictiveness can be assessed using variable importance
+  (VIMP) measures for single, as well as grouped variables.  Missing
+  data (for x-variables and y-outcomes) can be imputed on both training
+  and test data.  The underlying code is based on Ishwaran and Kogalur's
+  now retired \pkg{randomSurvivalForest} package (Ishwaran and Kogalur
   2007), and has been significantly refactored for improved
   computational speed.
+  
 }
 
 \section{Package Overview}{
@@ -47,7 +49,11 @@
     using user supplied training data.  We refer to the resulting object
     as a RF-SRC grow object.  Formally, the resulting object has class
     \code{(rfsrc, grow)}.
+
+    \item \code{\link{rfsrcFast}}
     
+    A fast implementation of \code{rfsrc} using subsampling.
+
     \item \code{\link{predict.rfsrc}}, \code{predict}
     
     Used for prediction.  Predicted values are obtained by dropping the
@@ -76,31 +82,36 @@
     Used to extract the partial effects of a variable or variables on the ensembles.
 
   }
+  
 }
 
-\section{Source Code, Beta Builds and Bug Reporting}{Regular stable releases of this package
-  are available on CRAN at
-  \url{_HTTPS_PREFIX_cran.r-project.org/package=randomForestSRC}.
-  Interim unstable development builds with bug fixes and sometimes additional
-  functionality are available at
-  \url{_HTTPS_PREFIX_github.com/kogalur/randomForestSRC}.
-  Bugs may be reported via \url{_HTTPS_PREFIX_github.com/kogalur/randomForestSRC/issues/new}.
-  Please provide the accompanying
-  information with any reports:
+\section{Source Code, Beta Builds and Bug Reporting}{
 
   \enumerate{
-    \item \code{sessionInfo()}
-    \item A minimal reproducible example consisting of the following items:
-    \itemize{
-      \item a minimal dataset, necessary to reproduce the error
-      \item the minimal runnable code necessary to reproduce the error, 
-      which can be run on the given dataset
-      \item the necessary information on the used packages, R version and system it is run on
-      \item in the case of random processes, a seed (set by \code{set.seed()}) for reproducibility
+
+    \item Regular stable releases of this package are available on CRAN
+    at \url{cran.r-project.org/package=randomForestSRC}
+
+    \item Interim unstable development builds with bug fixes and sometimes additional
+    functionality are available at
+    \url{github.com/kogalur/randomForestSRC}
+
+    \item Bugs may be reported via \url{github.com/kogalur/randomForestSRC/issues/new}.
+    Please provide the accompanying information with any reports:
+    \enumerate{
+      \item \code{sessionInfo()}
+      \item A minimal reproducible example consisting of the following items:
+      \itemize{
+	\item a minimal dataset, necessary to reproduce the error
+	\item the minimal runnable code necessary to reproduce the error, 
+	which can be run on the given dataset
+	\item the necessary information on the used packages, R version and system it is run on
+	\item in the case of random processes, a seed (set by \code{set.seed()}) for reproducibility
+      }
     }
   }
+  
 }
-
 \section{OpenMP Parallel Processing -- Installation}{This package
   implements OpenMP shared-memory parallel programming if the
   target architecture and operating system support it.  This is the
@@ -108,7 +119,7 @@
 
   Additional instructions for configuring OpenMP parallel processing
   are available at
-  \url{_HTTPS_PREFIX_kogalur.github.io/randomForestSRC/building.html}.
+  \url{kogalur.github.io/randomForestSRC/building.html}.
   
   An understanding of resource utilization (CPU and RAM) is necessary
   when running the package using OpenMP and Open MPI parallel execution.
@@ -150,9 +161,9 @@
   Ishwaran H. (2015).  The effect of splitting on random forests.
   \emph{Machine Learning}, 99:75-118.
   
-  Ishwaran H. and Lu M.  (2017).  Standard errors and confidence
+  Ishwaran H. and Lu M.  (2018).  Standard errors and confidence
   intervals for variable importance in random forest regression,
-  classification, and survival.
+  classification, and survival. Statistics in Medicine (in press).
 
   Mantero A. and Ishwaran H. (2017). Unsupervised random forests.
 
@@ -164,10 +175,14 @@
 }
 \seealso{
   \command{\link{find.interaction}},
+
    
+
   \command{\link{impute}},
   \command{\link{max.subtree}},
+
    
+
   \command{\link{plot.competing.risk}},
   \command{\link{plot.rfsrc}},
   \command{\link{plot.survival}},
@@ -175,10 +190,15 @@
   \command{\link{predict.rfsrc}},
   \command{\link{print.rfsrc}},
   \command{\link{quantileReg}},
-  \command{\link{rfsrc}},
+  \command{\link{rfsrcFast}},
   \command{\link{rfsrcSyn}},
+
    
+
+  \command{\link{subsample}},
+
   \command{\link{stat.split}},
+  \command{\link{tune}},
   \command{\link{var.select}},
   \command{\link{vimp}}
 }

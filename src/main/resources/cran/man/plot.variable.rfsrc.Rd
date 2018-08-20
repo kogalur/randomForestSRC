@@ -4,10 +4,10 @@
 \title{Plot Marginal Effect of Variables}
 \description{
   Plot the marginal effect of an x-variable on the class probability
-  (classification), response (regression), mortality (survival), or
-  the expected years lost (competing risk) from a RF-SRC analysis.  Users
-  can select between marginal (unadjusted, but fast) and partial plots
-  (adjusted, but slow).
+  (classification), response (regression), mortality (survival), or the
+  expected years lost (competing risk).  Users can select between
+  marginal (unadjusted, but fast) and partial plots (adjusted, but
+  slower).
 }
 \usage{\method{plot.variable}{rfsrc}(x, xvar.names, target,
   m.target = NULL, time, surv.type = c("mort", "rel.freq",
@@ -17,24 +17,24 @@
   smooth.lines = FALSE, subset, ...)
 }
 \arguments{
-  \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc, synthetic)},
-    \code{(rfsrc, predict)}, or \code{(rfsrc, plot.variable)}.  See the
-    examples below for illustration of the latter.}
+  \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc,
+    synthetic)}, or \code{(rfsrc, plot.variable)}.  See the examples
+    below for illustration of the latter.}
   \item{xvar.names}{Names of the x-variables to be used.}
-  \item{target}{For classification families, an integer or
+  \item{target}{For classification, an integer or
     character value specifying the class to focus on (defaults to the
-    first class).  For competing risk families, an integer value between
+    first class).  For competing risks, an integer value between
     1 and \code{J} indicating the event of interest, where \code{J} is
     the number of event types.  The default is to use the first event
     type.}
   \item{m.target}{Character value for multivariate families
     specifying the target outcome to be used.  If left unspecified, the
     algorithm will choose a default target.}
-   \item{time}{For survival families, the time at which the predicted
+   \item{time}{For survival, the time at which the predicted
     survival value is evaluated at (depends on \code{surv.type}).}
-  \item{surv.type}{For survival families, specifies the predicted value.
+  \item{surv.type}{For survival, specifies the predicted value.
     See details below.}
-  \item{class.type}{For classification families, specifies the predicted value.
+  \item{class.type}{For classification, specifies the predicted value.
     See details below.}
   \item{partial}{Should partial plots be used?}
   \item{oob}{OOB (TRUE)  or in-bag (FALSE) predicted values.}
@@ -153,7 +153,7 @@
 
 ## survival
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
-v.obj <- rfsrc(Surv(time,status)~., veteran, nsplit = 10, ntree = 100)
+v.obj <- rfsrc(Surv(time,status)~., veteran, ntree = 100)
 plot.variable(v.obj, plots.per.page = 3)
 plot.variable(v.obj, plots.per.page = 2, xvar.names = c("trt", "karno", "age"))
 plot.variable(v.obj, surv.type = "surv", nvar = 1, time = 200)

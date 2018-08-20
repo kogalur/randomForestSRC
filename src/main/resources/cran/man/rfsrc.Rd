@@ -3,63 +3,53 @@
 \alias{_PROJECT_PACKAGE_NAME_}
 \title{Random Forests for Survival, Regression, and Classification (RF-SRC)}
 \description{
-  A random forest (Breiman, 2001) is grown using user supplied training
-  data.  Applies when the response (outcome) is numeric, categorical
-  (factor), or right-censored (including competing risk), and yields
-  regression, classification, and survival forests, respectively.  The
-  resulting forest, informally referred to as a RF-SRC object, contains
-  many useful values which can be directly extracted by the user and/or
-  parsed using additional functions (see the examples below).  This is
-  the main entry point to the \pkg{_PROJECT_PACKAGE_NAME_} package.
-  
-  Note that the package now handles multivariate regression and
-  classification responses as well as mixed outcomes
-  (regression/classification responses).  In such cases, a multivariate
-  forest is grown, informally referred to as an mRF-SRC object.
-  Unsupervised forests and quantile regression forests are also available.
-  
-  The package implements OpenMP shared-memory parallel programming.
-  However, the default installation will only execute serially.  Users
-  should consult the randomForestSRC-package help file for details on
-  installing the OpenMP version of the package.  The help file is
-  readily accessible via the command
+
+  Fast OpenMP parallel processing unified treatment of Breiman's random
+  forests (Breiman 2001) for a variety of data settings.  Applies when
+  the y-response is numeric or categorical, yielding Breiman regression
+  and classification forests, while random survival forests (Ishwaran et
+  al. 2008, 2012) are grown for right-censored survival and competing
+  risk data.  Multivariate regression and classification responses as
+  well as mixed regression/classification responses are also handled.
+  Also includes unsupervised forests and quantile regression forests,
+  \command{\link{quantileReg}}.  Different splitting rules invoked under
+  deterministic or random splitting are available for all families.
+  Variable predictiveness can be assessed using variable importance
+  (VIMP) measures for single, as well as grouped variables.  Missing
+  data can be imputed on both training and test data; see
+  \command{\link{impute}}.  The forest object, informally referred to as
+  an RF-SRC object, contains many useful values which can be directly
+  extracted by the user and/or parsed using additional functions (see
+  the examples below).
+
+  This is the main entry point to the \pkg{_PROJECT_PACKAGE_NAME_}
+  package.  Also see \command{\link{rfsrcFast}} for a fast
+  implementation of \code{rfsrc}.
+
+  For more information about this package and OpenMP, use the command
   \code{package?_PROJECT_PACKAGE_NAME_}.
+  
 }
 \usage{
 rfsrc(formula, data, ntree = 1000,
+  mtry = NULL, ytry = NULL,
+  nodesize = NULL, nodedepth = NULL,
+  splitrule = NULL, nsplit = 10,
+  importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
+  block.size = if (importance == "none" || as.character(importance) == "FALSE") NULL
+    else 10,
+  ensemble = c("all", "oob", "inbag"),
   bootstrap = c("by.root", "by.node", "none", "by.user"),
-  mtry = NULL,
-  ytry = NULL,
-  yvar.wt = NULL,
-  nodesize = NULL,
-  nodedepth = NULL,
-  splitrule = NULL,
-  nsplit = NULL,
-  importance = c(FALSE, TRUE, "none", "permute", "random", "anti", 
-                 "permute.ensemble", "random.ensemble",  "anti.ensemble"),
-  err.block = NULL,
-  
-  na.action = c("na.omit", "na.impute"),
-  
-   
-  nimpute = 1,
-  ntime,
-  cause,
-  proximity = FALSE,
-  sampsize = NULL,
-  samptype = c("swr", "swor"),
-  samp = NULL,
-  case.wt  = NULL,
-  split.wt = NULL,
-  forest.wt = FALSE,
-    
-  xvar.wt = NULL,  
+  samptype = c("swr", "swor"), sampsize = NULL, samp = NULL, membership = FALSE,
+  na.action = c("na.omit", "na.impute"), nimpute = 1,
+  ntime, cause,
+  proximity = FALSE, distance = FALSE, forest.wt = FALSE,
+  xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt  = NULL,
   forest = TRUE,
   var.used = c(FALSE, "all.trees", "by.tree"),
   split.depth = c(FALSE, "all.trees", "by.tree"),
   seed = NULL,
   do.trace = FALSE,
-  membership = FALSE,
   statistics = FALSE,
   ...)
 }
@@ -68,29 +58,15 @@ rfsrc(formula, data, ntree = 1000,
     missing, unsupervised splitting is implemented.}
   \item{data}{Data frame containing the y-outcome and x-variables.}
   \item{ntree}{Number of trees in the forest.}
-  \item{bootstrap}{Bootstrap protocol.  The default is \code{by.root}
-    which bootstraps the data by sampling with replacement at the root
-    node before growing the tree.  If \code{by.node} is choosen, the
-    data is bootstrapped at each node during the grow process.  If
-    \code{none} is chosen, the data is not bootstrapped at all.  If
-    \code{by.user} is choosen, the bootstrap specified by \code{samp} is
-    used. Note the details below on prediction error when the default choice
-    is not in effect.}
   \item{mtry}{Number of variables randomly selected as candidates for
-    splitting a node.  The default is \code{p}/3 for regression families,
+    splitting a node.  The default is \code{p}/3 for regression,
     where \code{p} equals the number of variables.  For all
     other families (including unsupervised settings), the default is
     sqrt(\code{p}).  Values are always rounded up.}
   \item{ytry}{For unsupervised forests, sets the number of randomly
     selected pseudo-responses (see below for more details). 
     The default is \code{ytry}=1, which selects one pseudo-response.}
-    \item{yvar.wt}{NOT YET IMPLEMENTED: Vector of non-negative weights where entry
-    \code{k}, after normalizing, is the probability of selecting
-    response \code{k} as a candidate for inclusion in the split
-    statistic in unsupervised settings.  Default is to
-    use uniform weights.  Vector must be of the same length as the
-    number of respones in the data set.}
-    \item{nodesize}{Forest average number of unique cases (data points) in
+  \item{nodesize}{Forest average number of unique cases (data points) in
     a terminal node.  The defaults are: survival (3), competing risk
     (6), regression (5), classification (1), mixed outcomes (3),
     unsupervised (3).  It is recommended to experiment with different
@@ -99,99 +75,96 @@ rfsrc(formula, data, ntree = 1000,
     default behaviour is that this parameter is ignored.}
   \item{splitrule}{Splitting rule used to grow trees.  See below for
     details.}
-  \item{nsplit}{Non-negative integer value.  When zero,
+  \item{nsplit}{Non-negative integer value.  When zero or NULL,
     deterministic splitting for an x-variable is in effect.  When
     non-zero, a maximum of nsplit split points are randomly chosen
-    among the possible split points for the x-variable. This can
-    significantly increase speed over deterministic splitting.  In
-    the case of pure random splitting, a value of one is used as the
-    default, since deterministic splitting is not a compatible
-    concept in that scenario.  However, values greater than one are
-    accepted, as with the other split rules.}
+    among the possible split points for the x-variable. This
+    significantly increases speed.}  
   \item{importance}{Method for computing variable importance (VIMP).
     Because VIMP is computationally expensive, the default action is
     \code{importance="none"} (VIMP can always be recovered later
     using the functions \command{vimp} or \command{predict}). Setting
-    \code{importance=TRUE} implements Breiman-Cutler permutation VIMP.
+    \code{importance=TRUE} implements permutation VIMP.
     See below for more details.}
-  \item{err.block}{Should the error rate be calculated on every tree?
-    When \code{NULL}, it will only be calculated on the last tree.  In
-    such situations, plot of the error rate will result in a flat line.
-    To view the error rate on every nth tree, set the value to an
-    integer between \code{1} and \code{ntree}.  Restore the model with
-    these values on demand to accomplish the same.  As an intentended
-    side effect, if importance is requested, VIMP is
-    calculated in "blocks" of size equal to \code{err.block}, thus
+  \item{block.size}{Should the cumulative error rate be calculated on
+    every tree?  When \code{NULL}, it will only be calculated on the
+    last tree and the plot of the cumulative error rate will result in a
+    flat line.  To view the cumulative error rate on every nth tree, set
+    the value to an integer between \code{1} and \code{ntree}.  As an
+    intended side effect, if importance is requested, VIMP is
+    calculated in "blocks" of size equal to \code{block.size}, thus
     resulting in a useful compromise between ensemble and permutation
-    VIMP (not yet implemented). See below for more details.}
+    VIMP. The default action is to use 10 trees.  See VIMP below for more details.}
+  \item{ensemble}{Specifies the type of ensemble.  By default both
+    out-of-bag (OOB) and inbag ensembles are returned.  Always use OOB
+  values for interfence on the training data.}
+  \item{bootstrap}{Bootstrap protocol.  The default is \code{by.root}
+    which bootstraps the data by sampling with replacement at the root
+    node before growing the tree (for sampling without replacement, see
+    the option \code{samptype}).    If \code{by.node} is choosen, the
+    data is bootstrapped at each node during the grow process.  If
+    \code{none} is chosen, the data is not bootstrapped at all.  If
+    \code{by.user} is choosen, the bootstrap specified by \code{samp} is
+    used.  It is not possible to return OOB ensembles or prediction
+    error if \code{by.node} or \code{none} are in effect.}
+  \item{samptype}{Type of bootstrap when \code{"by.root"} is in
+    effect.  Choices are \code{swr} (sampling with replacement,
+    the default action) and \code{swor} (sampling without replacement).}
+  \item{sampsize}{Requested size of bootstrap when \code{"by.root"} is in
+    effect (if missing the default action is the usual bootstrap).}
+  \item{samp}{Bootstrap specification when \code{"by.user"} is in
+    effect.  This is a array of dim \code{n x ntree} specifying how many
+    times each record appears inbag in the bootstrap for each tree.}
+  \item{membership}{Should terminal node membership and inbag
+    information be returned?}
   \item{na.action}{Action taken if the data contains \code{NA}'s.
     Possible values are \code{na.omit} or \code{na.impute}.
     The default \code{na.omit} removes the entire record if
     even one of its entries is \code{NA} (for x-variables this applies only
     to those specifically listed in 'formula').  Selecting
-	  \code{na.impute} imputes the data.
-	  See below for more details regarding missing data imputation.}
+    \code{na.impute} imputes the data. See below for more details
+    regarding missing data imputation.}
   \item{nimpute}{Number of iterations of the missing data algorithm.
 	  Performance measures such as out-of-bag (OOB) error rates tend
 	  to become optimistic if \code{nimpute} is greater than 1.}
-  \item{ntime}{Integer value used for survival families to
-    constrain ensemble calculations to a grid of time values of no more
-    than \code{ntime} time points.  Alternatively if a vector of values
-    of length greater than one is supplied, it is assumed these are the
-    time points to be used to constrain the calculations (note that the
-    constrained time points used will be the observed event times
-    closest to the user supplied time points).  If no value is
-    specified, the default action is to use all observed event times.}
-  \item{cause}{Integer value between 1 and
-    \code{J} indicating the event of interest for competing risks, where
-    \code{J} is the number of event types (this option applies only to
-    competing risks and is ignored otherwise).  While growing a
-    tree, the splitting of a node is restricted to the event type
-    specified by \code{cause}.  If not specified, the default is
-    to use a composite splitting rule which is an average over the
-    entire set of event types (a democratic approach).  Users can
-    also pass a vector of non-negative weights of length \code{J}
-    if they wish to use a customized composite split statistic
-    (for example, passing a vector of ones reverts to the default
-    composite split statistic).  In all instances when
-    \code{cause} is set incorrectly, splitting reverts to the
-    default.  Finally, note that regardless of how \code{cause} is
-    specified, the returned forest object always provides
-    estimates for all event types.}
+  \item{ntime}{Integer value used for survival to constrain ensemble
+    calculations to a grid of \code{ntime} time points.  Alternatively
+    if a vector of values of length greater than one is supplied, it is
+    assumed these are the time points to be used to constrain the
+    calculations (note that the constrained time points used will be the
+    observed event times closest to the user supplied time points).  If
+    no value is specified, the default action is to use all observed
+    event times.}
+  \item{cause}{Integer value between 1 and \code{J} indicating the event
+    of interest for competing risks, where \code{J} is the number of
+    event types (this option applies only to competing risks and is
+    ignored otherwise).  While growing a tree, the splitting of a node
+    is restricted to the event type specified by \code{cause}.  If not
+    specified, the default is to use a composite splitting rule which is
+    an average over the entire set of event types (a democratic
+    approach).  Users can also pass a vector of non-negative weights of
+    length \code{J} if they wish to use a customized composite split
+    statistic (for example, passing a vector of ones reverts to the
+    default composite split statistic).  In all instances when
+    \code{cause} is set incorrectly, splitting reverts to the default.
+    Finally, note that regardless of how \code{cause} is specified, the
+    returned forest object always provides estimates for all event
+    types.}
   \item{proximity}{Proximity of cases as measured by the frequency of
     sharing the same terminal node.  This is an \code{n}x\code{n}
     matrix, which can be large.  Choices are \code{"inbag"},
     \code{"oob"}, \code{"all"}, \code{TRUE}, or \code{FALSE}.  
     Setting \code{proximity = TRUE} is equivalent to 
     \code{proximity = "inbag"}.}
-   
-  \item{sampsize}{Requested size of bootstrap when \code{"by.root"} is in
-    effect (if missing the default action is the usual bootstrap).}
-  \item{samptype}{Type of bootstrap when \code{"by.root"} is in
-    effect.  Choices are \code{swr} (sampling with replacement,
-    the default action) and \code{swor} (sampling without replacement).}
-  \item{samp}{Bootstrap specification when \code{"by.user"} is in
-    effect.  This is a array of dim \code{n x ntree} specifying how many
-    times each record appears inbag in the bootstrap for each tree.}
-  \item{case.wt}{Vector of non-negative weights where entry
-    \code{k}, after normalizing, is the probability of selecting
-    case \code{k} as a candidate for the bootstrap.  Default is to
-    use uniform weights.  Vector must be of dimension \code{n},
-    where \code{n} equals the number of cases in the processed data
-    set (missing values may be removed, thus altering the original
-    sample size).  It is generally better to use real weights rather than
-    integers.  With larger sizes of \code{n}, the slightly different
-    sampling algorithms used in the two scenarios can result in
-    dramatically different execution times.  See the example below for
-    the breast data set for an illustration of its use for
-    class imbalanced data.}
-  \item{split.wt}{Vector of non-negative weights where entry
-    \code{k}, after normalizing, is the multiplier by which the
-    split statistic for a variable is adjusted.  A large value
-    encourages the node to split on the variable. Default is to
-    use uniform weights.  Vector must be of dimension \code{p},
-    where \code{p} equals the number of variables, otherwise the
-    default is invoked.}
+  \item{distance}{Distance between cases as measured by the ratio of the
+    sum of the count of edges from each case to their immediate common
+    ancestor node to the sum of the count of edges from each case to the
+    root node.  If the cases are co-terminal for a tree, this measure is
+    zero and reduces to 1 - the proximity measure for these cases in a
+    tree. This is an \code{n}x\code{n} matrix, which can be large.
+    Choices are \code{"inbag"}, \code{"oob"}, \code{"all"}, \code{TRUE},
+    or \code{FALSE}.  Setting \code{distance = TRUE} is equivalent to
+    \code{distance = "inbag"}.}
   \item{forest.wt}{Should the forest weight matrix be
     calculated?  Creates an \code{n}x\code{n} matrix which can be
     used for prediction and constructing customized estimators.  Choices
@@ -207,22 +180,52 @@ rfsrc(formula, data, ntree = 1000,
     integers.  With larger sizes of \code{p}, the slightly different
     sampling algorithms used in the two scenarios can result in
     dramatically different execution times.}
+  \item{yvar.wt}{NOT YET IMPLEMENTED: Vector of non-negative weights where entry
+    \code{k}, after normalizing, is the probability of selecting
+    response \code{k} as a candidate for inclusion in the split
+    statistic in unsupervised settings.  Default is to
+    use uniform weights.  Vector must be of the same length as the
+    number of respones in the data set.}
+  \item{split.wt}{Vector of non-negative weights where entry
+    \code{k}, after normalizing, is the multiplier by which the
+    split statistic for a variable is adjusted.  A large value
+    encourages the node to split on the variable. Default is to
+    use uniform weights.  Vector must be of dimension \code{p},
+    where \code{p} equals the number of variables, otherwise the
+    default is invoked.}
+  \item{case.wt}{Vector of non-negative weights where entry
+    \code{k}, after normalizing, is the probability of selecting
+    case \code{k} as a candidate for the bootstrap.  Default is to
+    use uniform weights.  Vector must be of dimension \code{n},
+    where \code{n} equals the number of cases in the processed data
+    set (missing values may be removed, thus altering the original
+    sample size).  It is generally better to use real weights rather than
+    integers.  With larger sizes of \code{n}, the slightly different
+    sampling algorithms used in the two scenarios can result in
+    dramatically different execution times.  See the example below for
+    the breast data set for an illustration of its use for
+    class imbalanced data.}
   \item{forest}{Should the forest object be returned?  Used for
     prediction on new data and required by many of the functions
     used to parse the RF-SRC object.  It is recommended not to
     change the default setting.}
   \item{var.used}{Return variables used for splitting?  Default is
-    \code{FALSE}.  Possible values are \code{all.trees} and
-    \code{by.tree}.}
+    \code{FALSE}.  Possible values are \code{all.trees} which returns a
+    vector where each element records the number of times a split
+    occurred on a variable, and \code{by.tree} which is a matrix
+    recording the number of times a split occurred on a variable in a
+    specific tree.}
   \item{split.depth}{Records the minimal depth for each variable.
-    Default is \code{FALSE}.  Possible values are \code{all.trees} and
-    \code{by.tree}. Used for variable selection.}
+    Default is \code{FALSE}.  Possible values are \code{all.trees} which
+    returns a matrix recording the minimal depth for a variable
+    (columns) for a specific case (rows) averaged over the forest, and
+    \code{by.tree} which returns a three-dimensional array recording
+    minimal depth for a specific case (first dimension) for a variable
+    (second dimension) for a specific tree (third dimension).}
   \item{seed}{Negative integer specifying seed for the random number
     generator.}
   \item{do.trace}{Number of seconds between updates to the user on
     approximate time to completion.}
-  \item{membership}{Should terminal node membership and inbag
-    information be returned?}
   \item{statistics}{Should split statistics be returned?  Values can be
     parsed using \command{stat.split}.}
   \item{...}{Further arguments passed to or from other methods.}
@@ -232,7 +235,7 @@ rfsrc(formula, data, ntree = 1000,
     
     \item \emph{Families}
 
-    Users do *not* set this value as the package automagically determines
+    Do *not* set this value as the package automagically determines
     the underlying random forest family from the type of response and
     the formula supplied.  There are eight possible scenarios:
     
@@ -255,7 +258,7 @@ rfsrc(formula, data, ntree = 1000,
     }
     
     See below for how to code the response in the two different survival
-    scenarios and for specifying formula for multivariate forests.
+    scenarios and for specifying a multivariate forest formula.
     
     \item \emph{Splitrules}
     
@@ -350,6 +353,7 @@ rfsrc(formula, data, ntree = 1000,
       \item Random splitting.  For all families, pure random splitting
       can be invoked by setting \code{splitrule="random"}.  See
       below for more details regarding randomized splitting rules.      
+
     }
     
     
@@ -373,58 +377,54 @@ rfsrc(formula, data, ntree = 1000,
     
     \item \emph{Improving computational speed}
     
-    \itemize{
+    See the function \command{\link{rfsrcFast}} for a fast
+    implementation of \code{rfsrc}.  In general, the key methods for
+    increasing speed are as follows:
+    
+      \itemize{
+
+      \item \emph{Randomized splitting rules}
       
-      \item \emph{Randomized Splitting Rules}
-      
-      Trees tend to favor splits on continuous variables and factors with
-      large numbers of levels (Loh and Shih, 1997).  To mitigate this
-      bias, and considerably improve computational speed, a randomize
-      version of a splitting rule can be invoked using \code{nsplit}.
-      If \code{nsplit} is set to a non-zero positive integer, then a
-      maximum of \code{nsplit} split points are chosen randomly for each
-      of the \code{mtry} variables within a node.  The splitting rule is
-      applied to the random split points and the node is split on that
-      variable and random split point yielding the best value (as measured
-      by the splitting rule).  Pure random splitting can be invoked by
-      setting \code{splitrule="random"}.  For each node, a variable is
-      randomly selected and the node is split using a random split point
-      (Cutler and Zhao, 2001; Lin and Jeon, 2006).
-      
-      The value of \code{nsplit} has a significant impact on the time
-      taken to grow a forest.  This is because non-random splitting
-      (i.e. the default option \code{nsplit=0}), considers all possible
-      split points for each of the \code{mtry} variables, and iterating
-      over each split point can be CPU intensive, especially in large
-      sample size settings.
-      
-      In general, regardless of computational speed, it is good practice
-      to use the \code{nsplit} when the data contains a mix of
-      continuous and discrete variables.  Using a reasonably small value
-      mitigates bias and may not compromise accuracy.
-      
-      
-      \item \emph{Large sample size}
-      
-      For increased efficiency for survival families, users should consider
-      setting \code{ntime} to a relatively small value when the sample
-      size (number of rows of the data) is large.  This constrains ensemble
-      calculations such as survival functions to a restricted grid of time
-      points of length no more than \code{ntime} which can considerably
-      reduce computational times.
+      Trees tend to favor splits on continuous variables and factors
+      with large numbers of levels (Loh and Shih, 1997).  To mitigate
+      this bias and improve speed, randomized splitting can be invoked
+      using the option \code{nsplit}.  If \code{nsplit} is set to a
+      non-zero positive integer, then a maximum of \code{nsplit} split
+      points are chosen randomly for each of the \code{mtry} variables
+      within a node and only these points are used to determine the best
+      split.  Pure random splitting can be invoked by setting
+      \code{splitrule="random"}.  In this case, a variable is randomly
+      selected and the node is split using a random split point (Cutler
+      and Zhao, 2001; Lin and Jeon, 2006).  Note when pure random
+      splitting is in effect, \code{nsplit} is set to one.
+
+      \item \emph{Subsampling}
+
+      Subsampling can be used to reduce the size of the in-sample data
+      used to grow a tree and therefore can greatly reduce computational
+      load.  Subsampling is implemented using options \code{sampsize}
+      and \code{samptype}.
+
+      \item \emph{Unique time points}
+
+      For large survival problems, users should consider setting
+      \code{ntime} to a reasonably small value (such as 50 or 100).
+      This constrains ensemble calculations such as survival functions
+      to a restricted grid of time points of length no more than
+      \code{ntime} and considerably reduces computational times.
+
       
       \item \emph{Large number of variables}
-
-      For increased efficiency when the number of variables are large,
-      use the defalut setting of \code{importance="none"} which turns
-      off variable importance (VIMP) calculations and can considerably
-      reduce computational times (see below for more details about
-      variable importance).  Note that variable importance calculations
-      can always be recovered using functions \command{vimp} or
-      \command{predict}.  Finally, the function
-      \command{max.subtree} calculates minimal depth, a measure of the
-      depth that a variable splits, and can be used for fast variable
-      selection (Ishwaran, 2010).
+  
+      Use the default setting of \code{importance="none"} which turns
+      off variable importance (VIMP) calculations and considerably
+      reduces computational times when there are a large number of
+      variables (see below for more details about variable importance).
+      Variable importance calculations can always be recovered later
+      using functions \command{vimp} or \command{predict}.  Also
+      consider using the function \command{max.subtree} which calculates
+      minimal depth, a measure of the depth that a variable splits, and
+      yields fast variable selection (Ishwaran, 2010).
       
       \item \emph{Factors}
       
@@ -434,8 +434,10 @@ rfsrc(formula, data, ntree = 1000,
       applied to each factor before and after the native C library is
       executed.  Because of this, if x-variables are all factors, then
       computational times may become very long in high dimensional
-      problems.
+      problems.  Consider converting factors to real if this is the
+      case.
 
+ 
     }
     
     \item \emph{Prediction Error}
@@ -461,45 +463,49 @@ rfsrc(formula, data, ntree = 1000,
     
     \item \emph{Variable Importance (VIMP)}
     
-    The option \code{importance} allows several ways to calculate
-    VIMP.  When the option is \code{permute} or \code{TRUE}, the 
-    action is to return Breiman-Cutler permutation VIMP as described in
-    Breiman (2001).  For each tree, the prediction error on the
-    out-of-bag (OOB) data is recorded.  Then for a given variable
-    \emph{x}, OOB cases are randomly permuted in \emph{x} and the
-    prediction error is recorded.  The VIMP for \emph{x} is defined as
-    the difference between the perturbed and unperturbed error rate,
-    averaged over all trees.  If \code{random} is specified, then
-    \emph{x} is not permuted, but rather an OOB case is assigned a
-    daughter node randomly whenever a split on \emph{x} is encountered
-    in the in-bag tree.  If \code{anti} is specified, then \emph{x} is
-    assigned to the opposite node whenever a split on \emph{x} is
-    encountered in the in-bag tree.
-    
-    If one of the \code{ensemble} options is selected, VIMP is
-    calculated by comparing the error rate for the perturbed OOB forest
-    ensemble to the unperturbed OOB forest ensemble, where the perturbed
-    ensemble is obtained by either permuting \emph{x}, or by random
-    daughter node assignment, or by anti-splitting on \emph{x}.  Thus,
-    unlike Breiman-Cutler VIMP, ensemble VIMP does not measure the tree
-    average effect of \emph{x}, but rather its overall forest effect.
-    This is called Ishwaran-Kogalur VIMP (Ishwaran et al. 2008).
+    To calculate VIMP, use the option \code{importance}.  Classical
+    permutation VIMP is implemented when \code{permute} or \code{TRUE}
+    is selected.  In this case, OOB cases for a variable \emph{x} are
+    randomly permuted and dropped down a tree.  VIMP is calculated by
+    comparing OOB prediction performance for the permuted predictor to
+    the original predictor.
 
-    A useful compromise between Breiman-Cutler and Ishwaran-Kogalur VIMP
-    can be obtained using \code{err.block} when Breiman-Cutler
-    permutation VIMP is requested (not yet implemented).  Setting this value to an integer
-    between \code{1} and \code{ntree} will calculate ensemble VIMP in
-    blocks of size \code{err.block}.  The average of these values are
-    returned.  Ensemble blocked VIMP is faster to calculate than Breiman-Cutler VIMP and is
-    preferable in large scale problems (this is especially true for
-    survival).
-    
+    The exact calculation for VIMP depends upon \code{block.size} (an
+    integer value between \code{1} and \code{ntree}) specifying the
+    number of trees in a block used to determine VIMP.  When the value
+    is \code{1}, VIMP is calculated by tree (blocks of size 1).
+    Specifically, the difference between prediction error under the
+    perturbed predictor and the original predictor is calculated for
+    each tree and averaged over the forest.  This yields the original
+    Breiman-Cutler VIMP (Breiman 2001).
+
+    When \code{block.size} is set to \code{ntree}, VIMP is calculated by
+    comparing the error rate for the perturbed OOB forest ensemble
+    (using all trees) to the unperturbed OOB forest ensemble (using all
+    trees).  Thus, unlike Breiman-Cutler VIMP, ensemble VIMP does not
+    measure the tree average effect of \emph{x}, but rather its overall
+    forest effect.  This is called Ishwaran-Kogalur VIMP (Ishwaran et
+    al. 2008).
+
+    A useful compromise between Breiman-Cutler (BC) and Ishwaran-Kogalur
+    (IK) VIMP can be obtained by setting \code{block.size} to a value
+    between \code{1} and \code{ntree}.  Smaller values are closer to BC
+    and larger values closer to IK.  Smaller generally gives better
+    accuracy, however computational times will be higher because VIMP is
+    calculated over more blocks.
+
+    The option \code{importance} permits different ways to perturb a
+    variable.  If \code{random} is specified, then instead of permuting
+    \emph{x}, OOB case are assigned a daughter node randomly whenever a
+    split on \emph{x} is encountered.  If \code{anti} is specified,
+    \emph{x} is assigned to the opposite node whenever a split on
+    \emph{x} is encountered.
+        
     Note that the option \code{none} turns VIMP off entirely.
     
     Note that the function \command{vimp} provides a friendly user
     interface for extracting VIMP.
-    
-    
+       
     \item \emph{Multivariate Forests}
     
     Multivariate forests are specified by using the multivariate formula
@@ -632,7 +638,7 @@ rfsrc(formula, data, ntree = 1000,
     missing are removed from the forest analysis.  Variables having all
     missing values are also removed.
     
-    See the function \command{impute.rfsrc} for a fast impute interface.    
+    See the function \command{impute} for a fast impute interface.    
     
 }}
 \value{
@@ -727,65 +733,49 @@ rfsrc(formula, data, ntree = 1000,
   \item{ndead}{Number of events.}
 }
 \note{
-  \enumerate{
-    \item Values returned depend heavily on the family.  In
-    particular, \code{predicted} and \code{predicted.oob} are the
-    following values calculated using in-bag and OOB data:
+
+  Values returned depend heavily on the family.  In particular,
+  \code{predicted} and \code{predicted.oob} are the following values
+  calculated using in-bag and OOB data:
     
     \enumerate{
       \item For regression, a vector of predicted y-responses.
       
       \item For classification, a matrix with columns containing the
-      estimated class probability for each class.
+      estimated class probability for each class.  Performance values
+      and VIMP for classification are reported as a matrix with J+1
+      columns where J is the number of classes.  The first column "all"
+      is the unconditional value for performance or VIMP, while the
+      remaining columns are performance and VIMP conditioned on cases
+      corresponding to that class label.
       
       \item For survival, a vector of mortality values (Ishwaran et al.,
       2008) representing estimated risk for each individual calibrated
       to the scale of the number of events (as a specific example, if
       \emph{i} has a mortality value of 100, then if all individuals had
       the same x-values as \emph{i}, we would expect an average of 100
-      events).  Also included in the grow object are matrices containing
+      events).  Also returned are matrices containing
       the CHF and survival function.  Each row corresponds to an
       individual's ensemble CHF or survival function evaluated at each
-      time point in \code{time.interest}.
+      time point in \code{time.interest}.  
       
       \item For competing risks, a matrix with one column for each event
       recording the expected number of life years lost due to the event
       specific cause up to the maximum follow up (Ishwaran et al.,
-      2013).  The grow object also contains the cause-specific
-      cumulative hazard function (CSCHF) and the cumulative incidence
-      function (CIF) for each event type.  These are encoded as a
-      three-dimensional array, with the third dimension used for the
-      event type, each time point in \code{time.interest} making up the
-      second dimension (columns), and the case (individual) being the
-      first dimension (rows).
+      2013).  Also returned are the cause-specific cumulative hazard
+      function (CSCHF) and the cumulative incidence function (CIF) for
+      each event type.  These are encoded as a three-dimensional array,
+      with the third dimension used for the event type, each time point
+      in \code{time.interest} making up the second dimension (columns),
+      and the case (individual) being the first dimension (rows).
       
       \item For multivariate families, predicted values (and other
       performance values such as VIMP and error rates) are stored in 
-      the lists \code{regrOutput} and \code{clasOutput}.
+      the lists \code{regrOutput} and \code{clasOutput} which can be
+      parsed using the functions \code{get.mv.error},
+      \code{get.mv.predicted} and \code{get.mv.vimp}.
       
     }
-    
-    \item Different R-wrappers are provided to aid in parsing the grow
-    object.
-    
-    \item Setting \code{var.used="all.trees"} returns a vector of size
-    \code{p} where each element is a count of the number of times a split
-    occurred on a variable.  If \code{var.used="by.tree"}, a matrix of
-    size \code{ntree}x\code{p} is returned.  Each element [i][j] is the
-    count of the number of times a split occurred on variable [j] in tree
-    [i].
-      
-    \item Setting \code{split.depth="all.trees"} returns a matrix of
-    size \code{n}x\code{p} where entry [i][j] is the minimal depth for
-    variable [j] for case [i] averaged over the forest.  That is, for
-    case [i], the entry [i][j] records the first time case [i] splits on
-    variable [j] averaged over the forest.  If
-    \code{split.depth="by.tree"}, a three-dimensional array is
-    returned where the third dimension [k] records the tree and the
-    first two coordinates [i][j] record the case and the variable.  Thus
-    entry [i][j][k] is the minimal depth for case [i] for variable [j]
-    for tree [k].    
-  }
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -836,7 +826,7 @@ rfsrc(formula, data, ntree = 1000,
   Ishwaran H. (2015).  The effect of splitting on random forests.
   \emph{Machine Learning}, 99:75-118.
 
-  Ishwaran H. and Lu M.  (2017).  Standard errors and confidence
+  Ishwaran H. and Lu M.  (2018).  Standard errors and confidence
   intervals for variable importance in random forest regression,
   classification, and survival. Statistics in Medicine (in press).
 
@@ -866,10 +856,14 @@ rfsrc(formula, data, ntree = 1000,
 }
 \seealso{
   \command{\link{find.interaction}},
+
    
+
   \command{\link{impute}},
   \command{\link{max.subtree}},
+
    
+
   \command{\link{plot.competing.risk}},
   \command{\link{plot.rfsrc}},
   \command{\link{plot.survival}},
@@ -877,9 +871,16 @@ rfsrc(formula, data, ntree = 1000,
   \command{\link{predict.rfsrc}},
   \command{\link{print.rfsrc}},
   \command{\link{quantileReg}},
+  \command{\link{rfsrcFast}},
   \command{\link{rfsrcSyn}},
+
    
+
+  \command{\link{subsample}},
+  
+
   \command{\link{stat.split}},
+  \command{\link{tune}},
   \command{\link{var.select}},
   \command{\link{vimp}}
 }
@@ -891,25 +892,24 @@ rfsrc(formula, data, ntree = 1000,
 ## veteran data
 ## randomized trial of two treatment regimens for lung cancer
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
-v.obj <- rfsrc(Surv(time, status) ~ ., data = veteran, ntree = 100, tree.err=TRUE)
+v.obj <- rfsrc(Surv(time, status) ~ ., data = veteran, 
+                   ntree = 100, block.size = 1)
 
-# print and plot the grow object
+## print and plot the grow object
 print(v.obj)
 plot(v.obj)
 
-# plot survival curves for first 10 individuals: direct way
-matplot(v.obj$time.interest, 100 * t(v.obj$survival[1:10, ]),
+## plot survival curves for first 10 individuals -- direct way
+matplot(v.obj$time.interest, 100 * t(v.obj$survival.oob[1:10, ]),
     xlab = "Time", ylab = "Survival", type = "l", lty = 1)
 
-# plot survival curves for first 10 individuals
-# indirect way: using plot.survival (also generates hazard plots)
-plot.survival(v.obj, subset = 1:10, haz.model = "ggamma")
+## plot survival curves for first 10 individuals -- use wrapper
+plot.survival(v.obj, subset = 1:10)
 
 \donttest{
 ## Primary biliary cirrhosis (PBC) of the liver
-
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc, nsplit = 10)
+pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc)
 print(pbc.obj)
 
 
@@ -922,26 +922,13 @@ pbc.obj2 <- rfsrc(Surv(days, status) ~ ., pbc,
            nsplit = 10, na.action = "na.impute")
 
 
-# here's a nice wrapper to combine original data + imputed data
-combine.impute <- function(object) {
- impData <- cbind(object$yvar, object$xvar)
- if (!is.null(object$imputed.indv)) {
-   impData[object$imputed.indv, ] <- object$imputed.data
- }
- impData
-}
-
-# combine original data + imputed data
-pbc.imp.data <- combine.impute(pbc.obj2)
-
-# same as above but we iterate the missing data algorithm
-pbc.obj3 <- rfsrc(Surv(days, status) ~ ., pbc, nsplit=10,
+## same as above but we iterate the missing data algorithm
+pbc.obj3 <- rfsrc(Surv(days, status) ~ ., pbc,
          na.action = "na.impute", nimpute = 3)
-pbc.iterate.imp.data <- combine.impute(pbc.obj3)
 
-# fast way to impute the data (no inference is done)
-# see impute.rfsc for more details
-pbc.fast.imp.data <- impute.rfsrc(data = pbc, nsplit = 10, nimpute = 5)
+## fast way to impute the data (no inference is done)
+## see impute for more details
+pbc.imp <- impute(Surv(days, status) ~ ., pbc, splitrule = "random")
 
 ##------------------------------------------------------------
 ## Compare RF-SRC to Cox regression
@@ -973,7 +960,7 @@ if (library("survival", logical.return = TRUE)
   ## run cox/rfsrc models
   ## for illustration we use a small number of trees
   cox.obj <- coxph(surv.f, data = pbc.na)
-  rfsrc.obj <- rfsrc(surv.f, pbc.na, nsplit = 10, ntree = 150)
+  rfsrc.obj <- rfsrc(surv.f, pbc.na, ntree = 150)
 
   ## compute bootstrap cross-validation estimate of expected Brier score
   ## see Mogensen, Ishwaran and Gerds (2012) Journal of Statistical Software
@@ -984,7 +971,7 @@ if (library("survival", logical.return = TRUE)
   plot(prederror.pbc)
 
   ## compute out-of-bag C-index for cox regression and compare to rfsrc
-  rfsrc.obj <- rfsrc(surv.f, pbc.na, nsplit = 10)
+  rfsrc.obj <- rfsrc(surv.f, pbc.na)
   cat("out-of-bag Cox Analysis ...", "\n")
   cox.err <- sapply(1:100, function(b) {
     if (b\%\%10 == 0) cat("cox bootstrap:", b, "\n")
@@ -1011,7 +998,7 @@ if (library("survival", logical.return = TRUE)
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
 wihs.obj <- rfsrc(Surv(time, status) ~ ., wihs, nsplit = 3, ntree = 100)
 plot.competing.risk(wihs.obj)
-cif <- wihs.obj$cif
+cif <- wihs.obj$cif.oob
 Time <- wihs.obj$time.interest
 idu <- wihs$idu
 cif.haart <- cbind(apply(cif[,,1][idu == 0,], 2, mean),
@@ -1036,15 +1023,15 @@ if (library("survival", logical.return = TRUE)) {
   pbc$id <- NULL
 
   ## modified Gray's weighted log-rank splitting
-  pbc.cr <- rfsrc(Surv(time, status) ~ ., pbc, nsplit = 10)
+  pbc.cr <- rfsrc(Surv(time, status) ~ ., pbc)
 
   ## log-rank event-one specific splitting
-  pbc.log1 <- rfsrc(Surv(time, status) ~ ., pbc, nsplit = 10,
-              splitrule = "logrank", cause = c(1,0), importance="permute")
+  pbc.log1 <- rfsrc(Surv(time, status) ~ ., pbc, 
+              splitrule = "logrank", cause = c(1,0), importance = TRUE)
 
   ## log-rank event-two specific splitting
-  pbc.log2 <- rfsrc(Surv(time, status) ~ ., pbc, nsplit = 10,
-              splitrule = "logrank", cause = c(0,1), importance="permute")
+  pbc.log2 <- rfsrc(Surv(time, status) ~ ., pbc, 
+              splitrule = "logrank", cause = c(0,1), importance = TRUE)
 
   ## extract VIMP from the log-rank forests: event-specific
   ## extract minimal depth from the Gray log-rank forest: non-event specific
@@ -1070,15 +1057,6 @@ plot.variable(airq.obj, partial = TRUE, smooth.lines = TRUE)
 ## motor trend cars
 mtcars.obj <- rfsrc(mpg ~ ., data = mtcars)
 
-# minimal depth variable selection via max.subtree
-md.obj <- max.subtree(mtcars.obj)
-cat("top variables:\n")
-print(md.obj$topvars)
-
-# equivalent way to select variables
-# see var.select for more details
-vs.obj <- var.select(object = mtcars.obj)
-
 
 ## ------------------------------------------------------------
 ## Classification analysis
@@ -1089,7 +1067,7 @@ iris.obj <- rfsrc(Species ~., data = iris)
 
 ## Wisconsin prognostic breast cancer data
 data(breast, package = "_PROJECT_PACKAGE_NAME_")
-breast.obj <- rfsrc(status ~ ., data = breast, nsplit = 10, tree.err=TRUE)
+breast.obj <- rfsrc(status ~ ., data = breast, block.size=1)
 plot(breast.obj)
 
 ## ------------------------------------------------------------
@@ -1098,7 +1076,7 @@ plot(breast.obj)
 
 data(breast, package = "_PROJECT_PACKAGE_NAME_")
 breast <- na.omit(breast)
-o <- rfsrc(status ~ ., data = breast, nsplit = 10)
+o <- rfsrc(status ~ ., data = breast)
 print(o)
 
 ## The data is imbalanced so we use balanced random forests
@@ -1109,7 +1087,7 @@ print(o)
 ## with probabilities n1/n, n0/n where n=n0+n1
 
 y <- breast$status
-o <- rfsrc(status ~ ., data = breast, nsplit = 10,
+o <- rfsrc(status ~ ., data = breast, 
            case.wt = _PROJECT_PACKAGE_NAME_:::make.wt(y),
            sampsize = _PROJECT_PACKAGE_NAME_:::make.size(y))
 print(o)
@@ -1123,32 +1101,31 @@ print(o)
 mtcars.unspv <- rfsrc(Unsupervised() ~., data = mtcars)
 mtcars2.unspv <- rfsrc(data = mtcars)
 
-#minimal depth variable selection applies!
-var.select(mtcars2.unspv)
-
 ## ------------------------------------------------------------
 ## Multivariate regression analysis
 ## ------------------------------------------------------------
-mtcars.mreg <- rfsrc(Multivar(mpg, cyl) ~., data = mtcars,
-           tree.err=TRUE, importance = TRUE)
 
-## extract error rates, vimp, and predicted values for all targets
+mtcars.mreg <- rfsrc(Multivar(mpg, cyl) ~., data = mtcars,
+           block.size=1, importance = TRUE)
+
+## extract error rates, vimp, and OOB predicted values for all targets
 err <- get.mv.error(mtcars.mreg)
 vmp <- get.mv.vimp(mtcars.mreg)
 pred <- get.mv.predicted(mtcars.mreg)
 
-## standardized error and vimp and OOB prediction
-err.std <- get.mv.error(mtcars.mreg, std = TRUE)
-vmp.std <- get.mv.vimp(mtcars.mreg, std = TRUE)
-pred.oob <- get.mv.predicted(mtcars.mreg, oob = TRUE)
+## standardized error and vimp
+err.std <- get.mv.error(mtcars.mreg, standardize = TRUE)
+vmp.std <- get.mv.vimp(mtcars.mreg, standardize = TRUE)
+
 
 ## ------------------------------------------------------------
 ## Mixed outcomes analysis
 ## ------------------------------------------------------------
+
 mtcars.new <- mtcars
 mtcars.new$cyl <- factor(mtcars.new$cyl)
 mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
-mtcars.mix <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new, tree.err=TRUE)
+mtcars.mix <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new, block.size=1)
 print(mtcars.mix, outcome.target = "mpg")
 print(mtcars.mix, outcome.target = "cyl")
 plot(mtcars.mix, outcome.target = "mpg")
@@ -1156,15 +1133,19 @@ plot(mtcars.mix, outcome.target = "cyl")
 
 
 ## ------------------------------------------------------------
-## Custom splitting using the pre-coded examples.
+## Custom splitting using the pre-coded examples
 ## ------------------------------------------------------------
+
 ## motor trend cars
-mtcars.obj <- rfsrc(mpg ~ ., data = mtcars, splitrule="custom")
-## Edgar Anderson's iris data
-iris.obj <- rfsrc(Species ~., data = iris, splitrule="custom1")
+mtcars.obj <- rfsrc(mpg ~ ., data = mtcars, splitrule = "custom")
+
+## iris analysis
+iris.obj <- rfsrc(Species ~., data = iris, splitrule = "custom1")
+
 ## WIHS analysis
 wihs.obj <- rfsrc(Surv(time, status) ~ ., wihs, nsplit = 3,
-                  ntree = 100, splitrule="custom1")
+                  ntree = 100, splitrule = "custom1")
+
 }
 }
 \keyword{forest}

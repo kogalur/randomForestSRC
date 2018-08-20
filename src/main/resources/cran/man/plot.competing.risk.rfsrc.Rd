@@ -16,7 +16,8 @@
 }
 \details{
   Ensemble ensemble CSCHF and CIF functions for each event type.
-  Does not apply to right-censored data.
+  Does not apply to right-censored data.    Whenever possible,
+  out-of-bag (OOB) values are displayed.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -50,7 +51,7 @@
 if (library("survival", logical.return = TRUE)) {
    data(pbc, package = "survival")
    pbc$id <- NULL
-   plot.competing.risk(rfsrc(Surv(time, status) ~ ., pbc, nsplit = 10))
+   plot.competing.risk(rfsrc(Surv(time, status) ~ ., pbc))
 }
 }
 }

@@ -35,10 +35,10 @@ mv.obj <- rfsrc(get.mv.formula(colnames(nutrigenomic$lipids)),
 
 ## acquire the error rate for each of the 21-coordinates 
 ## standardize to allow for comparison across coordinates
-serr <- get.mv.error(mv.obj, std = TRUE)
+serr <- get.mv.error(mv.obj, standardize = TRUE)
 
 ## acquire standardized VIMP 
-svimp <- get.mv.vimp(mv.obj, std = TRUE)
+svimp <- get.mv.vimp(mv.obj, standardize = TRUE)
 
 par(mfrow = c(1,2))
 plot(serr, xlab = "Lipids", ylab = "Standardized Performance")

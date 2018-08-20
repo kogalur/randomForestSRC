@@ -21,13 +21,14 @@ typedef struct jni2DInfo JNI2DInfo;
 struct jni2DInfo {
   void *outerPtr;
   jarray *innerPtr;
-  jboolean *isCopy;
   uint outLen;
   uint *innLen;
   char type;
+  jboolean *isCopy;
 };
 typedef struct jniEnsembleInfo JNIEnsembleInfo;
 struct jniEnsembleInfo {
+  char *identity;
   jarray array;
   void *arrayPtr;
   jint dimSize;
@@ -35,7 +36,7 @@ struct jniEnsembleInfo {
   int *dimPtr;
   ulong size;
   char type;
-  uint identity;
+  jint slot;
   jboolean isCopy;
   jboolean isCopyDim;
 };

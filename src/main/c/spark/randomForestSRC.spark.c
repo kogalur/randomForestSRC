@@ -78,6 +78,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
   free_jvvector(RF_jni1DInfoList, 0, 1 << 6, NRUTIL_J1D_PTR);
   free_jvvector(RF_jni2DInfoList, 0, 1 << 6, NRUTIL_J2D_PTR);
   memoryCheck();
+  initProtect(0);
   return RF_java_hshmap_obj;
 }
 JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv      *env,
@@ -206,6 +207,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   free_jvvector(RF_jni1DInfoList, 0, 1 << 6, NRUTIL_J1D_PTR);
   free_jvvector(RF_jni2DInfoList, 0, 1 << 6, NRUTIL_J2D_PTR);
   memoryCheck();
+  initProtect(0);
   return RF_java_hshmap_obj;
 }
 void exit2J() {
@@ -308,7 +310,7 @@ void setNativeGlobalEnv(JNIEnv *env, jobject obj) {
     RF_nativeError("\nRF-SRC:  The application will now exit.\n");
     RF_nativeExit();
   }
-  RF_java_ens_mid = (*RF_java_env) -> GetMethodID(RF_java_env, RF_java_ens_cls, "Ensemble", "(Ljava/lang/String;BIJZI[ILjava/lang/Object;)V");
+  RF_java_ens_mid = (*RF_java_env) -> GetMethodID(RF_java_env, RF_java_ens_cls, "Ensemble", "(Ljava/lang/String;BIJI[ILjava/lang/Object;)V");
   if (RF_java_ens_mid == NULL) {
     RF_nativeError("\nRF-SRC:  Unable to access constructor for class com/kogalur/randomforest/Ensemble.\n");
     RF_nativeError("\nRF-SRC:  The application will now exit.\n");
@@ -631,7 +633,7 @@ void initProtect(uint stackCount) {
 }
 void *stackAndProtect(uint  *index,
                       char   type,
-                      uint   identity,
+                      uint   unused,
                       ulong  size,
                       double value,
                       char  *sexpString,
@@ -644,13 +646,8 @@ void *stackAndProtect(uint  *index,
   void      *thisArrayPtr;
   jintArray  thisDim;
   int       *thisDimPtr;
+  uint stringLength;
   JNIEnsembleInfo *ensembleInfo;
-  if (((*index) >> 6) > 0) {
-          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-          RF_nativeError("\nRF-SRC:  S.E.X.P. vector list limit exceeded:  %20d", *index);
-          RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-          RF_nativeExit();
-  }
   if (sizeof(ulong) > sizeof(uint)) {
     if (size > UINT_MAX) {
       if (TRUE) {
@@ -676,9 +673,12 @@ void *stackAndProtect(uint  *index,
     thisDimPtr[i] = va_arg(list, int);
   }
   va_end(list);
+  stringLength = strlen(sexpString) + 1;
+  ensembleInfo -> identity = cvector(1, stringLength);
+  strcpy(ensembleInfo -> identity, sexpString);
+  ensembleInfo -> slot     = *index;
   ensembleInfo -> type     = type;
   ensembleInfo -> size     = size;
-  ensembleInfo -> identity = identity;
   ensembleInfo -> dimSize  = auxiliaryDimSize;
   ensembleInfo -> dim      = thisDim;
   ensembleInfo -> dimPtr   = thisDimPtr;
@@ -731,7 +731,9 @@ void *stackAndProtect(uint  *index,
   (ensembleInfo -> array) = thisArray;
   (ensembleInfo -> arrayPtr) = thisArrayPtr;
   allocateAuxiliaryInfo(type,
-                        identity,
+                        sexpString,
+                        RF_snpAuxiliaryInfoList,
+                        *index,
                         thisArrayPtr,
                         auxiliaryArrayPtr,
                         auxiliaryDimSize,
@@ -744,11 +746,11 @@ void put_jniEnsembleInfoList(uint size) {
   JNIEnsembleInfo *ensembleInfo;
   SNPAuxiliaryInfo *auxInfoPtr;
   jstring name;
+  uint stringLength;
   jboolean result;
   for (uint i = 0; i < size; i++) {
     ensembleInfo = RF_jniEnsembleInfoList[i];
-    auxInfoPtr = RF_snpAuxiliaryInfoList[ensembleInfo -> identity];
-    name = (*RF_java_env) -> NewStringUTF(RF_java_env, RF_sexpString[ensembleInfo -> identity]);
+    name = (*RF_java_env) -> NewStringUTF(RF_java_env, (const char*) ensembleInfo -> identity);
     if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
       RF_nativeExit();
     }
@@ -795,9 +797,8 @@ void put_jniEnsembleInfoList(uint size) {
     jobject ensembleObj = (*RF_java_env) -> NewObject(RF_java_env, RF_java_ens_cls, RF_java_ens_mid,
                                                       (jstring) name,
                                                       (jbyte) ensembleInfo -> type,
-                                                      (jint) ensembleInfo -> identity,
+                                                      (jint) ensembleInfo -> slot,
                                                       (jlong) ensembleInfo -> size,
-                                                      (jboolean) (((auxInfoPtr -> auxiliaryArrayPtr) == NULL) && (auxInfoPtr -> dimSize > 1)) ? JNI_TRUE : JNI_FALSE,
                                                       (jint) (ensembleInfo -> dimSize),
                                                       (jintArray) (ensembleInfo -> dim),
                                                       (jobject) (ensembleInfo -> array));
@@ -815,6 +816,8 @@ void put_jniEnsembleInfoList(uint size) {
     }
     (*RF_java_env) -> DeleteLocalRef(RF_java_env, ensembleInfo -> dim);      
     (*RF_java_env) -> DeleteLocalRef(RF_java_env, ensembleInfo -> array);      
+    stringLength = strlen(ensembleInfo -> identity) + 1;
+    free_cvector(ensembleInfo -> identity, 1, stringLength);
     free_gblock(ensembleInfo, (size_t) sizeof(JNIEnsembleInfo));  
   }
 }

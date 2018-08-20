@@ -6,9 +6,8 @@
   Calculate variable importance (VIMP) for a single variable or group of
   variables for training or test data.
 }
-\usage{\method{vimp}{rfsrc}(object, xvar.names, m.target=NULL, 
-  importance = c("permute", "random", "anti",
-                  "permute.ensemble", "random.ensemble", "anti.ensemble"),
+\usage{\method{vimp}{rfsrc}(object, xvar.names, m.target = NULL, 
+  importance = c("permute", "random", "anti"), block.size = 1,
   joint = FALSE, subset, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
@@ -21,6 +20,8 @@
     specifying the target outcome to be used.  If left unspecified, the
     algorithm will choose a default target.}
   \item{importance}{Type of VIMP.}
+  \item{block.size}{Specifies number of trees in a block when calculating
+    VIMP.}
   \item{joint}{Individual or joint VIMP?}
   \item{subset}{Vector indicating which rows of the grow data to
     restrict VIMP calculations to; i.e. this option yields VIMP which is
@@ -38,22 +39,15 @@
   Using a previously grown forest, calculate the VIMP for variables
   \code{xvar.names}.  By default, VIMP is calculated for the original
   data, but the user can specify a new test data for the VIMP
-  calculation using \code{newdata}.  Depending upon the option
-  \code{importance}, VIMP is calculated either by random daughter
-  assignment or by random permutation of the variable(s).  The default
-  is Breiman-Cutler permutation VIMP.  See \command{rfsrc} for more
-  details.
+  calculation using \code{newdata}.  See \command{rfsrc} for more
+  details about how VIMP is calculated.
   
-  Joint VIMP is requested using \option{joint}.  The joint VIMP is the
-  importance for a group of variables when the group is perturbed
-  simultaneously.
+  Joint VIMP is requested using \option{joint} and equals importance for
+  a group of variables when the group is perturbed simultaneously.
 }
 \value{
-  An object of class \code{(rfsrc, predict)}, which is a list with
-  the following key components:
-  \item{err.rate}{OOB error rate for the ensemble restricted to the
-    subsetted data.}
-  \item{importance}{Variable importance (VIMP).}
+  An object of class \code{(rfsrc, predict)} containing importance
+  values.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -74,35 +68,30 @@
 
 iris.obj <- rfsrc(Species ~ ., data = iris)
 
-# Breiman-Cutler permutation vimp
+# Permutation vimp
 print(vimp(iris.obj)$importance)
 
-# Breiman-Cutler random daughter vimp
+# Random daughter vimp
 print(vimp(iris.obj, importance = "random")$importance)
 
-# Breiman-Cutler joint permutation vimp 
+# Joint permutation vimp 
 print(vimp(iris.obj, joint = TRUE)$importance)
 
-# Breiman-Cuter paired vimp
+# Paired vimp
 print(vimp(iris.obj, c("Petal.Length", "Petal.Width"), joint = TRUE)$importance)
 print(vimp(iris.obj, c("Sepal.Length", "Petal.Width"), joint = TRUE)$importance)
 
 
 ## ------------------------------------------------------------
 ## regression example
-## compare Breiman-Cutler vimp to ensemble based vimp
 ## ------------------------------------------------------------
 
 airq.obj <- rfsrc(Ozone ~ ., airquality)
-vimp.all <- cbind(
-     ensemble = vimp(airq.obj, importance = "permute.ensemble")$importance,
-     breimanCutler = vimp(airq.obj, importance = "permute")$importance)
-print(vimp.all)
+print(vimp(airq.obj))
 
 
 ## ------------------------------------------------------------
-## regression example
-## calculate VIMP on test data
+## regression example where vimp is calculated on test data
 ## ------------------------------------------------------------
 
 set.seed(100080)

@@ -115,7 +115,7 @@
 ## ------------------------------------------------------------
 
 data(pbc, package = "_PROJECT_PACKAGE_NAME_") 
-pbc.obj <- rfsrc(Surv(days,status) ~ ., pbc, nsplit = 10, importance = TRUE)
+pbc.obj <- rfsrc(Surv(days,status) ~ ., pbc, importance = TRUE)
 find.interaction(pbc.obj, method = "vimp", nvar = 8)
 
 ## ------------------------------------------------------------

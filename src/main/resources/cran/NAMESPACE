@@ -1,23 +1,25 @@
 useDynLib(_PROJECT_PACKAGE_NAME_, .registration = TRUE)
 
 importFrom("parallel", mclapply)
-importFrom("graphics", "abline", "axis", "box", "boxplot", "legend",
-           "lines", "matlines", "matplot", "mtext", "par", "plot",
+importFrom("graphics", "abline", "axis", "box", "boxplot", "bxp",
+           "legend", "lines", "matlines", "matplot", "mtext", "par", "plot",
            "plot.new", "plot.window", "points", "rug", "segments",
-           "strwidth", "text", "title", "bxp")
-importFrom("stats", "as.formula", "dlnorm", "formula", "lowess",
-           "median", "na.omit", "optim", "pgamma", "plnorm", "predict",
-           "quantile", "runif", "sd", "supsmu", "var",
-           "hclust", "as.dist", "cutree", "model.matrix", "qnorm", "pnorm")
-importFrom("utils", "installed.packages", "write.table",
-           "txtProgressBar", "setTxtProgressBar")
+           "strwidth", "text", "title")
+importFrom("stats", "as.dist", "as.formula", "cutree", "dlnorm", "formula",
+           "hclust", "lowess", "median", "model.matrix", "na.omit",
+           "optim", "pgamma", "plnorm", "pnorm", "predict", 
+           "quantile", "qnorm", "runif", "sd", "supsmu", "var", "wilcox.test")
+importFrom("utils", "installed.packages", "txtProgressBar", "setTxtProgressBar",
+           "write.table")
 importFrom("grDevices", "gray")
 
 export(cindex,
-        
+       extract.bootsample,
+       extract.subsample,
        find.interaction,
        find.interaction.rfsrc,
        get.mv.error,
+       get.mv.error.block,
        get.mv.formula,
        get.mv.predicted,
        get.mv.vimp,
@@ -34,7 +36,8 @@ export(cindex,
        plot.survival,
        plot.survival.rfsrc,
        plot.rfsrc,
-        
+       plot.subsample,
+       plot.subsample.rfsrc,       
        plot.variable,
        plot.variable.rfsrc,       
        predict.rfsrc,
@@ -43,11 +46,17 @@ export(cindex,
        quantileReg.rfsrc,
        rfsrc,
        rfsrc.news,
+       rfsrcFast,
+       rfsrcFast.rfsrc,
        rfsrcSyn,
        rfsrcSyn.rfsrc,
         
+       subsample,
+       subsample.rfsrc,
        stat.split,
        stat.split.rfsrc,
+       tune,
+       tune.rfsrc,
        var.select,
        var.select.rfsrc,
        vimp,
@@ -55,7 +64,8 @@ export(cindex,
 
 
 S3method(print, rfsrc)
- 
+S3method(plot, subsample)
+S3method(plot, subsample.rfsrc)
 S3method(plot, rfsrc)
 S3method(predict, rfsrc)
 S3method(max, subtree)

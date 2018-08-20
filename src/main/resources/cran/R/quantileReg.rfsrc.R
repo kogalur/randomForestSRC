@@ -13,13 +13,13 @@ quantileReg.rfsrc <- function(obj, oob = TRUE, prob = (1:10) / 10, newdata = NUL
   }
   ## training:
   ## forest weights
-  ## test whether forest weights are available
+  ## test whether oob forest weights are available
   ## cost saving measure for advanced users
   ## otherwise pull the forest weights by calling predict
   ##
   ## testing:
   ## pull forest weights for test data set
-    if (!is.null(obj$forest.wt) && is.null(newdata)) {
+  if (!is.null(obj$forest.wt) && is.null(newdata)) {
     fwt <- obj$forest.wt
   }
   else {
@@ -61,6 +61,7 @@ quantileReg.rfsrc <- function(obj, oob = TRUE, prob = (1:10) / 10, newdata = NUL
          density = t(apply(cbind(0,cdf), 1, diff)),
          yunq = yunq)
   })
+  class(rO) <- c("rfsrc", "quantileReg")
   ## return the goodies
   if (obj$family == "regr") {
     rO[[1]]

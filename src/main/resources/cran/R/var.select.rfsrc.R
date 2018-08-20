@@ -54,7 +54,7 @@ var.select.rfsrc <-
                                cause = cause,
                                na.action = na.action,
                                importance=TRUE,
-                               err.block = err.block, perf.type = perf.type)
+                               block.size = block.size, perf.type = perf.type)
     ## set the target dimension for CR families
     if (rfsrc.filter.obj$family == "surv-CR") {
       target.dim <- max(1, min(cause, max(get.event.info(rfsrc.filter.obj)$event.type)), na.rm = TRUE)
@@ -204,7 +204,7 @@ var.select.rfsrc <-
         method <- "md"
     }
     dots <- list(...)
-    err.block <- dots$err.block
+    block.size <- dots$block.size
     perf.type <- is.hidden.perf.type(dots)
   }
     else {
@@ -223,7 +223,7 @@ var.select.rfsrc <-
           yvar.dim <- 0
           method <- "md"
       }
-    err.block <- object$err.block
+    block.size <- object$block.size
     perf.type <- object$forest$perf.type
     }
   ## specify the default event type for CR
@@ -300,7 +300,7 @@ var.select.rfsrc <-
                                  cause = cause,
                                  na.action = na.action,
                                  importance = TRUE,
-                                 err.block = err.block, perf.type = perf.type)
+                                 block.size = block.size, perf.type = perf.type)
       ## set the target dimension for CR families
       if (rfsrc.prefit.obj$family == "surv-CR") {
         target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
@@ -350,7 +350,7 @@ var.select.rfsrc <-
                            na.action = na.action,
                            xvar.wt = xvar.wt,
                            importance = TRUE,
-                           err.block = err.block, perf.type = perf.type)
+                           block.size = block.size, perf.type = perf.type)
         ## set the target dimension for CR families
         if (rfsrc.obj$family == "surv-CR") {
           target.dim <- max(1, min(cause, max(get.event.info(rfsrc.obj)$event.type)), na.rm = TRUE)
@@ -509,7 +509,7 @@ var.select.rfsrc <-
                                    splitrule = splitrule,
                                    na.action = na.action,
                                    importance = TRUE,
-                                   err.block = err.block, perf.type = perf.type)
+                                   block.size = block.size, perf.type = perf.type)
         ## set the target dimension for CR families
         if (rfsrc.prefit.obj$family == "surv-CR") {
           target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
@@ -593,7 +593,7 @@ var.select.rfsrc <-
                               nsplit = nsplit,
                               cause = cause,
                               splitrule = splitrule,
-                              err.block = err.block, perf.type = perf.type)
+                              block.size = block.size, perf.type = perf.type)
   }
     else {
       rfsrc.refit.obj <- NULL

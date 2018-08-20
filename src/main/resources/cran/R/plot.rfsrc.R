@@ -14,7 +14,11 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
       sum(inherits(x, c("rfsrc", "predict"), TRUE) == c(1, 2)) != 2) {
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, predict)'")
   }
-   
+  ## print a subsampled object
+  if (sum(inherits(x, c("rfsrc", "subsample"), TRUE) == c(1, 4)) == 2 ||
+      sum(inherits(x, c("rfsrc", "bootsample"), TRUE) == c(1, 4)) == 2) {
+    return(plot.subsample(x, m.target = m.target, ...))
+  }
   ## coerce the (potentially) multivariate object if necessary.
   m.target <- get.univariate.target(x, m.target)
   x <- coerce.multivariate(x, m.target)
@@ -34,13 +38,13 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
   ## Check that the error rate vector is assigned for all trees.  If
   ## it is not, fill in the slots for 1:ntree.  This will result in
   ## the plot flat-lining between transitions or blocks.
-  if (x$err.block != 1) {
+  if (x$block.size != 1) {
       x$err.rate <- cbind(x$err.rate)
-      fill.err.row <-  x$err.block
+      fill.err.row <-  x$block.size
       nullO <- lapply(1:x$ntree, function(i) {
         x$err.rate[i, ] <<- x$err.rate[fill.err.row, ]
         if (i == fill.err.row) {
-          fill.err.row <<- min(fill.err.row + x$err.block, x$ntree)
+          fill.err.row <<- min(fill.err.row + x$block.size, x$ntree)
         }
         NULL
       })

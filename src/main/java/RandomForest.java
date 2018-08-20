@@ -80,6 +80,8 @@ public class RandomForest {
                                                            modelArg.get_timeInterestSize(),
                                                            modelArg.get_timeInterest(),
                                                            modelArg.get_nImpute(),
+                                                                 
+                                                           modelArg.get_blockSize(),
                                                            modelArg.get_rfCores());
 
             
@@ -331,6 +333,8 @@ public class RandomForest {
                                                                     0,    // fySize         invalid
                                                                     null, // fyData         invalid
                                                                     null, // fxData         invalid
+
+                                                                    modelArg.get_blockSize(),
 
                                                                     model.get_rfCores()); 
 

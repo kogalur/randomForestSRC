@@ -123,6 +123,48 @@ available <- function (package, lib.loc = NULL, quietly = TRUE)
       return(invisible(FALSE))
     }
 }
+### AUC workhorse
+auc.workhorse <- function(roc.data) {
+  x <- roc.data[, 1][roc.data[, 2] == 1]
+  y <- roc.data[, 1][roc.data[, 2] == 0]
+  if (length(x) > 1 & length(y) > 1) {
+    AUC  <- tryCatch({wilcox.test(x, y, exact=F)$stat/(length(x)*length(y))}, error=function(ex){NA})
+  }
+  else {
+    AUC <- NA
+  }
+  AUC
+}
+### Multiclass AUC -- Hand & Till (2001) definition
+auc <- function(y, prob) {
+  if (is.factor(y)) {
+    y.uniq <- levels(y)
+  }
+  else {
+    y.uniq <- sort(unique(y))
+  }
+  nclass <- length(y.uniq)
+  AUC <- NULL
+  for (i in 1:(nclass - 1)) {
+    for (j in (i + 1):nclass) {
+      pt.ij <- (y == y.uniq[i] | y == y.uniq[j])
+      if (sum(pt.ij) > 1) {
+        y.ij <- y[pt.ij]
+        pij <- prob[pt.ij, j]
+        pji <- prob[pt.ij, i]
+        Aij <-  auc.workhorse(cbind(pij, 1 * (y.ij == y.uniq[j])))
+        Aji <-  auc.workhorse(cbind(pji, 1 * (y.ij == y.uniq[i])))
+        AUC <- c(AUC, (Aij + Aji)/2)
+      }
+    } 
+  }
+  if (is.null(AUC)) {
+    NA
+  }
+  else {
+    mean(AUC, na.rm = TRUE)
+  }
+}                          
 bayes.rule <- function(prob, pi.hat = NULL) {
   class.labels <- colnames(prob)
   if (is.null(pi.hat)) {
@@ -183,7 +225,11 @@ data.matrix <- function(x) {
         }
   }))
 }
-family.pretty <- function(fmly) {
+family.pretty <- function(x) {
+  fmly <- x$family
+  if (!is.null(x$forest$rfq) && x$forest$rfq) {
+    fmly <- "rfq"
+  }
   switch(fmly,
          "surv"     = "RSF",
          "surv-CR"  = "RSF",
@@ -192,7 +238,8 @@ family.pretty <- function(fmly) {
          "unsupv"   = "RF-U",
          "regr+"    = "mRF-R",
          "class+"   = "mRF-C",
-         "mix+"     = "mRF-RC"
+         "mix+"     = "mRF-RC",
+         "rfq"      = "RFQ"
          )
 }
 finalizeFormula <- function(formula.obj, data) {
@@ -244,6 +291,17 @@ finalizeData <- function(fnames, data, na.action, miss.flag = TRUE) {
     ## no need to make the call if there is no missing data
     if (any(is.na(data))) {
       data <- na.omit(data)
+    }
+  }
+  ## canvert nan to na's (github reported bug 06/27/2018)
+  if (miss.flag == TRUE && na.action != "na.omit") {
+    nan.names <- sapply(data, function(x){any(is.nan(x))})
+    if (sum(nan.names) > 0) {
+      data[, nan.names] <- data.frame(lapply(which(nan.names), function(j) {
+        x <- data[, j]
+        x[is.nan(x)] <- NA
+        x
+      }))
     }
   }
   ## is anything left?
@@ -652,35 +710,99 @@ get.importance.xvar <- function(importance.xvar, importance, object) {
   return (importance.xvar)
 }
  
-get.mv.error <- function(obj, std = FALSE) {
-  c(sapply(obj$yvar.names, function(nn) {
+get.mv.error <- function(obj, standardize = FALSE, pretty = TRUE, block = FALSE) {
+  ## acquire yvar names - don't want "censoring" for surv and surv-CR
+  nms <- NULL
+  ynms <- obj$yvar.names
+  if (obj$family == "surv" ||  obj$family == "surv-CR") {
+    ynms <- ynms[1]
+  }
+  ## pretty option is not allowed for blocked error
+  if (block) {
+    pretty <- FALSE
+  }
+  ## loop over the yvar names acquring error if it is present
+  err <- lapply(ynms, function(nn) {
     o.coerce <- coerce.multivariate(obj, nn)
-    err <- o.coerce$err.rate
-    if (!is.null(err)) {
-      if (o.coerce$family == "class") {
-        err <- utils::tail(err[, 1], 1)
+    if (!block) {
+      er <- o.coerce$err.rate
+    }
+    else {
+      er <- o.coerce$err.block.rate
+    }
+    if (!is.null(er)) {
+      if (o.coerce$family != "regr" || !standardize) {
+        if (pretty && o.coerce$family == "class") {##pretty can only pull first vimp column "all"
+            er <- utils::tail(cbind(er)[, 1], 1)
+        }
+        ## now returns survival error rates more coherently
+        else {
+          if (!block) {
+            er <- utils::tail(er, 1)
+            rownames(er) <- NULL
+          }
+        }
       }
-      else {
-        if (std) {
-          err <- utils::tail(err, 1) / var(o.coerce$yvar, na.rm = TRUE)
+      else {##standardized VIMP only applies to regression
+        if (!block) {
+          er <- utils::tail(er, 1) / var(o.coerce$yvar, na.rm = TRUE)
         }
         else {
-          err <- utils::tail(err, 1)
+          er <- er / var(o.coerce$yvar, na.rm = TRUE)
         }
       }
     }
-    err
-  }))
+    if (is.null(dim(er))) {
+      nms <<- c(nms, paste(nn))
+    }
+    else {
+      nms <<- c(nms, colnames(er))
+    }
+    er
+  })
+  ## if the first entry is NULL make the entire list NULL
+  if (is.null(err[[1]])) {
+    err <- NULL
+  }  
+  ## return as a vector for convenient interpretation?
+  ## vector reduces information for classification to "all"
+  if (!is.null(err)) {
+    if (pretty) {
+      err <- unlist(err)
+      names(err) <- nms
+    }
+    else {
+      names(err) <- ynms
+    }
+  }
+  ### return the goodies
+  err
+}
+get.mv.error.block <- function(obj, standardize = FALSE) {
+  ## use get.mv.error but request blocked error rate
+  get.mv.error(obj, standardize = standardize, block = TRUE)
 }
 get.mv.formula <- function(ynames) {
   as.formula(paste("Multivar(", paste(ynames, collapse = ","),paste(") ~ ."), sep = ""))
 }
-get.mv.predicted <- function(obj, oob = FALSE) {
+get.mv.predicted <- function(obj, oob = TRUE) {
+  ## loop over the yvar names acquring the vimp if it is present
+  ## acquire yvar names - don't want "censoring" for surv and surv-CR
   nms <- NULL
-  pred <- do.call(cbind, lapply(obj$yvar.names, function(nn) {
+  ynms <- obj$yvar.names
+  if (obj$family == "surv" ||  obj$family == "surv-CR") {
+    ynms <- ynms[1]
+  }
+  pred <- do.call(cbind, lapply(ynms, function(nn) {
     o.coerce <- coerce.multivariate(obj, nn)
-    if (o.coerce$family == "class") {
-      nms <<- c(nms, paste(nn, ".", colnames(o.coerce$predicted), sep = ""))
+    if (o.coerce$family == "class" || o.coerce$family == "surv-CR") {
+      ## ensembles can now be either oob, inbag, or all 05/06/2018
+      if (!is.null(o.coerce$predicted.oob)) {
+        nms <<- c(nms, paste(nn, ".", colnames(o.coerce$predicted.oob), sep = ""))
+      }
+      else {
+        nms <<- c(nms, paste(nn, ".", colnames(o.coerce$predicted), sep = ""))
+      }
     }
     else {
       nms <<- c(nms, paste(nn))
@@ -693,32 +815,52 @@ get.mv.predicted <- function(obj, oob = FALSE) {
       o.coerce$predicted
     }
   }))
+  ## pretty names
   colnames(pred) <- nms
   pred
 }
-get.mv.vimp <- function(obj, std = FALSE) {
-  vmp <- do.call(cbind, lapply(obj$yvar.names, function(nn) {
+get.mv.vimp <- function(obj, standardize = FALSE, pretty = TRUE) {
+  ## acquire yvar names - don't want "censoring" for surv and surv-CR
+  ynms <- obj$yvar.names
+  if (obj$family == "surv" ||  obj$family == "surv-CR") {
+    ynms <- ynms[1]
+  }
+  ## loop over the yvar names acquring the vimp if it is present
+  vmp <- lapply(ynms, function(nn) {
     o.coerce <- coerce.multivariate(obj, nn)
     v <- o.coerce$importance
     if (!is.null(v)) {
-      if (o.coerce$family == "class") {
-        v <- v[, 1]
+      if (o.coerce$family != "regr" || !standardize) {
+        if (pretty && o.coerce$family == "class") {##pretty can only pull first vimp column "all"
+          v <- v[, 1]
+        }
       }
-      else {
-        if (std) {
-          v <- v / var(o.coerce$yvar, na.rm = TRUE)
-        }        
+      else {##standardized VIMP only applies to regression
+        v <- v / var(o.coerce$yvar, na.rm = TRUE)
+      }
+      if (is.null(dim(v))) {
+        v <- cbind(v)
+        colnames(v) <- nn
       }
     }
     v
-  }))
+  })
+  ## if the first entry is NULL make the entire list NULL
+  if (is.null(vmp[[1]])) {
+    vmp <- NULL
+  }  
+  ## return as a matrix for convenient interpretation?
+  ## matrix reduces information for classification to "all"
   if (!is.null(vmp)) {
-    colnames(vmp) <- obj$yvar.names
-    return(vmp)
+    if (pretty) {
+      vmp <- do.call(cbind, vmp)
+    }
+    else {
+      names(vmp) <- ynms
+    }
   }
-  else {
-    NULL
-  }
+  ### return the goodies
+  vmp 
 }
 get.nmiss <- function(xvar, yvar = NULL) {
   if (!is.null(yvar)) {
@@ -1062,7 +1204,7 @@ parseMissingData <- function(formula.obj, data) {
     ## works for any dimension
     col.resp.na <- unlist(lapply(data[, yvar.names, drop = FALSE], is.all.na))
     if (any(col.resp.na)) {
-      stop("All records are missing for the yvar(s)")
+      stop("All records are missing for one (or more) yvar(s)")
     }
   }
   ## remove all x variables with missing values for all records
@@ -1083,7 +1225,7 @@ parseMissingData <- function(formula.obj, data) {
 }
 ## make inbag bootstrap samples (for use with bootstrap = "by.user")
 ## allows for under/over sampling, but default is Efron
-make.sample <- function(ntree, samp.size, boot.size = NULL) {
+make.sample <- function(ntree, samp.size, boot.size = NULL, replace = TRUE) {
   ## samp.size cannot be negative
   if (samp.size < 0) {
     stop("samp.size cannot be negative:", samp.size)
@@ -1095,7 +1237,7 @@ make.sample <- function(ntree, samp.size, boot.size = NULL) {
   ## use rbind at the end to ensure a matrix
   rbind(sapply(1:ntree, function(bb){
     inb <- rep(0, samp.size)
-    smp <- sample(1:samp.size, size = boot.size, replace = TRUE)
+    smp <- sample(1:samp.size, size = boot.size, replace = replace)
     frq <- tapply(smp, smp, length)
     idx <- as.numeric(names(frq))
     inb[idx] <- frq
@@ -1118,6 +1260,8 @@ make.imbalanced.sample <- function(ntree, ratio = 0.5, y) {
   n.minority <- min(frq, na.rm = TRUE)
   n.majority <- max(frq, na.rm = TRUE)
   samp.size <- length(y)
+  ## ratio must be larger than minority ratio
+  ratio <- max((2 + n.minority) / length(y), ratio)
   ## use rbind to ensure a matrix
   rbind(sapply(1:ntree, function(bb){
     inb <- rep(0, samp.size)
@@ -1151,7 +1295,58 @@ make.wt <- function(y) {
   ## this ensures 0 < wt <= 1
   wt / max(wt, na.rm = TRUE)
 }
- 
+#weighted gini/entropy performance metric
+#mode is equal to either 'gini' or 'entropy'
+perf.metric <- function(truth,cluster,mode=c("entropy", "gini")){
+  ## verify mode option
+  mode <- match.arg(mode, c("entropy", "gini"))
+  ## confusion matrix
+  k=length(unique(truth))
+  tab=table(truth,cluster)
+  clustersizes=colSums(tab)
+  clustersizesnorm=clustersizes/sum(clustersizes)
+  tabprop=tab
+  lapply(1:(dim(tab)[2]),function(i){
+    tabprop[,i]<<-tabprop[,i]/clustersizes[i]
+    NULL
+  })
+  if(mode=="entropy"){
+    measure=0
+    maxmeasure=0
+    lapply(1:(dim(tabprop)[2]),function(i){
+      clustermeasure=0
+      maxclustermeasure=0
+      lapply(1:(dim(tabprop)[1]),function(j){
+        if(tabprop[j,i]!=0){
+          clustermeasure<<-clustermeasure+-tabprop[j,i]*log2(tabprop[j,i])
+        }
+        maxclustermeasure<<-maxclustermeasure+-1/k*log2(1/k)
+        NULL
+      })
+      measure<<-measure+clustersizesnorm[i]*clustermeasure
+      maxmeasure<<-maxmeasure+clustersizesnorm[i]*maxclustermeasure
+    })
+  }
+  if(mode=="gini"){
+    measure=0
+    maxmeasure=0
+    lapply(1:(dim(tabprop)[2]),function(i){
+      clustermeasure=1
+      maxclustermeasure=1
+      lapply(1:(dim(tabprop)[1]),function(j){
+        if(tabprop[j,i]!=0){
+          clustermeasure<<-clustermeasure+(-tabprop[j,i]^2)
+        }
+        maxclustermeasure<<-maxclustermeasure+(-1/k^2)
+        NULL
+      })
+      measure<<-measure+clustersizesnorm[i]*clustermeasure
+      maxmeasure<<-maxmeasure+clustersizesnorm[i]*maxclustermeasure
+      NULL
+    })
+  }
+  list(result=measure,measure=mode,normalized_measure=measure/maxmeasure)
+}
 ## robust resampling
 resample <- function(x, size, ...) {
   if (length(x) <= 1) {
