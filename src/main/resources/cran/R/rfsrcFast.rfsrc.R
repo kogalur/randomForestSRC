@@ -31,7 +31,7 @@ rfsrcFast.rfsrc <- function(formula, data,
   ## list of forest parameters
   rfnames <- names(formals(rfsrc))
   ## add key hidden parameters
-  rfnames <- c(rfnames, "rfq", "perf.type")
+  rfnames <- c(rfnames, "rfq", "perf.type", "gk.quantile", "prob", "prob.epsilon", "vtry")
    
   ## restrict to allowed values
   rfnames <- rfnames[rfnames != "ntree"     &

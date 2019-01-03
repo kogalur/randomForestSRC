@@ -183,7 +183,7 @@ bayes.rule <- function(prob, pi.hat = NULL) {
     majority <- setdiff(1:2, minority)      
     rfq.rule <- rep(majority, nrow(prob))
     rfq.rule[prob[, minority] >= min(pi.hat, na.rm = TRUE)] <- minority
-    class.labels[rfq.rule]
+    factor(class.labels[rfq.rule], levels = class.labels)
   }
 }
 ## normalized brier (normalized to one for strawman coin toss)
@@ -465,13 +465,13 @@ get.grow.nodesize <- function(fmly, nodesize) {
   ## Default node size for right-censored survival
   if (fmly == "surv"){
     if (is.null(nodesize)) {
-      nodesize <- 3
+      nodesize <- 15
     }
   }
   ## Default node size for competing risks
     else if (fmly == "surv-CR"){
       if (is.null(nodesize)) {
-        nodesize <- 6
+        nodesize <- 15
       }
     }
   ## Default node size for classification
@@ -524,8 +524,14 @@ get.grow.splitinfo <- function (formula.detail, splitrule, htry, nsplit, event.t
                        "mv.mix",               ## 15 --  reg/class/mix
                        "custom",               ## 16
                        "l2.impute",            ## 17
-                       "rps")                  ## 18
-  fmly <- formula.detail$family
+                       "rps",                  ## 18
+                       "quantile.regr",        ## 19
+                       "wibs",                 ## 20
+                       "quantile.surv",        ## 21
+                       "bs.gradient1",         ## 22
+                       "bs.gradient1a",        ## 23
+                       "bs.gradient1b")        ## 24
+fmly <- formula.detail$family
     ## Preliminary check for consistency.
     if (htry > 0) {
         if(!is.null(nsplit)) {
@@ -621,7 +627,8 @@ get.grow.splitinfo <- function (formula.detail, splitrule, htry, nsplit, event.t
           ## User specified split rule.
           if ((splitrule != "mse") &
               (splitrule != "mse.unwt") &
-              (splitrule != "mse.hvwt")) {
+              (splitrule != "mse.hvwt") &
+              (splitrule != "quantile.regr")) {
             stop("Invalid split rule specified:  ", splitrule)
           }
           splitrule.idx <- which(splitrule.names == splitrule)
@@ -1064,6 +1071,80 @@ gmean <- function(y, prob, rfq = FALSE, robust = FALSE) {
   else {
     NA
   }
+}
+global.prob.assign <- function(prob, prob.epsilon, gk.quantile, splitrule, n) {
+  ## default values
+  prob.default <- (1:99) / 100
+  prob.epsilon.default <- .005
+  prob.bs.default <- (1:9) / 10
+  prob.bsab.default <- .9
+  ## is quantile.regr in effect?
+  if (splitrule == "quantile.regr") {
+    ## is gk requested?
+    if (gk.quantile) {
+      ## gk quantile requires prob and prob.epsilon
+      ## if both are missing, set to optimal value -- SLOW SLOW !!!!
+      if (is.null(prob) && is.null(prob.epsilon)) {
+        n <- max(n, 1)
+        prob <- (1 : (2 * n)) / (2 * n + 1)
+        prob.epsilon <- diff(prob)[1] * .99
+      }
+      ## if prob missing, set to default value
+      else if (is.null(prob) && !is.null(prob.epsilon)) {
+        prob <- prob.default
+      }
+      ## if prob.epsilon missing, set to default value
+      else if (!is.null(prob) && is.null(prob.epsilon)) {
+        prob.epsilon <- mean(diff(sort(prob)), na.rm = TRUE) * .99
+      }
+      ## neither are missing
+      else {
+        ##nothing        
+      }
+    }
+    ## quantile splitting is in effect but no gk estimation
+    else {
+      prob.epsilon <- prob.epsilon.default
+      ## here's where we set the default prob if its missing
+      if (is.null(prob)) {
+        prob <-  prob.default
+      }
+    }
+    ## make sure prob values are coherent
+    if (sum(prob > 0 & prob < 1) == 0) {
+      stop("parameter 'prob' is not between (0,1)", prob)
+    }
+    prob <- sort(prob[prob>0 & prob<1])
+  }
+  ## survival has quantile splitting rules, here's where we deal with those
+  if (splitrule == "bs.gradient1") {
+    if (is.null(prob)) {
+      prob <- prob.bs.default
+    }
+    ## make sure prob values are coherent
+    if (sum(prob > 0 & prob < 1) == 0) {
+      stop("parameter 'prob' is not between (0,1)", prob)
+    }
+    prob <- sort(prob[prob>0 & prob<1])
+  }
+  if (splitrule ==  "bs.gradient1a" || splitrule == "bs.gradient1b") {
+    if (is.null(prob)) {
+      prob <- prob.bsab.default
+    }
+    ## make sure prob values are coherent
+    if (sum(prob > 0 & prob < 1) == 0) {
+      stop("parameter 'prob' is not between (0,1)", prob)
+    }
+    prob <- prob[prob>0 & prob<1][1]
+  }
+  ## for all other families leave the values at default NULL
+  #if (is.null(prob)) {
+  #  prob <-  prob.default
+  #}
+  #if (is.null(prob.epsilon)) {
+  #  prob.epsilon <-  prob.epsilon.default
+  #}
+  return(list(prob = prob, prob.epsilon = prob.epsilon))
 }
 parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
   ## confirm coherency of the formula

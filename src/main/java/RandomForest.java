@@ -38,51 +38,63 @@ public class RandomForest {
         @RF_TRACE_OFF@  }
 
         LinkedHashMap   ensembleList = Native.getInstance().grow(modelArg.get_trace(),
-                                                           modelArg.get_seed(),
+                                                                 modelArg.get_seed(),
 
-                                                           modelArg.getEnsembleArgOptLow() + modelArg.getModelArgOptLow(),
-                                                           modelArg.getEnsembleArgOptHigh() + modelArg.getModelArgOptHigh(),
-
-                                                           modelArg.getSplitRuleID(modelArg.get_splitRule()),
-                                                           modelArg.get_nSplit(),
-
-                                                           modelArg.get_mtry(),
-                                                           modelArg.get_htry(),
-                                                           modelArg.get_ytry(),
-
-                                                           modelArg.get_nodeSize(),
-                                                           modelArg.get_nodeDepth(),
-
-                                                           modelArg.get_eventCount(),
-                                                           modelArg.get_eventWeight(),
-
-                                                           modelArg.get_ntree(),
-                                                           modelArg.get_nSize(),
-                                                           modelArg.get_ySize(),
-                                                           modelArg.get_yType(),
-                                                           modelArg.get_yLevel(),
-                                                           modelArg.get_yData(),
-
-                                                           modelArg.get_xSize(),
-                                                           modelArg.get_xType(),
-                                                           modelArg.get_xLevel(),
-
-                                                           modelArg.get_sampleSize(),
-                                                           modelArg.get_sample(),
-                                                           modelArg.get_caseWeight(),
-
-                                                           modelArg.get_xStatisticalWeight(),
-                                                           modelArg.get_yWeight(),
-
-                                                           modelArg.get_xWeight(),
-                                                           modelArg.get_xData(),
-
-                                                           modelArg.get_timeInterestSize(),
-                                                           modelArg.get_timeInterest(),
-                                                           modelArg.get_nImpute(),
+                                                                 modelArg.getEnsembleArgOptLow() + modelArg.getModelArgOptLow(),
+                                                                 modelArg.getEnsembleArgOptHigh() + modelArg.getModelArgOptHigh(),
                                                                  
-                                                           modelArg.get_blockSize(),
-                                                           modelArg.get_rfCores());
+                                                                 modelArg.getSplitRuleID(modelArg.get_splitRule()),
+                                                                 modelArg.get_nSplit(),
+                                                                 
+                                                                 modelArg.get_mtry(),
+                                                                 modelArg.get_htry(),
+                                                                 
+                                                                 modelArg.get_vtry(),
+                                                                 modelArg.get_vtryArray(),
+
+                                                                 modelArg.get_ytry(),
+
+                                                                 modelArg.get_nodeSize(),
+                                                                 modelArg.get_nodeDepth(),
+
+                                                                 modelArg.get_eventCount(),
+                                                                 modelArg.get_eventWeight(),
+
+                                                                 modelArg.get_ntree(),
+                                                                 modelArg.get_nSize(),
+                                                                 
+                                                                 modelArg.get_ySize(),
+                                                                 modelArg.get_yType(),
+                                                                 modelArg.get_yLevel(),
+                                                                 modelArg.get_yData(),
+
+                                                                 modelArg.get_xSize(),
+                                                                 modelArg.get_xType(),
+                                                                 modelArg.get_xLevel(),
+
+                                                                 modelArg.get_sampleSize(),
+                                                                 modelArg.get_sample(),
+                                                                 modelArg.get_caseWeight(),
+
+                                                                 modelArg.get_xStatisticalWeight(),
+                                                                 modelArg.get_yWeight(),
+
+                                                                 modelArg.get_xWeight(),
+                                                                 modelArg.get_xData(),
+
+                                                                 modelArg.get_timeInterestSize(),
+                                                                 modelArg.get_timeInterest(),
+                                                                 modelArg.get_nImpute(),
+                                                                 
+                                                                 modelArg.get_blockSize(),
+
+                                                                 modelArg.get_probSize(),
+                                                                 modelArg.get_prob(),
+                                                                 modelArg.get_probEpsilon(),
+
+                                                                 0, // Hack for modelArg.get_wibsTau(),
+                                                                 
+                                                                 modelArg.get_rfCores());
 
             
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {        
@@ -207,6 +219,10 @@ public class RandomForest {
         
         // Create the Random Forest Model Object, given the inputs, and resulting outputs.
         RandomForestModel rfModel = new RandomForestModel(modelArg, ensembleList);
+
+
+        // Set the default value for the ensemble calculations to be conducted over all trees.
+        rfModel.set_extractTree();
         
         return rfModel;
     }
@@ -283,13 +299,13 @@ public class RandomForest {
                                                                     modelArg.get_timeInterestSize(),
                                                                     modelArg.get_timeInterest(),
                                                               
-                                                                    (int[]) (model.getEnsembleObj("seed")).ensembleVector,
                                                                     ((int[]) (model.getEnsembleObj("treeID")).ensembleVector).length,
+                                                                    (int[]) (model.getEnsembleObj("seed")).ensembleVector,
+
+                                                                    modelArg.get_htry(),
 
                                                                     (int[]) (model.getEnsembleObj("treeID")).ensembleVector,
                                                                     (int[]) (model.getEnsembleObj("nodeID")).ensembleVector,
-
-                                                                    modelArg.get_htry(),
                                                               
                                                                     hc_zero,
                                                                     hc_multi,
@@ -335,6 +351,12 @@ public class RandomForest {
                                                                     null, // fxData         invalid
 
                                                                     modelArg.get_blockSize(),
+
+                                                                    modelArg.get_probSize(),     // Should these be model or modelArg parameters
+                                                                    modelArg.get_prob(),         // Should these be model or modelArg parameters
+                                                                    modelArg.get_probEpsilon(),  // Should these be model or modelArg parameters
+
+                                                                    model.get_extractTree(),
 
                                                                     model.get_rfCores()); 
 

@@ -7,8 +7,26 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
   https://github.com/kogalur/randomForestSRC
 ---------------------------------------------------------------------------------
 
+
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
+---------------------------------------------------------------------------------
+Ensembles in regression now support Greenwald-Khanna approximate
+quantile queries via rfsrc(), predict.rfsrc() and the new wrapper
+quantileReg.rfsrc(). Related to this, a new split rule "quantile.regr"
+has been added.  Specifications will be added to the GitHub page,
+shortly.  Another new wrapper, imbalanced.rfsrc(), implements various
+solutions to the two-class imbalanced problem, including the newly
+proposed quantile-classifier approach of O'Brien and Ishwaran (2017).
+Also includes Breiman's balanced random forests undersampling of the
+majority class.  Performance is assesssed using the G-mean, but
+misclassification error can be requested. Also, the new parameter
+get.tree in predict.rfsrc() allows users to extract the ensembles for
+a single tree or subset of trees over the forest. Finally, the default
+nodesize for survival and competing risk has been changed to 15.
+    
+---------------------------------------------------------------------------------
+RELEASE 2.7.0
 ---------------------------------------------------------------------------------
 Three primary additions:
   (1) Subsample Forests for VIMP Confidence Intervals:

@@ -62,15 +62,21 @@ public class ModelArg {
 
     private int        mtry;
     private int        htry;
+
+    private int        vtry;
+    private int[][]    vtryArray;
+    
     private int        ytry;
 
     private int        nodeSize;
     private int        nodeDepth;
+
     private int        crWeightSize;
     private double[]   crWeight;
 
     private int        ntree;
     private int        nSize;
+
     private int        ySize;
     private char[]     yType;
     private int[]      yLevel;
@@ -95,7 +101,13 @@ public class ModelArg {
     private double[]   ntime;
 
     private int        blockSize;
-    
+
+    private int        quantileSize;
+    private double[]   quantile;
+    private double     qEpsilon;
+
+    private double     wibsTau;
+
     private int        rfCores;
 
     
@@ -1101,7 +1113,14 @@ public class ModelArg {
 
         // Default value of blockSize, called after ntree has been initialized above.
         set_blockSize();
-            
+
+        // Default value of quantile vector is to make it absent.
+        set_prob(null);
+
+        // Default value of vtry is zero, no holdouts.
+        set_vtry(0);
+        set_vtryArray(null);
+        
         // Set x-weight, y-weight, and split weight.
         set_xWeight();
 
@@ -1695,6 +1714,141 @@ public class ModelArg {
     }
 
 
+
+
+
+
+
+
+
+
+
+
+
+    /**
+     * Sets the target quantile probabilities in scenarios that require them.
+     * @param prob The target quantile probability vector.  This must be a vector 
+     * of probabilities between zero and one. When null is sent in, the vector is ingored.
+     */
+    public void set_prob(double[] prob) {
+        this.quantile = prob;
+
+        if (prob == null) {
+            quantileSize = 0;
+        }
+        else {
+            quantileSize = prob.length;
+        }
+    }
+
+    /**
+     * Returns the vector of target quantile probabilities.
+     * @return The vector of target quantile probabilities.
+     * @see #set_prob(double[])
+     */
+    public double[] get_prob() {
+        return quantile;
+    }
+
+    int get_probSize() {
+        return quantileSize;
+    }
+            
+        
+    /**
+     * Sets the Greenwald-Khanna allowable error for the target quantiles.
+     * @param probEpsilon The Greenwald-Khanna allowable error for the target quantiles.
+     */
+    public void set_probEpsilon(double probEpsilon) {
+        qEpsilon = probEpsilon;
+    }
+
+    /**
+     * Sets the default value for the Greenwald-Khanna allowable error for the target quantiles.
+     */
+    public void set_probEpsilon() {
+        qEpsilon = 0.005;
+    }
+
+    /**
+     * Returns the value for the Greenwald-Khanna allowable error for the target quantiles.
+     * @return The value for the Greenwald-Khanna allowable error for the target quantiles.
+     * @see #set_probEpsilon(double)
+     */
+    public double get_probEpsilon() {
+        return qEpsilon;
+    }
+
+
+
+    
+    /** Sets the number of variables to be randomly held out while growing a tree.
+     * @param vtry Number of variables to be randomly held out while growing a tree.
+     */
+    public void set_vtry(int vtry) {
+        // TBD TBD TBD need logic for coherent vtry TBD TBD TBD
+        this.vtry = 0;
+    }
+
+    /** Specifies the holdout array, a p x ntree array of zeros and ones, where
+     *  one indicates that the x-variable is to be held out in the corresponding tree,
+     *  and zero indicates that the x-variable is available as an mtry candidate.
+     * @param vtryArray holdout array, a p x ntree array of zeros and ones.
+     */
+    public void set_vtryArray(int[][] vtryArray) {
+        // TBD TBD TBD need logic for coherent vtryArray TBD TBD TBD
+        this.vtryArray = null;
+    }
+    
+
+    /** Returns the number of variables to be randomly held out while growing a tree.
+     * @return The number of variables to be randomly held out while growing a tree.
+     * @see #set_vtry(int)
+     */
+    public int get_vtry() {
+        // TBD TBD TBD need logic for coherent vtry TBD TBD TBD
+        return vtry;
+    }
+
+    /** Returns the holdout array, a p x ntree array of zeros and ones, where
+     *  one indicates that the x-variable is to be held out in the corresponding tree,
+     *  and zero indicates that the x-variable is available as an mtry candidate.
+     * @return The holdout array.
+     * @see #set_vtryArray(int[][])
+     */
+    public int[][] get_vtryArray() {
+        // TBD TBD TBD need logic for coherent vtryArray TBD TBD TBD
+        return vtryArray;
+    }
+
+
+
+
+
+
+
+
+
+
+
+    
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
     /**
      * Sets the number of x-variables to be randomly selected as candidates for splitting a node.
      * @param mtry The number of x-variables to be randomly selected as candidates for splitting a node. 

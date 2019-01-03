@@ -14,6 +14,8 @@
   -->
 
   <!-- CAUTION:  These comments affect the public build.     -->
+  <!-- CAUTION:  These are for the Java-side trace only.     -->
+  <!-- CAUTION:  For C-side trace refer to build.xml.        -->
   <!-- CAUTION   "java-trace" means TRACE IS OFF:            -->  
   <target name="java-trace">
     <property name="java.trace.token" value="//"/>

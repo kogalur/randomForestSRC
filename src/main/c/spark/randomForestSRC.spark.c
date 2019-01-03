@@ -8,6 +8,8 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
                                                                     jint         nsplit,
                                                                     jint         mtry,
                                                                     jint         htry,
+                                                                    jint         vtry,
+                                                                    jintArray    vtryArray,
                                                                     jint         ytry,
                                                                     jint         nodeSize,
                                                                     jint         nodeDepth,
@@ -33,6 +35,10 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
                                                                     jdoubleArray timeInterest,
                                                                     jint         nImpute,
                                                                     jint         perfBlock,
+                                                                    jint         quantileSize,
+                                                                    jdoubleArray quantile,
+                                                                    jdouble      qEpsilon,
+                                                                    jdouble      wibsTau,
                                                                     jint         numThreads) {
   setUserTraceFlag((uint) traceFlag);
   setNativeGlobalEnv(env, obj);
@@ -68,6 +74,11 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
   RF_timeInterest         = (double *) copy1DObject(timeInterest, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_nImpute              = (uint) nImpute;
   RF_perfBlock            = (uint) perfBlock;
+  RF_quantileSize         = (uint) quantileSize;
+  RF_quantile             = (double *) copy1DObject(quantile, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
+  RF_qEpsilon             = (uint) qEpsilon;
+  RF_vtry                 = (uint) vtry;
+  RF_vtryArray            = (uint **) copy2DObject(vtryArray, NATIVE_TYPE_INTEGER, &RF_jni2DInfoListSize);
   RF_numThreads           = (int)  numThreads;
   processDefaultGrow();
   rfsrc(RF_GROW, seedValue);
@@ -102,11 +113,11 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
                                                                        jdoubleArray caseWeight,
                                                                        jint         timeInterestSize,
                                                                        jdoubleArray timeInterest,
-                                                                       jintArray    seed,
                                                                        jint         totalNodeCount,
+                                                                       jintArray    seed,
+                                                                       jint         htry,
                                                                        jintArray    treeID,
                                                                        jintArray    nodeID,
-                                                                       jint         htry,
                                                                        jobject      hc_zero,
                                                                        jobject      hc_one,
                                                                        jobject      hc_parmID,
@@ -139,6 +150,10 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
                                                                        jdoubleArray fyData,
                                                                        jdoubleArray fxData,
                                                                        jint         perfBlock,
+                                                                       jint         quantileSize,
+                                                                       jdoubleArray quantile,
+                                                                       jdouble      qEpsilon,
+                                                                       jintArray    getTree,
                                                                        jint         numThreads) {
   char mode;
   uint i;
@@ -172,6 +187,9 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   RF_TN_RCNT_             = (uint *)   copy1DObject(tnRCNT, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_TN_ACNT_             = (uint *)   copy1DObject(tnACNT, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_perfBlock            = (uint) perfBlock;
+  RF_quantileSize         = (uint) quantileSize;
+  RF_quantile             = (double *) copy1DObject(quantile, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
+  RF_qEpsilon             = (uint) qEpsilon;
   RF_numThreads           = (int)  numThreads;
   RF_ptnCount             = (uint) ptnCount;
   RF_rTargetCount         = (uint) yTargetSize;
@@ -186,6 +204,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   RF_frSize               = (uint) fySize;
   RF_fresponseIn          = (double **) copy2DObject(fyData, NATIVE_TYPE_NUMERIC, &RF_jni2DInfoListSize);
   RF_fobservationIn       = (double **) copy2DObject(fxData, NATIVE_TYPE_NUMERIC, &RF_jni2DInfoListSize);
+  RF_getTree              = (uint *) copy1DObject(getTree, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
   RF_TN_SURV_             = (double *) copy1DObject(tnSURV, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_TN_MORT_             = (double *) copy1DObject(tnMORT, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_TN_NLSN_             = (double *) copy1DObject(tnNLSN, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);

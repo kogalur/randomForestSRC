@@ -28,7 +28,12 @@ rfsrc <- function(formula, data, ntree = 1000,
   ## TBD TBD make perf.type visible TBD TBD
   perf.type <- is.hidden.perf.type(user.option)
   rfq <- is.hidden.rfq(user.option)
+  gk.quantile <- is.hidden.gk.quantile(user.option)
+  prob <- is.hidden.prob(user.option)
+  prob.epsilon <- is.hidden.prob.epsilon(user.option)
   htry <- is.hidden.htry(user.option)
+  vtry <- is.hidden.vtry(user.option)
+  holdout.array <- is.hidden.holdout.array(user.option)
   ## verify key options
   ensemble <- match.arg(ensemble, c("all", "oob", "inbag"))  
   bootstrap <- match.arg(bootstrap, c("by.root", "by.node", "none", "by.user"))
@@ -121,7 +126,6 @@ rfsrc <- function(formula, data, ntree = 1000,
   rownames(xvar) <- colnames(xvar) <- NULL
   ## Initialize sample size
   ## Set mtry
-  ## Set the weight matrix for xvar, and the split
   n <- nrow(xvar)
   n.xvar <- ncol(xvar)
   mtry <- get.grow.mtry(mtry, n.xvar, family)
@@ -170,16 +174,18 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## Override sample type when not bootstrapping by root or user.
     samptype <- "swr"
   }
+  ## Set the weight matrix for xvar, split
+  ## Set the flag for forest weight  
   case.wt  <- get.weight(case.wt, n)
-  forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))
   split.wt <- get.weight(split.wt, n.xvar)
+  forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))
   ## Note that yvar.types is based on the formula:
   ## If the family is unsupervised, yvar.types is NULL
   ## If the family is regression, classification, or
   ## multivariate/mixed, it is of length greater than zero (0).  In the case
   ## of surival and competing risk, it is specifically of length two (2) for
   ## coherency, though it is ignored in the native-code.
-  ## Note that ytry is set by the formula.
+  ## Note that ytry is set by the formula:
   ## If the family is unsupervised, ytry assumes the value specified
   ## via the formula.  If the family is regression, classification, or
   ## multivariate/mixed, it defaults to length(yvar.types).  In the case
@@ -298,6 +304,25 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## other than imputed data.
     ## na.action    <- "na.impute"
   }
+  ## get holdout array which is NULL unless the user passes in an array
+  ## or specifies a non-zero vtry 
+  if (is.null(holdout.array)) {
+    holdout.array <- make.holdout.array(vtry, mtry, n.xvar, ntree)
+  }
+  else {##user specified array - set vtry=1 to trigger holdout algorithm
+    if (nrow(holdout.array) != n.xvar | ncol(holdout.array) != ntree) {
+      stop("dimension of holdout.array does not conform to p x ntree")
+    }
+    vtry <- 1
+  }
+  ## !!! here's where prob and prob.epsilon are set globally !!!
+  ## for the user convenience if not set make coherent
+  ## global assingments for  prob and prob.epsilon values
+  ## takes into account splitrule and whether gk.quantile is requested
+  gk.quantile <- get.gk.quantile(gk.quantile)
+  prob.assign <- global.prob.assign(prob, prob.epsilon, gk.quantile, splitinfo$name, n)
+  prob <- prob.assign$prob
+  prob.epsilon <- prob.assign$prob.epsilon
   ## Bit dependencies:
   if (terminal.qualts | terminal.quants) {
     forest <- TRUE
@@ -315,11 +340,12 @@ rfsrc <- function(formula, data, ntree = 1000,
   membership.bits <-  get.membership(membership)
   statistics.bits <- get.statistics(statistics)
   split.cust.bits <- get.split.cust(splitinfo$cust)
-  ## get performance and rfq bits
+  ## get performance and rfq, gk bits
   perf.type <- get.perf(perf.type, impute.only, family)
   perf.bits <-  get.perf.bits(perf.type)
   rfq <- get.rfq(rfq)
-  rfq.bits <- get.rfq.bits(rfq, family)
+  rfq.bits  <- get.rfq.bits(rfq, family)
+  gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
   ## Assign high bits for the native code
   samptype.bits <- get.samptype(samptype)
   forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
@@ -342,6 +368,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                                              proximity.bits +
                                              perf.bits +
                                              rfq.bits +
+                                             gk.quantile.bits +
                                              statistics.bits),
                                   as.integer(samptype.bits +
                                              forest.wt.bits +
@@ -355,6 +382,8 @@ rfsrc <- function(formula, data, ntree = 1000,
                                   as.integer(splitinfo$nsplit),
                                   as.integer(mtry),
                                   as.integer(htry),
+                                  as.integer(vtry),
+                                  as.integer(holdout.array),
                                   as.integer(formulaDetail$ytry),
                                   as.integer(nodesize),
                                   as.integer(nodedepth),
@@ -380,6 +409,10 @@ rfsrc <- function(formula, data, ntree = 1000,
                                   as.double(event.info$time.interest),
                                   as.integer(nimpute),
                                   as.integer(block.size),
+                                  as.integer(length(prob)),
+                                  as.double(prob),
+                                  as.double(prob.epsilon),
+                                  as.double(NULL),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -677,8 +710,8 @@ rfsrc <- function(formula, data, ntree = 1000,
                        bootstrap = bootstrap,
                        sampsize = sampsize,
                        samptype = samptype,
-                       samp     = samp,
-                       case.wt  = case.wt,
+                       samp = samp,
+                       case.wt = case.wt,
                        terminal.qualts = terminal.qualts,
                        terminal.quants = terminal.quants,
                        nativeArrayTNDS = nativeArrayTNDS,
@@ -686,6 +719,9 @@ rfsrc <- function(formula, data, ntree = 1000,
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,
+                       gk.quantile = gk.quantile,
+                       prob = prob,
+                       prob.epsilon = prob.epsilon,
                        block.size = block.size)
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
@@ -835,6 +871,7 @@ rfsrc <- function(formula, data, ntree = 1000,
     node.mtry.index = node.mtry.index,
     node.ytry.index = node.ytry.index,
     ensemble = ensemble,
+    holdout.array = holdout.array,
     block.size = block.size
   )
   ## memory management
@@ -851,6 +888,7 @@ rfsrc <- function(formula, data, ntree = 1000,
   if (n.miss > 0) remove(imputed.indv)
   if (n.miss > 0) remove(imputed.data)
   remove(split.depth.out)
+  remove(holdout.array)
   ## save the outputs
   survOutput <- NULL
   classOutput <- NULL
@@ -1225,10 +1263,16 @@ rfsrc <- function(formula, data, ntree = 1000,
         vimp.offset <-  cumsum(vimp.offset)
         iter.ensb.start <- 0
         iter.ensb.end   <- 0
+        iter.qntl.start <- 0
+        iter.qntl.end   <- 0
         ## From the native code:
         ##   "allEnsbRGR"
         ##   "oobEnsbRGR"
         ## -> of dim [regr.count] x [obsSize]
+        ## From the native code:
+        ##   "allEnsbQNT"
+        ##   "oobEnsbQNT"
+        ## -> of dim [regr.count] x [length(prob)] x [n]
         ## From the native code:
         ##   "perfRegr"
         ## -> of dim [ntree] x [regr.count]
@@ -1247,6 +1291,8 @@ rfsrc <- function(formula, data, ntree = 1000,
         for (i in 1:regr.count) {
           iter.ensb.start <- iter.ensb.end
           iter.ensb.end <- iter.ensb.end + n
+          iter.qntl.start <- iter.qntl.end
+          iter.qntl.end <- iter.qntl.end + (length(prob) * n)
           vimp.names <- xvar.names
           predicted <- (if (!is.null(nativeOutput$allEnsbRGR))
                         array(nativeOutput$allEnsbRGR[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
@@ -1256,6 +1302,16 @@ rfsrc <- function(formula, data, ntree = 1000,
                             array(nativeOutput$oobEnsbRGR[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
           regrOutput[[i]] <- c(regrOutput[[i]], predicted.oob = list(predicted.oob))
           remove(predicted.oob)
+          quantile <- (if (!is.null(nativeOutput$allEnsbQNT))
+                        array(nativeOutput$allEnsbQNT[(iter.qntl.start + 1):iter.qntl.end],
+                              c(n, length(prob))) else NULL)
+          regrOutput[[i]] <- c(regrOutput[[i]], quantile = list(quantile))
+          remove(quantile)
+          quantile.oob <- (if (!is.null(nativeOutput$oobEnsbQNT))
+                            array(nativeOutput$oobEnsbQNT[(iter.qntl.start + 1):iter.qntl.end],
+                                  c(n, length(prob))) else NULL)
+          regrOutput[[i]] <- c(regrOutput[[i]], quantile.oob = list(quantile.oob))
+          remove(quantile.oob)
           if (!is.null(nativeOutput$perfRegr)) {
             err.rate <- nativeOutput$perfRegr[tree.offset]
             tree.offset <- tree.offset + 1
@@ -1278,6 +1334,8 @@ rfsrc <- function(formula, data, ntree = 1000,
         }
         nativeOutput$allEnsbRGR <- NULL
         nativeOutput$oobEnsbRGR <- NULL
+        nativeOutput$allEnsbQNT <- NULL
+        nativeOutput$oobEnsbQNT <- NULL
         nativeOutput$perfRegr <- NULL
         nativeOutput$vimpRegr <- NULL
         nativeOutput$blockRegr <- NULL

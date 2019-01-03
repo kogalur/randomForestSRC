@@ -10,7 +10,7 @@ importFrom("stats", "as.dist", "as.formula", "cutree", "dlnorm", "formula",
            "optim", "pgamma", "plnorm", "pnorm", "predict", 
            "quantile", "qnorm", "runif", "sd", "supsmu", "var", "wilcox.test")
 importFrom("utils", "installed.packages", "txtProgressBar", "setTxtProgressBar",
-           "write.table")
+           "write.table", "tail")
 importFrom("grDevices", "gray")
 
 export(cindex,
@@ -24,6 +24,8 @@ export(cindex,
        get.mv.predicted,
        get.mv.vimp,
         
+       imbalanced,
+       imbalanced.rfsrc,
        impute,       
        impute.rfsrc,
        max.subtree,

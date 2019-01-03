@@ -4,6 +4,7 @@ generic.predict.rfsrc <-
            ensemble = NULL,
            m.target = NULL,
            importance = FALSE,
+           get.tree = NULL,
            block.size = NULL,
            importance.xvar,
            subset = NULL,
@@ -19,7 +20,7 @@ generic.predict.rfsrc <-
            do.trace = FALSE,
            membership = FALSE,
            statistics = FALSE,
-                       
+            
            ...)
 {
   univariate.nomenclature <- TRUE
@@ -29,6 +30,9 @@ generic.predict.rfsrc <-
   terminal.quants <- is.hidden.terminal.quants(user.option)
   perf.type <- is.hidden.perf.type(user.option)
   rfq <- is.hidden.rfq(user.option)
+  gk.quantile <- is.hidden.gk.quantile(user.option)
+  prob <- is.hidden.prob(user.option)
+  prob.epsilon <- is.hidden.prob.epsilon(user.option)
   ## set the family
   family <- object$family
   ## incoming parameter checks: all are fatal
@@ -160,21 +164,47 @@ generic.predict.rfsrc <-
           stop()
         }
   }
-  ## class imbalanced processing
+  ## classification specific details related to rfq and perf.type
   pi.hat <- NULL
   if (family == "class") {
-    if (is.null(rfq) && !is.null(object$rfq)) {
-      rfq <- object$rfq
+    ## rfq specific details
+    if (!is.null(rfq)) {##predict has specified rfq
+      if (!rfq) {##predict does not want rfq
+        ## nothing 
+      }
+      else {##predict has requested rfq
+        pi.hat <- table(object$yvar) / length(object$yvar)
+      }
     }
-    if (!is.null(rfq) && rfq) {
-      pi.hat <- table(object$yvar) / length(object$yvar)
+    if (is.null(rfq)) {##predict  ambivalent about rfq
+      if (!object$rfq) {##grow did not use rfq
+        ## nothing -> rfq = FALSE
+      }
+      else {##grow used rfq - use grow spec
+        pi.hat <- table(object$yvar) / length(object$yvar)
+        rfq <- TRUE
+      }
     }
+    ## performance details
     if (is.null(perf.type) && !is.null(object$perf.type)) {
       perf.type <- object$perf.type
     }
   }
   ## recover the split rule
   splitrule <- object$splitrule
+  ## gk processing
+  if (!is.null(gk.quantile) || object$gk.quantile) { 
+    if (is.null(gk.quantile)) {##predict ambivalent about gk - use grow spec
+      gk.quantile <- object$gk.quantile
+    }
+  }
+  ## !!! here's where prob and prob.epsilon are set globally !!!
+  gk.quantile <- get.gk.quantile(gk.quantile)
+  prob.assign <- global.prob.assign(if (is.null(prob)) object$prob else prob,
+                                    if (is.null(prob.epsilon)) object$prob.epsilon else prob.epsilon,
+                                    gk.quantile, splitrule, nrow(object$xvar))
+  prob <- prob.assign$prob
+  prob.epsilon <- prob.assign$prob.epsilon
   ## Determine the immutable yvar factor map which is needed for
   ## classification sexp dimensioning.  But, first convert object$yvar
   ## to a data frame which is required for factor processing
@@ -394,6 +424,10 @@ generic.predict.rfsrc <-
   n <- nrow(xvar)
   ## Initialize the number of trees in the forest
   ntree <- object$ntree
+  ## Process the get.tree vector that specifies which trees we want
+  ## to extract from the forest.  This is only relevant to restore mode.
+  ## The parameter is ignored in predict mode.
+  get.tree <- get.tree.index(get.tree, ntree)
   ## Initialize the low bits
   ensemble.bits <- get.ensemble(ensemble)
   importance.bits <- get.importance(importance)
@@ -402,11 +436,12 @@ generic.predict.rfsrc <-
   split.depth.bits <- get.split.depth(split.depth)
   var.used.bits <- get.var.used(var.used)
   outcome.bits <- get.outcome(outcome)
-  ## get performance and rfq bits
+  ## get performance and rfq, gk bits
   perf.type <- get.perf(perf.type, FALSE, family)
   perf.bits <-  get.perf.bits(perf.type)
   rfq <- get.rfq(rfq)
   rfq.bits <- get.rfq.bits(rfq, family)
+  gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
   statistics.bits <- get.statistics(statistics)
   bootstrap.bits <- get.bootstrap(object$bootstrap)
   ## Initalize the high bits
@@ -416,7 +451,8 @@ generic.predict.rfsrc <-
   membership.bits <-  get.membership(membership)
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
-  block.size <- get.block.size(block.size, ntree)
+  ## We over-ride block-size in the case that get.tree is user specified
+  block.size <- min(get.block.size(block.size, ntree), sum(get.tree))
   ## Turn off partial option.
   partial.bits <- get.partial(0)
   ## na.action in the native code is only revelant to the training data.
@@ -470,6 +506,7 @@ generic.predict.rfsrc <-
                                              perf.bits +
                                              rfq.bits +
                                              cr.bits +
+                                             gk.quantile.bits +
                                              statistics.bits),
                                   as.integer(
                                     forest.wt.bits +
@@ -550,6 +587,10 @@ generic.predict.rfsrc <-
                                   as.double(if (outcome != "test") yvar.newdata else NULL),
                                   as.double(if (outcome != "test") xvar.newdata else NULL),
                                   as.integer(block.size),
+                                  as.integer(length(prob)),
+                                  as.double(prob),
+                                  as.double(prob.epsilon),
+                                  as.integer(get.tree),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -1154,9 +1195,15 @@ generic.predict.rfsrc <-
         vimp.offset <-  cumsum(vimp.offset)
         iter.ensb.start <- 0
         iter.ensb.end   <- 0
+        iter.qntl.start <- 0
+        iter.qntl.end   <- 0
         ## From the native code:
         ##   "allEnsbRGR"
         ## -> of dim [regr.count] x [obsSize]
+        ## From the native code:
+        ##   "allEnsbQNT"
+        ##   "oobEnsbQNT"
+        ## -> of dim [regr.count] x [length(prob)] x [n]
         ## From the native code:
         ##   "perfRegr"
         ## -> of dim [regr.count] x [ntree]
@@ -1177,6 +1224,8 @@ generic.predict.rfsrc <-
           if (length(target.idx) > 0) {
             iter.ensb.start <- iter.ensb.end
             iter.ensb.end <- iter.ensb.end + n.observed
+            iter.qntl.start <- iter.qntl.end
+            iter.qntl.end <- iter.qntl.end + (length(prob) * n.observed)
             vimp.names <- if(vimp.joint) "joint" else importance.xvar
             predicted <- (if (!is.null(nativeOutput$allEnsbRGR))
                             array(nativeOutput$allEnsbRGR[(iter.ensb.start + 1):iter.ensb.end], n.observed) else NULL)
@@ -1186,6 +1235,16 @@ generic.predict.rfsrc <-
                                 array(nativeOutput$oobEnsbRGR[(iter.ensb.start + 1):iter.ensb.end], n.observed) else NULL)
             regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], predicted.oob = list(predicted.oob))
             remove(predicted.oob)
+            quantile <- (if (!is.null(nativeOutput$allEnsbQNT))
+                             array(nativeOutput$allEnsbQNT[(iter.qntl.start + 1):iter.qntl.end],
+                                   c(n.observed, length(prob))) else NULL)
+            regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], quantile = list(quantile))
+            remove(quantile)
+            quantile.oob <- (if (!is.null(nativeOutput$oobEnsbQNT))
+                                 array(nativeOutput$oobEnsbQNT[(iter.qntl.start + 1):iter.qntl.end],
+                                       c(n.observed, length(prob))) else NULL)
+            regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], quantile.oob = list(quantile.oob))
+            remove(quantile.oob)
             if (!is.null(nativeOutput$perfRegr)) {
               err.rate <- nativeOutput$perfRegr[tree.offset]
               tree.offset <- tree.offset + 1
@@ -1209,6 +1268,8 @@ generic.predict.rfsrc <-
         }
         nativeOutput$allEnsbRGR <- NULL
         nativeOutput$oobEnsbRGR <- NULL
+        nativeOutput$allEnsbQNT <- NULL
+        nativeOutput$oobEnsbQNT <- NULL
         nativeOutput$perfRegr <- NULL
         nativeOutput$vimpRegr <- NULL
         nativeOutput$blockRegr <- NULL

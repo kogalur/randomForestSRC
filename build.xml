@@ -7,8 +7,8 @@
 <project name="RF-SRC Public" basedir="." default="usage" >
 
   <property name="project.pkg.name"  value="randomForestSRC"/>
-  <property name="project.version"   value="2.7.0"/>
-  <property name="project.build"     value="bld20180817"/>
+  <property name="project.version"   value="2.8.0"/>
+  <property name="project.build"     value="bld20190102"/>
   <property name="minimum.version"   value="2.3.0"/>
   
   <property name="http.prefix"       value="http://"/>
@@ -130,9 +130,7 @@
     <echo message=" source-cran"/>
     <echo message="     --> create the CRAN source package"/>
     <echo message=""/>
-    <echo message=" install-cran-mac"/>
-    <echo message=" install-cran-win"/>
-    <echo message=" install-cran-lin"/>
+    <echo message=" install-cran"/>
     <echo message="     --> install the parallel CRAN package"/>
     <echo message=""/>
     <echo message=" source-spark"/>

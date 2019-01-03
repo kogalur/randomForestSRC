@@ -12,9 +12,9 @@
 \usage{\method{plot.variable}{rfsrc}(x, xvar.names, target,
   m.target = NULL, time, surv.type = c("mort", "rel.freq",
   "surv", "years.lost", "cif", "chf"), class.type =
-  c("prob", "bayes"), partial = FALSE, oob = TRUE, show.plots = TRUE,
-  plots.per.page = 4, granule = 5, sorted = TRUE, nvar, npts = 25,
-  smooth.lines = FALSE, subset, ...)
+  c("prob", "bayes"), partial = FALSE, oob = TRUE,
+  show.plots = TRUE, plots.per.page = 4, granule = 5, sorted = TRUE,
+  nvar, npts = 25, smooth.lines = FALSE, subset, ...)
 }
 \arguments{
   \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc,
@@ -38,7 +38,7 @@
     See details below.}
   \item{partial}{Should partial plots be used?}
   \item{oob}{OOB (TRUE)  or in-bag (FALSE) predicted values.}
-  \item{show.plots}{Should plots be displayed?}
+   \item{show.plots}{Should plots be displayed?}
   \item{plots.per.page}{Integer value controlling page layout.}
   \item{granule}{Integer value controlling whether a plot for a
     specific variable should be treated as a factor and therefore given

@@ -13,7 +13,7 @@
   -->
   <target name="source-cran" depends="init, clean-cran">
 
-    <!--delete dir="target/cran"/-->
+    <delete dir="target/cran"/>
 
     <mkdir  dir="target/cran"/>
     <mkdir  dir="target/cran/${project.pkg.name}"/>
@@ -259,9 +259,7 @@
       INSTALL-CRAN-xxx target, Entry Point
     ========================================================================
   -->
-  <target name="install-cran-mac" depends="os-prep, source-cran, install-cran-generic"/>
-  <target name="install-cran-lin" depends="os-prep, source-cran, install-cran-generic"/>
-  <target name="install-cran-win" depends="os-prep, source-cran, install-cran-generic"/>
+  <target name="install-cran" depends="os-prep, source-cran, install-cran-generic"/>
 
   
   <!--

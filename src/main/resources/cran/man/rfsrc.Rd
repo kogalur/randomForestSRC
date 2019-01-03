@@ -67,8 +67,8 @@ rfsrc(formula, data, ntree = 1000,
     selected pseudo-responses (see below for more details). 
     The default is \code{ytry}=1, which selects one pseudo-response.}
   \item{nodesize}{Forest average number of unique cases (data points) in
-    a terminal node.  The defaults are: survival (3), competing risk
-    (6), regression (5), classification (1), mixed outcomes (3),
+    a terminal node.  The defaults are: survival (15), competing risk
+    (15), regression (5), classification (1), mixed outcomes (3),
     unsupervised (3).  It is recommended to experiment with different
     \code{nodesize} values.}
   \item{nodedepth}{Maximum depth to which a tree should be grown.  The
@@ -107,12 +107,12 @@ rfsrc(formula, data, ntree = 1000,
     \code{by.user} is choosen, the bootstrap specified by \code{samp} is
     used.  It is not possible to return OOB ensembles or prediction
     error if \code{by.node} or \code{none} are in effect.}
-  \item{samptype}{Type of bootstrap when \code{"by.root"} is in
+  \item{samptype}{Type of bootstrap when \code{by.root} is in
     effect.  Choices are \code{swr} (sampling with replacement,
     the default action) and \code{swor} (sampling without replacement).}
-  \item{sampsize}{Requested size of bootstrap when \code{"by.root"} is in
+  \item{sampsize}{Requested size of bootstrap when \code{by.root} is in
     effect (if missing the default action is the usual bootstrap).}
-  \item{samp}{Bootstrap specification when \code{"by.user"} is in
+  \item{samp}{Bootstrap specification when \code{by.user} is in
     effect.  This is a array of dim \code{n x ntree} specifying how many
     times each record appears inbag in the bootstrap for each tree.}
   \item{membership}{Should terminal node membership and inbag
@@ -152,8 +152,8 @@ rfsrc(formula, data, ntree = 1000,
     types.}
   \item{proximity}{Proximity of cases as measured by the frequency of
     sharing the same terminal node.  This is an \code{n}x\code{n}
-    matrix, which can be large.  Choices are \code{"inbag"},
-    \code{"oob"}, \code{"all"}, \code{TRUE}, or \code{FALSE}.  
+    matrix, which can be large.  Choices are \code{inbag},
+    \code{oob}, \code{all}, \code{TRUE}, or \code{FALSE}.  
     Setting \code{proximity = TRUE} is equivalent to 
     \code{proximity = "inbag"}.}
   \item{distance}{Distance between cases as measured by the ratio of the
@@ -162,15 +162,15 @@ rfsrc(formula, data, ntree = 1000,
     root node.  If the cases are co-terminal for a tree, this measure is
     zero and reduces to 1 - the proximity measure for these cases in a
     tree. This is an \code{n}x\code{n} matrix, which can be large.
-    Choices are \code{"inbag"}, \code{"oob"}, \code{"all"}, \code{TRUE},
+    Choices are \code{inbag}, \code{oob}, \code{all}, \code{TRUE},
     or \code{FALSE}.  Setting \code{distance = TRUE} is equivalent to
     \code{distance = "inbag"}.}
   \item{forest.wt}{Should the forest weight matrix be
     calculated?  Creates an \code{n}x\code{n} matrix which can be
     used for prediction and constructing customized estimators.  Choices
-    are similar to proximity: \code{"inbag"}, \code{"oob"}, \code{"all"},
+    are similar to proximity: \code{inbag}, \code{oob}, \code{all},
     \code{TRUE}, or \code{FALSE}.  The default is \code{TRUE} which
-    is equivalent to \code{"inbag"}.}
+    is equivalent to \code{inbag}.}
   \item{xvar.wt}{Vector of non-negative weights where entry
     \code{k}, after normalizing, is the probability of selecting
     variable \code{k} as a candidate for splitting a node.  Default is to
@@ -239,22 +239,19 @@ rfsrc(formula, data, ntree = 1000,
     the underlying random forest family from the type of response and
     the formula supplied.  There are eight possible scenarios:
     
-    \code{regr}, \code{regr+}, \code{class}, \code{class+}, \code{mix+},
-    \code{unsupv}, \code{surv}, and \code{surv-CR}.
-    
     \enumerate{
-      \item Regression forests (\code{regr}) for continuous responses.
-      \item Multivariate regression forests (\code{regr+})
-      for multivariate continuous responses.
-      \item Classification forests (\code{class}) for factor responses.
-      \item Multivariate classification forests (\code{class+})
-      for multivariate factor responses.
-      \item Multivariate mixed forests (\code{mix+}) for mixed continuous
-      and factor responses.
-      \item Unsupervised forests (\code{unsupv}) when there is no response.
-      \item Survival forest (\code{surv}) for right-censored survival settings.
-      \item Competing risk survival forests (\code{surv-CR})
-      for competing risk scenarios.
+      \item Regression forests for continuous responses.
+      \item Multivariate regression forests for multivariate continuous
+            responses.
+      \item Classification forests for factor responses.
+      \item Multivariate classification forests for multivariate
+            factor responses.
+      \item Multivariate mixed forests for mixed continuous
+            and factor responses.
+      \item Unsupervised forests when there is no response.
+      \item Survival forest for right-censored survival settings.
+      \item Competing risk survival forests for competing risk
+            scenarios.
     }
     
     See below for how to code the response in the two different survival
@@ -273,8 +270,10 @@ rfsrc(formula, data, ntree = 1000,
         rules can be invoked using splitrules \code{mse.unwt} and
 	      \code{mse.hvwt}.  Generally \code{mse} works best, but see
 	      Ishwaran (2015) for details.
+        \item Quantile regression splitting \code{quantile.regr} using
+      the "check-loss" function.  Requires specifying the target
+      quantiles.  See \code{quantileReg} for further details.
       }
-      
       
       \item Multivariate regression analysis: For multivariate regression
       responses, a composite normalized mean-squared error splitting
@@ -959,7 +958,7 @@ if (library("survival", logical.return = TRUE)
 
   ## run cox/rfsrc models
   ## for illustration we use a small number of trees
-  cox.obj <- coxph(surv.f, data = pbc.na)
+  cox.obj <- coxph(surv.f, data = pbc.na, x = TRUE)
   rfsrc.obj <- rfsrc(surv.f, pbc.na, ntree = 150)
 
   ## compute bootstrap cross-validation estimate of expected Brier score
@@ -977,7 +976,7 @@ if (library("survival", logical.return = TRUE)
     if (b\%\%10 == 0) cat("cox bootstrap:", b, "\n")
     train <- sample(1:nrow(pbc.na), nrow(pbc.na), replace = TRUE)
     cox.obj <- tryCatch({coxph(surv.f, pbc.na[train, ])}, error=function(ex){NULL})
-    if (is.list(cox.obj)) {
+    if (!is.null(cox.obj)) {
       _PROJECT_PACKAGE_NAME_:::cindex(pbc.na$days[-train],
                                       pbc.na$status[-train],
                                       predict(cox.obj, pbc.na[-train, ]))

@@ -62,8 +62,8 @@ typedef unsigned long ulong;
 #define RF_LEAF_CT  18  
 #define RF_SEED_ID  19  
 #define RF_XXXX_20  20  
-#define RF_XXXX_21  21  
-#define RF_XXXX_22  22  
+#define RF_AQNT_ID  21  
+#define RF_OQNT_ID  22  
 #define RF_BLK_SRG  23  
 #define RF_BLK_CLS  24  
 #define RF_BLK_RGR  25  
@@ -135,6 +135,7 @@ typedef unsigned long ulong;
 #define OPT_COMP_RISK 0x00200000 
 #define OPT_SPLDPTH_1 0x00400000 
 #define OPT_SPLDPTH_2 0x00800000 
+#define OPT_QUANTLE   0x01000000 
 #define OPT_VIMP      0x02000000 
 #define OPT_NODE_STAT 0x08000000 
 #define OPT_PROX      0x10000000 
@@ -195,7 +196,13 @@ typedef unsigned long ulong;
 #define CUST_SPLIT  16
 #define SURV_L2IMP  17
 #define CLAS_RNKPS  18
-#define MAXM_SPLIT  19 
+#define REGR_QUANT  19
+#define SURV_WIBS   20
+#define SURV_QUANT  21
+#define SURV_BSG1   22
+#define SURV_BSG1A  23
+#define SURV_BSG1B  24
+#define MAXM_SPLIT  25 
 #define SPLIT_MIA_NONE  0  
 #define SPLIT_MIA_LEFT  1  
 #define SPLIT_MIA_RGHT  2  
@@ -333,6 +340,11 @@ struct terminal {
   double        *maxClass;
   double weight;
   unsigned int membrCount;
+  unsigned int *membrStream;
+  uint *revEventCount;
+  unsigned int cTimeSize;
+  unsigned int *revEventTimeIndex;
+  double *revLocalRatio;
   uint *membrIndx;
   unsigned int inbagProxy;
   double errorSG;
@@ -409,24 +421,6 @@ void bookPair (uint    levelCount,
 void nChooseK (uint n, uint r, char type, void *result);
 char reduceFraction(uint *numerator, uint *denominator);
 char splitOnFactor(uint level, uint *mwcp);
-typedef struct hyperCube HyperCube;
-struct hyperCube {
-  unsigned int r; 
-  unsigned int *cSize;
-  unsigned int ***partition;
-};
-typedef struct orthoSlice OrthoSlice;
-struct orthoSlice {
-  unsigned int s;
-  unsigned int osCount;
-  unsigned int *polarity; 
-};
-HyperCube *makeHyperCube(uint r);
-void bookPartition(uint s, uint index, uint *row, uint *slice, HyperCube *h);
-void freeHyperCube(HyperCube *h);
-void unbookHyperCube(HyperCube *h);
-OrthoSlice *makeOrthoSlice(uint s);
-void freeOrthoSlice(OrthoSlice *os);
 Node *identifyPerturbedMembership(Node    *parent,
                                   double **shadowVIMP,
                                   uint     index);
@@ -617,8 +611,10 @@ enum alloc_type{
   NRUTIL_DPTR4,  
   NRUTIL_UPTR4,  
   NRUTIL_XPTR,   
-  NRUTIL_HPTR,   
-  NRUTIL_OPTR,   
+  NRUTIL_QPTR,   
+  NRUTIL_QPTR2,  
+  NRUTIL_SPTR,   
+  NRUTIL_SPTR2,  
   NRUTIL_VPTR,   
   NRUTIL_OMPLPTR,  
   NRUTIL_OMPLPTR2  
@@ -675,6 +671,34 @@ void nrCopyVector(
   unsigned int ncol
 );
 void testEndianness();
+typedef struct quantileObj QuantileObj;
+struct quantileObj {
+  double v;
+  uint g;
+  uint dlt;
+  QuantileObj *fwdLink;
+  QuantileObj *bakLink;
+};
+typedef struct lookUpInfo LookUpInfo;
+struct lookUpInfo {
+  QuantileObj *qPtr;
+  LookUpInfo *rootPtr;
+  LookUpInfo *leftPtr;
+  LookUpInfo *rghtPtr;
+};
+QuantileObj *makeQuantileObj(double value);
+void freeQuantileObj(QuantileObj *obj);
+void freeQuantileObjList(QuantileObj *obj);
+QuantileObj *insertQuantileObj(uint *qStreamSize, QuantileObj **head, QuantileObj **tail, uint *quantileLinkLength, double value, LookUpInfo **tree);
+QuantileObj *findInsertionPoint(QuantileObj *head, double value, LookUpInfo *tree);
+double getApproxQuantile(QuantileObj *head, double phi, uint streamSize);
+void populateBand(uint p, uint *band);
+void makeLookUpTree(LookUpInfo *infoObj, QuantileObj *qObj, uint size, uint depth);
+void findApproximateInsertionPoint(QuantileObj *head, LookUpInfo *tree, double value, QuantileObj **insertPtr);
+LookUpInfo *makeLookUpInfo();
+void freeLookUpInfo(LookUpInfo *obj);
+void freeLookUpTree(LookUpInfo *obj);
+void testQuantile(uint treeID);
 void randomStack(uint bSize, uint xSize);
 void randomUnstack(uint bSize, uint xSize);
 void randomSetChainParallel(uint b, int value);
@@ -720,6 +744,8 @@ char getVariance(uint    repMembrSize,
                  double *targetResponse,
                  double *mean,
                  double *variance);
+void updateQuantileStream(char     mode,
+                          uint     treeID);
 void rfsrc(char mode, int seedValue);
 void updateTerminalNodeOutcomes(char       mode,
                                 uint       treeID,
@@ -1014,6 +1040,21 @@ char getPreSplitResultGreedy (uint      treeID,
                               double   *preSplitMean,
                               char      multImpFlag,
                               char      multVarFlag);
+char quantileRegrSplit (uint    treeID,
+                    Node   *parent,
+                    uint   *repMembrIndx,
+                    uint    repMembrSize,
+                    uint   *allMembrIndx,
+                    uint    allMembrSize,
+                    uint   *splitParameterMax,
+                    double *splitValueMaxCont,
+                    uint   *splitValueMaxFactSize,
+                    uint  **splitValueMaxFactPtr,
+                    double *splitStatistic,
+                    char  **splitIndicator,
+                    char   *splitMIA,
+                    char    multImpFlag);
+double quantile7 (double *r, uint s, double p);
 char classificationRankedPS(uint    treeID,
                             Node   *parent,
                             uint   *repMembrIndx,
@@ -1070,6 +1111,76 @@ char logRankCR(uint    treeID,
                char  **splitIndicator,
                char   *splitMIA,
                char    multImpFlag);
+char wiBrierScore (uint    treeID,
+                   Node   *parent,
+                   uint   *repMembrIndx,
+                   uint    repMembrSize,
+                   uint   *allMembrIndx,
+                   uint    allMembrSize,
+                   uint   *splitParameterMax,
+                   double *splitValueMaxCont,
+                   uint   *splitValueMaxFactSize,
+                   uint  **splitValueMaxFactPtr,
+                   double *splitStatistic,
+                   char  **splitIndicator,
+                   char   *splitMIA,
+                   char    multImpFlag);
+char quantileSurvSplit (uint    treeID,
+                        Node   *parent,
+                        uint   *repMembrIndx,
+                        uint    repMembrSize,
+                        uint   *allMembrIndx,
+                        uint    allMembrSize,
+                        uint   *splitParameterMax,
+                        double *splitValueMaxCont,
+                        uint   *splitValueMaxFactSize,
+                        uint  **splitValueMaxFactPtr,
+                        double *splitStatistic,
+                        char  **splitIndicator,
+                        char   *splitMIA,
+                        char    multImpFlag);
+char brierScoreGradient1 (uint    treeID,
+                          Node   *parent,
+                          uint   *repMembrIndx,
+                          uint    repMembrSize,
+                          uint   *allMembrIndx,
+                          uint    allMembrSize,
+                          uint   *splitParameterMax,
+                          double *splitValueMaxCont,
+                          uint   *splitValueMaxFactSize,
+                          uint  **splitValueMaxFactPtr,
+                          double *splitStatistic,
+                          char  **splitIndicator,
+                          char   *splitMIA,
+                          char    multImpFlag);
+char brierScoreGradient1a (uint    treeID,
+                           Node   *parent,
+                           uint   *repMembrIndx,
+                           uint    repMembrSize,
+                           uint   *allMembrIndx,
+                           uint    allMembrSize,
+                           uint   *splitParameterMax,
+                           double *splitValueMaxCont,
+                           uint   *splitValueMaxFactSize,
+                           uint  **splitValueMaxFactPtr,
+                           double *splitStatistic,
+                           char  **splitIndicator,
+                           char   *splitMIA,
+                           char    multImpFlag);
+char brierScoreGradient1b (uint    treeID,
+                           Node   *parent,
+                           uint   *repMembrIndx,
+                           uint    repMembrSize,
+                           uint   *allMembrIndx,
+                           uint    allMembrSize,
+                           uint   *splitParameterMax,
+                           double *splitValueMaxCont,
+                           uint   *splitValueMaxFactSize,
+                           uint  **splitValueMaxFactPtr,
+                           double *splitStatistic,
+                           char  **splitIndicator,
+                           char   *splitMIA,
+                           char    multImpFlag);
 char l2Impute(uint    treeID,
               Node   *parent,
               uint   *repMembrIndx,
@@ -1161,90 +1272,20 @@ char customCompetingRiskSplit (uint    treeID,
                                char  **splitIndicator,
                                char   *splitMIA,
                                char    multImpFlag);
-void stackSplitIndicator(uint     nodeSize,
-                         char   **localSplitIndicator,
-                         double **splitVector);
-void unstackSplitIndicator(uint    nodeSize,
-                           char   *localSplitIndicator,
-                           double *splitvector);
-void stackSplitEventTime(uint **localEventTimeCount,
-                         uint **localEventTimeIndex);
-void unstackSplitEventTime(uint *localEventTimeCount,
-                           uint *localEventTimeIndex);
-uint getSplitEventTime(uint   treeID,
-                       uint   *repMembrIndx,
-                       uint    repMembrSize,
-                       uint   *nonMissMembrIndx,
-                       uint    nonMissMembrSize,
-                       uint   *localEventTimeCount,
-                       uint   *localEventTimeIndex);
-void stackSplitEventAndRisk(uint   eventTimeSize,
-                            uint **nodeParentEvent,
-                            uint **nodeParentAtRisk,
-                            uint **nodeLeftEvent,
-                            uint **nodeLeftAtRisk,
-                            uint **nodeRightEvent,
-                            uint **nodeRightAtRisk);
-void unstackSplitEventAndRisk(uint  eventTimeSize,
-                              uint *nodeParentEvent,
-                              uint *nodeParentAtRisk,
-                              uint *nodeLeftEvent,
-                              uint *nodeLeftAtRisk,
-                              uint *nodeRightEvent,
-                              uint *nodeRightAtRisk);
-void getSplitEventAndRisk(uint    treeID,
-                          uint   *repMembrIndx,
-                          uint    repMembrSize,
-                          uint   *nonMissMembrIndx,
-                          uint    nonMissMembrSize,
-                          uint   *localEventTimeCount,
-                          uint   *localEventTimeIndex,
-                          uint    localEventTimeSize,
-                          uint   *nodeParentEvent,
-                          uint   *nodeParentAtRisk);
-void stackAndGetSplitSurv(uint    treeID,
-                          uint   *repMembrIndx,
-                          uint    repMembrSize,
-                          uint   *nonMissMembrIndx,
-                          uint    nonMissMembrSize,
-                          uint  **localEventTimeCount,
-                          uint  **localEventTimeIndex,
-                          uint   *localEventTimeSize,
-                          uint  **nodeParentEvent,
-                          uint  **nodeParentAtRisk,
-                          uint  **nodeLeftEvent,
-                          uint  **nodeLeftAtRisk,
-                          uint  **nodeRightEvent,
-                          uint  **nodeRightAtRisk);
-void unstackSplitSurv(uint *localEventTimeCount,
-                      uint *localEventTimeIndex,
-                      uint  eventTimeSize,
-                      uint *nodeParentEvent,
-                      uint *nodeParentAtRisk,
-                      uint *nodeLeftEvent,
-                      uint *nodeLeftAtRisk,
-                      uint *nodeRightEvent,
-                      uint *nodeRightAtRisk);
-void stackAndGetSplitSurvL2(uint     treeID,
-                            Node    *parent,
-                            uint     localEventTimeSize,
-                            uint    *localEventTimeIndex,
-                            uint    *nodeParentEvent,
-                            uint    *nodeParentAtRisk,
-                            double **localRatio,
-                            double **localSurvival);
-void unstackAndGetSplitSurvL2(uint     localEventTimeSize,
-                              double  *localRatio,
-                              double  *localSurvival);
-void stackAndGetL2Impute(uint     treeID,
-                         Node    *parent,
-                         uint    *repMembrIndx,
-                         uint     repMembrSize,
-                         uint    *nonMissMembrIndx,
-                         uint     nonMissMembrSize,
-                         uint     localEventTimeSize,
-                         double  *localSurvival,
-                         double **l2Impute);
+char getPreSplitResult (uint      treeID,
+                        Node     *parent,
+                        uint      repMembrSize,
+                        uint     *repMembrIndx,
+                        uint     *nonMissMembrSize,
+                        uint    **nonMissMembrIndx,
+                        double   *preSplitMean,
+                        char      multImpFlag,
+                        char      multVarFlag);
+void unstackPreSplit (char      preliminaryResult,
+                      char      multImpFlag,
+                      char      multVarFlag,
+                      uint      repMembrSize,
+                      uint     *nonMissMembrIndx);
 uint stackAndConstructSplitVector(uint     treeID,
                                   uint     localMembershipSize,
                                   uint     randomCovariateIndex,
@@ -1311,6 +1352,12 @@ void unselectRandomCovariates(uint      treeID,
                               uint      nonMissMembrSizeStatic,
                               uint     *nonMissMembrIndx,
                               char      multImpFlag);
+void stackSplitIndicator(uint     nodeSize,
+                         char   **localSplitIndicator,
+                         double **splitVector);
+void unstackSplitIndicator(uint    nodeSize,
+                           char   *localSplitIndicator,
+                           double *splitvector);
 uint virtuallySplitNode(uint  treeID,
                            char  factorFlag,
                            uint  mwcpSizeAbsolute,
@@ -1326,6 +1373,29 @@ uint virtuallySplitNode(uint  treeID,
                            uint *leftSize,
                            uint  priorMembrIter,
                            uint *currentMembrIter);
+char summarizeSplitResult(uint    splitParameterMax,
+                          double  splitValueMaxCont,
+                          uint    splitValueMaxFactSize,
+                          uint   *splitValueMaxFactPtr,
+                          double *splitStatistic,
+                          double  deltaMax);
+char updateMaximumSplit(uint    treeID,
+                        Node   *parent,
+                        double  delta,
+                        uint    candidateCovariateCount,
+                        uint    covariate,
+                        uint    index,
+                        char    factorFlag,
+                        uint    mwcpSizeAbsolute,
+                        uint    repMembrSize,
+                        char   *localSplitIndicator,
+                        double *deltaMax,
+                        uint   *splitParameterMax,
+                        double *splitValueMaxCont,
+                        uint   *splitValueMaxFactSize,
+                        uint  **splitValueMaxFactPtr,
+                        void   *splitVectorPtr,
+                        char  **splitIndicator);
 void getReweightedRandomPair(uint    treeID,
                              uint    relativefactorSize,
                              uint    absoluteFactorSize,
@@ -1344,44 +1414,197 @@ void convertRelToAbsBinaryPair(uint    treeID,
                                uint    relativePair,
                                double *absoluteLevel,
                                uint   *pair);
-char summarizeSplitResult(uint    splitParameterMax,
-                          double  splitValueMaxCont,
-                          uint    splitValueMaxFactSize,
-                          uint   *splitValueMaxFactPtr,
-                          double *splitStatistic,
-                          double  deltaMax);
-char getPreSplitResult (uint      treeID,
-                        Node     *parent,
-                        uint      repMembrSize,
-                        uint     *repMembrIndx,
-                        uint     *nonMissMembrSize,
-                        uint    **nonMissMembrIndx,
-                        double   *preSplitMean,
-                        char      multImpFlag,
-                        char      multVarFlag);
-void unstackPreSplit (char      preliminaryResult,
-                      char      multImpFlag,
-                      char      multVarFlag,
-                      uint      repMembrSize,
-                      uint     *nonMissMembrIndx);
-char updateMaximumSplit(uint    treeID,
-                        Node   *parent,
-                        double  delta,
-                        uint    candidateCovariateCount,
-                        uint    covariate,
-                        uint    index,
-                        char    factorFlag,
-                        uint    mwcpSizeAbsolute,
-                        uint    repMembrSize,
-                        char   *localSplitIndicator,
-                        double *deltaMax,
-                        uint   *splitParameterMax,
-                        double *splitValueMaxCont,
-                        uint   *splitValueMaxFactSize,
-                        uint  **splitValueMaxFactPtr,
-                        void   *splitVectorPtr,
-                        char  **splitIndicator);
 void updateNodeStatistics(Node *parent, double delta, uint candidateCovariateCount, uint covariate);
+void stackAndGetL2Impute(uint     treeID,
+                         Node    *parent,
+                         uint    *repMembrIndx,
+                         uint     repMembrSize,
+                         uint    *nonMissMembrIndx,
+                         uint     nonMissMembrSize,
+                         uint     eventTimeSize,
+                         double  *localSurvival,
+                         double **l2Impute);
+void stackAndGetSplitSurv(uint    treeID,
+                          Node    *parent,
+                          uint   *repMembrIndx,
+                          uint    repMembrSize,
+                          uint   *nonMissMembrIndx,
+                          uint    nonMissMembrSize,
+                          char    eventType,
+                          uint  **eventTimeCount,
+                          uint  **eventTimeIndex,
+                          uint   *eventTimeSize,
+                          uint  **parentEvent,
+                          uint  **parentAtRisk,
+                          uint  **leftEvent,
+                          uint  **leftAtRisk,
+                          uint  **rightEvent,
+                          uint  **rightAtRisk);
+void unstackSplitSurv(uint    treeID,
+                      Node    *parent,
+                      uint *eventTimeCount,
+                      uint *eventTimeIndex,
+                      uint  eventTimeSize,
+                      uint *parentEvent,
+                      uint *parentAtRisk,
+                      uint *leftEvent,
+                      uint *leftAtRisk,
+                      uint *rightEvent,
+                      uint *rightAtRisk);
+void stackSplitSurv3(uint    treeID,
+                     Node    *parent,
+                     uint   eventTimeSize,
+                     double **leftLocalRatio,
+                     double **rightLocalRatio,
+                     double **leftLocalSurvival,
+                     double **rightLocalSurvival,
+                     uint   revEventTimeSize,
+                     double **leftRevLocalRatio,
+                     double **rightRevLocalRatio,
+                     double **leftRevLocalSurvival,
+                     double **rightRevLocalSurvival,
+                     double **leftBS,
+                     double **rightBS);
+void unstackSplitSurv3(uint    treeID,
+                       Node    *parent,
+                       uint   eventTimeSize,
+                       double *leftLocalRatio,
+                       double *rightLocalRatio,
+                       double *leftLocalSurvival,
+                       double *rightLocalSurvival,
+                       uint   revEventTimeSize,
+                       double *leftRevLocalRatio,
+                       double *rightRevLocalRatio,
+                       double *leftRevLocalSurvival,
+                       double *rightRevLocalSurvival,
+                       double *leftBS,
+                       double *rightBS);
+uint getEventTime(uint   treeID,
+                  Node   *parent,                  
+                  uint   *repMembrIndx,
+                  uint    repMembrSize,
+                  uint   *nonMissMembrIndx,
+                  uint    nonMissMembrSize,
+                  char    eventType,
+                  uint   *eventTimeCount,
+                  uint   *eventTimeIndex);
+void stackSplitEventAndRisk(uint    treeID,
+                            Node    *parent,
+                            uint    genEventTimeSize,
+                            uint  **genParentEvent,
+                            uint  **genParentAtRisk,
+                            uint  **genLeftEvent,
+                            uint  **genLeftAtRisk,
+                            uint  **genRightEvent,
+                            uint  **genRightAtRisk);
+void unstackSplitEventAndRisk(uint    treeID,
+                              Node    *parent,
+                              uint    eventTimeSize,
+                              uint   *genParentEvent,
+                              uint   *genParentAtRisk,
+                              uint   *genLeftEvent,
+                              uint   *genLeftAtRisk,
+                              uint   *genRightEvent,
+                              uint   *genRightAtRisk);
+void getSplitEventAndRisk(uint    treeID,
+                          Node    *parent,
+                          uint   *repMembrIndx,
+                          uint    repMembrSize,
+                          uint   *nonMissMembrIndx,
+                          uint    nonMissMembrSize,
+                          uint   *eventTimeCount,
+                          uint   *eventTimeIndex,
+                          uint    eventTimeSize,
+                          uint   *parentEvent,
+                          uint   *parentAtRisk);
+void stackAndGetSplitSurv2(uint     treeID,
+                           Node    *parent,
+                           uint     eventTimeSize,
+                           uint    *nodeParentEvent,
+                           uint    *nodeParentAtRisk,
+                           double **localSurvival);
+void unstackAndGetSplitSurv2(uint     treeID,
+                             Node    *parent,
+                             uint     eventTimeSize,
+                             double  *localSurvival);
+void stackAndGetFZhat(uint  treeID,
+                      Node *parent,
+                      uint *repMembrIndx,
+                      uint  repMembrSize,
+                      uint *nonMissMembrIndx,
+                      uint  nonMissMembrSize,
+                      uint *eventTimeIndex,
+                      uint  eventTimeSize,
+                      uint *revEventTimeIndex,
+                      uint  revEventTimeSize,
+                      double *revParentSurvival,
+                      double **fZHat);
+void unstackFZhat(uint  treeID,
+                  Node *parent,
+                  uint  eventTimeSize,
+                  double *fZHat);
+void stackAndGetFZhatNew(uint  treeID,
+                         Node *parent,
+                         uint *repMembrIndx,
+                         uint  repMembrSize,
+                         uint *nonMissMembrIndx,
+                         uint  nonMissMembrSize,
+                         uint *eventTimeIndex,
+                         uint  eventTimeSize,
+                         uint *revEventTimeIndex,
+                         uint  revEventTimeSize,
+                         double *revParentSurvival,
+                         double **gHat,
+                         double **fZHat);
+double getW_kt(uint  treeID,
+               Node *parent,
+               uint  indv,
+               uint  tIndx,
+               uint *eventTimeIndex,
+               uint *revEventTimeIndex,
+               uint  revEventTimeSize,
+               double *revParentSurvival,
+               double *gHatPrevious,
+               double *gHatCurrent);
+void stackAndGetQTime(uint  treeID,
+                      Node *parent,
+                      uint  eventTimeSize,
+                      double *survival,
+                      uint  **quantileTime);
+void unstackQTime(uint  *quantileTime);
+void stackAndGetQETime(uint   treeID,
+                       Node  *parent,
+                       uint  *eventTimeIndex,                       
+                       uint   eventTimeSize,
+                       double *survival,
+                       uint  **qeTimeIndex,
+                       uint   *qeTimeSize);
+void unstackQETime(uint treeID,
+                   uint eventTimeSize,
+                   uint  *qeTimeIndex);
+void stackAndGetLocalGamma(uint  treeID,
+                             Node *parent,
+                             uint *repMembrIndx,
+                             uint  repMembrSize,
+                             uint *nonMissMembrIndx,
+                             uint  nonMissMembrSize,
+                             uint *eventTimeIndex,
+                             uint  eventTimeSize,
+                             uint *revEventTimeIndex,
+                             uint  revEventTimeSize,
+                             double *revParentSurvival,
+                           uint      *qeTimeIndex,
+                           uint       qeTimeSize,
+                           double   **gHat,
+                             double  ***w_ktm,
+                             double  ***gamma_ktm);
+void  unstackLocalGamma(uint    treeID,
+                        uint    nonMissMembrSize,
+                        uint   *eventTimeIndex,
+                        uint    eventTimeSize,
+                           uint      *qeTimeIndex,
+                        uint       qeTimeSize,
+                        double **gamma_ktm);
 void initializeTimeArrays(char mode);
 void stackFactorArrays(char mode);
 void stackFactorGeneric(char    respFlag,
@@ -1526,6 +1749,7 @@ void getAtRiskAndEventCounts (uint       treeID,
                               uint       allMembrSize,
                               uint      *rmbrIterator);
 void getLocalRatios (uint treeID, Terminal *parent);
+void getRevLocalRatios(uint treeID, Terminal *parent);
 void getLocalCSH (uint treeID, Terminal *parent);
 void getLocalCIF (uint treeID, Terminal *parent);
 void mapLocalToTimeInterest(uint      treeID,
@@ -1586,10 +1810,9 @@ void freeTerminalNodeSurvivalStructuresIntermediate(Terminal *tTerm);
 void freeTerminalNodeSurvivalStructuresFinal(Terminal *tTerm);
 void freeTerminalNodeNonSurvivalStructures(Terminal *tTerm);
 void stackAtRiskAndEventCounts(Terminal *tTerm, unsigned int eTypeSize, unsigned int mTimeSize);
-void stackEventTimeIndex(Terminal *tTerm, unsigned int mTimeSize);
 void unstackAtRiskAndEventCounts(Terminal *tTerm);
+void stackEventTimeIndex(Terminal *tTerm, unsigned int mTimeSize);
 void unstackEventTimeIndex(Terminal *tTerm);
-void unstackAtRisk(Terminal *tTerm);
 void stackLocalRatio(Terminal *tTerm, unsigned int eTypeSize, unsigned int eTimeSize);
 void unstackLocalRatio(Terminal *tTerm);
 void stackLocalSurvival(Terminal *tTerm, unsigned int eTimeSize);
@@ -1615,6 +1838,8 @@ void stackMultiClassProbPartial(Terminal *tTerm, unsigned int rfCount);
 void unstackMultiClassProb(Terminal *tTerm);
 void stackMeanResponse(Terminal *tTerm, unsigned int rnfCount);
 void unstackMeanResponse(Terminal *tTerm);
+void stackMemberStream(Terminal *tTerm, unsigned int membrSize);
+void unstackMemberStream(Terminal *tTerm);
 void getTerminalInfo(Terminal *termPtr);
 void acquireTree(char mode, uint r, uint b);
 void updateWeight(char mode, uint b);
@@ -1625,7 +1850,7 @@ void finalizeProximity(char mode);
 void updateSplitDepth(uint treeID, Node *rootPtr, uint maxDepth);
 char pruneBranch(uint obsSize, uint treeID, Node **nodesAtDepth, uint nadCount, uint ptnTarget, uint ptnCurrent);
 uint pruneTree(uint obsSize, uint treeID, uint ptnCount);
-void unstackAuxiliary2(char mode, uint b);
+void stackAuxiliary(char mode, uint b);
 void unstackAuxiliary(char mode, uint b);
 void stackNodeAndTermList(uint treeID, uint length);
 void unstackNodeList(uint treeID);

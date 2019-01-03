@@ -49,6 +49,56 @@ get.bootstrap <- function (bootstrap) {
         }
   return (bootstrap)
 }
+get.cr.bits <- function (fmly) {
+  if (fmly == "surv-CR") {
+    return(2^21)
+  } else {
+    return(0)
+  }
+}
+get.distance <- function (grow.equivalent, distance) {
+    ## Convert distance option into native code parameter.
+    if (!is.null(distance)) {
+      if (distance == FALSE) {
+        dist.bits <- 0
+      }
+        else if (grow.equivalent == TRUE) {
+          if (distance == TRUE) {
+            dist.bits <- 2^20 + 2^21
+          }
+            else if (distance == "inbag") {
+              dist.bits <- 2^20 + 2^21
+            }
+              else if (distance == "oob") {
+                dist.bits <- 2^20 + 2^22
+              }
+                else if (distance == "all") {
+                  dist.bits <- 2^20 + 2^21 + 2^22
+                }
+                  else {
+                    stop("Invalid choice for 'distance' option:  ", distance)
+                  }
+        }
+          else if (grow.equivalent == FALSE) {
+            if (distance == TRUE) {
+              dist.bits <- 2^20 + 2^21 + 2^22
+            }
+              else if (distance == "all") {
+                dist.bits <- 2^20 + 2^21 + 2^22
+              }
+                else {
+                  stop("Invalid choice for 'distance' option:  ", distance)
+                }
+          }
+            else {
+              stop("Invalid choice for 'grow.equivalent' in distance:  ", grow.equivalent)
+            }
+    }
+      else {
+        stop("Invalid choice for 'distance' option:  ", distance)
+      }
+    return (dist.bits)
+  }
 ## convert ensemble option into native code parameter.
 get.ensemble <- function (ensemble) {
   if (ensemble == "oob") {
@@ -64,44 +114,6 @@ get.ensemble <- function (ensemble) {
     stop("Invalid choice for 'ensemble' option:  ", ensemble)
   }
   return (ensemble)
-}
-## convert samptype option into native code parameter.
-get.samptype <- function (samptype) {
-  if (samptype == "swr") {
-    bits <- 0
-  }
-    else if (samptype == "swor") {
-      bits <- 2^12
-    }
-      else {
-        stop("Invalid choice for 'samptype' option:  ", samptype)
-      }
-  return (bits)
-}
-get.cr.bits <- function (fmly) {
-  if (fmly == "surv-CR") {
-    return(2^21)
-  } else {
-    return(0)
-  }
-}
-get.na.action <- function (na.action) {
-  if (na.action == "na.omit") {
-    ## This is the high byte!
-    na.action <- 0
-  }
-    else if (na.action == "na.impute") {
-      ## This is the high byte!
-      na.action <- 2^4
-      ## To recover the original functionality in which the split
-      ## statistic uses missing in-node imputed values, uncomment 
-      ## the following statement:
-      ## na.action <- 0
-    }
-    else {
-        stop("Invalid choice for 'na.action' option:  ", na.action)
-      }
-  return (na.action)
 }
 get.forest <- function (forest) {
   ## Convert forest option into native code parameter.
@@ -217,6 +229,59 @@ get.impute.only <-  function (impute.only, nMiss) {
       return (0)
     }
 }
+  get.membership <- function (membership) {
+    ## Convert option into native code parameter.
+    bits <- 0
+    if (!is.null(membership)) {
+      if (membership == TRUE) {
+        bits <- 2^6
+      }
+        else if (membership != FALSE) {
+          stop("Invalid choice for 'membership' option:  ", membership)
+        }
+    }
+      else {
+        stop("Invalid choice for 'membership' option:  ", membership)
+      }
+    return (bits)
+  }
+get.na.action <- function (na.action) {
+  if (na.action == "na.omit") {
+    ## This is the high byte!
+    na.action <- 0
+  }
+    else if (na.action == "na.impute") {
+      ## This is the high byte!
+      na.action <- 2^4
+      ## To recover the original functionality in which the split
+      ## statistic uses missing in-node imputed values, uncomment 
+      ## the following statement:
+      ## na.action <- 0
+    }
+    else {
+        stop("Invalid choice for 'na.action' option:  ", na.action)
+      }
+  return (na.action)
+}
+get.tree.index <- function(get.tree, ntree) {
+  ## NULL --> default setting
+  if (is.null(get.tree)) {
+    rep(1, ntree)
+  }
+  ## the user has specified a subset of trees
+  else {
+    pt <- get.tree >=1 & get.tree <= ntree
+    if (sum(pt) > 0) {
+      get.tree <- get.tree[pt]
+      get.tree.temp <- rep(0, ntree)
+      get.tree.temp[get.tree] <- 1
+      get.tree.temp
+    }
+    else {
+      rep(1, ntree)
+    }
+  }
+}
 get.outcome <- function (outcome) {
   ## Convert outcome option into native code parameter.
   if (outcome == "train") {
@@ -270,21 +335,6 @@ get.perf.bits <- function (perf) {
     return (0)
   }
 }
-get.rfq <- function(rfq) {
-  if (is.null(rfq)) {
-    rfq <- FALSE
-  }
-  rfq
-}
-get.rfq.bits <- function (rfq, family) {
-    result <- 0
-    if (family == "class") {
-        if (rfq) {
-            result <- 2^15
-        }
-    }
-    return (result)
-}
 get.proximity <- function (grow.equivalent, proximity) {
   ## Convert proximity option into native code parameter.
     if (!is.null(proximity)) {
@@ -328,65 +378,21 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
     return (prox.bits)
   }
-  get.distance <- function (grow.equivalent, distance) {
-    ## Convert distance option into native code parameter.
-    if (!is.null(distance)) {
-      if (distance == FALSE) {
-        dist.bits <- 0
-      }
-        else if (grow.equivalent == TRUE) {
-          if (distance == TRUE) {
-            dist.bits <- 2^20 + 2^21
-          }
-            else if (distance == "inbag") {
-              dist.bits <- 2^20 + 2^21
-            }
-              else if (distance == "oob") {
-                dist.bits <- 2^20 + 2^22
-              }
-                else if (distance == "all") {
-                  dist.bits <- 2^20 + 2^21 + 2^22
-                }
-                  else {
-                    stop("Invalid choice for 'distance' option:  ", distance)
-                  }
-        }
-          else if (grow.equivalent == FALSE) {
-            if (distance == TRUE) {
-              dist.bits <- 2^20 + 2^21 + 2^22
-            }
-              else if (distance == "all") {
-                dist.bits <- 2^20 + 2^21 + 2^22
-              }
-                else {
-                  stop("Invalid choice for 'distance' option:  ", distance)
-                }
-          }
-            else {
-              stop("Invalid choice for 'grow.equivalent' in distance:  ", grow.equivalent)
-            }
-    }
-      else {
-        stop("Invalid choice for 'distance' option:  ", distance)
-      }
-    return (dist.bits)
+get.rfq <- function(rfq) {
+  if (is.null(rfq)) {
+    rfq <- FALSE
   }
-  get.membership <- function (membership) {
-    ## Convert option into native code parameter.
-    bits <- 0
-    if (!is.null(membership)) {
-      if (membership == TRUE) {
-        bits <- 2^6
-      }
-        else if (membership != FALSE) {
-          stop("Invalid choice for 'membership' option:  ", membership)
+  rfq
+}
+get.rfq.bits <- function (rfq, family) {
+    result <- 0
+    if (family == "class") {
+        if (rfq) {
+            result <- 2^15
         }
     }
-      else {
-        stop("Invalid choice for 'membership' option:  ", membership)
-      }
-    return (bits)
-  }
+    return (result)
+}
   get.rf.cores <- function () {
     if (is.null(getOption("rf.cores"))) {
       if(!is.na(as.numeric(Sys.getenv("RF_CORES")))) {
@@ -395,7 +401,20 @@ get.proximity <- function (grow.equivalent, proximity) {
     }
     return (getOption("rf.cores", -1L))
   }
-  get.seed <- function (seed) {
+## convert samptype option into native code parameter.
+get.samptype <- function (samptype) {
+  if (samptype == "swr") {
+    bits <- 0
+  }
+    else if (samptype == "swor") {
+      bits <- 2^12
+    }
+      else {
+        stop("Invalid choice for 'samptype' option:  ", samptype)
+      }
+  return (bits)
+}
+get.seed <- function (seed) {
     if ((is.null(seed)) || (abs(seed) < 1)) {
       seed <- runif(1,1,1e6)
     }
@@ -564,7 +583,21 @@ get.proximity <- function (grow.equivalent, proximity) {
     }
     return (block.size)
   }
-  get.var.used <- function (var.used) {
+get.gk.quantile <- function(gk.quantile) {
+  if (is.null(gk.quantile)) {
+    gk.quantile <- FALSE
+  }
+  gk.quantile
+}
+get.gk.quantile.bits <-  function (gk.quantile) {
+  if (gk.quantile) {
+    return (2^24)
+  }
+  else {
+    return (0)
+  }
+}
+get.var.used <- function (var.used) {
     ## Convert var.used option into native code parameter.
     if (!is.null(var.used)) {
       if (var.used == "all.trees") {
@@ -603,13 +636,68 @@ get.proximity <- function (grow.equivalent, proximity) {
       }
   }
   ## HIDDEN VARIABLES FOLLOW:
-  is.hidden.impute.only <-  function (user.option) {
+  is.hidden.gk.quantile <-  function (user.option) {
+    if (is.null(user.option$gk.quantile)) {
+      NULL
+    }
+    else {
+      as.logical(as.character(user.option$gk.quantile))
+    }
+  }
+is.hidden.impute.only <-  function (user.option) {
     if (is.null(user.option$impute.only)) {
       FALSE
     }
       else {
         as.logical(as.character(user.option$impute.only))
       }
+  }
+  is.hidden.perf.type <-  function (user.option) {
+    ## Default value is NULL
+    if (is.null(user.option$perf.type)) {
+      NULL
+    }
+    else {
+      as.character(user.option$perf.type)
+    }
+  }
+  is.hidden.prob <-  function (user.option) {
+    if (is.null(user.option$prob)) {
+      NULL
+    }
+    else {
+      prob <- user.option$prob
+      sort(prob[prob>0 & prob<1])
+    }
+  }
+  is.hidden.prob.epsilon <-  function (user.option) {
+    if (is.null(user.option$prob.epsilon)) {
+      NULL
+    }
+    else {
+      prob.epsilon <- user.option$prob.epsilon
+      if ((prob.epsilon <= 0) || (prob.epsilon >= 0.50)) {
+        stop("parameter 'prob.epsilon' must be in range (0, 1/2) :  ", prob.epsilon)
+      }
+      prob.epsilon
+    }
+  }
+  is.hidden.holdout.array <-  function (user.option) {
+    ## Default value is NULL
+    if (is.null(user.option$holdout.array)) {
+      NULL
+    }
+    else {
+      user.option$holdout.array
+    }
+  }
+  is.hidden.rfq <-  function (user.option) {
+    if (is.null(user.option$rfq)) {
+      NULL
+    }
+    else {
+      as.logical(as.character(user.option$rfq))
+    }
   }
   is.hidden.terminal.qualts <-  function (user.option) {
     ## Default value is !FALSE
@@ -629,40 +717,52 @@ get.proximity <- function (grow.equivalent, proximity) {
         as.logical(as.character(user.option$terminal.quants))
       }
   }
-  is.hidden.perf.type <-  function (user.option) {
-    ## Default value is NULL
-    if (is.null(user.option$perf.type)) {
-      NULL
+  is.hidden.vtry <-  function (user.option) {
+    ## Default value is 0
+    if (is.null(user.option$vtry)) {
+      0
     }
-      else {
-        as.character(user.option$perf.type)
-      }
-  }
-  is.hidden.rfq <-  function (user.option) {
-    if (is.null(user.option$rfq)) {
-      NULL
+    else {
+      user.option$vtry
     }
-      else {
-        as.logical(as.character(user.option$rfq))
-      }
   }
-is.hidden.ytry <-  function (user.option) {
+  is.hidden.ytry <-  function (user.option) {
     if (is.null(user.option$ytry)) {
-        NULL
+      NULL
     }
     else {
-        as.integer(user.option$ytry)
+      as.integer(user.option$ytry)
     }
-}
-is.hidden.htry <-  function (user.option) {
+  }
+  is.hidden.htry <-  function (user.option) {
     if (is.null(user.option$htry)) {
-        htry = 0
+      htry = 0
     }
     else {
-        htry = as.integer(user.option$htry)
-        if (htry < 0) {
-            stop("Invalid choice for 'htry' option:  ", user.option$htry)
-        }
+      htry = as.integer(user.option$htry)
+      if (htry < 0) {
+        stop("Invalid choice for 'htry' option:  ", user.option$htry)
+      }
     }
     return (htry)
-}
+  }
+  make.holdout.array <- function(vtry = 0, mtry, p, ntree) {
+    ##default is triggered by vtry = 0
+    if (vtry == 0) {
+      return(NULL)
+    }
+    ##vtry has to be positive
+    if (vtry < 0) {
+      stop("vtry must be positive")
+    }
+    ## non-default setting
+    if ((mtry + vtry) > p) {
+      stop("vtry is set too high, consider changing vtry or mtry")
+    }
+    ## everything is OK, go ahead and make the p x ntree array
+    do.call(cbind, lapply(1:ntree, function(b) {
+      holdout <- rep(0, p)
+      holdout[sample(1:p, size = vtry, replace = FALSE)] <- 1
+      holdout
+    }))
+  }

@@ -200,12 +200,17 @@ plot.variable.rfsrc <- function(
           if (!is.factor(x) & n.x > npts) {
             x.uniq <- sort(unique(x))[unique(as.integer(seq(1, n.x, length = min(npts, n.x))))]
           }
+          else {
+            if (is.factor(x)) {
+              x.uniq <- 1:length(unique(x))##partial.rfsrc requires factors as integers
+            }
             else {
               x.uniq <- sort(unique(x))
             }
+          }
           n.x <- length(x.uniq)
           yhat <- yhat.se <- NULL
-          factor.x <- !(!is.factor(x) & (n.x > granule))
+          factor.x <- is.factor(x) | (n.x <= granule)
           pred.temp <- extract.partial.pred(partial.rfsrc(object$forest,
                                                           m.target = m.target,
                                                           partial.type = pred.type,
@@ -232,12 +237,13 @@ plot.variable.rfsrc <- function(
             }
               else {
                 sd.temp <- apply(pred.temp, 2, sd, na.rm = TRUE)
-                yhat.se <- sd.temp / sqrt(n)
+                yhat.se <- sd.temp / sqrt(n)                
               }
           }
             else {
               pred.temp <- mean.temp + (pred.temp - mean.temp) / sqrt(n)
               yhat <- c(yhat, pred.temp)
+              x.uniq <- unique(x)##map factor back to original labels
             }
           list(xvar.name = xvar.names[k], yhat = yhat, yhat.se = yhat.se, n.x = n.x, x.uniq = x.uniq, x = x)
         })

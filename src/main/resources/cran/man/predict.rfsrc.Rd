@@ -9,7 +9,7 @@
   newdata,
   m.target = NULL,
   importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
-  block.size = NULL,
+  get.tree = NULL, block.size = NULL,
   ensemble = NULL,
   na.action = c("na.omit", "na.impute"),
   outcome = c("train", "test"),
@@ -20,7 +20,8 @@
   distance = FALSE,
   var.used = c(FALSE, "all.trees", "by.tree"),
   split.depth = c(FALSE, "all.trees", "by.tree"), seed = NULL,
-  do.trace = FALSE, membership = FALSE, statistics = FALSE, ...)
+  do.trace = FALSE, membership = FALSE, statistics = FALSE,
+  ...)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)} or \code{(rfsrc,
@@ -37,6 +38,12 @@
   \item{importance}{Method for computing variable importance (VIMP) when
     test data contains y-outcomes values.  Also see \command{vimp} for more
     flexibility, including joint vimp calculations.}
+  \item{get.tree}{Vector of integer(s) identifying trees over which the
+    ensembles are calculated over.  By default, uses all trees in the
+    forest.  As an example, the user can extract the ensemble, the
+    variable importance, or proximity from a single tree (or several
+    trees).  Note that \code{block.size} will be over-ridden
+    so that it is no larger than the requested number of trees.}
   \item{block.size}{Should the error rate be calculated on every tree?
     When \code{NULL}, it will only be calculated on the last tree.  To
     view the error rate on every nth tree, set the value to an integer
@@ -159,6 +166,10 @@
   \item{predicted}{Test set predicted value.}
   \item{predicted.oob}{OOB predicted value (\code{NULL} unless
     \option{outcome="test"}).}\cr
+  \item{quantile}{Quantile value at probabilities requested.}
+  \item{quantile.oob}{OOB quantile value at probabilities requested (\code{NULL} unless
+    \option{outcome="test"}).}\cr
+
   
   \item{++++++++}{for classification settings, additionally ++++++++} \cr     
   \item{class}{In-bag predicted class labels.}

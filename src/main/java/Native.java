@@ -72,6 +72,10 @@ class Native {
 
                                 int          mtry,
                                 int          htry,
+
+                                int         vtry,
+                                int[][]     vtryArray,
+                                
                                 int          ytry,
 
                                 int          nodeSize,
@@ -82,6 +86,7 @@ class Native {
                             
                                 int          ntree,
                                 int          nSize,
+
                                 int          ySize,
                                 char[]       yType,
                                 int[]        yLevel,
@@ -106,6 +111,13 @@ class Native {
                                 int          nImpute,
 
                                 int          blockSize,
+
+                                int          quantileSize,
+                                double[]     quantile,
+                                double       qEpsilon,
+                                
+                                double       wibsTau,
+
                                 int          numThreads);
 
 
@@ -136,14 +148,14 @@ class Native {
                                    int          timeInterestSize,
                                    double[]     timeInterest,
 
-                                   int[]        seed,
                                    int          totalNodeCount,
-
-                                   int[]        treeID,
-                                   int[]        nodeID,
+                                   int[]        seed,
 
                                    int          htry,
                              
+                                   int[]        treeID,
+                                   int[]        nodeID,
+
                                    HCzero      hc_zero,
                                    HCmulti     hc_multi,
 
@@ -189,9 +201,13 @@ class Native {
 
                                    int          blockSize,                                   
 
-                                   int          numThreads);
+                                   int          quantileSize,
+                                   double[]     quantile,
+                                   double       qEpsilon,
 
-    
+                                   int[]        getTree,
+                                                                        
+                                   int          numThreads);    
 
     static Native getInstance() {
         if (myInstance == null) {

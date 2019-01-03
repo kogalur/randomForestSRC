@@ -28,6 +28,7 @@ public class RandomForestModel {
     // Model argument, ensemble list contained in this model.
     private ModelArg modelArg;
     private LinkedHashMap ensembleList;
+
     // Type of model, grow, rest, or pred.
     private int type;
     
@@ -47,6 +48,8 @@ public class RandomForestModel {
     private String[] xImportance;
     private int[]    xImportanceIndex;
 
+    private int[]      extractTree;
+    
     private int      trace;
     private int      seed;
 
@@ -542,6 +545,65 @@ public class RandomForestModel {
         return size;
     }
 
+
+
+
+
+
+
+
+
+
+
+
+    /** Sets the default value (namely, we specify all trees in the forest) over which the ensembles should be
+     *  calculated.
+     */
+    public void set_extractTree() {
+
+        extractTree = new int[modelArg.get_ntree()];
+
+        for (int j = 0; j < modelArg.get_ntree(); j++) {
+            extractTree[j] = 1;
+        }
+    }
+    
+    /** Specifies the trees over which the ensembles should be calculated.
+     * @param extractTree A vector of length ntree in which a zero
+     * indicates that the ensembles should omit this tree, and
+     * a one indicates that the ensembles should include this tree.
+     */
+    public void set_extractTree(int[] extractTree) {
+        this.extractTree = extractTree;
+    }
+
+    /** Returns the trees over which the ensembles should be calculated.
+     * @return A vector of length ntree in which a zero indicates that the ensembles should omit this tree, and
+     * a one indicates that the ensembles should include this tree.
+     * @see #set_extractTree(int[])
+     */
+    public int[] get_extractTree() {
+        return extractTree;
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
     /** 
     * Sets the seed for the random number generator used by the

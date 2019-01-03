@@ -8,6 +8,7 @@ partial.rfsrc <- function(
   partial.xvar2 = NULL,
   partial.values2 = NULL,
   partial.time = NULL,
+  get.tree = NULL,
   seed = NULL,
   do.trace = FALSE,
   ...)
@@ -100,6 +101,8 @@ partial.rfsrc <- function(
   n <- nrow(xvar)
   ## There is no test data.
   outcome = "train"
+  ## Process the get.tree vector that specifies which trees we want
+  get.tree <- get.tree.index(get.tree, ntree)
   ## Initialize the low bits.
   ensemble.bits <- get.ensemble(ensemble)
   bootstrap.bits <- get.bootstrap(object$bootstrap)
@@ -213,6 +216,10 @@ partial.rfsrc <- function(
                                   as.double(NULL),  ## New data disabled.
                                   as.double(NULL),  ## New data disabled.
                                   as.integer(ntree), ## block.size is hard-coded.
+                                  as.integer(0),     ## Quantiles disabled
+                                  as.double(NULL),   ## Quantiles disabled
+                                  as.double(0),      ## Quantiles disabled
+                                  as.integer(get.tree),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})

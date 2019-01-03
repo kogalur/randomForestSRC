@@ -21,7 +21,7 @@ subsample.rfsrc <- function(obj,
   ##
   ##--------------------------------------------------------------
   fmly <- obj$family
-  mv.fmly <- fmly == "regr+" || fmly == "class+" || fmly == "class+" 
+  mv.fmly <- fmly == "regr+" || fmly == "class+" || fmly == "mix+" 
   ##--------------------------------------------------------------
   ##
   ## set the sample size

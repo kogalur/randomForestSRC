@@ -160,6 +160,8 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP nsplit,
                SEXP mtry,
                SEXP htry,
+               SEXP vtry,
+               SEXP vtryArray,
                SEXP ytry,
                SEXP nodeSize,
                SEXP nodeDepth,
@@ -185,6 +187,10 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP timeInterest,
                SEXP nImpute,
                SEXP perfBlock,
+               SEXP quantileSize,
+               SEXP quantile,
+               SEXP qEpsilon,
+               SEXP wibsTau,
                SEXP numThreads) {
   setUserTraceFlag(INTEGER(traceFlag)[0]);
   setNativeGlobalEnv();
@@ -220,6 +226,11 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_timeInterest         = REAL(timeInterest);  RF_timeInterest--;
   RF_nImpute              = INTEGER(nImpute)[0];
   RF_perfBlock            = INTEGER(perfBlock)[0];
+  RF_quantileSize         = INTEGER(quantileSize)[0];
+  RF_quantile             = REAL(quantile);  RF_quantile--;
+  RF_qEpsilon             = REAL(qEpsilon)[0];
+  RF_vtry                 = INTEGER(vtry)[0];
+  RF_vtryArray            = (uint **) copy2DObject(vtryArray, NATIVE_TYPE_INTEGER, RF_vtry > 0, RF_ntree, RF_xSize);
   RF_numThreads           = INTEGER(numThreads)[0];
   processDefaultGrow();
   rfsrc(RF_GROW, seedValue);
@@ -228,6 +239,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
   free_2DObject(RF_responseIn, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
   free_2DObject(RF_bootstrapIn, NATIVE_TYPE_INTEGER, (RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2), RF_ntree, RF_observationSize);
   free_2DObject(RF_observationIn, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);  
+  free_2DObject(RF_vtryArray, NATIVE_TYPE_INTEGER, RF_vtry > 0, RF_ntree, RF_xSize);  
   memoryCheck();
   R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);  
@@ -289,6 +301,10 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP frData,
                   SEXP fxData,
                   SEXP perfBlock,
+                  SEXP quantileSize,
+                  SEXP quantile,
+                  SEXP qEpsilon,
+                  SEXP getTree,
                   SEXP numThreads) {
   char mode;
   uint i;
@@ -322,6 +338,9 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_TN_RCNT_             = (uint *) INTEGER(tnRCNT);
   RF_TN_ACNT_             = (uint *) INTEGER(tnACNT);
   RF_perfBlock            = INTEGER(perfBlock)[0];
+  RF_quantileSize         = INTEGER(quantileSize)[0];
+  RF_quantile             = REAL(quantile);  RF_quantile--;
+  RF_qEpsilon             = REAL(qEpsilon)[0];
   RF_numThreads           = INTEGER(numThreads)[0];
   RF_ptnCount             = INTEGER(ptnCount)[0];
   RF_rTarget              = (uint *) INTEGER(rTarget); RF_rTarget --;
@@ -357,6 +376,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_frSize               = INTEGER(frSize)[0];
   RF_fresponseIn          = (double **) copy2DObject(frData, NATIVE_TYPE_NUMERIC, RF_frSize > 0, RF_frSize, RF_fobservationSize);
   RF_fobservationIn       = (double **) copy2DObject(fxData, NATIVE_TYPE_NUMERIC, RF_fobservationSize > 0, RF_xSize, RF_fobservationSize);
+  RF_getTree = (uint *) INTEGER(getTree);  RF_getTree --;
   RF_TN_SURV_ = REAL(tnSURV);
   RF_TN_MORT_ = REAL(tnMORT);
   RF_TN_NLSN_ = REAL(tnNLSN) ;

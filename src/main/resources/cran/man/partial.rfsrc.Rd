@@ -9,7 +9,7 @@
 partial.rfsrc(object, oob = TRUE, m.target = NULL,
   partial.type = NULL, partial.xvar = NULL, partial.values = NULL,
   partial.xvar2 = NULL, partial.values2 = NULL,
-  partial.time = NULL, seed = NULL, do.trace = FALSE, ...)
+  partial.time = NULL, get.tree = NULL, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)}.}
@@ -34,6 +34,9 @@ partial.rfsrc(object, oob = TRUE, m.target = NULL,
     a numeric element.}
   \item{partial.time}{For survival families, the time at which the predicted
     survival value is evaluated at (depends on \code{partial.type}).}
+  \item{get.tree}{Vector of integer(s) identifying trees over which the
+    partial values are calculated over.  By default, uses all trees in the
+    forest.}
   \item{seed}{Negative integer specifying seed for the random number
     generator.}
   \item{do.trace}{Number of seconds between updates to the user on
@@ -44,6 +47,10 @@ partial.rfsrc(object, oob = TRUE, m.target = NULL,
 
   Out-of-bag (OOB) values are returned by default.
 
+  For factors, the partial value should be encoded as a positive integer
+  reflecting the level number of the factor.  The actual label of the
+  factor should not be used.
+  
   A list of length equal to the number of outcomes (length is one for
   univariate families) with entries depending on the underlying family:
   
