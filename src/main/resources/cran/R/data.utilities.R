@@ -123,92 +123,6 @@ available <- function (package, lib.loc = NULL, quietly = TRUE)
       return(invisible(FALSE))
     }
 }
-### AUC workhorse
-auc.workhorse <- function(roc.data) {
-  x <- roc.data[, 1][roc.data[, 2] == 1]
-  y <- roc.data[, 1][roc.data[, 2] == 0]
-  if (length(x) > 1 & length(y) > 1) {
-    AUC  <- tryCatch({wilcox.test(x, y, exact=F)$stat/(length(x)*length(y))}, error=function(ex){NA})
-  }
-  else {
-    AUC <- NA
-  }
-  AUC
-}
-### Multiclass AUC -- Hand & Till (2001) definition
-auc <- function(y, prob) {
-  if (is.factor(y)) {
-    y.uniq <- levels(y)
-  }
-  else {
-    y.uniq <- sort(unique(y))
-  }
-  nclass <- length(y.uniq)
-  AUC <- NULL
-  for (i in 1:(nclass - 1)) {
-    for (j in (i + 1):nclass) {
-      pt.ij <- (y == y.uniq[i] | y == y.uniq[j])
-      if (sum(pt.ij) > 1) {
-        y.ij <- y[pt.ij]
-        pij <- prob[pt.ij, j]
-        pji <- prob[pt.ij, i]
-        Aij <-  auc.workhorse(cbind(pij, 1 * (y.ij == y.uniq[j])))
-        Aji <-  auc.workhorse(cbind(pji, 1 * (y.ij == y.uniq[i])))
-        AUC <- c(AUC, (Aij + Aji)/2)
-      }
-    } 
-  }
-  if (is.null(AUC)) {
-    NA
-  }
-  else {
-    mean(AUC, na.rm = TRUE)
-  }
-}                          
-bayes.rule <- function(prob, pi.hat = NULL) {
-  class.labels <- colnames(prob)
-  if (is.null(pi.hat)) {
-    factor(class.labels[apply(prob, 1, function(x) {
-      if (!all(is.na(x))) {
-        resample(which(x == max(x, na.rm = TRUE)), 1)
-      }
-      else {
-        NA
-      }
-    })], levels = class.labels)
-  }
-  ## added to handle the rfq classifier
-  else {
-    minority <- which.min(pi.hat)
-    majority <- setdiff(1:2, minority)      
-    rfq.rule <- rep(majority, nrow(prob))
-    rfq.rule[prob[, minority] >= min(pi.hat, na.rm = TRUE)] <- minority
-    factor(class.labels[rfq.rule], levels = class.labels)
-  }
-}
-## normalized brier (normalized to one for strawman coin toss)
-brier <- function(ytest, prob) {
-  cl <- colnames(prob)
-  J <- length(cl)
-  bs <- rep(NA, J)
-  nullO <- sapply(1:J, function(j) {
-    bs[j] <<- mean((1 * (ytest == cl[j]) - prob[, j]) ^ 2, na.rm = TRUE)
-    NULL
-  })
-  norm.const <- (J / (J - 1))
-  sum(bs * norm.const, na.rm = TRUE)
-}
-class.error <- function(y, yhat) {
-  cl <- sort(unique(y))
-  err <- rep(NA, length(cl))
-  for (k in 1:length(cl)) {
-    cl.pt  <- (y == cl[k])
-    if (sum(cl.pt) > 0) {
-        err[k] <- mean(y[cl.pt] != yhat[cl.pt])
-    }
-  }
-  err
-}
 cv.folds <- function (n, folds = 10) {
   split(resample(1:n), rep(1:folds, length = n))
 }
@@ -320,6 +234,139 @@ finalizeData <- function(fnames, data, na.action, miss.flag = TRUE) {
   }
   return (data)
 }
+### AUC workhorse
+get.auc.workhorse <- function(roc.data) {
+  x <- roc.data[, 1][roc.data[, 2] == 1]
+  y <- roc.data[, 1][roc.data[, 2] == 0]
+  if (length(x) > 1 & length(y) > 1) {
+    AUC  <- tryCatch({wilcox.test(x, y, exact=F)$stat/(length(x)*length(y))}, error=function(ex){NA})
+  }
+  else {
+    AUC <- NA
+  }
+  AUC
+}
+### Multiclass AUC -- Hand & Till (2001) definition
+get.auc <- function(y, prob) {
+  if (is.factor(y)) {
+    y.uniq <- levels(y)
+  }
+  else {
+    y.uniq <- sort(unique(y))
+  }
+  nclass <- length(y.uniq)
+  AUC <- NULL
+  for (i in 1:(nclass - 1)) {
+    for (j in (i + 1):nclass) {
+      pt.ij <- (y == y.uniq[i] | y == y.uniq[j])
+      if (sum(pt.ij) > 1) {
+        y.ij <- y[pt.ij]
+        pij <- prob[pt.ij, j]
+        pji <- prob[pt.ij, i]
+        Aij <-  get.auc.workhorse(cbind(pij, 1 * (y.ij == y.uniq[j])))
+        Aji <-  get.auc.workhorse(cbind(pji, 1 * (y.ij == y.uniq[i])))
+        AUC <- c(AUC, (Aij + Aji)/2)
+      }
+    } 
+  }
+  if (is.null(AUC)) {
+    NA
+  }
+  else {
+    mean(AUC, na.rm = TRUE)
+  }
+}                          
+get.bayes.rule <- function(prob, pi.hat = NULL) {
+  class.labels <- colnames(prob)
+  if (is.null(pi.hat)) {
+    factor(class.labels[apply(prob, 1, function(x) {
+      if (!all(is.na(x))) {
+        resample(which(x == max(x, na.rm = TRUE)), 1)
+      }
+      else {
+        NA
+      }
+    })], levels = class.labels)
+  }
+  ## added to handle the rfq classifier
+  else {
+    minority <- which.min(pi.hat)
+    majority <- setdiff(1:2, minority)      
+    rfq.rule <- rep(majority, nrow(prob))
+    rfq.rule[prob[, minority] >= min(pi.hat, na.rm = TRUE)] <- minority
+    factor(class.labels[rfq.rule], levels = class.labels)
+  }
+}
+## normalized brier (normalized to one for strawman coin toss)
+get.brier.error <- function(y, prob) {
+  if (is.null(colnames(prob))) {
+    colnames(prob) <- levels(y)
+  }
+  cl <- colnames(prob)
+  J <- length(cl)
+  bs <- rep(NA, J)
+  nullO <- sapply(1:J, function(j) {
+    bs[j] <<- mean((1 * (y == cl[j]) - prob[, j]) ^ 2, na.rm = TRUE)
+    NULL
+  })
+  norm.const <- (J / (J - 1))
+  sum(bs * norm.const, na.rm = TRUE)
+}
+## misclassification error
+get.misclass.error <- function(y, yhat) {
+  cl <- sort(unique(y))
+  err <- rep(NA, length(cl))
+  for (k in 1:length(cl)) {
+    cl.pt  <- (y == cl[k])
+    if (sum(cl.pt) > 0) {
+        err[k] <- mean(y[cl.pt] != yhat[cl.pt])
+    }
+  }
+  err
+}
+## get confusion matrix
+get.confusion <- function(y, class.or.prob) {
+  ## response or probability?
+  if (is.factor(class.or.prob)) {
+    confusion <- table(y, class.or.prob)
+  }
+  else {
+    if (is.null(colnames(class.or.prob))) {
+      colnames(class.or.prob) <- levels(y)
+    }
+    confusion <- table(y, get.bayes.rule(class.or.prob))
+  }
+  class.error <- 1 - diag(confusion) / rowSums(confusion, na.rm = TRUE)
+  cbind(confusion, class.error = round(class.error, 4))
+}
+## cindex
+get.cindex <- function (time, censoring, predicted, do.trace = FALSE) {
+  size <- length(time)
+  if (size != length(time) |
+      size != length(censoring) |
+      size != length(predicted)) {
+    stop("time, censoring, and predicted must have the same length")
+  }
+  miss <- is.na(time) | is.na(censoring) | is.na(predicted)
+  nmiss <- sum(miss)
+  if (nmiss == size) {
+    stop("no valid pairs found, too much missing data")
+  }
+  ## Flag missing members so we can exclude them in the pairs.
+  denom <- sapply(miss, function(x) if (x) 0 else 1)
+  nativeOutput <- .Call("rfsrcCIndex",
+                        as.integer(do.trace),
+                        as.integer(size),
+                        as.double(time),
+                        as.double(censoring),
+                        as.double(predicted),
+                        as.integer(denom))
+  ## check for error return condition in the native code
+  if (is.null(nativeOutput)) {
+    stop("An error has occurred in rfsrcCIndex.  Please turn trace on for further analysis.")
+  }
+  return (nativeOutput$err)
+}
 get.coerced.survival.fmly <- function(fmly, event.type, splitrule = NULL) {
   if (grepl("surv", fmly)) {
     ## assume no coercion
@@ -383,6 +430,48 @@ get.event.info <- function(obj, subset = NULL) {
   return(list(event = event, event.type = event.type, cens = cens,
               time.interest = time.interest, time = time, r.dim = r.dim))
 }
+## gmean for imbalanced classification
+get.gmean <- function(y, prob, rfq = FALSE, robust = FALSE) {
+  ## determine frequencies: exit if this is not a two-class problem
+  frq <- table(y)  
+  if (length(frq) > 2) {
+    return(NULL)
+  }
+  ## determine threshold
+  if (rfq) {
+    threshold <- min(frq, na.rm = TRUE) / sum(frq, na.rm = TRUE)
+  }
+  else {
+    threshold <- 0.5
+  }
+  ## convert yhat to a class label: 0 = majority, 1 = minority
+  minority <- which.min(frq)
+  majority <- setdiff(1:2, minority)
+  yhat <- factor(1 * (prob[, minority] >= threshold), levels = c(0,1))
+  ## compute the confusion matrix and extract TN,TP etc.
+  confusion.matrix <- table(y, yhat)
+  if (nrow(confusion.matrix) > 1) {##check that dimension is correct
+    ## calculate the various rates
+    TN <- confusion.matrix[minority, 2]
+    FP <- confusion.matrix[minority, 1]
+    FN <- confusion.matrix[majority, 2]
+    TP <- confusion.matrix[majority, 1]
+    ## assemble the sensitivity/specificity values
+    if (robust) {##modified with 1 added to diagonals
+      sensitivity <- (1 + TP) / (1 + TP + FN)
+      specificity <- (1 + TN) / (1 + TN + FP)
+    }
+    else {
+      sensitivity <- TP / (TP + FN)
+      specificity <- TN / (TN + FP)
+    }
+    ## return the g mean
+    sqrt(sensitivity * specificity)
+  }
+  else {
+    NA
+  }
+}
 get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
   if (grepl("surv", fmly)) {
     r.dim <- 2
@@ -397,9 +486,10 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
       stop("no deaths in data!")
     }
     ## Check for event time consistency.
-    if (!all(na.omit(time) >= 0)) {
-      stop("time must be  positive")
-    }
+    ## we over-ride this now to allow for negative time (see Stute)
+    ##if (!all(na.omit(time) >= 0)) {
+    ##  stop("time must be  positive")
+    ##}
     ## Extract the unique event types.
     event.type <- unique(na.omit(cens))
     ## Ensure they are all greater than or equal to zero.
@@ -505,39 +595,34 @@ get.grow.nodesize <- function(fmly, nodesize) {
   ## Nodesize should be rounded if non-integer
   nodesize <- round(nodesize)
 }
-get.grow.splitinfo <- function (formula.detail, splitrule, htry, nsplit, event.type) {
+get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.type) {
   ## CAUTION:  HARD CODED ON NATIVE SIDE
   splitrule.names <- c("logrank",              ##  1
                        "logrankscore",         ##  2
                        "logrankCR",            ##  3
-                       "logrankACR",           ##  4
-                       "random",               ##  5
-                       "mse",                  ##  6
-                       "mse.unwt",             ##  7
-                       "mse.hvwt",             ##  8
-                       "gini",                 ##  9
-                       "gini.unwt",            ## 10
-                       "gini.hvwt",            ## 11
-                       "unsupv",               ## 12
-                       "mv.mse",               ## 13 --  reg/class/mix
-                       "mv.gini",              ## 14 --  reg/class/mix
-                       "mv.mix",               ## 15 --  reg/class/mix
-                       "custom",               ## 16
-                       "l2.impute",            ## 17
-                       "rps",                  ## 18
-                       "quantile.regr",        ## 19
-                       "wibs",                 ## 20
-                       "quantile.surv",        ## 21
-                       "bs.gradient1",         ## 22
-                       "bs.gradient1a",        ## 23
-                       "bs.gradient1b")        ## 24
+                       "random",               ##  4
+                       "mse",                  ##  5
+                       "gini",                 ##  6
+                       "unsupv",               ##  7
+                       "mv.mse",               ##  8 --  reg/class/mix
+                       "mv.gini",              ##  9 --  reg/class/mix
+                       "mv.mix",               ## 10 --  reg/class/mix
+                       "custom",               ## 11
+                       "quantile.regr",        ## 12
+                       "la.quantile.regr",     ## 13
+                       "bs.gradient",          ## 14
+                       "auc",                  ## 15
+                       "entropy",              ## 16
+                       "sg.regr",              ## 17
+                       "sg.class",             ## 18
+                       "sg.surv")              ## 19
 fmly <- formula.detail$family
     ## Preliminary check for consistency.
-    if (htry > 0) {
+    if (hdim > 0) {
         if(!is.null(nsplit)) {
             nsplit <- round(nsplit)    
-            if (nsplit <= 0) {
-                stop("Invalid nsplit value.  Set nsplit > 0.")
+            if (nsplit < 0) {
+                stop("Invalid nsplit value.  Set nsplit >= 0.")
             }
         }
         else {
@@ -596,7 +681,7 @@ fmly <- formula.detail$family
           }
           if ((length(event.type) >   1) & (splitrule.idx == which(splitrule.names == "logrank"))) {
             ## Override the splitrule to access the CR split rule.
-            splitrule.idx <- which(splitrule.names == "logrankACR")
+            splitrule.idx <- which(splitrule.names == "logrankCR")
           }
         }
     }
@@ -609,9 +694,9 @@ fmly <- formula.detail$family
         else {
             ## User specified split rule.
             if ((splitrule != "rps") &
-                (splitrule != "gini") &
-                (splitrule != "gini.unwt") &
-                (splitrule != "gini.hvwt")) {
+                (splitrule != "auc") &
+                (splitrule != "entropy") &
+                (splitrule != "gini")) {
                 stop("Invalid split rule specified:  ", splitrule)
             }
             splitrule.idx <- which(splitrule.names == splitrule)
@@ -625,9 +710,9 @@ fmly <- formula.detail$family
       }
         else {
           ## User specified split rule.
-          if ((splitrule != "mse") &
-              (splitrule != "mse.unwt") &
-              (splitrule != "mse.hvwt") &
+            if ((splitrule != "mse") &
+                (splitrule != "sg.regr") &
+                (splitrule != "la.quantile.regr") &
               (splitrule != "quantile.regr")) {
             stop("Invalid split rule specified:  ", splitrule)
           }
@@ -1031,55 +1116,13 @@ get.yvar.nlevels <- function(fmly, nlevels, yvar.names, yvar, coerce.factor = NU
   }
     yvar.nlevels
 }
-gmean <- function(y, prob, rfq = FALSE, robust = FALSE) {
-  ## determine frequencies: exit if this is not a two-class problem
-  frq <- table(y)  
-  if (length(frq) > 2) {
-    return(NULL)
-  }
-  ## determine threshold
-  if (rfq) {
-    threshold <- min(frq, na.rm = TRUE) / sum(frq, na.rm = TRUE)
-  }
-  else {
-    threshold <- 0.5
-  }
-  ## convert yhat to a class label: 0 = majority, 1 = minority
-  minority <- which.min(frq)
-  majority <- setdiff(1:2, minority)
-  yhat <- factor(1 * (prob[, minority] >= threshold), levels = c(0,1))
-  ## compute the confusion matrix and extract TN,TP etc.
-  confusion.matrix <- table(y, yhat)
-  if (nrow(confusion.matrix) > 1) {##check that dimension is correct
-    ## calculate the various rates
-    TN <- confusion.matrix[minority, 2]
-    FP <- confusion.matrix[minority, 1]
-    FN <- confusion.matrix[majority, 2]
-    TP <- confusion.matrix[majority, 1]
-    ## assemble the sensitivity/specificity values
-    if (robust) {##modified with 1 added to diagonals
-      sensitivity <- (1 + TP) / (1 + TP + FN)
-      specificity <- (1 + TN) / (1 + TN + FP)
-    }
-    else {
-      sensitivity <- TP / (TP + FN)
-      specificity <- TN / (TN + FP)
-    }
-    ## return the g mean
-    sqrt(sensitivity * specificity)
-  }
-  else {
-    NA
-  }
-}
-global.prob.assign <- function(prob, prob.epsilon, gk.quantile, splitrule, n) {
+global.prob.assign <- function(prob, prob.epsilon, gk.quantile, quantile.regr, splitrule, n) {
   ## default values
   prob.default <- (1:99) / 100
   prob.epsilon.default <- .005
-  prob.bs.default <- (1:9) / 10
-  prob.bsab.default <- .9
-  ## is quantile.regr in effect?
-  if (splitrule == "quantile.regr") {
+  prob.bs.default <- .9
+  ## is quantile.regr in effect or is a quantile regression splitting rule in place?
+  if (quantile.regr  || grepl("quantile.regr", splitrule) || gk.quantile) {
     ## is gk requested?
     if (gk.quantile) {
       ## gk quantile requires prob and prob.epsilon
@@ -1117,19 +1160,9 @@ global.prob.assign <- function(prob, prob.epsilon, gk.quantile, splitrule, n) {
     prob <- sort(prob[prob>0 & prob<1])
   }
   ## survival has quantile splitting rules, here's where we deal with those
-  if (splitrule == "bs.gradient1") {
+  if (splitrule ==  "bs.gradient") {
     if (is.null(prob)) {
       prob <- prob.bs.default
-    }
-    ## make sure prob values are coherent
-    if (sum(prob > 0 & prob < 1) == 0) {
-      stop("parameter 'prob' is not between (0,1)", prob)
-    }
-    prob <- sort(prob[prob>0 & prob<1])
-  }
-  if (splitrule ==  "bs.gradient1a" || splitrule == "bs.gradient1b") {
-    if (is.null(prob)) {
-      prob <- prob.bsab.default
     }
     ## make sure prob values are coherent
     if (sum(prob > 0 & prob < 1) == 0) {
@@ -1145,6 +1178,114 @@ global.prob.assign <- function(prob, prob.epsilon, gk.quantile, splitrule, n) {
   #  prob.epsilon <-  prob.epsilon.default
   #}
   return(list(prob = prob, prob.epsilon = prob.epsilon))
+}
+make.samplesize.function <- function(fraction = 1) {
+  f <- paste("x * ", paste(eval(fraction)))
+  expr <- parse(text = f)
+  function(x) eval(expr, list(x = x))
+}
+make.holdout.array <- function(vtry = 0, p, ntree, ntree.allvars = NULL) {
+  ##default is triggered by vtry = 0
+  if (vtry == 0) {
+    return(NULL)
+  }
+  ## check that 1<= vtry <= p-1
+  if (vtry < 0 || vtry >= p) {
+    stop("vtry must be positive and less than the feature dimension")
+  }
+  ## everything is OK, go ahead and make the p x ntree array
+  holdout <- do.call(cbind, lapply(1:ntree, function(b) {
+    ho <- rep(0, p)
+    ho[sample(1:p, size = vtry, replace = FALSE)] <- 1
+    ho
+  }))
+  if (is.null(ntree.allvars)) {
+    holdout
+  }
+  ## otherwise pad the array with 0's so that no variables are held out
+  ## put them at the front for split-optimization  
+  else {
+    cbind(matrix(0, p, ntree.allvars), holdout)
+  }
+}
+## imbalanced sampling - uses SWOR
+make.imbalanced.sample <- function(ntree, ratio = 0.5, y, replace = FALSE) {
+  ## ratio must be between 0 and 1
+  if (ratio < 0 | ratio > 1) {
+    stop("undersampling ratio must be between 0 and 1:", ratio)
+  }
+  ## determine minority/majority frequencies
+  frq <- table(y)
+  class.labels <- names(frq)
+  minority <- which.min(frq)
+  majority <- setdiff(1:2, minority)
+  n.minority <- min(frq, na.rm = TRUE)
+  n.majority <- max(frq, na.rm = TRUE)
+  samp.size <- length(y)
+  ## ratio must be larger than minority ratio
+  ratio <- max((2 + n.minority) / length(y), ratio)
+  ## use rbind to ensure a matrix
+  rbind(sapply(1:ntree, function(bb){
+    inb <- rep(0, samp.size)
+    smp.min <- sample(which(y == class.labels[minority]), size = n.minority, replace = TRUE)
+    smp.maj <- sample(which(y == class.labels[majority]), size = ratio * n.majority, replace = replace)
+    smp <- c(smp.min, smp.maj)
+    inb.frq <- tapply(smp, smp, length)
+    idx <- as.numeric(names(inb.frq))
+    inb[idx] <- inb.frq
+    inb
+  }))
+}
+## modified to default to "SWR"
+## make inbag bootstrap samples (for use with bootstrap = "by.user")
+## allows for under/over sampling
+make.sample <- function(ntree, samp.size, boot.size = NULL, replace = FALSE) {
+  ## samp.size cannot be negative
+  if (samp.size < 0) {
+    stop("samp.size cannot be negative:", samp.size)
+  }
+  ## default setting
+  if (is.null(boot.size)) {
+    if (replace == TRUE) {
+      boot.size <- samp.size
+    }
+    else {
+      boot.size <- .632 * samp.size
+    }
+  }
+  ## use rbind at the end to ensure a matrix
+  rbind(sapply(1:ntree, function(bb){
+    inb <- rep(0, samp.size)
+    smp <- sample(1:samp.size, size = boot.size, replace = replace)
+    frq <- tapply(smp, smp, length)
+    idx <- as.numeric(names(frq))
+    inb[idx] <- frq
+    inb
+  }))
+}
+ 
+## make stratified inbag bootstrap samples for imbalanced two class problem
+## allows for arbitrary under-sampling ratio of the majority class
+## sample size for subsampling
+make.size <- function(y) {
+  ## extract the relative frequencies
+  frq <- table(y)
+  min(length(y), min(frq, na.rm = TRUE) * length(frq))
+}
+## imbalanced weights for subsampling
+make.wt <- function(y) {
+  ## extract the relative frequencies
+  frq <- table(y)
+  class.labels <- names(frq)
+  wt <- rep(1, length(y))
+  ## weights for class j equal product of all non-j class frequencies
+  nullO <- sapply(1:length(frq), function(j) {
+    wt[y == class.labels[j]] <<- prod(frq[-j], na.rm = TRUE)
+    NULL
+  })
+  ## weights can become large, so divide by the maximum value
+  ## this ensures 0 < wt <= 1
+  wt / max(wt, na.rm = TRUE)
 }
 parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
   ## confirm coherency of the formula
@@ -1304,81 +1445,37 @@ parseMissingData <- function(formula.obj, data) {
   ## return the NA processed data
   return(data)
 }
-## make inbag bootstrap samples (for use with bootstrap = "by.user")
-## allows for under/over sampling, but default is Efron
-make.sample <- function(ntree, samp.size, boot.size = NULL, replace = TRUE) {
-  ## samp.size cannot be negative
-  if (samp.size < 0) {
-    stop("samp.size cannot be negative:", samp.size)
+## robust resampling
+resample <- function(x, size, ...) {
+  if (length(x) <= 1) {
+    if (!missing(size) && size == 0) x[FALSE] else x
   }
-  ## default is Efron bootstrap
-  if (is.null(boot.size)) {
-    boot.size <- samp.size
+    else {
+      sample(x, size, ...)
+    }
+}
+## determine rows and columns missing from dat
+row.col.deleted <- function(dat, r.n, c.n)
+{
+  which.r <- setdiff(r.n, rownames(dat))
+  if (length(which.r) > 0) {
+    which.r <- match(which.r, r.n)
   }
-  ## use rbind at the end to ensure a matrix
-  rbind(sapply(1:ntree, function(bb){
-    inb <- rep(0, samp.size)
-    smp <- sample(1:samp.size, size = boot.size, replace = replace)
-    frq <- tapply(smp, smp, length)
-    idx <- as.numeric(names(frq))
-    inb[idx] <- frq
-    inb
-  }))
-}
- 
-## make stratified inbag bootstrap samples for imbalanced two class problem
-## allows for arbitrary under-sampling ratio of the majority class
-make.imbalanced.sample <- function(ntree, ratio = 0.5, y) {
-  ## ratio must be between 0 and 1
-  if (ratio < 0 | ratio > 1) {
-    stop("undersampling ratio must be between 0 and 1:", ratio)
+    else {
+      which.r <- NULL
+    }
+  which.c <- setdiff(c.n, colnames(dat))
+  if (length(which.c) > 0) {
+    which.c <- match(which.c, c.n)
   }
-  ## determine minority/majority frequencies
-  frq <- table(y)
-  class.labels <- names(frq)
-  minority <- which.min(frq)
-  majority <- setdiff(1:2, minority)
-  n.minority <- min(frq, na.rm = TRUE)
-  n.majority <- max(frq, na.rm = TRUE)
-  samp.size <- length(y)
-  ## ratio must be larger than minority ratio
-  ratio <- max((2 + n.minority) / length(y), ratio)
-  ## use rbind to ensure a matrix
-  rbind(sapply(1:ntree, function(bb){
-    inb <- rep(0, samp.size)
-    smp.min <- sample(which(y == class.labels[minority]), size = n.minority, replace = TRUE)
-    smp.maj <- sample(which(y == class.labels[majority]), size = ratio * n.majority, replace = TRUE)
-    smp <- c(smp.min, smp.maj)
-    inb.frq <- tapply(smp, smp, length)
-    idx <- as.numeric(names(inb.frq))
-    inb[idx] <- inb.frq
-    inb
-  }))
-}
-## sample size for subsampling
-make.size <- function(y) {
-  ## extract the relative frequencies
-  frq <- table(y)
-  min(length(y), min(frq, na.rm = TRUE) * length(frq))
-}
-## imbalanced weights for subsampling
-make.wt <- function(y) {
-  ## extract the relative frequencies
-  frq <- table(y)
-  class.labels <- names(frq)
-  wt <- rep(1, length(y))
-  ## weights for class j equal product of all non-j class frequencies
-  nullO <- sapply(1:length(frq), function(j) {
-    wt[y == class.labels[j]] <<- prod(frq[-j], na.rm = TRUE)
-    NULL
-  })
-  ## weights can become large, so divide by the maximum value
-  ## this ensures 0 < wt <= 1
-  wt / max(wt, na.rm = TRUE)
+    else {
+      which.c <- NULL
+    }
+  return(list(row = which.r, col = which.c))
 }
 #weighted gini/entropy performance metric
 #mode is equal to either 'gini' or 'entropy'
-perf.metric <- function(truth,cluster,mode=c("entropy", "gini")){
+sid.perf.metric <- function(truth,cluster,mode=c("entropy", "gini")){
   ## verify mode option
   mode <- match.arg(mode, c("entropy", "gini"))
   ## confusion matrix
@@ -1427,32 +1524,4 @@ perf.metric <- function(truth,cluster,mode=c("entropy", "gini")){
     })
   }
   list(result=measure,measure=mode,normalized_measure=measure/maxmeasure)
-}
-## robust resampling
-resample <- function(x, size, ...) {
-  if (length(x) <= 1) {
-    if (!missing(size) && size == 0) x[FALSE] else x
-  }
-    else {
-      sample(x, size, ...)
-    }
-}
-## determine rows and columns missing from dat
-row.col.deleted <- function(dat, r.n, c.n)
-{
-  which.r <- setdiff(r.n, rownames(dat))
-  if (length(which.r) > 0) {
-    which.r <- match(which.r, r.n)
-  }
-    else {
-      which.r <- NULL
-    }
-  which.c <- setdiff(c.n, colnames(dat))
-  if (length(which.c) > 0) {
-    which.c <- match(which.c, c.n)
-  }
-    else {
-      which.c <- NULL
-    }
-  return(list(row = which.r, col = which.c))
 }

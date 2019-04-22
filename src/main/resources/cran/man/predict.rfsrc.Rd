@@ -9,41 +9,46 @@
   newdata,
   m.target = NULL,
   importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
-  get.tree = NULL, block.size = NULL,
+  get.tree = NULL,
+  block.size = if (any(is.element(as.character(importance),
+    c("none", "FALSE")))) NULL else 10,
   ensemble = NULL,
   na.action = c("na.omit", "na.impute"),
   outcome = c("train", "test"),
   proximity = FALSE,
   forest.wt = FALSE,
   ptn.count = 0,
-   
   distance = FALSE,
   var.used = c(FALSE, "all.trees", "by.tree"),
   split.depth = c(FALSE, "all.trees", "by.tree"), seed = NULL,
   do.trace = FALSE, membership = FALSE, statistics = FALSE,
+   
   ...)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)} or \code{(rfsrc,
 	    forest)}.}
-  \item{newdata}{Test data. If missing, the original grow
-    (training) data is used.}
-  \item{ensemble}{Optional parameter for specifying the type of
-    ensemble.  Can be \code{oob}, \code{inbag} or \code{all}, although
-    not all choices will be applicable depending on the setting (e.g.
-    when predicting on newdata there is no notion of out-of-bag).}
+
+  \item{newdata}{Test data. If missing, the original grow (training)
+    data is used.}
+  
+
   \item{m.target}{Character vector for multivariate families
     specifying the target outcomes to be used. The default is to use all
     coordinates.}
+  
   \item{importance}{Method for computing variable importance (VIMP) when
     test data contains y-outcomes values.  Also see \command{vimp} for more
-    flexibility, including joint vimp calculations.}
+    flexibility, including joint vimp calculations.  Another way to
+    calculate VIMP is \command{holdoutvimp}.}
+  
   \item{get.tree}{Vector of integer(s) identifying trees over which the
     ensembles are calculated over.  By default, uses all trees in the
     forest.  As an example, the user can extract the ensemble, the
     variable importance, or proximity from a single tree (or several
     trees).  Note that \code{block.size} will be over-ridden
     so that it is no larger than the requested number of trees.}
+  
   \item{block.size}{Should the error rate be calculated on every tree?
     When \code{NULL}, it will only be calculated on the last tree.  To
     view the error rate on every nth tree, set the value to an integer
@@ -51,10 +56,17 @@
     calculated in "blocks" of size equal to \code{block.size}, thus
     resulting in a useful compromise between ensemble and permutation
     VIMP.}
-  \item{na.action}{Missing value action. The default
-    \code{na.omit} removes the entire record if
-    even one of its entries is \code{NA}.  Selecting \option{na.impute} 
-    imputes the test data.}
+  
+  \item{ensemble}{Optional parameter for specifying the type of
+    ensemble.  Can be \code{oob}, \code{inbag} or \code{all}, although
+    not all choices will be applicable depending on the setting (e.g.
+    when predicting on newdata there is no notion of out-of-bag).}
+
+  \item{na.action}{Missing value action. The default \code{na.omit}
+    removes the entire record if even one of its entries is \code{NA}.
+    Selecting \option{na.impute} imputes the test data.  Also see the
+    function \command{impute} for fast direct imputation.}
+  
   \item{outcome}{Determines whether the y-outcomes from the training
     data or the test data are used to calculate the predicted value.
     The default and natural choice is \code{train} which uses the
@@ -63,52 +75,63 @@
     settings.  The option is also ignored whenever the test data is
     devoid of y-outcomes.  See the details and examples below for more
     information.}
+
   \item{proximity}{Should proximity between test observations
     be calculated?  Possible choices are \code{"inbag"}, \code{"oob"},
     \code{"all"}, \code{TRUE}, or \code{FALSE} --- but some options may
     not be valid and will depend on the context of the predict call.
     The safest choice is \code{TRUE} if proximity is desired.}
+  
   \item{distance}{Should distance between test observations
     be calculated?  Possible choices are \code{"inbag"}, \code{"oob"},
     \code{"all"}, \code{TRUE}, or \code{FALSE} --- but some options may
     not be valid and will depend on the context of the predict call.
     The safest choice is \code{TRUE} if distance is desired.}
+  
   \item{forest.wt}{Should the forest weight matrix for test observations
     be calculated?  Choices are the same as proximity.}
+
   \item{ptn.count}{The number of terminal nodes that each tree in the
     grow forest should be pruned back to.  The terminal node membership
     for the pruned forest is returned but no other action is taken.  The
     default is \code{ptn.count=0} which does no pruning.}
-   
+
   \item{var.used}{Record the number of times a variable is split?}
+  
   \item{split.depth}{Return minimal depth for each variable for each case?}
+
   \item{seed}{Negative integer specifying seed for the random number
     generator.} 
+
   \item{do.trace}{Number of seconds between updates to the user on
     approximate time to completion.}
+
   \item{membership}{Should terminal node membership and inbag
     information be returned?}
+
   \item{statistics}{Should split statistics be returned?  Values can be
     parsed using \command{stat.split}.}
+
+   
+  
+
   \item{...}{Further arguments passed to or from other methods.}
+
 }
 \details{
-  Predicted values are obtained by dropping test data down the grow
-  forest (the forest grown using the training data).  The overall error
-  rate and VIMP are also returned if the test data contains y-outcome
-  values.  Single as well as joint VIMP measures can be requested.  Note
-  that calculating VIMP can be computationally expensive (especially
-  when the dimension is high), thus if VIMP is not needed, computational
-  times can be significantly improved by setting
-  \option{importance="none"} which turns VIMP off.
+
+  Predicted values are obtained by "dropping" test data down the
+  training forest (the forest grown using the training data).
+  Performance values are returned if test data contains y-outcome
+  values.  Single as well as joint VIMP are also returned if requested.
   
   Setting \option{na.action="na.impute"} imputes missing test data
-  (x-variables and/or y-outcomes).  Imputation uses the grow-forest and
-  only training data is used to impute test data to avoid biasing error
-  rates and VIMP (Ishwaran et al. 2008).  See the \command{rfsrc}
-  help file for details.
+  (x-variables and/or y-outcomes).  Test imputation uses only the
+  grow-forest and training data to avoid biasing error rates and VIMP
+  (Ishwaran et al. 2008).  Also see the function \command{impute} for an
+  alternate way to do fast and accurate imputation.
   
-  If no test data is provided, then the original training data is used
+  If no test data is provided, the original training data is used,
   and the code reverts to restore mode allowing the user to restore the
   original grow forest.  This is useful, because it gives the user the
   ability to extract outputs from the forest that were not asked for in
@@ -116,13 +139,14 @@
   
   If \option{outcome="test"}, the predictor is calculated by using
   y-outcomes from the test data (outcome information must be present).
-  In this case, the terminal nodes from the grow-forest are recalculated
-  using the y-outcomes from the test set.  This yields a modified
-  predictor in which the topology of the forest is based solely on the
-  training data, but where the predicted value is based on the test
-  data.  Error rates and VIMP are calculated by bootstrapping the test
-  data and using out-of-bagging to ensure unbiased estimates.  See the
-  examples for illustration.
+  Terminal nodes from the grow-forest are recalculated using y-outcomes
+  from the test set.  This yields a modified predictor in which the
+  topology of the forest is based solely on the training data, but where
+  predicted values are obtained from test data.  Error rates and VIMP
+  are calculated by bootstrapping the test data and using out-of-bagging
+  to ensure unbiased estimates.  See the examples below for
+  illustration.
+
 }    
 \value{
   An object of class \code{(rfsrc, predict)}, which is a list with the
@@ -204,15 +228,16 @@
   \item{ndead}{Number of events.}
 }
 \note{
+
   The dimensions and values of returned objects depend heavily on the
   underlying family and whether y-outcomes are present in the test data.
   In particular, items related to performance will be \code{NULL} when
   y-outcomes are not present.  For multivariate families, predicted
   values, VIMP, error rate, and performance values are stored in the
-  lists \code{regrOutput} and \code{clasOutput}.
+  lists \code{regrOutput} and \code{clasOutput} which can be extracted
+  using functions \code{get.mv.error}, \code{get.mv.predicted} and
+  \code{get.mv.vimp}.
   
-  For more detailed information regarding returned values (such as \code{predicted})
-  see the \command{rfsrc} help file.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -228,13 +253,16 @@
   \emph{Rnews}, 7(2):25-31.
 }	
 \seealso{
-  \command{\link{plot.competing.risk}},
+  \command{\link{holdout.vimp.rfsrc}},
+  \command{\link{plot.competing.risk.rfsrc}},
   \command{\link{plot.rfsrc}},
-  \command{\link{plot.survival}},
-  \command{\link{plot.variable}},
+  \command{\link{plot.survival.rfsrc}},
+  \command{\link{plot.variable.rfsrc}},
   \command{\link{rfsrc}},
-  \command{\link{stat.split}},
-  \command{\link{vimp}}
+  \command{\link{rfsrc.fast}},
+  \command{\link{stat.split.rfsrc}},
+  \command{\link{synthetic.rfsrc}},
+  \command{\link{vimp.rfsrc}}
 }
 \examples{
 ## ------------------------------------------------------------
@@ -266,23 +294,23 @@ print(breast.pred$class)
 ## the original training data is used and the forest is restored
 ## ------------------------------------------------------------
 
-# first we make the grow call
+## first we make the grow call
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)
 
-# now we restore it and compare it to the original call
-# they are identical
+## now we restore it and compare it to the original call
+## they are identical
 predict(airq.obj)
 print(airq.obj)
 
-# we can retrieve various outputs that were not asked for in
-# in the original call
+## we can retrieve various outputs that were not asked for in
+## in the original call
 
-#here we extract the proximity matrix
+## here we extract the proximity matrix
 prox <- predict(airq.obj, proximity = TRUE)$proximity
 print(prox[1:10,1:10])
 
-#here we extract the number of times a variable was used to grow
-#the grow forest
+## here we extract the number of times a variable was used to grow
+## the grow forest
 var.used <- predict(airq.obj, var.used = "by.tree")$var.used
 print(head(var.used))
 
@@ -292,19 +320,19 @@ print(head(var.used))
 ## training and test data
 ## ------------------------------------------------------------
 
-# first we convert all x-variables to factors
+## first we convert all x-variables to factors
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 veteran.factor <- data.frame(lapply(veteran, factor))
 veteran.factor$time <- veteran$time
 veteran.factor$status <- veteran$status
 
-# split the data into unbalanced train/test data (5/95)
-# the train/test data have the same levels, but different labels
+## split the data into unbalanced train/test data (5/95)
+## the train/test data have the same levels, but different labels
 train <- sample(1:nrow(veteran), round(nrow(veteran) * .05))
 summary(veteran.factor[train,])
 summary(veteran.factor[-train,])
 
-# grow the forest on the training data and predict on the test data
+## grow the forest on the training data and predict on the test data
 veteran.f.grow <- rfsrc(Surv(time, status) ~ ., veteran.factor[train, ]) 
 veteran.f.pred <- predict(veteran.f.grow, veteran.factor[-train , ])
 print(veteran.f.grow)
@@ -315,31 +343,31 @@ print(veteran.f.pred)
 ## illustrates restoration of forest via outcome = "test"
 ## ------------------------------------------------------------
 
-# first we make the grow call
+## first we make the grow call
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 pbc.grow <- rfsrc(Surv(days, status) ~ ., pbc)
 
-# now use predict with outcome = TEST
+## now use predict with outcome = TEST
 pbc.pred <- predict(pbc.grow, pbc, outcome = "test")
 
-# notice that error rates are the same!!
+## notice that error rates are the same!!
 print(pbc.grow)
 print(pbc.pred)
 
-# note this is equivalent to restoring the forest
+## note this is equivalent to restoring the forest
 pbc.pred2 <- predict(pbc.grow)
 print(pbc.grow)
 print(pbc.pred)
 print(pbc.pred2)
 
-# similar example, but with na.action = "na.impute"
+## similar example, but with na.action = "na.impute"
 airq.obj <- rfsrc(Ozone ~ ., data = airquality, na.action = "na.impute")
 print(airq.obj)
 print(predict(airq.obj))
-# ... also equivalent to outcome="test" but na.action = "na.impute" required
+## ... also equivalent to outcome="test" but na.action = "na.impute" required
 print(predict(airq.obj, airquality, outcome = "test", na.action = "na.impute"))
 
-# classification example
+## classification example
 iris.obj <- rfsrc(Species ~., data = iris)
 print(iris.obj)
 print(predict.rfsrc(iris.obj, iris, outcome = "test"))
@@ -349,46 +377,47 @@ print(predict.rfsrc(iris.obj, iris, outcome = "test"))
 ## unique way to check reproducibility of the forest
 ## ------------------------------------------------------------
 
-# primary call
+## primary call
 set.seed(542899)
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 train <- sample(1:nrow(pbc), round(nrow(pbc) * 0.50))
 pbc.out <- rfsrc(Surv(days, status) ~ .,  data=pbc[train, ])
 
-# standard predict call
+## standard predict call
 pbc.train <- predict(pbc.out, pbc[-train, ], outcome = "train")
-#non-standard predict call: overlays the test data on the grow forest
+##non-standard predict call: overlays the test data on the grow forest
 pbc.test <- predict(pbc.out, pbc[-train, ], outcome = "test")
 
-# check forest reproducibilility by comparing "test" predicted survival
-# curves to "train" predicted survival curves for the first 3 individuals
+## check forest reproducibilility by comparing "test" predicted survival
+## curves to "train" predicted survival curves for the first 3 individuals
 Time <- pbc.out$time.interest
-matplot(Time, t(exp(-pbc.train$chf)[1:3,]), ylab = "Survival", col = 1, type = "l")
-matlines(Time, t(exp(-pbc.test$chf)[1:3,]), col = 2)
+matplot(Time, t(pbc.train$survival[1:3,]), ylab = "Survival", col = 1, type = "l")
+matlines(Time, t(pbc.test$survival[1:3,]), col = 2)
 
 ## ------------------------------------------------------------
+## ... just for _fun_ ...
 ## survival analysis using mixed multivariate outcome analysis 
 ## compare the predicted value to RSF
 ## ------------------------------------------------------------
 
-# fit the pbc data using RSF
+## fit the pbc data using RSF
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 rsf.obj <- rfsrc(Surv(days, status) ~ ., pbc)
 yvar <- rsf.obj$yvar
 
-# fit a mixed outcome forest using days and status as y-variables
+## fit a mixed outcome forest using days and status as y-variables
 pbc.mod <- pbc
 pbc.mod$status <- factor(pbc.mod$status)
 mix.obj <- rfsrc(Multivar(days, status) ~., pbc.mod)
 
-# compare oob predicted values
+## compare oob predicted values
 rsf.pred <- rsf.obj$predicted.oob
 mix.pred <- mix.obj$regrOutput$days$predicted.oob
 plot(rsf.pred, mix.pred)
 
-# compare C-index error rate
-rsf.err <- _PROJECT_PACKAGE_NAME_:::cindex(yvar$days, yvar$status, rsf.pred)
-mix.err <- 1 - _PROJECT_PACKAGE_NAME_:::cindex(yvar$days, yvar$status, mix.pred)
+## compare C-index error rate
+rsf.err <- get.cindex(yvar$days, yvar$status, rsf.pred)
+mix.err <- 1 - get.cindex(yvar$days, yvar$status, mix.pred)
 cat("RSF                :", rsf.err, "\n")
 cat("multivariate forest:", mix.err, "\n")
 

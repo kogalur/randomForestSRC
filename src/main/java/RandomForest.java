@@ -47,7 +47,7 @@ public class RandomForest {
                                                                  modelArg.get_nSplit(),
                                                                  
                                                                  modelArg.get_mtry(),
-                                                                 modelArg.get_htry(),
+                                                                 modelArg.getLot(),
                                                                  
                                                                  modelArg.get_vtry(),
                                                                  modelArg.get_vtryArray(),
@@ -123,19 +123,19 @@ public class RandomForest {
         ensb = (Ensemble) ensembleList.get("leafCount");
         int[] leafCount = (int[]) ensb.ensembleVector;
         
-        if (modelArg.get_htry() == 0) {
+        if (modelArg.get_hdim() == 0) {
             trimmedFactorSize = new int[1];
             trimmedFactorSize[0] = 0;
 
             mwcpCT = new int[1][]; 
         }
         else {
-            trimmedFactorSize = new int[modelArg.get_htry()];
-            for (int k = 0; k < modelArg.get_htry(); k++) {
+            trimmedFactorSize = new int[modelArg.get_hdim()];
+            for (int k = 0; k < modelArg.get_hdim(); k++) {
                 trimmedFactorSize[k] = 0;
             }
 
-            mwcpCT = new int[modelArg.get_htry()][]; 
+            mwcpCT = new int[modelArg.get_hdim()][]; 
         }
 
         Set keys = ensembleList.keySet();
@@ -255,7 +255,7 @@ public class RandomForest {
                              (int[]) (model.getEnsembleObj("mwcpSZ")).ensembleVector,
                              (int[]) (model.getEnsembleObj("mwcpPT")).ensembleVector);
 
-        if (modelArg.get_htry() > 0) {
+        if (modelArg.get_hdim() > 0) {
             hc_multi = new HCmulti((int[]) (model.getEnsembleObj("hcDim")).ensembleVector,
                                    (double[]) (model.getEnsembleObj("contPTR")).ensembleVector);
         }
@@ -302,7 +302,7 @@ public class RandomForest {
                                                                     ((int[]) (model.getEnsembleObj("treeID")).ensembleVector).length,
                                                                     (int[]) (model.getEnsembleObj("seed")).ensembleVector,
 
-                                                                    modelArg.get_htry(),
+                                                                    modelArg.get_hdim(),
 
                                                                     (int[]) (model.getEnsembleObj("treeID")).ensembleVector,
                                                                     (int[]) (model.getEnsembleObj("nodeID")).ensembleVector,

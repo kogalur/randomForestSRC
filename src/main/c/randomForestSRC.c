@@ -97,7 +97,10 @@ char  *RF_sexpString[RF_SEXP_CNT] = {
   "contPTR",       
   "mwcpSZ",        
   "mwcpPT",        
-  "mwcpCT"         
+  "mwcpCT",        
+  "emprRisk",      
+  "oobEmprRisk",   
+  "splitStatLOT"   
 };
 uint     *RF_treeID_;
 uint     *RF_nodeID_;
@@ -148,6 +151,9 @@ uint     *RF_TN_ACNT_;
 double   *RF_perfMRT_;
 double   *RF_perfCLS_;
 double   *RF_perfRGR_;
+double   *RF_splitStatLOT_;
+double   *RF_emprRSK_;
+double   *RF_oobEmprRSK_;
 double   *RF_vimpMRT_;
 double   *RF_vimpCLS_;
 double   *RF_vimpRGR_;
@@ -173,7 +179,7 @@ double   *RF_fullEnsembleRGR_;
 double   *RF_oobEnsembleQNT_;
 double   *RF_fullEnsembleQNT_;
 double     *RF_proximity_;
- 
+double     *RF_distance_;
 double     *RF_weight_;
 uint      RF_opt;
 uint      RF_optHigh;
@@ -182,13 +188,16 @@ uint      RF_splitCustomIdx;
 uint      RF_nsplit;
 uint      RF_nImpute;
 uint      RF_ntree;
+int       RF_lotSize;
+int       RF_lotLag;
+int       RF_lotStrikeout;
 uint      RF_nodeSize;
 int       RF_nodeDepth;
 uint      RF_crWeightSize;
 double   *RF_crWeight;
 uint      RF_perfBlock;
 uint      RF_mtry;
-uint      RF_htry;
+uint      RF_hdim;
 uint      RF_vtry;
 uint    **RF_vtryArray;
 uint      RF_bootstrapSize;
@@ -337,7 +346,9 @@ uint  **RF_TN_ACNT_ptr;
 double **RF_proximityPtr;
 double **RF_proximityDenPtr;
 double  *RF_proximityDen;
- 
+double **RF_distancePtr;
+double **RF_distanceDenPtr;
+double  *RF_distanceDen;
 uint    RF_rejectedTreeCount;
 uint    RF_validTreeCount;
 uint    RF_stumpedTreeCount;
@@ -373,6 +384,9 @@ double   **RF_vimpRGRptr;
 double   **RF_perfMRTptr;
 double  ***RF_perfCLSptr;
 double   **RF_perfRGRptr;
+double   **RF_splitStatLOTptr;
+double   **RF_emprRSKptr;
+double   **RF_oobEmprRSKptr;
 double  ****RF_partSURVptr;
 double  ****RF_partCLASptr;
 double   ***RF_partREGRptr;
@@ -509,7 +523,7 @@ char (*genericSplit) (uint,
                       uint**,
                       double*,
                       char**,
-                      char*,
+                      GreedyObj*,
                       char);
 customFunction customFunctionArray[4][16];
 uint   RF_userTraceFlag;
@@ -1259,6 +1273,186 @@ void getMaxVote(uint     size,
     }  
  } 
 }
+void getSplitObjectInfo(SplitInfo *info) {
+  RF_nativePrint("\nSplitInfo:  %20x \n", info);
+  RF_nativePrint("\n  info -> size        :    %20d", info -> size);
+  RF_nativePrint("\n  info -> indicator   : 0x %20x", info -> indicator);
+  RF_nativePrint("\n  info -> hcDim       :    %20d", info -> hcDim);
+  RF_nativePrint("\n  info -> randomVar   : 0x %20x", info -> randomVar);
+  RF_nativePrint("\n  info -> mwcpSizeAbs : 0x %20x", info -> mwcpSizeAbs);
+  RF_nativePrint("\n  info -> randomPts   : 0x %20x", info -> randomPts);
+  RF_nativePrint("\n  info -> randomPtsR  : 0x %20x", info -> randomPtsRight);
+  if (info -> hcDim == 0) {
+    RF_nativePrint("\n  hcDimension:   %10d", 0);
+    RF_nativePrint("\n   x-variable:   %10d", info -> randomVar[1]);
+    RF_nativePrint("\n");
+      uint covariate = info -> randomVar[1];
+      if (info -> mwcpSizeAbs[1] > 0) {
+        RF_nativePrint(" (cov = %10d, mwcpPT =", covariate);
+        for (uint m = 1; m <= info -> mwcpSizeAbs[1]; m++) {
+          RF_nativePrint(" %10x", ((uint *) info -> randomPts[1])[m]);
+        }
+        RF_nativePrint(")");
+      }
+      else {
+        RF_nativePrint(" (cov = %10d, spltPT = %12.4f) ", covariate, ((double *) info -> randomPts[1])[1]);
+      }
+  }
+  else {
+    RF_nativePrint("\n  hcDimension:  ");
+    for (uint ii = 1; ii <= info -> hcDim; ii++) {
+      RF_nativePrint(" %10d", ii);
+    }
+    RF_nativePrint("\n   x-variable:  ");
+    for (uint ii = 1; ii <= info -> hcDim; ii++) {
+      RF_nativePrint(" %10d", info -> randomVar[ii]);
+    }
+    RF_nativePrint("\n");
+    for (uint ii = 1; ii <= info -> hcDim; ii++) {  
+      uint covariate = info -> randomVar[ii];
+      if (info -> mwcpSizeAbs[ii] > 0) {
+        RF_nativePrint(" (cov = %10d, mwcpPT =", covariate);
+        for (uint m = 1; m <= info -> mwcpSizeAbs[ii]; m++) {
+          RF_nativePrint(" %10x", ((uint *) info -> randomPts[ii])[m]);
+        }
+        RF_nativePrint(") \n");
+      }
+      else {
+        RF_nativePrint(" (cov = %10d, spltPT = %12.4f, spltPTright = %12.4f) \n", covariate, ((double *) info -> randomPts[ii])[1], ((double *) info -> randomPtsRight[ii])[1]);
+      }
+    }
+  }
+  RF_nativePrint("\n");
+}
+void getNodeInfo(Node *nodePtr) {
+  RF_nativePrint("\nNodeInfo:  (address, leaf) = (%20x, %10d)", nodePtr, nodePtr -> nodeID);
+  if (nodePtr -> splitInfo != NULL) {
+    getSplitObjectInfo(nodePtr -> splitInfo);
+  }
+  RF_nativePrint("\nSplit Statistic \n");
+  RF_nativePrint(" %12.4f \n", nodePtr -> splitStatistic);
+  RF_nativePrint("\nNode Variance \n");
+  RF_nativePrint(" %12.4f \n", nodePtr -> variance);
+  RF_nativePrint("\nPermissible Flag Size:          %10d", nodePtr -> xSize);
+  RF_nativePrint("\n mpIndexSize   = %20d", nodePtr -> mpIndexSize);
+  RF_nativePrint("\n fmpIndexSize  = %20d", nodePtr -> fmpIndexSize);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n mpSign       = %20x", nodePtr -> mpSign);
+  RF_nativePrint("\n fmpSign      = %20x", nodePtr -> fmpSign);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n lmpIndexActualSize        = %20d", nodePtr -> lmpIndexActualSize);
+  RF_nativePrint("\n flmpIndexActualSize       = %20d", nodePtr -> flmpIndexActualSize);
+  RF_nativePrint("\n lmpIndexAllocSize         = %20d", nodePtr -> lmpIndexAllocSize);
+  RF_nativePrint("\n flmpIndexAllocSize        = %20d", nodePtr -> flmpIndexAllocSize);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n lmpIndex            = %20x", nodePtr -> lmpIndex);
+  RF_nativePrint("\n flmpIndex           = %20x", nodePtr -> flmpIndex);
+  RF_nativePrint("\n");
+}
+void getTerminalInfo(Terminal *termPtr) {
+  RF_nativePrint("\nTerminalInfo:  %20x", termPtr);
+  RF_nativePrint("\n  nodeID: %10d", termPtr -> nodeID);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n lmiIndex            = %20x", termPtr -> lmiIndex);
+  RF_nativePrint("\n lmiSize             = %20d", termPtr -> lmiSize);
+  RF_nativePrint("\n lmiValue            = %20x", termPtr -> lmiValue);
+}
+Node *getTerminalNode(uint treeID, uint leaf) {
+  uint i, j;
+  Node *parent;
+  parent = NULL;
+  for (j = 1; j <= RF_observationSize; j++) {
+    if ((RF_nodeMembership[treeID][j] -> nodeID) == leaf) {
+      parent = RF_nodeMembership[treeID][j];
+      j = RF_observationSize;
+    }
+  }
+  if (parent == NULL) {
+    RF_nativePrint("\nDiagnostic Trace of (individual, boot, node, leaf) vectors in data set:  ");
+    RF_nativePrint("\n        index         boot         node         leaf \n");
+    for (i = 1; i <= RF_observationSize; i++) {
+      RF_nativePrint(" %12d %12d %12x %12d \n", i,
+              RF_bootMembershipFlag[treeID][i], RF_nodeMembership[treeID][i],
+              RF_nodeMembership[treeID][i] -> nodeID);
+    }
+    RF_nativePrint("\nDiagnostic State of TRAIN (SHADOW) data:  ");
+    RF_nativePrint("\n       index       status         time   observations -> \n");
+    RF_nativePrint("\n                                      ");
+    for (i=1; i <= RF_xSize; i++) {
+      RF_nativePrint(" %12d", i);
+    }
+    RF_nativePrint("\n");
+    for (j = 1; j <= RF_observationSize; j++) {
+      RF_nativePrint("%12d %12.4f %12.4f", j, RF_status[treeID][j], RF_time[treeID][j]);
+      for (i=1; i <= RF_xSize; i++) {
+        RF_nativePrint(" %12.4f", (RF_observation[treeID][i][j]));
+      }
+      RF_nativePrint("\n");
+    }
+    RF_nativePrint("\nDiagnostic State of TRAIN (INCOMING) data:  ");
+    RF_nativePrint("\n       index       status         time   observations -> \n");
+    RF_nativePrint("\n                                      ");
+    for (i=1; i <= RF_xSize; i++) {
+      RF_nativePrint(" %12d", i);
+    }
+    RF_nativePrint("\n");
+    for (j = 1; j <= RF_observationSize; j++) {
+      RF_nativePrint("%12d %12.4f %12.4f", j, RF_responseIn[RF_statusIndex][j], RF_responseIn[RF_timeIndex][j]);
+      for (i=1; i <= RF_xSize; i++) {
+        RF_nativePrint(" %12.4f", (RF_observationIn[i][j]));
+      }
+      RF_nativePrint("\n");
+    }
+    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+    RF_nativeError("\nRF-SRC:  Proxy member for (tree, node) = (%12d, %12d) not found.", treeID, leaf);
+    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+    RF_nativeExit();
+  }
+  return parent;
+}
+void getRawNodeSize(uint  type,
+                    uint  treeID,
+                    Node *parent,
+                    uint *repMembrIndx,
+                    uint *repMembrSize,
+                    uint *allMembrIndx,
+                    uint *allMembrSize) {
+  uint      obsSize;
+  Node   ***nodeMembershipPtr;
+  uint      bootMembrSize;
+  uint i;
+  obsSize           = 0;     
+  nodeMembershipPtr = NULL;  
+  switch (type) {
+  case RF_PRED:
+    obsSize = RF_fobservationSize;
+    nodeMembershipPtr = RF_fnodeMembership;
+    break;
+  default:
+    obsSize = RF_observationSize;
+    nodeMembershipPtr = RF_nodeMembership;
+    break;
+  }
+  bootMembrSize = RF_bootstrapSize;
+  *repMembrSize = 0;
+  for (i=1; i <= bootMembrSize; i++) {
+    if (RF_nodeMembership[treeID][RF_bootMembershipIndex[treeID][i]] == parent) {
+      repMembrIndx[++(*repMembrSize)] = RF_bootMembershipIndex[treeID][i];
+    }
+  }
+  *allMembrSize = 0;
+  for (i=1; i <= obsSize; i++) {
+    if (nodeMembershipPtr[treeID][i] == parent) {
+      allMembrIndx[++(*allMembrSize)] = i;
+    }
+  }
+}
+void getTreeInfo(uint treeID, Node *parent) {
+  if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
+    getTreeInfo(treeID, parent ->  left);
+    getTreeInfo(treeID, parent -> right);
+  }
+}
 void processDefaultGrow() {
   RF_intrPredictorSize    = RF_xSize;
   RF_optHigh = RF_optHigh & (~OPT_MEMB_PRUN);
@@ -1292,7 +1486,10 @@ void processDefaultGrow() {
       RF_opt = RF_opt | OPT_PROX_IBG;
       RF_opt = RF_opt | OPT_PROX_OOB;
     }
-     
+    if (RF_optHigh & OPT_DIST) {
+      RF_optHigh = RF_optHigh | OPT_DIST_IBG;
+      RF_optHigh = RF_optHigh | OPT_DIST_OOB;
+    }
     if (RF_optHigh & OPT_WGHT) {
       RF_optHigh = RF_optHigh | OPT_WGHT_IBG;
       RF_optHigh = RF_optHigh | OPT_WGHT_OOB;
@@ -1323,6 +1520,16 @@ void processDefaultGrow() {
   }
   else {
     RF_opt = RF_opt & (~OPT_SEED);
+  }
+  if (RF_hdim > 0) { 
+    if (RF_lotLag > 0) {
+      RF_opt = RF_opt | OPT_EMPR_RISK;
+    }
+    else {
+    }
+  }
+  else {
+    RF_opt = RF_opt & (~OPT_EMPR_RISK);
   }
   if ((RF_opt & OPT_OENS) | (RF_opt & OPT_FENS)) {
   }
@@ -1372,7 +1579,10 @@ void processDefaultPredict() {
       RF_opt = RF_opt | OPT_PROX_IBG;
       RF_opt = RF_opt | OPT_PROX_OOB;
     }
-     
+    if (RF_optHigh & OPT_DIST) {
+      RF_optHigh = RF_optHigh | OPT_DIST_IBG;
+      RF_optHigh = RF_optHigh | OPT_DIST_OOB;
+    }
     if (RF_optHigh & OPT_WGHT) {
       RF_optHigh = RF_optHigh | OPT_WGHT_IBG;
       RF_optHigh = RF_optHigh | OPT_WGHT_OOB;
@@ -1380,6 +1590,7 @@ void processDefaultPredict() {
     if (!(RF_opt & OPT_FENS)) {
       RF_opt                  = RF_opt & (~OPT_PERF);
     }
+    RF_opt = RF_opt & (~OPT_EMPR_RISK);
     if (RF_opt & OPT_FENS) {
     }
     else {
@@ -1421,11 +1632,17 @@ void processDefaultPredict() {
         RF_opt = RF_opt | OPT_PROX_IBG;
         RF_opt = RF_opt | OPT_PROX_OOB;
       }
-       
+      if (RF_optHigh & OPT_DIST) {
+        RF_optHigh = RF_optHigh | OPT_DIST_IBG;
+        RF_optHigh = RF_optHigh | OPT_DIST_OOB;
+      }
       if (RF_optHigh & OPT_WGHT) {
         RF_optHigh = RF_optHigh | OPT_WGHT_IBG;
         RF_optHigh = RF_optHigh | OPT_WGHT_OOB;
       }
+    }
+    if (RF_hdim == 0) { 
+      RF_opt = RF_opt & (~OPT_EMPR_RISK);
     }
     if ((RF_opt & OPT_OENS) | (RF_opt & OPT_FENS)) {
     }
@@ -1449,7 +1666,7 @@ void processDefaultPredict() {
       RF_opt     = RF_opt & (~OPT_PROX);
       RF_opt     = RF_opt & (~OPT_OENS);
       RF_opt     = RF_opt & (~OPT_FENS);
-       
+      RF_optHigh = RF_optHigh & (~OPT_DIST);
       RF_optHigh = RF_optHigh & (~OPT_WGHT);
   }
   else {
@@ -1655,10 +1872,10 @@ char reduceFraction(uint *numerator, uint *denominator) {
 }
 char splitOnFactor(uint level, uint *mwcp) {
   char daughterFlag;
-  uint mwcpLevelIdentifier = (level >> (3 + ulog2(sizeof(uint)))) + ((level & (MAX_EXACT_LEVEL - 1)) ? 1 : 0);
-  uint mwcpLevelWord = upower(2, level - ((mwcpLevelIdentifier - 1) * MAX_EXACT_LEVEL) - 1 );
+  uint mwcpWordIdent = (level >> (3 + ulog2(sizeof(uint)))) + ((level & (MAX_EXACT_LEVEL - 1)) ? 1 : 0);
+  uint binaryWord = upower(2, level - ((mwcpWordIdent - 1) * MAX_EXACT_LEVEL) - 1 );
   daughterFlag = RIGHT;
-  if (mwcpLevelWord & mwcp[mwcpLevelIdentifier]) {
+  if (binaryWord & mwcp[mwcpWordIdent]) {
     daughterFlag = LEFT;
   }
   return daughterFlag;
@@ -3044,7 +3261,7 @@ char restoreNodeMembership(uint  r,
       bootMembrSize = RF_bootstrapSize;
     }
     else {
-      bootMembrIndx  = uivector(1, allMembrSize);
+      bootMembrIndx  = uivector(1, allMembrSize + 1);
       bootMembrSize = allMembrSize;
     }
     bootResult = bootstrap (mode,
@@ -3337,7 +3554,7 @@ char restoreNodeMembership(uint  r,
       free_uivector(bootMembrIndx, 1, RF_bootstrapSize);
     }
     else {
-      free_uivector(bootMembrIndx, 1, allMembrSize);
+      free_uivector(bootMembrIndx, 1, allMembrSize + 1);
     }
   }
   return bootResult;
@@ -4660,13 +4877,16 @@ Node *makeNode(unsigned int xSize,
   parent -> lmpIndexActualSize   = 0;
   parent -> flmpIndexActualSize  = 0;
   parent -> splitInfo = NULL;
+  parent -> repMembrIndx = NULL;
+  parent -> allMembrIndx = NULL;
+  parent -> repMembrSizeAlloc = parent -> repMembrSize = 0;
+  parent -> allMembrSizeAlloc = parent -> allMembrSize = 0;
   return parent;
 }
 void freeNode(Node         *parent) {
   if (parent -> xSize > 0) {
     free_cvector(parent -> permissibleSplit, 1, parent -> xSize);
     parent -> permissibleSplit = NULL;
-    parent -> xSize = 0;
   }
   if ((parent -> urStatSize) > 0) {
     if ((parent -> urStat) != NULL) {
@@ -4692,32 +4912,19 @@ void freeNode(Node         *parent) {
     freeSplitInfo(parent -> splitInfo);
     parent -> splitInfo = NULL;
   }
-  free_gblock(parent, (size_t) sizeof(Node));
-}
-void getNodeInfo(Node *nodePtr) {
-  RF_nativePrint("\nNodeInfo:  (address, leaf) = (%20x, %10d)", nodePtr, nodePtr -> nodeID);
-  if (nodePtr -> splitInfo != NULL) {
-    getSplitObjectInfo(nodePtr -> splitInfo);
+  if (parent -> repMembrSizeAlloc > 0) {
+    if (parent -> repMembrIndx != NULL) {
+      free_uivector(parent -> repMembrIndx, 1, parent -> repMembrSizeAlloc);
+      parent -> repMembrIndx = NULL;
+    }
   }
-  RF_nativePrint("\nSplit Statistic \n");
-  RF_nativePrint(" %12.4f \n", nodePtr -> splitStatistic);
-  RF_nativePrint("\nNode Variance \n");
-  RF_nativePrint(" %12.4f \n", nodePtr -> variance);
-  RF_nativePrint("\nPermissible Flag Size:          %10d", nodePtr -> xSize);
-  RF_nativePrint("\n mpIndexSize   = %20d", nodePtr -> mpIndexSize);
-  RF_nativePrint("\n fmpIndexSize  = %20d", nodePtr -> fmpIndexSize);
-  RF_nativePrint("\n");
-  RF_nativePrint("\n mpSign       = %20x", nodePtr -> mpSign);
-  RF_nativePrint("\n fmpSign      = %20x", nodePtr -> fmpSign);
-  RF_nativePrint("\n");
-  RF_nativePrint("\n lmpIndexActualSize        = %20d", nodePtr -> lmpIndexActualSize);
-  RF_nativePrint("\n flmpIndexActualSize       = %20d", nodePtr -> flmpIndexActualSize);
-  RF_nativePrint("\n lmpIndexAllocSize         = %20d", nodePtr -> lmpIndexAllocSize);
-  RF_nativePrint("\n flmpIndexAllocSize        = %20d", nodePtr -> flmpIndexAllocSize);
-  RF_nativePrint("\n");
-  RF_nativePrint("\n lmpIndex            = %20x", nodePtr -> lmpIndex);
-  RF_nativePrint("\n flmpIndex           = %20x", nodePtr -> flmpIndex);
-  RF_nativePrint("\n");
+  if (parent -> allMembrSizeAlloc > 0) {
+    if (parent -> allMembrIndx != NULL) {
+      free_uivector(parent -> allMembrIndx, 1, parent -> allMembrSizeAlloc);
+      parent -> allMembrIndx = NULL;
+    }
+  }
+  free_gblock(parent, (size_t) sizeof(Node));
 }
 void setParent(Node *daughter, Node *parent) {
   daughter -> parent = parent;
@@ -6402,7 +6609,7 @@ void rfsrc(char mode, int seedValue) {
     RF_nativeError("\nRF-SRC:  Invalid value specified for error block count:  %10d \n", RF_perfBlock);
     RF_nativeExit();
   }
-  if (RF_htry > 0) {
+  if (RF_hdim > 0) {
     if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {
       RF_nativeError("\nRF-SRC:  *** ERROR *** ");
       RF_nativeError("\nRF-SRC:  Parameter verification failed.");
@@ -6416,6 +6623,29 @@ void rfsrc(char mode, int seedValue) {
       RF_nativeExit();
     }
          
+    if ((RF_opt & OPT_BOOT_TYP1) && !(RF_opt & OPT_BOOT_TYP2)) {
+      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+      RF_nativeError("\nRF-SRC:  Parameter verification failed.");
+      RF_nativeError("\nRF-SRC:  Greedy splitting does not allow bootstrapping by node. \n");
+      RF_nativeExit();
+    }
+    if (RF_lotSize == 0) {
+      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+      RF_nativeError("\nRF-SRC:  Parameter verification failed.");
+      RF_nativeError("\nRF-SRC:  Greedy splitting lot object parameter size must be positive:  %10d \n", RF_lotSize);
+      RF_nativeExit();
+    }
+    if (RF_lotLag > 0) {
+      if (RF_lotStrikeout == 0) {
+        RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+        RF_nativeError("\nRF-SRC:  Parameter verification failed.");
+        RF_nativeError("\nRF-SRC:  Greedy splitting lot object parameter strikeout must be positive when lag is positive:  %10d and %10d\n", RF_lotLag, RF_lotStrikeout);
+        RF_nativeExit();
+      }
+    }
+    else {
+      RF_lotStrikeout = 1;
+    }
   }
 #ifdef _OPENMP
   if (RF_numThreads < 0) {
@@ -6459,7 +6689,7 @@ void rfsrc(char mode, int seedValue) {
                             & RF_root,
                             & RF_tLeafCount_,
                             & RF_proximity_,
-                             
+                            & RF_distance_,
                             & RF_weight_,
                             & RF_seed_,
                             & RF_imputation_,
@@ -6487,11 +6717,11 @@ void rfsrc(char mode, int seedValue) {
     stackAuxForestObjects(mode);
     break;
   default:
-    if (RF_htry == 0) {
+    if (RF_hdim == 0) {
       adj = 1;
     }
     else {
-      adj = RF_htry;
+      adj = RF_hdim;
     }
     mwcpOffset = ulvector(1, adj);
     for (j = 1; j <= adj; j++) {
@@ -8461,20 +8691,20 @@ uint sampleUniformlyFromVector (uint    treeID,
   return result;
 }
 #include     "splitCustom.h"
-char getBestSplit(uint    treeID,
-                  Node   *parent,
-                  uint   *repMembrIndx,
-                  uint    repMembrSize,
-                  uint   *allMembrIndx,
-                  uint    allMembrSize,
-                  uint   *splitParameterMax,
-                  double *splitValueMaxCont,
-                  uint   *splitValueMaxFactSize,
-                  uint  **splitValueMaxFactPtr,
-                  double *splitStatistic,
-                  char  **splitIndicator,
-                  char   *splitMIA,
-                  char    multImpFlag) {
+char getBestSplit(uint       treeID,
+                  Node      *parent,
+                  uint      *repMembrIndx,
+                  uint       repMembrSize,
+                  uint      *allMembrIndx,
+                  uint       allMembrSize,
+                  uint      *splitParameterMax,
+                  double    *splitValueMaxCont,
+                  uint      *splitValueMaxFactSize,
+                  uint     **splitValueMaxFactPtr,
+                  double    *splitStatistic,
+                  char     **splitIndicator,
+                  GreedyObj *greedyMembr,
+                  char       multImpFlag) {
   char  result;
   result = FALSE;  
   switch(RF_splitRule) {
@@ -8484,56 +8714,32 @@ char getBestSplit(uint    treeID,
   case SURV_LRSCR:
     genericSplit = &logRankNCR;
     break;
-  case SURV_L2IMP:
-    genericSplit = &l2Impute;
-    break;
   case SURV_CR_LAU:
     genericSplit = &logRankCR;
     break;
-  case SURV_CR_LOG:
-    genericSplit = &logRankCR;
-    break;
-  case SURV_WIBS:
-    genericSplit = &wiBrierScore;
-    break;
   case SURV_BSG1:
-    genericSplit = &brierScoreGradient1b;
-    break;
-  case SURV_BSG1A:
-    genericSplit = &brierScoreGradient1b;
-    break;
-  case SURV_BSG1B:
-    genericSplit = &brierScoreGradient1b;
-    break;
-  case SURV_QUANT:
-    genericSplit = &quantileSurvSplit;
+    genericSplit = &brierScoreGradient1;
     break;
   case RAND_SPLIT:
     genericSplit = &randomSplit;
     break;
-  case REGR_WT_NRM:
-    genericSplit = &regressionXwghtSplit;
-    break;
-  case REGR_WT_OFF:
-    genericSplit = &regressionXwghtSplit;
-    break;
-  case REGR_WT_HVY:
+  case REGR_NRM:
     genericSplit = &regressionXwghtSplit;
     break;
   case REGR_QUANT:
     genericSplit = &quantileRegrSplit;
     break;
+  case LARG_QUANT:
+    genericSplit = &locallyAdaptiveQuantileRegrSplit;
+    break;
   case CLAS_WT_NRM:
     genericSplit = &classificationXwghtSplit;
     break;
-  case CLAS_WT_OFF:
-    genericSplit = &classificationXwghtSplit;
+  case CLAS_AU_ROC:
+    genericSplit = &classificationAreaUnderROCSplit;
     break;
-  case CLAS_WT_HVY:
-    genericSplit = &classificationXwghtSplit;
-    break;
-  case CLAS_RNKPS:
-    genericSplit = &classificationRankedPS;
+  case CLAS_ENTROP:
+    genericSplit = &classificationEntropySplit;
     break;
   case MVRG_SPLIT:
     genericSplit = &multivariateSplit;
@@ -8579,24 +8785,24 @@ char getBestSplit(uint    treeID,
                         splitValueMaxFactPtr,
                         splitStatistic,
                         splitIndicator,
-                        splitMIA,
+                        greedyMembr,
                         multImpFlag);
   return result;
 }
-char randomSplit(uint    treeID,
-                 Node   *parent,
-                 uint   *repMembrIndx,
-                 uint    repMembrSize,
-                 uint   *allMembrIndx,
-                 uint    allMembrSize,
-                 uint   *splitParameterMax,
-                 double *splitValueMaxCont,
-                 uint   *splitValueMaxFactSize,
-                 uint  **splitValueMaxFactPtr,
-                 double *splitStatistic,
-                 char  **splitIndicator,
-                 char   *splitMIA,
-                 char    multImpFlag) {
+char randomSplit(uint       treeID,
+                 Node      *parent,
+                 uint      *repMembrIndx,
+                 uint       repMembrSize,
+                 uint      *allMembrIndx,
+                 uint       allMembrSize,
+                 uint      *splitParameterMax,
+                 double    *splitValueMaxCont,
+                 uint      *splitValueMaxFactSize,
+                 uint     **splitValueMaxFactPtr,
+                 double    *splitStatistic,
+                 char     **splitIndicator,
+                 GreedyObj *greedyMembr,
+                 char       multImpFlag) {
   uint    *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -8780,10 +8986,10 @@ char randomSplit(uint    treeID,
                           splitVector);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  multVarFlag,
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  multVarFlag);
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -8803,20 +9009,20 @@ void registerThis (customFunction func, unsigned int family, unsigned int slot) 
     RF_nativeExit();
   }    
 }
-char classificationXwghtSplit (uint    treeID,
-                               Node   *parent,
-                               uint   *repMembrIndx,
-                               uint    repMembrSize,
-                               uint   *allMembrIndx,
-                               uint    allMembrSize,
-                               uint   *splitParameterMax,
-                               double *splitValueMaxCont,
-                               uint   *splitValueMaxFactSize,
-                               uint  **splitValueMaxFactPtr,
-                               double *splitStatistic,
-                               char  **splitIndicator,
-                               char   *splitMIA,
-                               char    multImpFlag) {
+char classificationXwghtSplit (uint       treeID,
+                               Node      *parent,
+                               uint      *repMembrIndx,
+                               uint       repMembrSize,
+                               uint      *allMembrIndx,
+                               uint       allMembrSize,
+                               uint      *splitParameterMax,
+                               double    *splitValueMaxCont,
+                               uint      *splitValueMaxFactSize,
+                               uint     **splitValueMaxFactPtr,
+                               double    *splitStatistic,
+                               char     **splitIndicator,
+                               GreedyObj *greedyMembr,
+                               char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -8979,36 +9185,279 @@ char classificationXwghtSplit (uint    treeID,
           }
         }
         sumLeft = sumRght = 0.0;
-        switch(RF_splitRule) {
-        case CLAS_WT_NRM:
+        for (p=1; p <= responseClassCount; p++) {
+          sumLeft += (double) upower(leftClassProp[p], 2);
+          sumRght += (double) upower(rghtClassProp[p], 2);
+        }
+        sumLeftSqr = sumLeft / leftSize;
+        sumRghtSqr  = sumRght / rghtSize;
+        delta = (sumLeftSqr + sumRghtSqr) / nonMissMembrSize;
+        updateMaximumSplit(treeID,
+                           parent,
+                           delta,
+                           candidateCovariateCount,
+                           covariate,
+                           j,
+                           factorFlag,
+                           mwcpSizeAbsolute,
+                           repMembrSize,
+                           localSplitIndicator,
+                           & deltaMax,
+                           splitParameterMax,
+                           splitValueMaxCont,
+                           splitValueMaxFactSize,
+                           splitValueMaxFactPtr,
+                           splitVectorPtr,
+                           splitIndicator);
+        if (factorFlag == FALSE) {
+          priorMembrIter = currentMembrIter - 1;
+        }
+      }  
+      unstackSplitVector(treeID,
+                         splitVectorSize,
+                         splitLength,
+                         factorFlag,
+                         deterministicSplitFlag,
+                         mwcpSizeAbsolute,
+                         splitVectorPtr);
+      unselectRandomCovariates(treeID,
+                               parent,
+                               repMembrSize,
+                               indxx,
+                               nonMissMembrSizeStatic,
+                               nonMissMembrIndx,
+                               multImpFlag);
+    }  
+    unstackRandomCovariates(treeID,
+                            parent,
+                            randomCovariateIndex,
+                            cdf,
+                            cdfSort,
+                            density,
+                            densitySwap);
+    free_uivector (parentClassProp, 1, responseClassCount);
+    free_uivector (leftClassProp,   1, responseClassCount);
+    free_uivector (rghtClassProp,   1, responseClassCount);
+    unstackSplitIndicator(repMembrSize,
+                          localSplitIndicator,
+                          splitVector);
+  }  
+  unstackPreSplit(preliminaryResult,
+                  repMembrSize,
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
+  result = summarizeSplitResult(*splitParameterMax,
+                                *splitValueMaxCont,
+                                *splitValueMaxFactSize,
+                                *splitValueMaxFactPtr,
+                                 splitStatistic,
+                                 deltaMax);
+  return result;
+}
+char classificationAreaUnderROCSplit (uint       treeID,
+                                      Node      *parent,
+                                      uint      *repMembrIndx,
+                                      uint       repMembrSize,
+                                      uint      *allMembrIndx,
+                                      uint       allMembrSize,
+                                      uint      *splitParameterMax,
+                                      double    *splitValueMaxCont,
+                                      uint      *splitValueMaxFactSize,
+                                      uint     **splitValueMaxFactPtr,
+                                      double    *splitStatistic,
+                                      char     **splitIndicator,
+                                      GreedyObj *greedyMembr,
+                                      char       multImpFlag) {
+  uint   *randomCovariateIndex;
+  uint    uniformSelectedSlot;
+  uint    uniformSize;
+  double *cdf;
+  uint    cdfSize;
+  uint   *cdfSort;
+  uint   *density;
+  uint    densitySize;
+  uint  **densitySwap;
+  uint     covariate;
+  double  *splitVector;
+  uint     splitVectorSize;
+  uint nonMissMembrSize, nonMissMembrSizeStatic;
+  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
+  uint   *indxx;
+  uint priorMembrIter, currentMembrIter;
+  uint leftSize;
+  char *localSplitIndicator;
+  uint splitLength;
+  void *splitVectorPtr;
+  char factorFlag;
+  uint mwcpSizeAbsolute;
+  char deterministicSplitFlag;
+  char preliminaryResult, result;
+  double delta, deltaMax;
+  uint j, k, p;
+  localSplitIndicator    = NULL;  
+  splitVector            = NULL;  
+  splitVectorSize        = 0;     
+  mwcpSizeAbsolute       = 0;     
+  *splitParameterMax     = 0;
+  *splitValueMaxFactSize = 0;
+  *splitValueMaxFactPtr  = NULL;
+  *splitValueMaxCont     = RF_nativeNaN;
+  deltaMax               = RF_nativeNaN;
+  preliminaryResult = getPreSplitResult(treeID,
+                                        parent,
+                                        repMembrSize,
+                                        repMembrIndx,
+                                        & nonMissMembrSizeStatic,
+                                        & nonMissMembrIndxStatic,
+                                        & parent -> mean,
+                                        multImpFlag,
+                                        FALSE);
+  if (preliminaryResult) {
+    stackSplitIndicator(repMembrSize,
+                        & localSplitIndicator,
+                        & splitVector);
+    stackRandomCovariates(treeID,
+                          parent,
+                          repMembrSize,
+                          multImpFlag,
+                          & randomCovariateIndex,
+                          & uniformSize,
+                          & cdf,
+                          & cdfSize,
+                          & cdfSort,
+                          & density,
+                          & densitySize,
+                          & densitySwap);
+    uint responseClassCount = RF_classLevelSize[1];
+    uint *parentClassProp = uivector(1, responseClassCount);
+    uint *leftClassProp   = uivector(1, responseClassCount);
+    uint *rghtClassProp   = uivector(1, responseClassCount);
+    double alpha, beta;
+    uint sLen;
+    if (responseClassCount == 2) {
+    }
+    else {
+      sLen = responseClassCount * (responseClassCount - 1) / 2;
+    }
+    delta = 0;  
+    uint actualCovariateCount = 0;
+    uint candidateCovariateCount = 0;
+    while (selectRandomCovariates(treeID,
+                                  parent,
+                                  repMembrIndx,
+                                  repMembrSize,
+                                  randomCovariateIndex,
+                                  & uniformSize,
+                                  & uniformSelectedSlot,
+                                  cdf,
+                                  & cdfSize,
+                                  cdfSort,
+                                  density,
+                                  & densitySize,
+                                  densitySwap,
+                                  & covariate,
+                                  & actualCovariateCount,
+                                  & candidateCovariateCount,
+                                  splitVector,
+                                  & splitVectorSize,
+                                  & indxx,
+                                  nonMissMembrSizeStatic,
+                                  nonMissMembrIndxStatic,
+                                  & nonMissMembrSize,
+                                  & nonMissMembrIndx,
+                                  multImpFlag)) {
+      for (j = 1; j <= repMembrSize; j++) {
+        localSplitIndicator[j] = NEITHER;
+      }
+      for (p=1; p <= responseClassCount; p++) {
+        parentClassProp[p] = 0;
+      }
+      for (j = 1; j <= nonMissMembrSize; j++) {
+        parentClassProp[RF_classLevelIndex[1][ (uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[j]]] ]]] ++;
+      }
+      leftSize = 0;
+      priorMembrIter = 0;
+      splitLength = stackAndConstructSplitVector(treeID,
+                                                 repMembrSize,
+                                                 covariate,
+                                                 splitVector,
+                                                 splitVectorSize,
+                                                 & factorFlag,
+                                                 & deterministicSplitFlag,
+                                                 & mwcpSizeAbsolute,
+                                                 & splitVectorPtr);
+      if (factorFlag == FALSE) {
+        for (j = 1; j <= nonMissMembrSize; j++) {
+          localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
+        }
+        for (p = 1; p <= responseClassCount; p++) {
+          rghtClassProp[p] = parentClassProp[p];
+          leftClassProp[p] = 0;
+        }
+      }
+      for (j = 1; j < splitLength; j++) {
+        if (factorFlag == TRUE) {
+          priorMembrIter = 0;
+          leftSize = 0;
+        }
+        virtuallySplitNode(treeID,
+                              factorFlag,
+                              mwcpSizeAbsolute,
+                              covariate,
+                              repMembrIndx,
+                              repMembrSize,
+                              nonMissMembrIndx,
+                              nonMissMembrSize,
+                              indxx,
+                              splitVectorPtr,
+                              j,
+                              localSplitIndicator,
+                              & leftSize,
+                              priorMembrIter,
+                              & currentMembrIter);
+        if (factorFlag == TRUE) {
           for (p=1; p <= responseClassCount; p++) {
-            sumLeft += (double) upower(leftClassProp[p], 2);
-            sumRght += (double) upower(rghtClassProp[p], 2);
+            leftClassProp[p] = 0;
           }
-          sumLeftSqr = sumLeft / leftSize;
-          sumRghtSqr  = sumRght / rghtSize;
-          delta = (sumLeftSqr + sumRghtSqr) / nonMissMembrSize;
-          break;
-        case CLAS_WT_OFF:
+          for (k = 1; k <= nonMissMembrSize; k++) {
+            if (localSplitIndicator[ nonMissMembrIndx[indxx[k]] ] == LEFT)  {
+              leftClassProp[RF_classLevelIndex[1][ (uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] ++;
+            }
+          }
           for (p=1; p <= responseClassCount; p++) {
-            sumLeft += pow((double) leftClassProp[p] / (double) leftSize, 2.0);
-            sumRght += pow((double) (rghtClassProp[p]) / (double) rghtSize, 2.0);
+            rghtClassProp[p] = parentClassProp[p] - leftClassProp[p];
           }
-          delta = sumLeft + sumRght;
-          break;
-        case CLAS_WT_HVY:
-          for (p=1; p <= responseClassCount; p++) {
-            sumLeft += (double) upower(leftClassProp[p], 2);
-            sumRght += (double) upower(rghtClassProp[p], 2);
+        }
+        else {
+          for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
+            leftClassProp[RF_classLevelIndex[1][(uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] ++;
+            rghtClassProp[RF_classLevelIndex[1][(uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] --;
           }
-          delta =
-            (sumLeft / (double) (upower(nonMissMembrSize, 2))) +
-            (sumRght / (double) (upower(nonMissMembrSize, 2))) -
-            pow((double) leftSize / nonMissMembrSize, 2.0) -
-            pow((double) rghtSize / nonMissMembrSize, 2.0) + 2.0;
-          break;
-        default:
-          break;
+        }
+        if (responseClassCount == 2) {
+          alpha = (double) rghtClassProp[1] / (double) (leftClassProp[1] + rghtClassProp[1]);
+          beta  = (double) rghtClassProp[2] / (double) (leftClassProp[2] + rghtClassProp[2]);
+          delta = 1.0 - alpha + beta;
+          if (delta < (1.0 - beta + alpha)) {
+            delta =  1.0 - beta + alpha;
+          }
+        }
+        else {
+          delta = 0.0;
+          for (uint k1 = 1; k1 <= responseClassCount - 1; k1++) {
+            for (uint k2 = k1+1; k2 <= responseClassCount; k2++) {
+              alpha  = (double) rghtClassProp[k1] / (double) (leftClassProp[k1] + rghtClassProp[k1]);
+              beta  = (double) rghtClassProp[k2] / (double) (leftClassProp[k2] + rghtClassProp[k2]);
+              if ((1.0 - alpha + beta) > (1.0 - beta + alpha)) {
+                delta +=  1.0 - alpha + beta;
+              }
+              else {
+                delta +=  1.0 - beta + alpha;
+              }
+            }
+          }
+          delta = delta / sLen;
         }
         updateMaximumSplit(treeID,
                            parent,
@@ -9061,10 +9510,263 @@ char classificationXwghtSplit (uint    treeID,
                           splitVector);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
+  result = summarizeSplitResult(*splitParameterMax,
+                                *splitValueMaxCont,
+                                *splitValueMaxFactSize,
+                                *splitValueMaxFactPtr,
+                                 splitStatistic,
+                                 deltaMax);
+  return result;
+}
+char classificationEntropySplit (uint       treeID,
+                                 Node      *parent,
+                                 uint      *repMembrIndx,
+                                 uint       repMembrSize,
+                                 uint      *allMembrIndx,
+                                 uint       allMembrSize,
+                                 uint      *splitParameterMax,
+                                 double    *splitValueMaxCont,
+                                 uint      *splitValueMaxFactSize,
+                                 uint     **splitValueMaxFactPtr,
+                                 double    *splitStatistic,
+                                 char     **splitIndicator,
+                                 GreedyObj *greedyMembr,
+                                 char       multImpFlag) {
+  uint   *randomCovariateIndex;
+  uint    uniformSelectedSlot;
+  uint    uniformSize;
+  double *cdf;
+  uint    cdfSize;
+  uint   *cdfSort;
+  uint   *density;
+  uint    densitySize;
+  uint  **densitySwap;
+  uint     covariate;
+  double  *splitVector;
+  uint     splitVectorSize;
+  uint nonMissMembrSize, nonMissMembrSizeStatic;
+  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
+  uint   *indxx;
+  uint priorMembrIter, currentMembrIter;
+  uint leftSize, rghtSize;;
+  char *localSplitIndicator;
+  uint splitLength;
+  void *splitVectorPtr;
+  char factorFlag;
+  uint mwcpSizeAbsolute;
+  char deterministicSplitFlag;
+  char preliminaryResult, result;
+  double delta, deltaLeft, deltaRght, deltaMax;
+  uint j, k, p;
+  localSplitIndicator    = NULL;  
+  splitVector            = NULL;  
+  splitVectorSize        = 0;     
+  mwcpSizeAbsolute       = 0;     
+  *splitParameterMax     = 0;
+  *splitValueMaxFactSize = 0;
+  *splitValueMaxFactPtr  = NULL;
+  *splitValueMaxCont     = RF_nativeNaN;
+  deltaMax               = RF_nativeNaN;
+  preliminaryResult = getPreSplitResult(treeID,
+                                        parent,
+                                        repMembrSize,
+                                        repMembrIndx,
+                                        & nonMissMembrSizeStatic,
+                                        & nonMissMembrIndxStatic,
+                                        & parent -> mean,
+                                        multImpFlag,
+                                        FALSE);
+  if (preliminaryResult) {
+    stackSplitIndicator(repMembrSize,
+                        & localSplitIndicator,
+                        & splitVector);
+    stackRandomCovariates(treeID,
+                          parent,
+                          repMembrSize,
+                          multImpFlag,
+                          & randomCovariateIndex,
+                          & uniformSize,
+                          & cdf,
+                          & cdfSize,
+                          & cdfSort,
+                          & density,
+                          & densitySize,
+                          & densitySwap);
+    uint responseClassCount = RF_classLevelSize[1];
+    uint *parentClassProp = uivector(1, responseClassCount);
+    uint *leftClassProp   = uivector(1, responseClassCount);
+    uint *rghtClassProp   = uivector(1, responseClassCount);
+    uint *leftClassRatio  = uivector(1, responseClassCount);
+    uint *rghtClassRatio  = uivector(1, responseClassCount);
+    delta = deltaLeft = deltaRght = 0;  
+    uint actualCovariateCount = 0;
+    uint candidateCovariateCount = 0;
+    while (selectRandomCovariates(treeID,
+                                  parent,
+                                  repMembrIndx,
+                                  repMembrSize,
+                                  randomCovariateIndex,
+                                  & uniformSize,
+                                  & uniformSelectedSlot,
+                                  cdf,
+                                  & cdfSize,
+                                  cdfSort,
+                                  density,
+                                  & densitySize,
+                                  densitySwap,
+                                  & covariate,
+                                  & actualCovariateCount,
+                                  & candidateCovariateCount,
+                                  splitVector,
+                                  & splitVectorSize,
+                                  & indxx,
+                                  nonMissMembrSizeStatic,
+                                  nonMissMembrIndxStatic,
+                                  & nonMissMembrSize,
+                                  & nonMissMembrIndx,
+                                  multImpFlag)) {
+      for (j = 1; j <= repMembrSize; j++) {
+        localSplitIndicator[j] = NEITHER;
+      }
+      for (p=1; p <= responseClassCount; p++) {
+        parentClassProp[p] = 0;
+      }
+      for (j = 1; j <= nonMissMembrSize; j++) {
+        parentClassProp[RF_classLevelIndex[1][ (uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[j]]] ]]] ++;
+      }
+      leftSize = 0;
+      priorMembrIter = 0;
+      splitLength = stackAndConstructSplitVector(treeID,
+                                                 repMembrSize,
+                                                 covariate,
+                                                 splitVector,
+                                                 splitVectorSize,
+                                                 & factorFlag,
+                                                 & deterministicSplitFlag,
+                                                 & mwcpSizeAbsolute,
+                                                 & splitVectorPtr);
+      if (factorFlag == FALSE) {
+        for (j = 1; j <= nonMissMembrSize; j++) {
+          localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
+        }
+        for (p = 1; p <= responseClassCount; p++) {
+          rghtClassProp[p] = parentClassProp[p];
+          leftClassProp[p] = 0;
+        }
+      }
+      for (j = 1; j < splitLength; j++) {
+        if (factorFlag == TRUE) {
+          priorMembrIter = 0;
+          leftSize = 0;
+        }
+        virtuallySplitNode(treeID,
+                              factorFlag,
+                              mwcpSizeAbsolute,
+                              covariate,
+                              repMembrIndx,
+                              repMembrSize,
+                              nonMissMembrIndx,
+                              nonMissMembrSize,
+                              indxx,
+                              splitVectorPtr,
+                              j,
+                              localSplitIndicator,
+                              & leftSize,
+                              priorMembrIter,
+                              & currentMembrIter);
+        rghtSize = nonMissMembrSize - leftSize;
+        if (factorFlag == TRUE) {
+          for (p=1; p <= responseClassCount; p++) {
+            leftClassProp[p] = 0;
+          }
+          for (k = 1; k <= nonMissMembrSize; k++) {
+            if (localSplitIndicator[ nonMissMembrIndx[indxx[k]] ] == LEFT)  {
+              leftClassProp[RF_classLevelIndex[1][ (uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] ++;
+            }
+          }
+          for (p=1; p <= responseClassCount; p++) {
+            rghtClassProp[p] = parentClassProp[p] - leftClassProp[p];
+          }
+        }
+        else {
+          for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
+            leftClassProp[RF_classLevelIndex[1][(uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] ++;
+            rghtClassProp[RF_classLevelIndex[1][(uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] --;
+          }
+        }
+        deltaLeft = deltaRght = 0.0;
+        for (uint k1 = 1; k1 <= responseClassCount; k1++) {
+          leftClassRatio[k1] = leftClassProp[k1] / (double) leftSize;
+          rghtClassRatio[k1] = rghtClassProp[k1] / (double) rghtSize;
+          if (leftClassRatio[k1] > 0) {
+            deltaLeft += leftClassRatio[k1] / log(leftClassRatio[k1]);
+          }
+          if (rghtClassRatio[k1] > 0) {
+            deltaRght += rghtClassRatio[k1] / log(rghtClassRatio[k1]);
+          }
+        }
+        delta = (deltaLeft * leftSize / (double) repMembrSize) + (deltaRght * rghtSize / (double) repMembrSize);
+        updateMaximumSplit(treeID,
+                           parent,
+                           delta,
+                           candidateCovariateCount,
+                           covariate,
+                           j,
+                           factorFlag,
+                           mwcpSizeAbsolute,
+                           repMembrSize,
+                           localSplitIndicator,
+                           & deltaMax,
+                           splitParameterMax,
+                           splitValueMaxCont,
+                           splitValueMaxFactSize,
+                           splitValueMaxFactPtr,
+                           splitVectorPtr,
+                           splitIndicator);
+        if (factorFlag == FALSE) {
+          priorMembrIter = currentMembrIter - 1;
+        }
+      }  
+      unstackSplitVector(treeID,
+                         splitVectorSize,
+                         splitLength,
+                         factorFlag,
+                         deterministicSplitFlag,
+                         mwcpSizeAbsolute,
+                         splitVectorPtr);
+      unselectRandomCovariates(treeID,
+                               parent,
+                               repMembrSize,
+                               indxx,
+                               nonMissMembrSizeStatic,
+                               nonMissMembrIndx,
+                               multImpFlag);
+    }  
+    unstackRandomCovariates(treeID,
+                            parent,
+                            randomCovariateIndex,
+                            cdf,
+                            cdfSort,
+                            density,
+                            densitySwap);
+    free_uivector (parentClassProp, 1, responseClassCount);
+    free_uivector (leftClassProp,   1, responseClassCount);
+    free_uivector (rghtClassProp,   1, responseClassCount);
+    free_uivector (leftClassRatio,  1, responseClassCount);
+    free_uivector (rghtClassRatio,  1, responseClassCount);
+    unstackSplitIndicator(repMembrSize,
+                          localSplitIndicator,
+                          splitVector);
+  }  
+  unstackPreSplit(preliminaryResult,
+                  repMembrSize,
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -9074,17 +9776,18 @@ char classificationXwghtSplit (uint    treeID,
   return result;
 }
 char getBestSplitGreedy (uint         treeID,
-                         Node        *parent,
-                         uint        *repMembrIndx,
-                         uint         repMembrSize,
                          char         multImpFlag,
-                         SplitInfo  **maxSplitInfo) {
+                         GreedyObj   *greedyMembr) {
   uint nonMissMembrSizeStatic;
   uint *nonMissMembrIndxStatic;
+  Node *parent;
+  uint *repMembrIndx;
+  uint  repMembrSize;
   char preliminaryResult, result;
-  uint bestNodeIndex;
-  double bestError;
-  uint i, j, k;
+  uint i, k;
+  parent       =  greedyMembr -> parent;
+  repMembrIndx = (greedyMembr -> parent) -> repMembrIndx;
+  repMembrSize = (greedyMembr -> parent) -> repMembrSize;
   preliminaryResult = getPreSplitResult(treeID,
                                         parent,
                                         repMembrSize,
@@ -9096,119 +9799,95 @@ char getBestSplitGreedy (uint         treeID,
                                         FALSE);
   if (preliminaryResult) {
     {
-      Node *subParent = makeNode(parent -> xSize, 0, 0);
-      subParent -> parent = NULL;
-      subParent -> nodeID = 1;
+      Node *subRoot = makeNode(parent -> xSize, 0, 0);
+      subRoot -> parent = NULL;
+      subRoot -> nodeID = 1;
+      subRoot -> repMembrSizeAlloc = subRoot -> repMembrSize = repMembrSize;
+      subRoot -> repMembrIndx = uivector(1, repMembrSize);
+      for (i = 1; i <= repMembrSize; i++) {
+        subRoot -> repMembrIndx[i] = repMembrIndx[i];
+      }
       Node **nodeMembership = (Node **) new_vvector(1, RF_observationSize, NRUTIL_NPTR);
-      Terminal **tTermList = new_vvector(1, upower2(RF_htry), NRUTIL_TPTR);
+      GreedyObj *subGreedyHead, *subGreedyMembr;
       uint leafCount = 1;
-      GreedyObj *greedyHead = makeGreedyObj(parent, repMembrSize, repMembrIndx);
-      greedyHead -> errorSG = getInbagError(treeID, repMembrIndx, repMembrSize);
+      subGreedyHead = makeGreedyObj(parent, NULL);
+      subGreedyHead -> head = subGreedyHead;
+      subGreedyMembr = makeGreedyObj(parent, subGreedyHead);
+      subGreedyMembr -> leafFlag = TRUE;
+      subGreedyHead -> fwdLink = subGreedyMembr;
+      subGreedyMembr -> bakLink = subGreedyHead;
+      subGreedyHead -> standardResponse = (greedyMembr -> head) -> standardResponse;
+      subGreedyHead -> eRisk = getL2Loss(treeID,
+                                         subGreedyHead -> standardResponse,
+                                         repMembrIndx,
+                                         repMembrSize,
+                                         NULL,
+                                         0,
+                                         NULL,
+                                         RF_nativeNaN,
+                                         NEITHER);
+      subGreedyHead -> parent = subRoot;
+      subGreedyMembr -> parent = subRoot;
       growSubTree(TRUE,
                   multImpFlag,
                   treeID,
-                  subParent,
-                  repMembrIndx,
-                  repMembrSize,
                   & leafCount,
                   nodeMembership,
-                  tTermList,
-                  greedyHead);
-      freeGreedyObjList(greedyHead);
+                  NULL,
+                  subGreedyMembr);
       if (leafCount > 1) {
-        uint *complementSize = uivector(1, leafCount);
-        uint **complementMembership = (uint**) new_vvector(1, leafCount, NRUTIL_UPTR);
-        uint maxSize;
-        for (i = 1; i <= leafCount; i++) {
-          complementSize[i] = 0;
-        }
-        maxSize = 0;
-        for (i = 1; i <= leafCount; i++) {
-          maxSize += tTermList[i] -> membrCount;
-        }
-        bestError = DBL_MAX;
-        bestNodeIndex = 0;
-        for (i = 1; i <= leafCount; i++) {
-          complementSize[i] = maxSize - tTermList[i] -> membrCount;
-          complementMembership[i] = uivector(1, complementSize[i]);
-          uint itr = 0;
-          for (j = 1; j <= leafCount; j++) {
-            if (j != i) {
-              for (k = 1; k <= tTermList[j] -> membrCount; k++) {
-                complementMembership[i][++itr] = tTermList[j] -> membrIndx[k];
-              }
-            }
+        if (subGreedyHead -> depth > 0) {
+          greedyMembr -> splitInfo = makeSplitInfo(0);
+          HCDimension *hcdObject = makeHCDimension(RF_xSize);
+          defineHyperCubeDimension(treeID, subRoot, subGreedyHead -> inbagProxy, subGreedyHead -> depth, hcdObject);
+          (greedyMembr -> splitInfo) -> hcDim = hcdObject -> hcDim;
+          (greedyMembr -> splitInfo) -> mwcpSizeAbs = uivector(1, hcdObject -> hcDim);
+          (greedyMembr -> splitInfo) -> randomVar   = uivector(1, hcdObject -> hcDim);
+          (greedyMembr -> splitInfo) -> randomPts   = new_vvector(1, hcdObject -> hcDim, NRUTIL_VPTR);
+          (greedyMembr -> splitInfo) -> randomPtsRight   = new_vvector(1, hcdObject -> hcDim, NRUTIL_VPTR);
+          uint *hcMapping = uivector(1, RF_xSize);
+          uint hcCount;
+          for (k = 1; k <= RF_xSize; k++) {
+            hcMapping[k] = 0;
           }
-          double errorSG  = tTermList[i] -> errorSG;
-          double errorSGP = tTermList[i] -> errorSGP;
-          errorSG = (errorSG < errorSGP) ? errorSG : DBL_MAX;
-          if (errorSG <= bestError) {
-            bestError = errorSG;
-            bestNodeIndex = i;
-          }
-          else {
-          }
+          hcCount = 0;
+          defineHyperCube(treeID,
+                          subRoot,
+                          subGreedyHead -> inbagProxy,
+                          subGreedyHead -> depth,
+                          & hcCount,
+                          hcMapping,
+                          greedyMembr -> splitInfo);
+          free_uivector(hcMapping, 1, RF_xSize);
+          freeHCDimension(hcdObject);
+          greedyMembr -> sgStat = subGreedyHead -> sgStat;
         }
-        *maxSplitInfo = makeSplitInfo(0);
-        (*maxSplitInfo) -> delta = bestError;
-        HCDimension *hcdObject = makeHCDimension(RF_xSize);
-        defineHyperCubeDimension(treeID, subParent, tTermList[bestNodeIndex] -> inbagProxy, hcdObject);
-        (*maxSplitInfo) -> hcDim = hcdObject -> hcDim;
-        (*maxSplitInfo) -> mwcpSizeAbs = uivector(1, hcdObject -> hcDim);
-        (*maxSplitInfo) -> randomVar   = uivector(1, hcdObject -> hcDim);
-        (*maxSplitInfo) -> randomPts   = new_vvector(1, hcdObject -> hcDim, NRUTIL_VPTR);
-        (*maxSplitInfo) -> randomPtsRight   = new_vvector(1, hcdObject -> hcDim, NRUTIL_VPTR);
-        uint *hcIndex = uivector(1, hcdObject -> hcDim);
-        uint *hcMapping = uivector(1, RF_xSize);
-        uint hcCount;
-        for (k = 1; k <= hcdObject -> hcDim; k++) {
-          hcIndex[k] = 0;
+        else {
+          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+          RF_nativeError("\nRF-SRC:  Computational Inconsistency has occurred.  Best sub-tree node is the root node.");
+          RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+          RF_nativeExit();
         }
-        for (k = 1; k <= RF_xSize; k++) {
-          hcMapping[k] = 0;
-        }
-        hcCount = 0;
-        defineHyperCube(treeID,
-                        subParent,
-                        tTermList[bestNodeIndex] -> inbagProxy,
-                        & hcCount,
-                        hcIndex,
-                        hcMapping,
-                        *maxSplitInfo);
-        free_uivector(hcIndex, 1, hcdObject -> hcDim);
-        free_uivector(hcMapping, 1, RF_xSize);
-        freeHCDimension(hcdObject);
-        for (i = 1; i <= leafCount; i++) {
-          free_uivector(complementMembership[i], 1, complementSize[i]);
-        }
-        free_uivector(complementSize, 1, leafCount);
-        free_new_vvector(complementMembership, 1, leafCount, NRUTIL_UPTR);
       }
-      freeTree(treeID, subParent);
+      subGreedyHead -> standardResponse = NULL;
+      freeGreedyObjList(subGreedyHead);
+      freeTree(treeID, subRoot);
       free_new_vvector(nodeMembership, 1, RF_observationSize, NRUTIL_NPTR);
-      if (leafCount > 0) {      
-        for (i = 1; i <= leafCount; i++) {
-          freeTerminal(tTermList[i]);
-        }
-      }
-      free_new_vvector(tTermList, 1, upower2(RF_htry), NRUTIL_TPTR);      
-    }  
+    }
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
-  result = summarizeSplitResultGreedy(*maxSplitInfo);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
+  result = summarizeSplitResultGreedy(greedyMembr -> splitInfo);
   return result;
 }
 char summarizeSplitResultGreedy(SplitInfo *info) {
   char result;
   result = FALSE;
   if (info != NULL) {
-    if (!RF_nativeIsNaN(info -> delta)) {
-      result = TRUE;
-    }
+    result = TRUE;
   }
   return result;
 }
@@ -9220,13 +9899,11 @@ HCDimension *makeHCDimension(uint size) {
   for (p = 1; p <= size; p++) {
     obj -> splitFlag[p] = FALSE;
   }
-  obj -> splitFlagIndex = uivector(1, size);
   obj -> hcDim = 0;
   return obj;
 }
 void freeHCDimension(HCDimension *obj) {
   free_cvector(obj -> splitFlag, 1, obj -> size);
-  free_uivector(obj -> splitFlagIndex, 1, obj -> size);
   free_gblock(obj, (size_t) sizeof(HCDimension));
 }
 SplitInfo *makeSplitInfo(uint size) {
@@ -9243,7 +9920,6 @@ SplitInfo *makeSplitInfo(uint size) {
   info -> randomVar      = NULL;
   info -> randomPts      = NULL;
   info -> randomPtsRight = NULL;
-  info -> delta = RF_nativeNaN;
   return info;
 }
 void freeSplitInfo(SplitInfo *info) {
@@ -9279,58 +9955,6 @@ void freeSplitInfo(SplitInfo *info) {
   }
   free_gblock(info, (size_t) sizeof(SplitInfo));
 }
-void getSplitObjectInfo(SplitInfo *info) {
-  RF_nativePrint("\nSplitInfo:  %20x \n", info);
-  RF_nativePrint("\n  info -> size        :    %20d", info -> size);
-  RF_nativePrint("\n  info -> indicator   : 0x %20x", info -> indicator);
-  RF_nativePrint("\n  info -> delta       :    %20.4f", info -> delta);
-  RF_nativePrint("\n  info -> hcDim       :    %20d", info -> hcDim);
-  RF_nativePrint("\n  info -> randomVar   : 0x %20x", info -> randomVar);
-  RF_nativePrint("\n  info -> mwcpSizeAbs : 0x %20x", info -> mwcpSizeAbs);
-  RF_nativePrint("\n  info -> randomPts   : 0x %20x", info -> randomPts);
-  RF_nativePrint("\n  info -> randomPtsR  : 0x %20x", info -> randomPtsRight);
-  if (info -> hcDim == 0) {
-    RF_nativePrint("\n  hcDimension:   %10d", 0);
-    RF_nativePrint("\n   x-variable:   %10d", info -> randomVar[1]);
-    RF_nativePrint("\n");
-      uint covariate = info -> randomVar[1];
-      if (info -> mwcpSizeAbs[1] > 0) {
-        RF_nativePrint(" (cov = %10d, mwcpPT =", covariate);
-        for (uint m = 1; m <= info -> mwcpSizeAbs[1]; m++) {
-          RF_nativePrint(" %10d", ((uint *) info -> randomPts[1])[m]);
-        }
-        RF_nativePrint(")");
-      }
-      else {
-        RF_nativePrint(" (cov = %10d, spltPT = %12.4f) ", covariate, ((double *) info -> randomPts[1])[1]);
-      }
-  }
-  else {
-    RF_nativePrint("\n  hcDimension:  ");
-    for (uint ii = 1; ii <= info -> hcDim; ii++) {
-      RF_nativePrint(" %10d", ii);
-    }
-    RF_nativePrint("\n   x-variable:  ");
-    for (uint ii = 1; ii <= info -> hcDim; ii++) {
-      RF_nativePrint(" %10d", info -> randomVar[ii]);
-    }
-    RF_nativePrint("\n");
-    for (uint ii = 1; ii <= info -> hcDim; ii++) {  
-      uint covariate = info -> randomVar[ii];
-      if (info -> mwcpSizeAbs[ii] > 0) {
-        RF_nativePrint(" (cov = %10d, mwcpPT =", covariate);
-        for (uint m = 1; m <= info -> mwcpSizeAbs[ii]; m++) {
-          RF_nativePrint(" %10d", ((uint *) info -> randomPts[ii])[m]);
-        }
-        RF_nativePrint(")");
-      }
-      else {
-        RF_nativePrint(" (cov = %10d, spltPT = %12.4f, spltPTright = %12.4f) ", covariate, ((double *) info -> randomPts[ii])[1], ((double *) info -> randomPtsRight[ii])[1]);
-      }
-    }
-  }
-  RF_nativePrint("\n");
-}
 char forkAndUpdate(uint       treeID,
                    Node      *parent,
                    uint      *repMembrIndx,
@@ -9352,6 +9976,8 @@ char forkAndUpdate(uint       treeID,
     (*leafCount) ++;
     ((parent -> left) -> nodeID) = (parent -> nodeID);
     ((parent -> right) -> nodeID) = *leafCount;
+    ((parent -> left) -> depth) = parent -> depth + 1;
+    ((parent -> right) -> depth) = parent -> depth + 1;
     *leftDaughterSize = *rghtDaughterSize = 0;
     for (i = 1; i <= allMembrSize; i++) {
       indicator[allMembrIndx[i]] = NEITHER;
@@ -9445,32 +10071,32 @@ void saveTree(uint    b,
   RF_treeID_[*offset] = b;
   RF_nodeID_[*offset] = parent -> nodeID;
   if (parent -> splitInfo == NULL) {
-    if (RF_htry == 0) {
+    if (RF_hdim == 0) {
       adj = 1;
     }
     else {
-      adj = RF_htry;
+      adj = RF_hdim;
     }
-    if (RF_htry > 0) {
+    if (RF_hdim > 0) {
       RF_hcDim_[*offset]     = 0;
     }
     for (k = 1; k <= adj; k++) {
       RF_parmID_[k][*offset] = 0;
       RF_contPT_[k][*offset] = RF_nativeNaN;
-      if (RF_htry > 0) {
+      if (RF_hdim > 0) {
         RF_contPTR_[k][*offset] = RF_nativeNaN;
       }
       RF_mwcpSZ_[k][*offset] = 0;
     }
   }
   else {
-    if (RF_htry == 0) {
+    if (RF_hdim == 0) {
       adj = 1;
     }
     else {
       adj = (parent -> splitInfo) -> hcDim;
     }
-    if (RF_htry > 0) {    
+    if (RF_hdim > 0) {    
       RF_hcDim_[*offset]     = (parent -> splitInfo) -> hcDim;
     }
     for (k = 1; k <= adj; k++) {
@@ -9483,21 +10109,21 @@ void saveTree(uint    b,
           *RF_mwcpPT_[k] = ((uint *) ((parent -> splitInfo) -> randomPts)[k])[i];
         }
         RF_contPT_[k][*offset] = RF_nativeNaN;
-        if (RF_htry > 0) {
+        if (RF_hdim > 0) {
           RF_contPTR_[k][*offset] = RF_nativeNaN;
         }
       }
       else {
         RF_contPT_[k][*offset] = ((double *) ((parent -> splitInfo) -> randomPts)[k])[1];
-        if (RF_htry > 0) {
+        if (RF_hdim > 0) {
           RF_contPTR_[k][*offset] = ((double *) ((parent -> splitInfo) -> randomPtsRight)[k])[1];
         }
       }
     }  
-    for (k = adj+1; k <= RF_htry; k++) {
+    for (k = adj+1; k <= RF_hdim; k++) {
       RF_parmID_[k][*offset] = 0;
       RF_contPT_[k][*offset] = RF_nativeNaN;
-      if (RF_htry > 0) {
+      if (RF_hdim > 0) {
         RF_contPTR_[k][*offset] = RF_nativeNaN;
       }
       RF_mwcpSZ_[k][*offset] = 0;
@@ -9535,7 +10161,7 @@ void restoreTree(char    mode,
   parent -> nodeID = RF_nodeID_[*offset];
   if (RF_parmID_[1][*offset] > 0) {
     info = parent -> splitInfo = makeSplitInfo(0);
-    if (RF_htry == 0) {
+    if (RF_hdim == 0) {
       info -> hcDim = 0;
       adj = 1;
     }
@@ -9546,7 +10172,7 @@ void restoreTree(char    mode,
     info -> mwcpSizeAbs = uivector(1, adj);
     info -> randomVar   = uivector(1, adj);
     info -> randomPts   = new_vvector(1, adj, NRUTIL_VPTR);
-    if (RF_htry > 0) {
+    if (RF_hdim > 0) {
       info -> randomPtsRight   = new_vvector(1, adj, NRUTIL_VPTR);
     }
     for (k = 1; k <= adj; k++) {
@@ -9562,7 +10188,7 @@ void restoreTree(char    mode,
       else {
         info -> randomPts[k] = dvector(1, 1);
         ((double *) info -> randomPts[k])[1] =  RF_contPT_[k][*offset];
-        if (RF_htry > 0) {
+        if (RF_hdim > 0) {
           info -> randomPtsRight[k] = dvector(1, 1);
           ((double *) info -> randomPtsRight[k])[1] =  RF_contPTR_[k][*offset];
         }
@@ -9583,7 +10209,7 @@ void restoreTree(char    mode,
   }
   else {
     if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {
-      getSplitDepth(b, parent);
+      getSplitPath(b, parent);
     }
     parent -> pseudoTerminal = TRUE;
     RF_tNodeList[b][parent -> nodeID] = parent;
@@ -9610,22 +10236,22 @@ uint numHexDigits(unsigned n) {
     }
     return ret;
 }
-char growSubTree(char   rootFlag,
-                 char   multImpFlag,
-                 uint   treeID,
-                 Node  *parent,
-                 uint  *repMembrIndx,
-                 uint   repMembrSize,
-                 uint  *leafCount,
-                 Node **nodeMembership,
+char growSubTree(char       rootFlag,
+                 char       multImpFlag,
+                 uint       treeID,
+                 uint      *leafCount,
+                 Node     **nodeMembership,
                  Terminal **tTermList,
-                 GreedyObj *greedyHead) {
+                 GreedyObj *greedyMembr) {
   char  splitResult;
   char  forkResult;
   char leftResult, rghtResult;
   char terminalFlag;
+  Node *parent;
+  uint *repMembrIndx;
   uint *leftRepMembrIndx;
   uint *rghtRepMembrIndx;
+  uint repMembrSize;
   uint leftRepMembrSize;
   uint rghtRepMembrSize;
   uint leftAllMembrSize;
@@ -9637,30 +10263,95 @@ char growSubTree(char   rootFlag,
   double   splitStatistic;
   char    *splitIndicator;
   SplitInfo *splitInfo;
-  uint i;
+  GreedyObj *greedyItr;
+  uint *membershipComplement;
+  uint  membershipComplementSize;
+  double delta;
+  char   updateFlag;
+  uint i, k;
+  leftAllMembrSize = rghtAllMembrSize = 0;
+  parent = greedyMembr -> parent;
+  greedyMembr -> inbagProxy = parent -> repMembrIndx[1];
+  membershipComplement = uivector(1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+  greedyMembr -> membershipComplement = membershipComplement;
   if (!rootFlag) {
-    parent -> depth = (parent -> parent) -> depth + 1;
-  }
-  else {
-    leftAllMembrSize = rghtAllMembrSize = 0;
-  }
+    greedyItr = (greedyMembr -> head) -> fwdLink;
+    membershipComplementSize = 0;
+    while (greedyItr != NULL) {
+      if (greedyItr -> leafFlag == TRUE) {
+        if ((greedyItr -> parent) -> nodeID != parent -> nodeID) {
+          for (k = 1; k <= (greedyItr -> parent) -> repMembrSize; k++) {
+            membershipComplement[++membershipComplementSize] = (greedyItr -> parent) -> repMembrIndx[k];
+          }
+        }
+      }
+      greedyItr = greedyItr -> fwdLink;
+    }
+    if (((greedyMembr -> head) -> parent) -> repMembrSize != ((parent -> repMembrSize) + membershipComplementSize)) {
+      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+      RF_nativeError("\nRF-SRC:  parent and parent complement in-bag size incorrect:  (%10d + %10d != %10d)", parent -> repMembrSize, membershipComplementSize, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+      RF_nativeExit();
+    }
+  }  
+    if (rootFlag) {
+      (greedyMembr -> head) -> sgStat = RF_nativeNaN;
+      (greedyMembr -> head) -> nodeID = parent -> nodeID;
+      (greedyMembr -> head) -> depth = parent -> depth;
+      (greedyMembr -> head) -> inbagProxy = greedyMembr -> inbagProxy;
+    }
+    else {
+      if (RF_nativeIsNaN((greedyMembr -> head) -> sgStat)) {
+        delta = (greedyMembr -> sgStat);
+        updateFlag = TRUE;
+      }
+      else {
+        delta = (greedyMembr -> sgStat) - ((greedyMembr -> head) -> sgStat);
+        if (delta > 0.0) {
+          updateFlag = TRUE;
+        }
+        else if (delta < 0.0) {
+          updateFlag = FALSE;
+        }
+        else {
+          if (ran1B(treeID) <= 0.5) {
+            updateFlag = TRUE;
+          }
+          else {
+            updateFlag = FALSE;
+          }
+        }
+      }
+      if (updateFlag) {
+        (greedyMembr -> head) -> sgStat = greedyMembr -> sgStat;
+        (greedyMembr -> head) -> nodeID = parent -> nodeID;
+        (greedyMembr -> head) -> depth = parent -> depth;
+        (greedyMembr -> head) -> inbagProxy = greedyMembr -> inbagProxy;
+      }
+      else {
+      }
+    }
   terminalFlag = TRUE;
   splitIndicator = NULL;
-  GreedyObj *greedyMember = findGreedyObj(greedyHead, parent);
-  if ((parent -> depth) < RF_htry) {
-    splitResult = genericGreedySplit(treeID,
-                                     parent,
-                                     repMembrIndx,
-                                     repMembrSize,
-                                     & splitParameterMax,
-                                     & splitValueMaxCont,
-                                     & splitValueMaxFactSize,
-                                     & splitValueMaxFactPtr,
-                                     & splitStatistic,
-                                     & splitIndicator,
-                                     multImpFlag,
-                                     greedyHead);
+  repMembrIndx = parent -> repMembrIndx;
+  repMembrSize = parent -> repMembrSize;
+  if ((parent -> depth) < RF_hdim) {
+    splitResult = getBestSplitSubTree(treeID,
+                                      parent,
+                                      repMembrIndx,
+                                      repMembrSize,
+                                      NULL,
+                                      0,
+                                      & splitParameterMax,
+                                      & splitValueMaxCont,
+                                      & splitValueMaxFactSize,
+                                      & splitValueMaxFactPtr,
+                                      & splitStatistic,
+                                      & splitIndicator,
+                                      greedyMembr,
+                                      multImpFlag);
     if (splitResult) {
+      greedyMembr -> leafFlag = FALSE;
       splitInfo = makeSplitInfo(0);
       splitInfo -> hcDim = 0;
       splitInfo -> size = repMembrSize;
@@ -9697,8 +10388,10 @@ char growSubTree(char   rootFlag,
                                  &leftAllMembrSize,
                                  &rghtAllMembrSize);
       if (forkResult == TRUE) {
-        leftRepMembrIndx  = uivector(1, repMembrSize);
-        rghtRepMembrIndx  = uivector(1, repMembrSize);
+        (parent -> left)  -> repMembrSizeAlloc = repMembrSize;
+        (parent -> right) -> repMembrSizeAlloc = repMembrSize;
+        (parent -> left)  -> repMembrIndx      = leftRepMembrIndx  = uivector(1, repMembrSize);
+        (parent -> right) -> repMembrIndx      = rghtRepMembrIndx  = uivector(1, repMembrSize);
         leftRepMembrSize = rghtRepMembrSize = 0;
         for (i = 1; i <= repMembrSize; i++) {
           if (membershipIndicator[repMembrIndx[i]] == LEFT) {
@@ -9708,290 +10401,260 @@ char growSubTree(char   rootFlag,
             rghtRepMembrIndx[++rghtRepMembrSize] = repMembrIndx[i];
           }
         }
-        if (greedyMember == NULL) {
-          greedyHead -> fwdLink = makeGreedyObj(parent -> left, leftRepMembrSize, leftRepMembrIndx);
-          (greedyHead -> fwdLink) -> bakLink = greedyHead;
-          (greedyHead -> fwdLink) -> fwdLink = makeGreedyObj(parent -> right, rghtRepMembrSize, rghtRepMembrIndx);          
-          ((greedyHead -> fwdLink) -> fwdLink) -> bakLink = greedyHead -> fwdLink;
-          (greedyHead -> fwdLink) -> errorSG = greedyHead -> errorSGL;
-          ((greedyHead -> fwdLink) -> fwdLink) -> errorSG = greedyHead -> errorSGR;
-          (greedyHead -> fwdLink) -> errorSGP = greedyHead -> errorSG;
-          ((greedyHead -> fwdLink) -> fwdLink) -> errorSGP = greedyHead -> errorSG;
-        }
-        else {
-          GreedyObj *savedBak = greedyMember -> bakLink;
-          GreedyObj *savedFwd = greedyMember -> fwdLink;
-          double errorSGL = greedyMember -> errorSGL;
-          double errorSGR = greedyMember -> errorSGR;
-          double errorSG  = greedyMember -> errorSG;
-          freeGreedyObj(greedyMember);
-          savedBak -> fwdLink = makeGreedyObj(parent -> left, leftRepMembrSize, leftRepMembrIndx);
-          (savedBak -> fwdLink) -> bakLink = savedBak;
-          (savedBak -> fwdLink) -> fwdLink = makeGreedyObj(parent -> right, rghtRepMembrSize, rghtRepMembrIndx);          
-          ((savedBak -> fwdLink) -> fwdLink) -> bakLink = savedBak -> fwdLink;
-          if (savedFwd != NULL) {
-            ((savedBak -> fwdLink) -> fwdLink) -> fwdLink = savedFwd;
-            savedFwd -> bakLink = ((savedBak -> fwdLink) -> fwdLink);
-          }
-          (savedBak -> fwdLink) -> errorSG = errorSGL;
-          ((savedBak -> fwdLink) -> fwdLink) -> errorSG = errorSGR;
-          (savedBak -> fwdLink) -> errorSGP = errorSG;
-          ((savedBak -> fwdLink) -> fwdLink) -> errorSGP = errorSG;
-        }
+        (parent ->  left) -> repMembrSize = leftRepMembrSize;
+        (parent -> right) -> repMembrSize = rghtRepMembrSize;
         free_cvector(membershipIndicator, 1, RF_observationSize);
+        GreedyObj *greedyNakedLeft = makeGreedyObj(parent -> left, greedyMembr -> head);
+        GreedyObj *greedyNakedRight = makeGreedyObj(parent -> right, greedyMembr -> head);
+        greedyNakedLeft -> leafFlag = TRUE;
+        greedyNakedRight -> leafFlag = TRUE;
+        GreedyObj *greedyItr = greedyMembr;
+        while (greedyItr -> fwdLink != NULL) {
+          greedyItr = greedyItr -> fwdLink;
+        }
+        greedyItr -> fwdLink = greedyNakedLeft;
+        greedyNakedLeft -> bakLink = greedyItr;
+        greedyNakedLeft -> fwdLink = greedyNakedRight;
+        greedyNakedRight -> bakLink = greedyNakedLeft;
+        greedyNakedLeft  -> sgStat = greedyMembr -> G_nR_h_l;
+        greedyNakedRight -> sgStat = greedyMembr -> G_nR_h_r;
         leftResult = growSubTree (FALSE,
                                   multImpFlag,
                                   treeID,
-                                  parent -> left,
-                                  leftRepMembrIndx,
-                                  leftRepMembrSize,
                                   leafCount,
                                   nodeMembership,
                                   tTermList,
-                                  greedyHead);
+                                  greedyNakedLeft);
         if(!leftResult) {
         }
         rghtResult = growSubTree (FALSE,
                                   multImpFlag,
                                   treeID,
-                                  parent -> right,
-                                  rghtRepMembrIndx,
-                                  rghtRepMembrSize,
                                   leafCount,
                                   nodeMembership,
                                   tTermList,
-                                  greedyHead);
+                                  greedyNakedRight);
         if(!rghtResult) {
         }
-        free_uivector(leftRepMembrIndx, 1, repMembrSize);
-        free_uivector(rghtRepMembrIndx, 1, repMembrSize);
+      }
+      else {
+        RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+        RF_nativeError("\nRF-SRC:  forkAndUpdate(%10d) failed.", treeID);
+        RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+        RF_nativeExit();
       }
     }  
     else {
       parent -> splitFlag = FALSE;
       free_cvector(parent -> permissibleSplit, 1, parent -> xSize);
       parent -> permissibleSplit = NULL;
-      parent -> xSize = 0;
+      parent -> xSize = 0;  
       parent -> splitInfo = NULL;
     }
   }
   else {
   }
+  free_uivector(membershipComplement, 1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+  greedyMembr -> membershipComplement = NULL;
   if (terminalFlag) {
-    tTermList[parent -> nodeID] = makeTerminal();
-    tTermList[parent -> nodeID] -> nodeID = parent -> nodeID;
-    tTermList[parent -> nodeID] -> inbagProxy = repMembrIndx[1];
-    tTermList[parent -> nodeID] -> membrCount = repMembrSize;
-    tTermList[parent -> nodeID] -> membrIndx = uivector(1, repMembrSize);
-    for (i = 1; i <= repMembrSize; i++) {
-      tTermList[parent -> nodeID] -> membrIndx[i] = repMembrIndx[i];
-    }
-    if (greedyMember == NULL) {
-    }
-    else {
-      tTermList[parent -> nodeID] -> errorSG = greedyMember -> errorSG;
-      tTermList[parent -> nodeID] -> errorSGP = greedyMember -> errorSGP;
-    }
   }
   return TRUE;
 }
-double getInbagError(uint treeID, uint *repMembrIndx, uint repMembrSize) {
-  uint i, k;
+double standardVector(uint       treeID,
+                      char       standardFlag,
+                      GreedyObj *greedyMembr,
+                      double    *rawVector,
+                      uint      *repMembrIndx,
+                      uint       repMembrSize) {
+  uint i;
   double mean;
+  double stdDeviation;
   double result;
-  result = RF_nativeNaN;
-  uint rTarget = 1;
+  mean         = RF_nativeNaN;    
+  stdDeviation = RF_nativeNaN;    
+  result       = RF_nativeNaN;    
   if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
   }
   else {
-    if (RF_rFactorCount > 0) {
-      uint size = RF_rFactorSize[RF_rFactorMap[rTarget]];
-      double *univariateProb = dvector(1, size);
-      uint maxVote;
-      for (k = 1; k <= size; k++) {
-        univariateProb[k] = 0.0;
-      }
-      for (i = 1; i <= repMembrSize; i++) {
-        univariateProb[ (uint) RF_response[treeID][rTarget][repMembrIndx[i]] ] += 1.0;
-      }
-      for (k = 1; k <= size; k++) {
-        univariateProb[k] = univariateProb[k] / repMembrSize;
-      }
-      if (RF_opt & OPT_PERF_CALB) {
-        double *cpv = dvector(1, RF_rFactorSize[RF_rFactorMap[rTarget]]);
-        uint *oaaResponse = uivector(1, repMembrSize);
-        uint against;
-        result = 0.0;
-        for (against = 1; against <= RF_rFactorSize[RF_rFactorMap[rTarget]]; against++) {
-          for (i = 1; i <= repMembrSize; i ++) {
-            if ((uint) RF_response[treeID][rTarget][repMembrIndx[i] ] == against) {
-              oaaResponse[i] = 1;
-            }
-            else {
-              oaaResponse[i] = 0;
-            }
-          }
-          cpv[against] = 0.0;
-          for (i = 1; i <= repMembrSize; i ++) {
-            cpv[against] += pow(((double) oaaResponse[i] - univariateProb[against]), 2.0);
-          }
-          cpv[against] = cpv[against] / (double) repMembrSize;
-          result += cpv[against];
-        }
-        result = result  * RF_rFactorSize[RF_rFactorMap[rTarget]] / (RF_rFactorSize[RF_rFactorMap[rTarget]] - 1);
-        free_uivector(oaaResponse, 1, repMembrSize);
-        free_dvector(cpv, 1, RF_rFactorSize[RF_rFactorMap[rTarget]]);
-      }
-      else {
-        if ((RF_opt & OPT_CLAS_RFQ) && RF_rFactorMinorityFlag[RF_rFactorMap[rTarget]]) {
-          uint minorityClass = RF_rFactorMinority[RF_rFactorMap[rTarget]];
-          uint majorityClass = RF_rFactorMajority[RF_rFactorMap[rTarget]];
-          double threshold   = RF_rFactorThreshold[RF_rFactorMap[rTarget]];
-          if (univariateProb[minorityClass] >= threshold) {
-            maxVote = minorityClass;
-          }
-          else {
-            maxVote = majorityClass;
-          }
-        }
-        else {
-          double maxValue = 0.0;
-          maxVote = 0;
-          for (k = 1; k <= RF_rFactorSize[RF_rFactorMap[rTarget]]; k++) {
-            if (maxValue <= univariateProb[k]) {
-              maxValue = univariateProb[k];
-              maxVote = k;
-            }
-          }
-        }
-        result = 0.0;
-        for (i = 1; i <= repMembrSize; i++) {
-          if ((uint) RF_response[treeID][rTarget][ repMembrIndx[i] ] == maxVote) {
-            result += 1.0;
-          }
-        }
-        result = 1.0 - result / (double) repMembrSize;
-      }
-      free_dvector(univariateProb, 1, size);
-    }
-    else if (RF_rNonFactorCount > 0) {
+    if (RF_rNonFactorCount > 0) {
+      greedyMembr -> standardResponse = dvector(1, RF_observationSize);
       mean = 0.0;
       for (i = 1; i <= repMembrSize; i++) {
-        mean += RF_response[treeID][rTarget][ repMembrIndx[i] ];
+        mean += rawVector[ repMembrIndx[i] ];
       }
       mean = mean / repMembrSize;
       result = 0.0;
-      for (i = 1; i <= repMembrSize; i++) {
-        result += pow (RF_response[treeID][rTarget][repMembrIndx[i]] - mean, 2.0);
+      for (i = 1; i <= repMembrSize; i++) {      
+        result += pow (rawVector[ repMembrIndx[i] ] - mean, 2.0);
       }
-      result = result / repMembrSize;
+      if (standardFlag) {
+        stdDeviation = sqrt(result / repMembrSize);
+        for (i = 1; i <= repMembrSize; i++) {
+          greedyMembr -> standardResponse[repMembrIndx[i]] = ( rawVector[repMembrIndx[i] ] - mean) / stdDeviation;
+        }
+        result = 0.0;
+        for (i = 1; i <= repMembrSize; i++) {      
+          result += pow (greedyMembr -> standardResponse[repMembrIndx[i]], 2.0);
+        }
+      }
+      else {
+        for (i = 1; i <= repMembrSize; i++) {
+          greedyMembr -> standardResponse[repMembrIndx[i]] = rawVector[repMembrIndx[i] ];
+        }
+      }
     }
   }
   return result;
 }
-void defineHyperCubeDimension(uint treeID, Node *parent, uint proxy, HCDimension *obj) {
+double getL2Loss(uint    treeID,
+                 double *response,
+                 uint   *repMembrIndx,
+                 uint    repMembrSize,
+                 uint   *allMembrIndx,
+                 uint    allMembrSize,
+                 char   *membershipFlag,
+                 double  trainingMean,
+                 char    selectFlag) {
+  uint i;
+  double localMean;
+  double result;
+  localMean = trainingMean;
+  if (RF_nativeIsNaN(localMean)) {
+    localMean = 0.0;
+    for (i = 1; i <= repMembrSize; i++) {
+      localMean += response[repMembrIndx[i]];
+    }
+    localMean = localMean / repMembrSize;
+  }
+  result = 0.0;
+  if (allMembrSize == 0) {
+    for (i = 1; i <= repMembrSize; i++) {
+      result += pow (response[repMembrIndx[i]] - localMean, 2.0);
+    }
+  }
+  else {
+    for (i = 1; i <= allMembrSize; i++) {
+      if (membershipFlag[allMembrIndx[i]] == selectFlag) {
+        result += pow (response[allMembrIndx[i]] - localMean, 2.0);
+      }
+    }
+  }
+  return result;
+}
+void defineHyperCubeDimension(uint treeID,
+                              Node *parent,
+                              uint proxy,
+                              uint depth,
+                              HCDimension *obj) {
   SplitInfo *info;
   uint splitParameter;
   char daughterFlag;
   if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
-    info = parent -> splitInfo;
-    splitParameter = info -> randomVar[1];
-    if (obj -> splitFlag[splitParameter] == FALSE) {
-      (obj -> hcDim) ++;
-      obj -> splitFlag[splitParameter] = TRUE;
-      obj -> splitFlagIndex[obj -> hcDim] = splitParameter;
-    }
-    else {
-    }
-    if (info -> mwcpSizeAbs[1] > 0) {
-      daughterFlag = splitOnFactor((uint)  RF_observation[treeID][info -> randomVar[1]][    proxy     ],
-                                   (uint*) info -> randomPts[1]);
-    }
-    else {
-      daughterFlag =  (( ((double*) info -> randomPts[1])[1] - RF_observation[treeID][info -> randomVar[1]][   proxy    ]) >= 0.0) ? LEFT : RIGHT;
-    }
-    if (daughterFlag == LEFT) {
-      defineHyperCubeDimension(treeID, parent ->  left, proxy, obj);
-    }
-    else {
-      defineHyperCubeDimension(treeID, parent -> right, proxy, obj);
+    if (parent -> depth < depth) {
+      info = parent -> splitInfo;
+      splitParameter = info -> randomVar[1];
+      if (obj -> splitFlag[splitParameter] == FALSE) {
+        (obj -> hcDim) ++;
+        obj -> splitFlag[splitParameter] = TRUE;
+      }
+      else {
+      }
+      if (info -> mwcpSizeAbs[1] > 0) {
+        daughterFlag = splitOnFactor((uint)  RF_observation[treeID][info -> randomVar[1]][    proxy     ],
+                                     (uint*) info -> randomPts[1]);
+      }
+      else {
+        daughterFlag =  (( ((double*) info -> randomPts[1])[1] - RF_observation[treeID][info -> randomVar[1]][   proxy    ]) >= 0.0) ? LEFT : RIGHT;
+      }
+      if (daughterFlag == LEFT) {
+        defineHyperCubeDimension(treeID, parent ->  left, proxy, depth, obj);
+      }
+      else {
+        defineHyperCubeDimension(treeID, parent -> right, proxy, depth, obj);
+      }
     }
   }
 }
-void defineHyperCube(uint treeID,
+void defineHyperCube(uint  treeID,
                      Node *parent,
-                     uint proxy,
+                     uint  proxy,
+                     uint  depth,
                      uint *hcCount,
-                     uint *hcIndex,
                      uint *hcMapping,
-                     SplitInfo *maxSplitInfo) {
+                     SplitInfo *splitInfo) {
   SplitInfo *info;
   uint splitParameter;
   char daughterFlag;
   uint activeIndex;
   uint i;
   if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
-    info = parent -> splitInfo;
-    splitParameter = info -> randomVar[1];
-    activeIndex = hcMapping[splitParameter];
-    if (activeIndex == 0) {
-      (*hcCount) ++;
-      maxSplitInfo -> randomVar[*hcCount] = splitParameter;
-      hcMapping[splitParameter] = *hcCount;
-      activeIndex = *hcCount;
-      if (info -> mwcpSizeAbs[1] > 0) {
-        maxSplitInfo -> randomPts[activeIndex] = uivector(1, info -> mwcpSizeAbs[1]);
-      }
-      else {
-        maxSplitInfo -> randomPts[activeIndex] = dvector(1, 1);
-        maxSplitInfo -> randomPtsRight[activeIndex] = dvector(1, 1);
-        ((double *) maxSplitInfo -> randomPts[activeIndex])[1] = RF_nativeNaN;        
-        ((double *) maxSplitInfo -> randomPtsRight[activeIndex])[1] = RF_nativeNaN;
-      }
-    }
-    else {
-    }
-    maxSplitInfo -> mwcpSizeAbs[activeIndex] = info -> mwcpSizeAbs[1];
-    if (maxSplitInfo -> mwcpSizeAbs[activeIndex] > 0) {
-      daughterFlag = splitOnFactor((uint)  RF_observation[treeID][maxSplitInfo -> randomVar[activeIndex]][    proxy     ],
-                                   ((uint *) info -> randomPts[1]));
-      if (daughterFlag == LEFT) {
-        for (i = 1; i <= maxSplitInfo -> mwcpSizeAbs[activeIndex]; i++) {
-          ((uint *) maxSplitInfo -> randomPts[activeIndex])[i] = ((uint *) info -> randomPts[1])[i];
+    if (parent -> depth < depth) {
+      info = parent -> splitInfo;
+      splitParameter = info -> randomVar[1];
+      activeIndex = hcMapping[splitParameter];
+      if (activeIndex == 0) {
+        (*hcCount) ++;
+        splitInfo -> randomVar[*hcCount] = splitParameter;
+        hcMapping[splitParameter] = *hcCount;
+        activeIndex = *hcCount;
+        if (info -> mwcpSizeAbs[1] > 0) {
+          splitInfo -> randomPts[activeIndex] = uivector(1, info -> mwcpSizeAbs[1]);
+          for (i = 1; i <= info -> mwcpSizeAbs[1]; i++) {
+            ((uint *) (splitInfo -> randomPts[activeIndex]))[i] = UINT_MAX;
+          }
+          splitInfo -> randomPtsRight[activeIndex] = NULL;
+        }
+        else {
+          splitInfo -> randomPts[activeIndex] = dvector(1, 1);
+          splitInfo -> randomPtsRight[activeIndex] = dvector(1, 1);
+          ((double *) splitInfo -> randomPts[activeIndex])[1] = RF_nativeNaN;        
+          ((double *) splitInfo -> randomPtsRight[activeIndex])[1] = RF_nativeNaN;
         }
       }
       else {
-        for (i = 1; i <= maxSplitInfo -> mwcpSizeAbs[activeIndex]; i++) {
-          ((double *) maxSplitInfo -> randomPts[activeIndex])[1] = ((double*) info -> randomPts[1])[1];
+      }
+      splitInfo -> mwcpSizeAbs[activeIndex] = info -> mwcpSizeAbs[1];
+      if (splitInfo -> mwcpSizeAbs[activeIndex] > 0) {
+        daughterFlag = splitOnFactor((uint)  RF_observation[treeID][splitInfo -> randomVar[activeIndex]][    proxy     ],
+                                     ((uint *) info -> randomPts[1]));
+        if (daughterFlag == LEFT) {
+          for (i = 1; i <= splitInfo -> mwcpSizeAbs[activeIndex]; i++) {
+            ((uint *) splitInfo -> randomPts[activeIndex])[i] = ((uint *) info -> randomPts[1])[i];
+          }
+        }
+        else {
+          for (i = 1; i <= splitInfo -> mwcpSizeAbs[activeIndex]; i++) {
+            ((uint *) splitInfo -> randomPts[activeIndex])[i] = ((uint *) splitInfo -> randomPts[activeIndex])[i]  & (~((uint *) info -> randomPts[1])[i]);
+          }
         }
       }
-    }
-    else {
-      daughterFlag =  (( ((double*) info -> randomPts[1])[1] - RF_observation[treeID][maxSplitInfo -> randomVar[activeIndex]][   proxy    ]) >= 0.0) ? LEFT : RIGHT;
+      else {
+        daughterFlag =  (( ((double*) info -> randomPts[1])[1] - RF_observation[treeID][splitInfo -> randomVar[activeIndex]][   proxy    ]) >= 0.0) ? LEFT : RIGHT;
+        if (daughterFlag == LEFT) {
+          ((double *) splitInfo -> randomPtsRight[activeIndex])[1] = ((double*) info -> randomPts[1])[1];
+        }
+        else {
+          ((double *) splitInfo -> randomPts[activeIndex])[1] = ((double*) info -> randomPts[1])[1];
+        }
+      }
       if (daughterFlag == LEFT) {
-        ((double *) maxSplitInfo -> randomPtsRight[activeIndex])[1] = ((double*) info -> randomPts[1])[1];
+        defineHyperCube(treeID,
+                        parent -> left,
+                        proxy,
+                        depth,
+                        hcCount,
+                        hcMapping,
+                        splitInfo);
       }
       else {
-        ((double *) maxSplitInfo -> randomPts[activeIndex])[1] = ((double*) info -> randomPts[1])[1];
+        defineHyperCube(treeID,
+                        parent -> right,
+                        proxy,
+                        depth,
+                        hcCount,
+                        hcMapping,
+                        splitInfo);
       }
-    }
-    if (daughterFlag == LEFT) {
-      defineHyperCube(treeID,
-                      parent -> left,
-                      proxy,
-                      hcCount,
-                      hcIndex,
-                      hcMapping,
-                      maxSplitInfo);
-    }
-    else {
-      defineHyperCube(treeID,
-                      parent -> right,
-                      proxy,
-                      hcCount,
-                      hcIndex,
-                      hcMapping,
-                      maxSplitInfo);
     }
   }
 }
@@ -10048,18 +10711,511 @@ char getDaughterPolarity(uint treeID, SplitInfo *info, double **value, uint inde
   }  
   return daughterFlag;
 }
-char genericGreedySplit (uint    treeID,
-                         Node   *parent,
-                         uint   *repMembrIndx,
-                         uint    repMembrSize,
-                         uint   *splitParameterMax,
-                         double *splitValueMaxCont,
-                         uint   *splitValueMaxFactSize,
-                         uint  **splitValueMaxFactPtr,
-                         double *splitStatistic,
-                         char  **splitIndicator,
-                         char    multImpFlag,
-                         GreedyObj *greedyHead) {
+GreedyObj *makeGreedyObj(Node *parent, GreedyObj *head) {
+  GreedyObj *greedyObj = (GreedyObj*) gblock((size_t) sizeof(GreedyObj));
+  greedyObj -> parent = parent;
+  greedyObj -> fwdLink = NULL;
+  greedyObj -> bakLink = NULL;
+  greedyObj -> head = head;
+  greedyObj -> splitInfo = NULL;
+  greedyObj -> G_nR_h_l  = RF_nativeNaN;
+  greedyObj -> G_nR_h_r  = RF_nativeNaN;
+  greedyObj -> sgStat    = RF_nativeNaN;
+  greedyObj -> inbagProxy = 0;
+  greedyObj -> nodeID     = 0;
+  greedyObj -> depth      = 0;
+  greedyObj -> leafFlag = FALSE;
+  greedyObj -> standardResponse = NULL;
+  greedyObj -> membershipComplement = NULL;
+  greedyObj -> eRisk = RF_nativeNaN;
+  greedyObj -> oobEmprRisk = RF_nativeNaN;
+  return greedyObj;
+}
+void freeGreedyObj(GreedyObj *gObj) {
+  if (gObj -> splitInfo != NULL) {
+    freeSplitInfo(gObj -> splitInfo);
+  }
+  if (gObj -> standardResponse != NULL) {
+    free_dvector(gObj -> standardResponse, 1, RF_observationSize);
+  }
+  free_gblock(gObj, (size_t) sizeof(GreedyObj));
+}
+void freeGreedyObjList(GreedyObj *gObj) {
+  if (gObj -> fwdLink != NULL) {
+    freeGreedyObjList(gObj -> fwdLink);
+  }
+  freeGreedyObj(gObj);
+}
+GreedyObj *findGreedyObj(GreedyObj *head, Node *parent) {
+  GreedyObj *currentPtr = head;   
+  char foundFlag = FALSE;
+  while (!foundFlag) {
+    if (currentPtr != NULL) {
+      if(currentPtr -> parent == parent) {
+        foundFlag = TRUE;
+      }
+      else {
+        currentPtr = currentPtr -> fwdLink;
+      }
+    }
+    else {
+      foundFlag = TRUE;
+    }
+  }
+  return currentPtr;
+}
+char getBestSplitSubTree(uint       treeID,
+                         Node      *parent,
+                         uint      *repMembrIndx,
+                         uint       repMembrSize,
+                         uint      *allMembrIndx,
+                         uint       allMembrSize,
+                         uint      *splitParameterMax,
+                         double    *splitValueMaxCont,
+                         uint      *splitValueMaxFactSize,
+                         uint     **splitValueMaxFactPtr,
+                         double    *splitStatistic,
+                         char     **splitIndicator,
+                         GreedyObj *greedyMembr,
+                         char       multImpFlag) {
+  char  result;
+  result = FALSE;  
+  switch(RF_splitRule) {
+  case REGR_SGS:
+    genericSplit = &regressionSGS;
+    break;
+  case REGR_NRM:
+    genericSplit = &regressionSGS;
+    break;
+  default:
+    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+    RF_nativeError("\nRF-SRC:  Split rule not found:  %10d", RF_splitRule);
+    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+    RF_nativeExit();
+    break;
+  }
+  result = genericSplit(treeID,
+                        parent,
+                        repMembrIndx,
+                        repMembrSize,
+                        allMembrIndx,
+                        allMembrSize,
+                        splitParameterMax,
+                        splitValueMaxCont,
+                        splitValueMaxFactSize,
+                        splitValueMaxFactPtr,
+                        splitStatistic,
+                        splitIndicator,
+                        greedyMembr,
+                        multImpFlag);
+  return result;
+}
+char regressionSGS (uint       treeID,
+                    Node      *parent,
+                    uint      *repMembrIndx,
+                    uint       repMembrSize,
+                    uint      *allMembrIndx,
+                    uint       allMembrSize,
+                    uint      *splitParameterMax,
+                    double    *splitValueMaxCont,
+                    uint      *splitValueMaxFactSize,
+                    uint     **splitValueMaxFactPtr,
+                    double    *splitStatistic,
+                    char     **splitIndicator,
+                    GreedyObj *greedyMembr,
+                    char       multImpFlag) {
+  uint   *randomCovariateIndex;
+  uint    uniformSelectedSlot;
+  uint    uniformSize;
+  double *cdf;
+  uint    cdfSize;
+  uint   *cdfSort;
+  uint   *density;
+  uint    densitySize;
+  uint  **densitySwap;
+  uint     covariate;
+  double  *splitVector;
+  uint     splitVectorSize;
+  uint actualCovariateCount, candidateCovariateCount;
+  uint nonMissMembrSize, nonMissMembrSizeStatic;
+  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
+  uint   *indxx;
+  uint priorMembrIter, currentMembrIter;
+  uint leftSize, rghtSize;
+  char *localSplitIndicator;
+  uint splitLength;
+  void *splitVectorPtr;
+  char factorFlag;
+  uint mwcpSizeAbsolute;
+  char deterministicSplitFlag;
+  char preliminaryResult, result;
+  double G_nR_h_l, G_nR_h_r;
+  double l2LossHead, l2LossLeft, l2LossRight, l2LossLeftCompl, l2LossRightCompl;
+  uint itrLeft, itrRight, itrLeftCompl, itrRightCompl;
+  uint  *membershipLeftComplement, *membershipRightComplement, *membershipLeft, *membershipRight;
+  uint commonComplementSize;
+  double sumLeft, sumRght, sumLeftSqr, sumRghtSqr;
+  double delta, deltaMax;
+  uint j, k;
+  localSplitIndicator    = NULL;  
+  splitVector            = NULL;  
+  splitVectorSize        = 0;     
+  mwcpSizeAbsolute       = 0;     
+  *splitParameterMax     = 0;
+  *splitValueMaxFactSize = 0;
+  *splitValueMaxFactPtr  = NULL;
+  *splitValueMaxCont     = RF_nativeNaN;
+  deltaMax               = RF_nativeNaN;
+  if (repMembrSize != (greedyMembr -> parent) -> repMembrSize) {
+    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+    RF_nativeError("\nRF-SRC:  Replicate count inncorrectly conveyed to split rule:  %10d versus %10d", repMembrSize, (greedyMembr -> parent) -> repMembrSize);
+    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+    RF_nativeExit();
+  }
+  preliminaryResult = getPreSplitResult(treeID,
+                                        parent,
+                                        repMembrSize,
+                                        repMembrIndx,
+                                        & nonMissMembrSizeStatic,
+                                        & nonMissMembrIndxStatic,
+                                        & parent -> mean,
+                                        multImpFlag,
+                                        FALSE);
+  if (preliminaryResult) {
+    stackSplitIndicator(repMembrSize,
+                        & localSplitIndicator,
+                        & splitVector);
+    stackRandomCovariates(treeID,
+                          parent,
+                          repMembrSize,
+                          multImpFlag,
+                          & randomCovariateIndex,
+                          & uniformSize,
+                          & cdf,
+                          & cdfSize,
+                          & cdfSort,
+                          & density,
+                          & densitySize,
+                          & densitySwap);
+    sumLeft = sumRght = sumLeftSqr = sumRghtSqr = 0;     
+    delta = 0;                                           
+    membershipLeftComplement  = membershipLeft  = NULL;  
+    membershipRightComplement = membershipRight = NULL;  
+    commonComplementSize = 0;  
+    l2LossHead = 0;          
+    G_nR_h_l = G_nR_h_r = 0;   
+    actualCovariateCount = candidateCovariateCount = 0;
+    if (RF_splitRule == REGR_SGS) {
+      membershipLeftComplement = uivector(1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      membershipRightComplement = uivector(1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      membershipLeft = uivector(1, repMembrSize);
+      membershipRight = uivector(1, repMembrSize);
+      commonComplementSize = 0;
+      for (k = 1; k <= ((greedyMembr -> head) -> parent) -> repMembrSize - (greedyMembr -> parent) -> repMembrSize; k++) {
+        membershipRightComplement[++commonComplementSize] = greedyMembr -> membershipComplement[k];
+        membershipLeftComplement[commonComplementSize]    = greedyMembr -> membershipComplement[k];
+      }
+      l2LossHead = (greedyMembr -> head) -> eRisk;
+    }
+    while (selectRandomCovariates(treeID,
+                                  parent,
+                                  repMembrIndx,
+                                  repMembrSize,
+                                  randomCovariateIndex,
+                                  & uniformSize,
+                                  & uniformSelectedSlot,
+                                  cdf,
+                                  & cdfSize,
+                                  cdfSort,
+                                  density,
+                                  & densitySize,
+                                  densitySwap,
+                                  & covariate,
+                                  & actualCovariateCount,
+                                  & candidateCovariateCount,
+                                  splitVector,
+                                  & splitVectorSize,
+                                  & indxx,
+                                  nonMissMembrSizeStatic,
+                                  nonMissMembrIndxStatic,
+                                  & nonMissMembrSize,
+                                  & nonMissMembrIndx,
+                                  multImpFlag)) {
+      for (k = 1; k <= repMembrSize; k++) {
+        localSplitIndicator[k] = NEITHER;
+      }
+      leftSize = 0;
+      priorMembrIter = 0;
+      splitLength = stackAndConstructSplitVector(treeID,
+                                                 repMembrSize,
+                                                 covariate,
+                                                 splitVector,
+                                                 splitVectorSize,
+                                                 & factorFlag,
+                                                 & deterministicSplitFlag,
+                                                 & mwcpSizeAbsolute,
+                                                 & splitVectorPtr);
+      if (factorFlag == FALSE) {
+        if (RF_splitRule == REGR_NRM) {
+          sumLeft = sumLeftSqr = sumRght = sumRghtSqr = 0.0;
+          sumRght = 0.0;
+          for (j = 1; j <= repMembrSize; j++) {
+            sumRght += RF_response[treeID][1][ repMembrIndx[j] ];
+          }
+        }
+        for (k = 1; k <= repMembrSize; k++) {
+          localSplitIndicator[k] = RIGHT;
+        }
+      }
+      for (j = 1; j < splitLength; j++) {
+        if (factorFlag == TRUE) {
+          priorMembrIter = 0;
+          leftSize = 0;
+        }
+        virtuallySplitNode(treeID,
+                           factorFlag,
+                           mwcpSizeAbsolute,
+                           covariate,
+                           repMembrIndx,
+                           repMembrSize,
+                           nonMissMembrIndx,
+                           nonMissMembrSize,
+                           indxx,
+                           splitVectorPtr,
+                           j,
+                           localSplitIndicator,
+                           & leftSize,
+                           priorMembrIter,
+                           & currentMembrIter);
+        rghtSize = nonMissMembrSize - leftSize;
+        if (RF_splitRule == REGR_NRM) {
+          if (factorFlag == TRUE) {
+            sumLeft = sumRght = 0.0;
+            for (k = 1; k <= repMembrSize; k++) {
+              if (localSplitIndicator[k] == LEFT) {
+                sumLeft += RF_response[treeID][1][ repMembrIndx[k] ];
+              }
+              else {
+                sumRght += RF_response[treeID][1][ repMembrIndx[k] ];
+              }
+            } 
+          }
+          else {
+            for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
+              sumLeft += RF_response[treeID][1][ repMembrIndx[indxx[k]] ];
+              sumRght -= RF_response[treeID][1][ repMembrIndx[indxx[k]] ];
+            }
+          }
+          sumLeftSqr = pow(sumLeft, 2.0) / leftSize;
+          sumRghtSqr = pow(sumRght, 2.0) / rghtSize;
+          delta = sumLeftSqr + sumRghtSqr;
+        } 
+        else {
+          itrLeft = itrRight = 0;
+          itrLeftCompl = itrRightCompl = commonComplementSize;
+          for (k = 1; k <= repMembrSize; k++) {
+            if (localSplitIndicator[k] == LEFT) {
+              membershipLeft[++itrLeft] = repMembrIndx[k];
+              membershipRightComplement[++itrRightCompl] = repMembrIndx[k];
+            }
+            else {
+              membershipRight[++itrRight] = repMembrIndx[k];
+              membershipLeftComplement[++itrLeftCompl] = repMembrIndx[k];
+            }
+          }
+          if ((itrLeft + itrRight) != repMembrSize) {
+            RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+            RF_nativeError("\nRF-SRC:  left + right in-bag size incorrect:  (%10d + %10d != %10d)", itrLeft, itrRight, repMembrSize);
+            RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RF_nativeExit();
+          }
+          if (itrLeft + itrLeftCompl != ((greedyMembr -> head) -> parent) -> repMembrSize) {
+            RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+            RF_nativeError("\nRF-SRC:  left + left complement in-bag size incorrect:  (%10d + %10d != %10d)", itrLeft, itrLeftCompl, ((greedyMembr -> head) -> parent) -> repMembrSize);
+            RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RF_nativeExit();
+          }
+          if ((itrRight + itrRightCompl) != ((greedyMembr -> head) -> parent) -> repMembrSize) {
+            RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+            RF_nativeError("\nRF-SRC:  right + right complement in-bag size incorrect:  (%10d + %10d != %10d)", itrRight, itrRightCompl, ((greedyMembr -> head) -> parent) -> repMembrSize);
+            RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RF_nativeExit();
+          }
+          l2LossLeft = getL2Loss(treeID,
+                                 (greedyMembr -> head) -> standardResponse,
+                                 membershipLeft,
+                                 itrLeft,
+                                 NULL,
+                                 0,
+                                 NULL,
+                                 RF_nativeNaN,
+                                 NEITHER);
+          l2LossRight = getL2Loss(treeID,
+                                  (greedyMembr -> head) -> standardResponse,
+                                  membershipRight,
+                                  itrRight,
+                                  NULL,
+                                  0,
+                                  NULL,
+                                  RF_nativeNaN,
+                                  NEITHER);
+          l2LossLeftCompl = getL2Loss(treeID,
+                                           (greedyMembr -> head) -> standardResponse,
+                                           membershipLeftComplement,
+                                           itrLeftCompl,
+                                           NULL,
+                                           0,
+                                           NULL,
+                                           RF_nativeNaN,
+                                           NEITHER);
+          l2LossRightCompl = getL2Loss(treeID,
+                                            (greedyMembr -> head) -> standardResponse,
+                                            membershipRightComplement,
+                                            itrRightCompl,
+                                            NULL,
+                                            0,
+                                            NULL,
+                                            RF_nativeNaN,
+                                            NEITHER);
+          G_nR_h_l = l2LossHead - (l2LossLeft  + l2LossLeftCompl);
+          G_nR_h_r = l2LossHead - (l2LossRight + l2LossRightCompl);
+          delta = (G_nR_h_l + G_nR_h_r) / 2.0; 
+        }
+        result = updateMaximumSplit(treeID,
+                                    parent,
+                                    delta,
+                                    candidateCovariateCount,
+                                    covariate,
+                                    j,
+                                    factorFlag,
+                                    mwcpSizeAbsolute,
+                                    repMembrSize,
+                                    localSplitIndicator,
+                                    & deltaMax,
+                                    splitParameterMax,
+                                    splitValueMaxCont,
+                                    splitValueMaxFactSize,
+                                    splitValueMaxFactPtr,
+                                    splitVectorPtr,
+                                    splitIndicator);
+        if (result) {
+          if (RF_splitRule == REGR_NRM) {
+            greedyMembr -> G_nR_h_l = sumLeftSqr;
+            greedyMembr -> G_nR_h_r = sumRghtSqr;
+          }
+          else {
+            greedyMembr -> G_nR_h_l = G_nR_h_l;
+            greedyMembr -> G_nR_h_r = G_nR_h_r;
+          }
+        }
+        if (factorFlag == FALSE) {
+          priorMembrIter = currentMembrIter - 1;
+        }
+      }  
+      unstackSplitVector(treeID,
+                         splitVectorSize,
+                         splitLength,
+                         factorFlag,
+                         deterministicSplitFlag,
+                         mwcpSizeAbsolute,
+                         splitVectorPtr);
+      unselectRandomCovariates(treeID,
+                               parent,
+                               repMembrSize,
+                               indxx,
+                               nonMissMembrSizeStatic,
+                               nonMissMembrIndx,
+                               multImpFlag);
+    }  
+    unstackRandomCovariates(treeID,
+                            parent, 
+                            randomCovariateIndex,
+                            cdf,
+                            cdfSort,
+                            density,
+                            densitySwap);
+    unstackSplitIndicator(repMembrSize,
+                          localSplitIndicator,
+                          splitVector);
+    if (RF_splitRule == REGR_SGS) {
+      free_uivector(membershipLeftComplement, 1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      free_uivector(membershipRightComplement, 1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      free_uivector(membershipLeft, 1, repMembrSize);
+      free_uivector(membershipRight, 1, repMembrSize);
+    }
+  }  
+  unstackPreSplit(preliminaryResult,
+                  repMembrSize,
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
+  result = summarizeSplitResult(*splitParameterMax,
+                                *splitValueMaxCont,
+                                *splitValueMaxFactSize,
+                                *splitValueMaxFactPtr,
+                                splitStatistic,
+                                deltaMax);
+  return result;
+}
+LatOptTreeObj *makeLatOptTreeObj() {
+  LatOptTreeObj *lotObj = (LatOptTreeObj*) gblock((size_t) sizeof(LatOptTreeObj));
+  lotObj -> risk  = dvector(1, RF_lotLag+1);
+  lotObj -> risk1 = dvector(1, RF_lotLag+1);
+  for (uint i = 1; i <= RF_lotLag; i++) {
+    lotObj -> risk[i]  = lotObj -> risk1[i] = 0.0;
+  }
+  lotObj -> firstIn = 0;
+  lotObj -> lastIn  = 0;
+  lotObj -> size = 0;
+  lotObj -> strikeout = 0;
+  lotObj -> firstOD = 0.0;
+  lotObj -> secondOD = 0.0;
+  lotObj -> treeSize = 1;
+  return lotObj;
+}
+void insertRisk(uint treeID, LatOptTreeObj *obj, double value) {
+  double normalizedValue;
+  if (RF_lotLag > 0) {
+    normalizedValue = value / RF_lotLag;
+    if (obj -> size < RF_lotLag) {
+      if (obj -> size == 0) {
+        (obj -> firstIn) ++;
+      }
+      else {
+      }
+      obj -> firstOD = obj -> firstOD + normalizedValue;
+      (obj -> size) ++;
+      (obj -> lastIn) ++;
+    }
+    else {
+      double saveFirstOD = obj -> firstOD; 
+      obj -> firstOD = obj -> firstOD - obj -> risk[obj -> firstIn] + normalizedValue;
+      obj -> strikeout = (obj -> strikeout) + (((obj -> firstOD - saveFirstOD)) > 0 ? 1:0);
+      if ((++ (obj -> lastIn)) > RF_lotLag) obj -> lastIn  = 1;
+      if ((++ (obj -> firstIn)) > RF_lotLag) obj -> firstIn = 1;
+    }
+    obj -> risk[obj -> lastIn] = normalizedValue;
+  }
+}
+void freeLatOptTreeObj(LatOptTreeObj *lotObj) {
+  free_dvector(lotObj -> risk,  1, RF_lotLag+1);
+  free_dvector(lotObj -> risk1, 1, RF_lotLag+1);
+  free_gblock(lotObj, (size_t) sizeof(LatOptTreeObj));
+}
+char locallyAdaptiveQuantileRegrSplit (uint       treeID,
+                                       Node      *parent,
+                                       uint      *repMembrIndx,
+                                       uint       repMembrSize,
+                                       uint      *allMembrIndx,
+                                       uint       allMembrSize,
+                                       uint      *splitParameterMax,
+                                       double    *splitValueMaxCont,
+                                       uint      *splitValueMaxFactSize,
+                                       uint     **splitValueMaxFactPtr,
+                                       double    *splitStatistic,
+                                       char     **splitIndicator,
+                                       GreedyObj *greedyMembr,
+                                       char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -10085,7 +11241,7 @@ char genericGreedySplit (uint    treeID,
   char deterministicSplitFlag;
   char preliminaryResult, result;
   double delta, deltaMax;
-  uint j, k;
+  uint j, jj, k, p;
   localSplitIndicator    = NULL;  
   splitVector            = NULL;  
   splitVectorSize        = 0;     
@@ -10095,30 +11251,16 @@ char genericGreedySplit (uint    treeID,
   *splitValueMaxFactPtr  = NULL;
   *splitValueMaxCont     = RF_nativeNaN;
   deltaMax               = RF_nativeNaN;
-  preliminaryResult = getPreSplitResultGreedy(treeID,
-                                              parent,
-                                              repMembrSize,
-                                              repMembrIndx,
-                                              & nonMissMembrSizeStatic,
-                                              & nonMissMembrIndxStatic,
-                                              & parent -> mean,
-                                              multImpFlag,
-                                              FALSE);
-  GreedyObj *greedyMember = findGreedyObj(greedyHead, parent);
-  char secondaryResult;
-  if (greedyMember == NULL) {
-    secondaryResult = TRUE;
-    greedyMember = greedyHead;
-  }
-  else {
-    if (greedyMember -> errorSG >= greedyMember -> errorSGP) {
-      secondaryResult = FALSE;
-    }
-    else {
-      secondaryResult = TRUE;
-    }
-  }
-  if (preliminaryResult && secondaryResult) {
+  preliminaryResult = getPreSplitResult(treeID,
+                                        parent,
+                                        repMembrSize,
+                                        repMembrIndx,
+                                        & nonMissMembrSizeStatic,
+                                        & nonMissMembrIndxStatic,
+                                        & parent -> mean,
+                                        multImpFlag,
+                                        FALSE);
+  if (preliminaryResult) {
     stackSplitIndicator(repMembrSize,
                         & localSplitIndicator,
                         & splitVector);
@@ -10134,8 +11276,39 @@ char genericGreedySplit (uint    treeID,
                           & density,
                           & densitySize,
                           & densitySwap);
+    uint responseClassCount = RF_quantileSize + 1;
+    uint *pseudoResponse = uivector(1, repMembrSize);
+    double *sortedResponse = dvector(1, repMembrSize);
+    double *quantileValue = dvector(1, RF_quantileSize);
+    uint *leftClassProp   = uivector(1, responseClassCount);
+    uint *rghtClassProp   = uivector(1, responseClassCount);
+    double sumLeft, sumRght, sumLeftSqr, sumRghtSqr;
+    double sumLeftMean, sumRghtMean;
+    double meanLeft, meanRght;
+    double centeredResponse, adaptiveResponse;
+    char centerFlag;
+    sumLeftMean = sumRghtMean = 0.0;  
+    delta = 0.0;  
     uint actualCovariateCount = 0;
     uint candidateCovariateCount = 0;
+    centerFlag = TRUE;
+    for (j = 1; j <= repMembrSize; j++) {
+      sortedResponse[j] = RF_response[treeID][1][ repMembrIndx[j]];
+    }
+    hpsort(sortedResponse, repMembrSize);
+    if (centerFlag) {
+      centeredResponse = 0.0;
+      for (j = 1; j <= repMembrSize; j++) {
+        centeredResponse += sortedResponse[j];
+      }
+      centeredResponse = centeredResponse / repMembrSize;
+      for (j = 1; j <= repMembrSize; j++) {
+        sortedResponse[j] = sortedResponse[j] - centeredResponse;
+      }
+    }
+    for (k = 1; k <= RF_quantileSize; k++) {
+      quantileValue[k] = quantile7(sortedResponse, repMembrSize, RF_quantile[k]);
+    }
     while (selectRandomCovariates(treeID,
                                   parent,
                                   repMembrIndx,
@@ -10174,95 +11347,110 @@ char genericGreedySplit (uint    treeID,
                                                  & deterministicSplitFlag,
                                                  & mwcpSizeAbsolute,
                                                  & splitVectorPtr);
+      if (factorFlag == FALSE) {
+        sumLeftMean = sumRghtMean = 0.0;
+        for (j = 1; j <= nonMissMembrSize; j++) {
+          sumRghtMean += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[j]] ];
+        }
+        for (j = 1; j <= repMembrSize; j++) {
+          localSplitIndicator[j] = RIGHT;
+        }
+      }
       for (j = 1; j < splitLength; j++) {
         if (factorFlag == TRUE) {
           priorMembrIter = 0;
           leftSize = 0;
         }
         virtuallySplitNode(treeID,
-                           factorFlag,
-                           mwcpSizeAbsolute,
-                           covariate,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndx,
-                           nonMissMembrSize,
-                           indxx,
-                           splitVectorPtr,
-                           j,
-                           localSplitIndicator,
-                           & leftSize,
-                           priorMembrIter,
-                           & currentMembrIter);
+                              factorFlag,
+                              mwcpSizeAbsolute,
+                              covariate,
+                              repMembrIndx,
+                              repMembrSize,
+                              nonMissMembrIndx,
+                              nonMissMembrSize,
+                              indxx,
+                              splitVectorPtr,
+                              j,
+                              localSplitIndicator,
+                              & leftSize,
+                              priorMembrIter,
+                              & currentMembrIter);
         rghtSize = nonMissMembrSize - leftSize;
-        uint *leftMembrIndx = uivector(1, leftSize);
-        uint *rghtMembrIndx = uivector(1, rghtSize);
-        uint leftItr, rghtItr;
-        leftItr = rghtItr = 0;
-        for (k = 1; k <= nonMissMembrSize; k++) {
-          if (localSplitIndicator[ nonMissMembrIndx[k] ] == LEFT) {
-            leftMembrIndx[++leftItr] = repMembrIndx[nonMissMembrIndx[k]];
-          }
-          else {
-            rghtMembrIndx[++rghtItr] = repMembrIndx[nonMissMembrIndx[k]];
-          }
-        }
-        double inbagLeftError = getInbagError(treeID, leftMembrIndx, leftSize);
-        double inbagRghtError = getInbagError(treeID, rghtMembrIndx, rghtSize);
-        uint *leftMembrCmplIndx = uivector(1, greedyHead -> size - leftSize);
-        uint *rghtMembrCmplIndx = uivector(1, greedyHead -> size - rghtSize);
-        leftItr = rghtItr = 0;
-        GreedyObj *greedyLink = greedyHead -> fwdLink;
-        while (greedyLink != NULL) {
-          if (parent != greedyLink -> parent) {
-            for (k = 1; k <= greedyLink -> size; k++) {
-              leftMembrCmplIndx[++leftItr] = greedyLink -> indx[k];
-              rghtMembrCmplIndx[++rghtItr] = greedyLink -> indx[k];
+        if (factorFlag == TRUE) {
+          sumLeftMean = sumRghtMean = 0.0;
+          for (k = 1; k <= nonMissMembrSize; k++) {
+            if (localSplitIndicator[ nonMissMembrIndx[k] ] == LEFT) {
+              sumLeftMean += RF_response[treeID][1][ repMembrIndx[ nonMissMembrIndx[k]] ];
+            }
+            else {
+              sumRghtMean += RF_response[treeID][1][ repMembrIndx[ nonMissMembrIndx[k]] ];
             }
           }
-          greedyLink = greedyLink -> fwdLink;
         }
-        for (k = 1; k <= rghtSize; k++) {
-          leftMembrCmplIndx[++leftItr] = rghtMembrIndx[k];
+        else {
+          for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
+            sumLeftMean += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ];
+            sumRghtMean -= RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ];
+          }
         }
-        for (k = 1; k <= leftSize; k++) {
-          rghtMembrCmplIndx[++rghtItr] = leftMembrIndx[k];
+        meanLeft = sumLeftMean / leftSize;
+        meanRght = sumRghtMean / rghtSize;
+        for (jj = 1; jj <= nonMissMembrSize; jj++) {
+          if (localSplitIndicator[ nonMissMembrIndx[jj] ] == LEFT)  {
+            adaptiveResponse = RF_response[treeID][1][ repMembrIndx[ nonMissMembrIndx[jj]] ] - meanLeft;
+          }
+          else {
+            adaptiveResponse = RF_response[treeID][1][ repMembrIndx[ nonMissMembrIndx[jj]] ] - meanRght;
+          }
+          for (k = 1; k <= RF_quantileSize; k++) {
+            if (adaptiveResponse <= quantileValue[k]) {
+              pseudoResponse[ nonMissMembrIndx[jj] ] = k;
+              k = RF_quantileSize;
+            }
+            else {
+              if (k == RF_quantileSize) {
+                pseudoResponse[ nonMissMembrIndx[jj] ] = k + 1;
+              }
+            }
+          }
         }
-        double inbagLeftCmplError = getInbagError(treeID, leftMembrCmplIndx, greedyHead -> size - leftSize);
-        double inbagRghtCmplError = getInbagError(treeID, rghtMembrCmplIndx, greedyHead -> size - rghtSize);
-        double deltaSGL = ((double) leftSize / (greedyHead -> size) * inbagLeftError) +
-          (( (double) (greedyHead -> size) - leftSize ) / (greedyHead -> size) * inbagLeftCmplError);
-        double deltaSGR = ((double) rghtSize / (greedyHead -> size) * inbagRghtError) +
-          (( (double) (greedyHead -> size) - rghtSize) / (greedyHead -> size) * inbagRghtCmplError);
-        delta = - (deltaSGL + deltaSGR) / 2;
-        free_uivector(leftMembrCmplIndx, 1, greedyHead -> size - leftSize);
-        free_uivector(rghtMembrCmplIndx, 1, greedyHead -> size - rghtSize);
-        if ((deltaSGL >= greedyMember -> errorSG) && (deltaSGR >= greedyMember -> errorSG)) {
-          delta = RF_nativeNaN;
+        for (p = 1; p <= responseClassCount; p++) {
+          leftClassProp[p] = rghtClassProp[p] = 0;
         }
-        free_uivector(leftMembrIndx, 1, leftSize);
-        free_uivector(rghtMembrIndx, 1, rghtSize);
-        char updateFlag = updateMaximumSplit(treeID,
-                                             parent,
-                                             delta,
-                                             candidateCovariateCount,
-                                             covariate,
-                                             j,
-                                             factorFlag,
-                                             mwcpSizeAbsolute,
-                                             repMembrSize,
-                                             localSplitIndicator,
-                                             & deltaMax,
-                                             splitParameterMax,
-                                             splitValueMaxCont,
-                                             splitValueMaxFactSize,
-                                             splitValueMaxFactPtr,
-                                             splitVectorPtr,
-                                             splitIndicator);
-        if (updateFlag) {
-          greedyMember -> errorSGL = deltaSGL;
-          greedyMember -> errorSGR = deltaSGR;
+        for (k = 1; k <= nonMissMembrSize; k++) {
+          if (localSplitIndicator[ nonMissMembrIndx[k] ] == LEFT)  {
+            leftClassProp[ pseudoResponse[ nonMissMembrIndx[k] ]] ++;
+          }
+          else {
+            rghtClassProp[ pseudoResponse[ nonMissMembrIndx[k] ]] ++;
+          }
         }
+        sumLeft = sumRght = 0.0;
+        for (p=1; p <= responseClassCount; p++) {
+          sumLeft += (double) upower(leftClassProp[p], 2);
+          sumRght += (double) upower(rghtClassProp[p], 2);
+        }
+        sumLeftSqr = sumLeft / leftSize;
+        sumRghtSqr  = sumRght / rghtSize;
+        delta = (sumLeftSqr + sumRghtSqr) / nonMissMembrSize;
+        updateMaximumSplit(treeID,
+                           parent,
+                           delta,
+                           candidateCovariateCount,
+                           covariate,
+                           j,
+                           factorFlag,
+                           mwcpSizeAbsolute,
+                           repMembrSize,
+                           localSplitIndicator,
+                           & deltaMax,
+                           splitParameterMax,
+                           splitValueMaxCont,
+                           splitValueMaxFactSize,
+                           splitValueMaxFactPtr,
+                           splitVectorPtr,
+                           splitIndicator);
         if (factorFlag == FALSE) {
           priorMembrIter = currentMembrIter - 1;
         }
@@ -10283,153 +11471,48 @@ char genericGreedySplit (uint    treeID,
                                multImpFlag);
     }  
     unstackRandomCovariates(treeID,
-                            parent, 
+                            parent,
                             randomCovariateIndex,
                             cdf,
                             cdfSort,
                             density,
                             densitySwap);
+    free_uivector (leftClassProp,   1, responseClassCount);
+    free_uivector (rghtClassProp,   1, responseClassCount);
+    free_uivector(pseudoResponse, 1, repMembrSize);
+    free_dvector(sortedResponse, 1, repMembrSize);
+    free_dvector(quantileValue, 1, RF_quantileSize);
     unstackSplitIndicator(repMembrSize,
                           localSplitIndicator,
                           splitVector);
   }  
+  unstackPreSplit(preliminaryResult,
+                  repMembrSize,
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
                                 *splitValueMaxFactPtr,
-                                splitStatistic,
-                                deltaMax);
+                                 splitStatistic,
+                                 deltaMax);
   return result;
 }
-GreedyObj *makeGreedyObj(Node *parent, uint size, uint *indx) {
-  GreedyObj *greedyObj = (GreedyObj*) gblock((size_t) sizeof(GreedyObj));
-  greedyObj -> parent = parent;
-  greedyObj -> fwdLink = NULL;
-  greedyObj -> bakLink = NULL;
-  greedyObj -> size = size;
-  greedyObj -> indx = uivector(1, size);
-  for (uint i = 1; i <= size; i++) {
-    greedyObj -> indx[i] = indx[i];
-  }
-  greedyObj -> errorSGP = DBL_MAX;
-  greedyObj -> errorSG  = DBL_MAX;
-  greedyObj -> errorSGL = DBL_MAX;
-  greedyObj -> errorSGR = DBL_MAX;
-  return greedyObj;
-}
-void freeGreedyObj(GreedyObj *node) {
-  if (node -> size > 0) {
-    free_uivector(node -> indx, 1, node -> size);
-  }
-  free_gblock(node, (size_t) sizeof(GreedyObj));
-}
-void freeGreedyObjList(GreedyObj *node) {
-  if (node -> fwdLink != NULL) {
-    freeGreedyObjList(node -> fwdLink);
-  }
-  freeGreedyObj(node);
-}
-GreedyObj *findGreedyObj(GreedyObj *head, Node *parent) {
-  GreedyObj *currentPtr = head;   
-  char foundFlag = FALSE;
-  while (!foundFlag) {
-    if (currentPtr != NULL) {
-      if(currentPtr -> parent == parent) {
-        foundFlag = TRUE;
-      }
-      else {
-        currentPtr = currentPtr -> fwdLink;
-      }
-    }
-    else {
-      foundFlag = TRUE;
-    }
-  }
-  return currentPtr;
-}
-char getPreSplitResultGreedy (uint      treeID,
-                              Node     *parent,
-                              uint      repMembrSize,
-                              uint     *repMembrIndx,
-                              uint     *nonMissMembrSize,
-                              uint    **nonMissMembrIndx,
-                              double   *preSplitMean,
-                              char      multImpFlag,
-                              char      multVarFlag) {
-  uint i;
-  char result;
-  result = TRUE;
-  (*nonMissMembrSize) = repMembrSize;
-  (*nonMissMembrIndx) = RF_identityMembershipIndex;
-    if (!multVarFlag) {
-      if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
-        uint q,k,m;
-        uint *evntProp = uivector(1, RF_eventTypeSize + 1);
-        for (q = 1; q <= RF_eventTypeSize + 1; q++) {
-          evntProp[q] = 0;
-        }
-        for (i = 1; i <= (*nonMissMembrSize); i++) {
-          m = (uint) RF_status[treeID][repMembrIndx[(*nonMissMembrIndx)[i]]];
-          if (m > 0) {
-            evntProp[RF_eventTypeIndex[m]] ++;
-          }
-          else {
-            evntProp[RF_eventTypeSize + 1] ++;
-          }
-        }
-        k = 0;
-        for (q = 1; q <= RF_eventTypeSize + 1; q++) {
-          if(evntProp[q] > 0) {
-            k ++;
-          }
-        }
-        if (k == 0) {
-          result = FALSE;
-        }
-        else {
-          if (k == 1) {
-            if (evntProp[RF_eventTypeSize + 1] > 0) {
-              result = FALSE;
-            }
-            else {
-              result = getVariance(repMembrSize,
-                                   repMembrIndx,
-                                   *nonMissMembrSize,
-                                   *nonMissMembrIndx,
-                                   RF_time[treeID],
-                                   preSplitMean,
-                                   NULL);
-            }
-          }
-        }
-        free_uivector(evntProp, 1, RF_eventTypeSize + 1);
-      }
-      else {
-        result = getVariance(repMembrSize,
-                             repMembrIndx,
-                             *nonMissMembrSize,
-                             *nonMissMembrIndx,
-                             RF_response[treeID][1],
-                             preSplitMean,
-                             NULL);
-      }
-    }
-  return result;
-}
-char quantileRegrSplit (uint    treeID,
-                    Node   *parent,
-                    uint   *repMembrIndx,
-                    uint    repMembrSize,
-                    uint   *allMembrIndx,
-                    uint    allMembrSize,
-                    uint   *splitParameterMax,
-                    double *splitValueMaxCont,
-                    uint   *splitValueMaxFactSize,
-                    uint  **splitValueMaxFactPtr,
-                    double *splitStatistic,
-                    char  **splitIndicator,
-                    char   *splitMIA,
-                    char    multImpFlag) {
+char quantileRegrSplit (uint       treeID,
+                        Node      *parent,
+                        uint      *repMembrIndx,
+                        uint       repMembrSize,
+                        uint      *allMembrIndx,
+                        uint       allMembrSize,
+                        uint      *splitParameterMax,
+                        double    *splitValueMaxCont,
+                        uint      *splitValueMaxFactSize,
+                        uint     **splitValueMaxFactPtr,
+                        double    *splitStatistic,
+                        char     **splitIndicator,
+                        GreedyObj *greedyMembr,
+                        char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -10552,7 +11635,7 @@ char quantileRegrSplit (uint    treeID,
         parentClassProp[p] = 0;
       }
       for (j = 1; j <= nonMissMembrSize; j++) {
-        parentClassProp[ pseudoResponse[ nonMissMembrIndx[indxx[j]] ]] ++;
+        parentClassProp[ pseudoResponse[ nonMissMembrIndx[j] ]] ++;
       }
       leftSize = 0;
       priorMembrIter = 0;
@@ -10567,7 +11650,7 @@ char quantileRegrSplit (uint    treeID,
                                                  & splitVectorPtr);
       if (factorFlag == FALSE) {
         for (j = 1; j <= nonMissMembrSize; j++) {
-          localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
+          localSplitIndicator[ nonMissMembrIndx[j] ] = RIGHT;
         }
         for (p = 1; p <= responseClassCount; p++) {
           rghtClassProp[p] = parentClassProp[p];
@@ -10600,8 +11683,8 @@ char quantileRegrSplit (uint    treeID,
             leftClassProp[p] = 0;
           }
           for (k = 1; k <= nonMissMembrSize; k++) {
-            if (localSplitIndicator[ nonMissMembrIndx[indxx[k]] ] == LEFT)  {
-              leftClassProp[ pseudoResponse[ nonMissMembrIndx[indxx[k]] ]] ++;
+            if (localSplitIndicator[ nonMissMembrIndx[k] ] == LEFT)  {
+              leftClassProp[ pseudoResponse[ nonMissMembrIndx[k] ]] ++;
             }
           }
           for (p=1; p <= responseClassCount; p++) {
@@ -10676,10 +11759,10 @@ char quantileRegrSplit (uint    treeID,
                           splitVector);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -10697,295 +11780,20 @@ double quantile7 (double *r, uint s, double p) {
   result = ((1.0 - delta) * r[i]) + (delta * r[i+1]);
   return result;
 }
-char classificationRankedPS (uint    treeID,
-                             Node   *parent,
-                             uint   *repMembrIndx,
-                             uint    repMembrSize,
-                             uint   *allMembrIndx,
-                             uint    allMembrSize,
-                             uint   *splitParameterMax,
-                             double *splitValueMaxCont,
-                             uint   *splitValueMaxFactSize,
-                             uint  **splitValueMaxFactPtr,
-                             double *splitStatistic,
-                             char  **splitIndicator,
-                             char   *splitMIA,
-                             char    multImpFlag) {
-  uint   *randomCovariateIndex;
-  uint    uniformSelectedSlot;
-  uint    uniformSize;
-  double *cdf;
-  uint    cdfSize;
-  uint   *cdfSort;
-  uint   *density;
-  uint    densitySize;
-  uint  **densitySwap;
-  uint     covariate;
-  double  *splitVector;
-  uint     splitVectorSize;
-  uint nonMissMembrSize, nonMissMembrSizeStatic;
-  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
-  uint   *indxx;
-  uint priorMembrIter, currentMembrIter;
-  uint leftSize, rghtSize;
-  char *localSplitIndicator;
-  uint splitLength;
-  void *splitVectorPtr;
-  char factorFlag;
-  uint mwcpSizeAbsolute;
-  char deterministicSplitFlag;
-  char preliminaryResult, result;
-  double delta, deltaMax;
-  uint j, k, p;
-  localSplitIndicator    = NULL;  
-  splitVector            = NULL;  
-  splitVectorSize        = 0;     
-  mwcpSizeAbsolute       = 0;     
-  *splitParameterMax     = 0;
-  *splitValueMaxFactSize = 0;
-  *splitValueMaxFactPtr  = NULL;
-  *splitValueMaxCont     = RF_nativeNaN;
-  deltaMax               = RF_nativeNaN;
-  preliminaryResult = getPreSplitResult(treeID,
-                                        parent,
-                                        repMembrSize,
-                                        repMembrIndx,
-                                        & nonMissMembrSizeStatic,
-                                        & nonMissMembrIndxStatic,
-                                        & parent -> mean,
-                                        multImpFlag,
-                                        FALSE);
-  if (preliminaryResult) {
-    stackSplitIndicator(repMembrSize,
-                        & localSplitIndicator,
-                        & splitVector);
-    stackRandomCovariates(treeID,
-                          parent,
-                          repMembrSize,
-                          multImpFlag,
-                          & randomCovariateIndex,
-                          & uniformSize,
-                          & cdf,
-                          & cdfSize,
-                          & cdfSort,
-                          & density,
-                          & densitySize,
-                          & densitySwap);
-    uint responseClassCount = RF_classLevelSize[1];
-    uint *parentClassProp = uivector(1, responseClassCount);
-    uint *leftClassProp   = uivector(1, responseClassCount);
-    uint *rghtClassProp   = uivector(1, responseClassCount);
-    double *piHatLeft     = dvector(1, responseClassCount);
-    double *piHatRght     = dvector(1, responseClassCount);
-    double *sumPiHatLeft  = dvector(1, responseClassCount);
-    double *sumPiHatRght  = dvector(1, responseClassCount);
-    double sumLeft, sumRght;
-    delta = 0;  
-    double indicator;
-    uint actualCovariateCount = 0;
-    uint candidateCovariateCount = 0;
-    while (selectRandomCovariates(treeID,
-                                  parent,
-                                  repMembrIndx,
-                                  repMembrSize,
-                                  randomCovariateIndex,
-                                  & uniformSize,
-                                  & uniformSelectedSlot,
-                                  cdf,
-                                  & cdfSize,
-                                  cdfSort,
-                                  density,
-                                  & densitySize,
-                                  densitySwap,
-                                  & covariate,
-                                  & actualCovariateCount,
-                                  & candidateCovariateCount,
-                                  splitVector,
-                                  & splitVectorSize,
-                                  & indxx,
-                                  nonMissMembrSizeStatic,
-                                  nonMissMembrIndxStatic,
-                                  & nonMissMembrSize,
-                                  & nonMissMembrIndx,
-                                  multImpFlag)) {
-      for (j = 1; j <= repMembrSize; j++) {
-        localSplitIndicator[j] = NEITHER;
-      }
-      for (p=1; p <= responseClassCount; p++) {
-        parentClassProp[p] = 0;
-      }
-      for (j = 1; j <= nonMissMembrSize; j++) {
-        parentClassProp[RF_classLevelIndex[1][ (uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[j]]] ]]] ++;
-      }
-      leftSize = 0;
-      priorMembrIter = 0;
-      splitLength = stackAndConstructSplitVector(treeID,
-                                                 repMembrSize,
-                                                 covariate,
-                                                 splitVector,
-                                                 splitVectorSize,
-                                                 & factorFlag,
-                                                 & deterministicSplitFlag,
-                                                 & mwcpSizeAbsolute,
-                                                 & splitVectorPtr);
-      if (factorFlag == FALSE) {
-        for (j = 1; j <= nonMissMembrSize; j++) {
-          localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
-        }
-        for (p = 1; p <= responseClassCount; p++) {
-          rghtClassProp[p] = parentClassProp[p];
-          leftClassProp[p] = 0;
-        }
-      }
-      for (j = 1; j < splitLength; j++) {
-        if (factorFlag == TRUE) {
-          priorMembrIter = 0;
-          leftSize = 0;
-        }
-        virtuallySplitNode(treeID,
-                              factorFlag,
-                              mwcpSizeAbsolute,
-                              covariate,
-                              repMembrIndx,
-                              repMembrSize,
-                              nonMissMembrIndx,
-                              nonMissMembrSize,
-                              indxx,
-                              splitVectorPtr,
-                              j,
-                              localSplitIndicator,
-                              & leftSize,
-                              priorMembrIter,
-                              & currentMembrIter);
-        rghtSize = nonMissMembrSize - leftSize;
-        if (factorFlag == TRUE) {
-          for (p=1; p <= responseClassCount; p++) {
-            leftClassProp[p] = 0;
-          }
-          for (k = 1; k <= nonMissMembrSize; k++) {
-            if (localSplitIndicator[ nonMissMembrIndx[indxx[k]] ] == LEFT)  {
-              leftClassProp[RF_classLevelIndex[1][ (uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] ++;
-            }
-          }
-          for (p=1; p <= responseClassCount; p++) {
-            rghtClassProp[p] = parentClassProp[p] - leftClassProp[p];
-          }
-        }
-        else {
-          for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
-            leftClassProp[RF_classLevelIndex[1][(uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] ++;
-            rghtClassProp[RF_classLevelIndex[1][(uint) RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] --;
-          }
-        }
-        for (p = 1; p <= responseClassCount; p++) {
-          piHatLeft[p] = (double) leftClassProp[p] / leftSize;
-          piHatRght[p] = (double) rghtClassProp[p] / rghtSize;
-        }
-        sumPiHatLeft[1] += piHatLeft[1];
-        sumPiHatRght[1] += piHatRght[1];
-        for (p = 2; p <= responseClassCount; p++) {
-          sumPiHatLeft[p] = sumPiHatLeft[p-1] + piHatLeft[p];
-          sumPiHatRght[p] = sumPiHatRght[p-1] + piHatRght[p]; 
-        }
-        sumLeft = sumRght = 0;
-        for (k = 1; k <= nonMissMembrSize; k++) {
-          for (p = 1; p <= responseClassCount - 1; p++) {
-            if (RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ] <= p) {
-              indicator = 1;
-            }
-            else {
-              indicator = 0;
-            }
-            if (localSplitIndicator[ nonMissMembrIndx[k] ] == LEFT) {              
-              sumLeft += pow(sumPiHatLeft[p] - indicator, 2.0);
-            }
-            else {
-              sumRght += pow(sumPiHatRght[p] - indicator, 2.0);
-            }
-          }
-        } 
-        delta = - (sumLeft + sumRght);
-        updateMaximumSplit(treeID,
-                           parent,
-                           delta,
-                           candidateCovariateCount,
-                           covariate,
-                           j,
-                           factorFlag,
-                           mwcpSizeAbsolute,
-                           repMembrSize,
-                           localSplitIndicator,
-                           & deltaMax,
-                           splitParameterMax,
-                           splitValueMaxCont,
-                           splitValueMaxFactSize,
-                           splitValueMaxFactPtr,
-                           splitVectorPtr,
-                           splitIndicator);
-        if (factorFlag == FALSE) {
-          priorMembrIter = currentMembrIter - 1;
-        }
-      }  
-      unstackSplitVector(treeID,
-                         splitVectorSize,
-                         splitLength,
-                         factorFlag,
-                         deterministicSplitFlag,
-                         mwcpSizeAbsolute,
-                         splitVectorPtr);
-      unselectRandomCovariates(treeID,
-                               parent,
-                               repMembrSize,
-                               indxx,
-                               nonMissMembrSizeStatic,
-                               nonMissMembrIndx,
-                               multImpFlag);
-    }  
-    unstackRandomCovariates(treeID,
-                            parent,
-                            randomCovariateIndex,
-                            cdf,
-                            cdfSort,
-                            density,
-                            densitySwap);
-    free_uivector (parentClassProp, 1, responseClassCount);
-    free_uivector (leftClassProp,   1, responseClassCount);
-    free_uivector (rghtClassProp,   1, responseClassCount);
-    free_dvector(piHatLeft,    1, responseClassCount);
-    free_dvector(piHatRght,    1, responseClassCount);
-    free_dvector(sumPiHatLeft, 1, responseClassCount);
-    free_dvector(sumPiHatRght, 1, responseClassCount);
-    unstackSplitIndicator(repMembrSize,
-                          localSplitIndicator,
-                          splitVector);
-  }  
-  unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE,  
-                  repMembrSize,
-                  nonMissMembrIndxStatic);
-  result = summarizeSplitResult(*splitParameterMax,
-                                *splitValueMaxCont,
-                                *splitValueMaxFactSize,
-                                *splitValueMaxFactPtr,
-                                 splitStatistic,
-                                 deltaMax);
-  return result;
-}
-char regressionXwghtSplit (uint    treeID,
-                           Node   *parent,
-                           uint   *repMembrIndx,
-                           uint    repMembrSize,
-                           uint   *allMembrIndx,
-                           uint    allMembrSize,
-                           uint   *splitParameterMax,
-                           double *splitValueMaxCont,
-                           uint   *splitValueMaxFactSize,
-                           uint  **splitValueMaxFactPtr,
-                           double *splitStatistic,
-                           char  **splitIndicator,
-                           char   *splitMIA,
-                           char    multImpFlag) {
+char regressionXwghtSplit (uint       treeID,
+                           Node      *parent,
+                           uint      *repMembrIndx,
+                           uint       repMembrSize,
+                           uint      *allMembrIndx,
+                           uint       allMembrSize,
+                           uint      *splitParameterMax,
+                           double    *splitValueMaxCont,
+                           uint      *splitValueMaxFactSize,
+                           uint     **splitValueMaxFactPtr,
+                           double    *splitStatistic,
+                           char     **splitIndicator,
+                           GreedyObj *greedyMembr,
+                           char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -11047,9 +11855,7 @@ char regressionXwghtSplit (uint    treeID,
                           & densitySize,
                           & densitySwap);
     double sumLeft, sumRght, sumLeftSqr, sumRghtSqr;
-    double sumLeftTemp, sumRghtTemp, sumLeftSqrTemp, sumRghtSqrTemp;
     sumLeft = sumRght = sumLeftSqr = sumRghtSqr = 0;                  
-    sumLeftTemp = sumRghtTemp = sumLeftSqrTemp = sumRghtSqrTemp = 0;  
     delta = 0;                                                        
     uint actualCovariateCount = 0;
     uint candidateCovariateCount = 0;
@@ -11093,21 +11899,8 @@ char regressionXwghtSplit (uint    treeID,
                                                  & splitVectorPtr);
       if (factorFlag == FALSE) {
         sumLeft = sumLeftSqr = sumRght = sumRghtSqr = 0.0;
-        switch(RF_splitRule) {
-        case REGR_WT_OFF:
-        case REGR_WT_HVY:
-          sumRght = sumRghtSqr = 0.0;
-          for (j = 1; j <= nonMissMembrSize; j++) {
-            sumRght += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[j]] ];
-            sumRghtSqr += pow(RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[j]] ], 2.0);
-          }
-          break;
-        default:
-          sumRght = 0.0;
-          for (j = 1; j <= nonMissMembrSize; j++) {
-            sumRght += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[j]] ];
-          }
-          break;
+        for (j = 1; j <= nonMissMembrSize; j++) {
+          sumRght += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[j]] ];
         }
         for (j = 1; j <= nonMissMembrSize; j++) {
           localSplitIndicator[ nonMissMembrIndx[j] ] = RIGHT;
@@ -11135,75 +11928,25 @@ char regressionXwghtSplit (uint    treeID,
                            & currentMembrIter);
         rghtSize = nonMissMembrSize - leftSize;
         if (factorFlag == TRUE) {
-          switch (RF_splitRule) {
-          case REGR_WT_OFF:
-          case REGR_WT_HVY:
-            sumLeft = sumRght = 0.0;
-            sumLeftSqr = sumRghtSqr = 0.0;
-            for (k = 1; k <= nonMissMembrSize; k++) {
-              if (localSplitIndicator[ nonMissMembrIndx[k] ] == LEFT) {
-                sumLeft    += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ];
-                sumLeftSqr += pow(RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ], 2.0);
-              }
-              else {
-                sumRght    += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ];
-                sumRghtSqr += pow(RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ], 2.0);
-              }
-            } 
-            break;
-          default:
-            sumLeft = sumRght = 0.0;
-            for (k = 1; k <= nonMissMembrSize; k++) {
-              if (localSplitIndicator[ nonMissMembrIndx[k] ] == LEFT) {
-                sumLeft += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ];
-              }
-              else {
-                sumRght += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ];
-              }
-            } 
-            break;
-          }
+          sumLeft = sumRght = 0.0;
+          for (k = 1; k <= nonMissMembrSize; k++) {
+            if (localSplitIndicator[ nonMissMembrIndx[k] ] == LEFT) {
+              sumLeft += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ];
+            }
+            else {
+              sumRght += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[k]] ];
+            }
+          } 
         }
         else {
-          switch(RF_splitRule) {
-          case REGR_WT_OFF:
-          case REGR_WT_HVY:
-            for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
-              sumLeft    += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ];
-              sumLeftSqr += pow(RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ], 2.0);
-              sumRght    -= RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ];
-              sumRghtSqr -= pow(RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ], 2.0);
-            }
-            break;
-          default:
-            for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
-              sumLeft += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ];
-              sumRght -= RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ];
-            }
-            break;
+          for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
+            sumLeft += RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ];
+            sumRght -= RF_response[treeID][1][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ];
           }
         }
-        switch(RF_splitRule) {
-        case REGR_WT_OFF:
-          sumLeftTemp = pow(sumLeft, 2.0) / pow(leftSize, 2.0);
-          sumRghtTemp = pow(sumRght, 2.0) / pow(rghtSize, 2.0);
-          sumLeftSqrTemp = sumLeftSqr / leftSize;
-          sumRghtSqrTemp = sumRghtSqr / rghtSize;
-          delta = sumLeftTemp + sumRghtTemp - sumLeftSqrTemp - sumRghtSqrTemp;
-          break;
-        case REGR_WT_HVY:
-          sumLeftTemp = pow(sumLeft, 2.0) / pow (leftSize + rghtSize, 2.0);
-          sumRghtTemp = pow(sumRght, 2.0) / pow (leftSize + rghtSize, 2.0);
-          sumLeftSqrTemp = sumLeftSqr * leftSize / pow (leftSize + rghtSize, 2.0);
-          sumRghtSqrTemp = sumRghtSqr * rghtSize / pow (leftSize + rghtSize, 2.0);
-          delta = sumLeftTemp + sumRghtTemp - sumLeftSqrTemp - sumRghtSqrTemp;
-          break;
-        default:
-          sumLeftSqr = pow(sumLeft, 2.0) / leftSize;
-          sumRghtSqr = pow(sumRght, 2.0) / rghtSize;
-          delta = sumLeftSqr + sumRghtSqr;
-          break;
-        }
+        sumLeftSqr = pow(sumLeft, 2.0) / leftSize;
+        sumRghtSqr = pow(sumRght, 2.0) / rghtSize;
+        delta = sumLeftSqr + sumRghtSqr;
         updateMaximumSplit(treeID,
                            parent,
                            delta,
@@ -11252,10 +11995,10 @@ char regressionXwghtSplit (uint    treeID,
                           splitVector);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -11264,20 +12007,20 @@ char regressionXwghtSplit (uint    treeID,
                                 deltaMax);
   return result;
 }
-char logRankNCR (uint    treeID,
-                 Node   *parent,
-                 uint   *repMembrIndx,
-                 uint    repMembrSize,
-                 uint   *allMembrIndx,
-                 uint    allMembrSize,
-                 uint   *splitParameterMax,
-                 double *splitValueMaxCont,
-                 uint   *splitValueMaxFactSize,
-                 uint  **splitValueMaxFactPtr,
-                 double *splitStatistic,
-                 char  **splitIndicator,
-                 char   *splitMIA,
-                 char    multImpFlag) {
+char logRankNCR (uint       treeID,
+                 Node      *parent,
+                 uint      *repMembrIndx,
+                 uint       repMembrSize,
+                 uint      *allMembrIndx,
+                 uint       allMembrSize,
+                 uint      *splitParameterMax,
+                 double    *splitValueMaxCont,
+                 uint      *splitValueMaxFactSize,
+                 uint     **splitValueMaxFactPtr,
+                 double    *splitStatistic,
+                 char     **splitIndicator,
+                 GreedyObj *greedyMembr,
+                 char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -11722,10 +12465,10 @@ char logRankNCR (uint    treeID,
                           splitVector);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE, 
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE); 
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -11734,20 +12477,20 @@ char logRankNCR (uint    treeID,
                                  deltaMax);
   return result;
 }
-char logRankCR (uint    treeID,
-                Node   *parent,
-                uint   *repMembrIndx,
-                uint    repMembrSize,
-                uint   *allMembrIndx,
-                uint    allMembrSize,
-                uint   *splitParameterMax,
-                double *splitValueMaxCont,
-                uint   *splitValueMaxFactSize,
-                uint  **splitValueMaxFactPtr,
-                double *splitStatistic,
-                char  **splitIndicator,
-                char   *splitMIA,
-                char    multImpFlag) {
+char logRankCR (uint       treeID,
+                Node      *parent,
+                uint      *repMembrIndx,
+                uint       repMembrSize,
+                uint      *allMembrIndx,
+                uint       allMembrSize,
+                uint      *splitParameterMax,
+                double    *splitValueMaxCont,
+                uint      *splitValueMaxFactSize,
+                uint     **splitValueMaxFactPtr,
+                double    *splitStatistic,
+                char     **splitIndicator,
+                GreedyObj *greedyMembr,
+                char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -11838,16 +12581,8 @@ char logRankCR (uint    treeID,
                            & nodeRightAtRisk);
       nodeParentEventCR = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
       nodeLeftEventCR = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
-      switch(RF_splitRule) {
-      case SURV_CR_LAU:
-        nodeParentInclusiveAtRisk = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
-        nodeLeftInclusiveAtRisk = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
-        break;
-      case SURV_CR_LOG:
-        break;
-      default:
-        break;
-      }
+      nodeParentInclusiveAtRisk = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
+      nodeLeftInclusiveAtRisk = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
     }
     uint actualCovariateCount = 0;
     uint candidateCovariateCount = 0;
@@ -11905,17 +12640,9 @@ char logRankCR (uint    treeID,
           nodeParentEventCR = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
           nodeLeftEventCR = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
         }
-        switch(RF_splitRule) {
-        case SURV_CR_LAU:
-          if (localEventTimeSize > 0) {
-            nodeParentInclusiveAtRisk = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
-            nodeLeftInclusiveAtRisk = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
-          }
-          break;
-        case SURV_CR_LOG:
-          break;
-        default:
-          break;
+        if (localEventTimeSize > 0) {
+          nodeParentInclusiveAtRisk = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
+          nodeLeftInclusiveAtRisk = uimatrix(1, RF_eventTypeSize, 1, localEventTimeSize);
         }
       }
       if (localEventTimeSize > 0) {
@@ -11943,27 +12670,19 @@ char logRankCR (uint    treeID,
             nodeParentEventCR[RF_eventTypeIndex[(uint) RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]][tIndx] ++;
           }
         }
-        switch(RF_splitRule) {
-        case SURV_CR_LAU:
-          for (m = 1; m <= localEventTimeSize; m++) {
-            for (q = 1; q <= RF_eventTypeSize; q++) {
-              if (RF_crWeight[q] > 0) {
-                nodeParentInclusiveAtRisk[q][m] = nodeParentAtRisk[m];
-                for (s = 1; s < m; s++) {
-                  for (r = 1; r <= RF_eventTypeSize; r++) {
-                    if (q != r) {
-                      nodeParentInclusiveAtRisk[q][m]  += nodeParentEventCR[r][s];
-                    }
+        for (m = 1; m <= localEventTimeSize; m++) {
+          for (q = 1; q <= RF_eventTypeSize; q++) {
+            if (RF_crWeight[q] > 0) {
+              nodeParentInclusiveAtRisk[q][m] = nodeParentAtRisk[m];
+              for (s = 1; s < m; s++) {
+                for (r = 1; r <= RF_eventTypeSize; r++) {
+                  if (q != r) {
+                    nodeParentInclusiveAtRisk[q][m]  += nodeParentEventCR[r][s];
                   }
                 }
               }
             }
           }
-          break;
-        case SURV_CR_LOG:
-          break;
-        default:
-          break;
         }
         if (factorFlag == FALSE) {
           for (j = 1; j <= nonMissMembrSize; j++) {
@@ -12038,76 +12757,40 @@ char logRankCR (uint    treeID,
               }
             }
           }
-          switch(RF_splitRule) {
-          case SURV_CR_LAU:
-            for (m=1; m <= localEventTimeSize; m++) {
-              for (q = 1; q <= RF_eventTypeSize; q++) {
-                if (RF_crWeight[q] > 0) {
-                  nodeLeftInclusiveAtRisk[q][m] = nodeLeftAtRisk[m];
-                  for (s = 1; s < m; s++) {
-                    for (r = 1; r <= RF_eventTypeSize; r++) {
-                      if (q != r) {
-                        nodeLeftInclusiveAtRisk[q][m] += nodeLeftEventCR[r][s];
-                      }
+          for (m=1; m <= localEventTimeSize; m++) {
+            for (q = 1; q <= RF_eventTypeSize; q++) {
+              if (RF_crWeight[q] > 0) {
+                nodeLeftInclusiveAtRisk[q][m] = nodeLeftAtRisk[m];
+                for (s = 1; s < m; s++) {
+                  for (r = 1; r <= RF_eventTypeSize; r++) {
+                    if (q != r) {
+                      nodeLeftInclusiveAtRisk[q][m] += nodeLeftEventCR[r][s];
                     }
                   }
                 }
               }
             }
-            break;
-          case SURV_CR_LOG:
-            break;
-          default:
-            break;
           }
           delta = deltaNum = deltaDen =  0.0;
-          switch(RF_splitRule) {
-          case SURV_CR_LAU:
-            for (q = 1; q <= RF_eventTypeSize; q++) {
-              if (RF_crWeight[q] > 0) {
-                deltaSubNum = 0;
-                for (m = 1; m <= localEventTimeSize; m++) {
-                  deltaSubNum = deltaSubNum + (nodeLeftEventCR[q][m] - (nodeParentEventCR[q][m] * ((double) nodeLeftInclusiveAtRisk[q][m] / nodeParentInclusiveAtRisk[q][m])));
-                }
-                deltaNum = deltaNum + (RF_crWeight[q] * deltaSubNum);
-                deltaSubDen = 0;
-                for (m = 1; m <= localEventTimeSize; m++) {
-                  if (nodeParentAtRisk[m] >= 2) {
-                    deltaSubDen = deltaSubDen  + (
-                                                  (nodeParentEventCR[q][m] * ((double) nodeLeftInclusiveAtRisk[q][m] / nodeParentInclusiveAtRisk[q][m])) *
-                                                  (1.0 - ((double) nodeLeftInclusiveAtRisk[q][m] / nodeParentInclusiveAtRisk[q][m])) *
-                                                  ((double) (nodeParentInclusiveAtRisk[q][m] - nodeParentEventCR[q][m]) / (nodeParentInclusiveAtRisk[q][m] - 1))
-                                                  );
-                  }
-                }
-                deltaDen = deltaDen + (RF_crWeight[q] * RF_crWeight[q] * deltaSubDen);
+          for (q = 1; q <= RF_eventTypeSize; q++) {
+            if (RF_crWeight[q] > 0) {
+              deltaSubNum = 0;
+              for (m = 1; m <= localEventTimeSize; m++) {
+                deltaSubNum = deltaSubNum + (nodeLeftEventCR[q][m] - (nodeParentEventCR[q][m] * ((double) nodeLeftInclusiveAtRisk[q][m] / nodeParentInclusiveAtRisk[q][m])));
               }
-            }
-            break;
-          case SURV_CR_LOG:
-            for (q = 1; q <= RF_eventTypeSize; q++) {
-              if (RF_crWeight[q] > 0) {
-                deltaSubNum = 0;
-                for (m=1; m <= localEventTimeSize; m++) {
-                  deltaSubNum = deltaSubNum + (nodeLeftEventCR[q][m] - (nodeParentEventCR[q][m] * ((double) nodeLeftAtRisk[m] / nodeParentAtRisk[m])));
+              deltaNum = deltaNum + (RF_crWeight[q] * deltaSubNum);
+              deltaSubDen = 0;
+              for (m = 1; m <= localEventTimeSize; m++) {
+                if (nodeParentAtRisk[m] >= 2) {
+                  deltaSubDen = deltaSubDen  + (
+                                                (nodeParentEventCR[q][m] * ((double) nodeLeftInclusiveAtRisk[q][m] / nodeParentInclusiveAtRisk[q][m])) *
+                                                (1.0 - ((double) nodeLeftInclusiveAtRisk[q][m] / nodeParentInclusiveAtRisk[q][m])) *
+                                                ((double) (nodeParentInclusiveAtRisk[q][m] - nodeParentEventCR[q][m]) / (nodeParentInclusiveAtRisk[q][m] - 1))
+                                                );
                 }
-                deltaNum = deltaNum + (RF_crWeight[q] * deltaSubNum);
-                deltaSubDen = 0;
-                for (m = 1; m <= localEventTimeSize; m++) {
-                  if (nodeParentAtRisk[m] >= 2) {
-                    deltaSubDen = deltaSubDen  + (
-                                                  (nodeParentEventCR[q][m] * ((double) nodeLeftAtRisk[m] / nodeParentAtRisk[m])) *
-                                                  (1.0 - ((double) nodeLeftAtRisk[m] / nodeParentAtRisk[m])) *
-                                                  ((double) (nodeParentAtRisk[m] - nodeParentEventCR[q][m]) / (nodeParentAtRisk[m] - 1))
-                                                  );
-                  }
-                }
-                deltaDen = deltaDen + (RF_crWeight[q] * RF_crWeight[q] * deltaSubDen);
               }
+              deltaDen = deltaDen + (RF_crWeight[q] * RF_crWeight[q] * deltaSubDen);
             }
-            break;
-          default:
-            break;
           }
           deltaNum = fabs(deltaNum);
           deltaDen = sqrt(deltaDen);
@@ -12176,17 +12859,9 @@ char logRankCR (uint    treeID,
           free_uimatrix(nodeParentEventCR, 1, RF_eventTypeSize, 1, localEventTimeSize);
           free_uimatrix(nodeLeftEventCR, 1, RF_eventTypeSize, 1, localEventTimeSize);
         }
-        switch(RF_splitRule) {
-        case SURV_CR_LAU:
-          if (localEventTimeSize > 0) {
-            free_uimatrix(nodeParentInclusiveAtRisk, 1, RF_eventTypeSize, 1, localEventTimeSize);
-            free_uimatrix(nodeLeftInclusiveAtRisk, 1, RF_eventTypeSize, 1, localEventTimeSize);
-          }
-          break;
-        case SURV_CR_LOG:
-          break;
-        default:
-          break;
+        if (localEventTimeSize > 0) {
+          free_uimatrix(nodeParentInclusiveAtRisk, 1, RF_eventTypeSize, 1, localEventTimeSize);
+          free_uimatrix(nodeLeftInclusiveAtRisk, 1, RF_eventTypeSize, 1, localEventTimeSize);
         }
       }
     }  
@@ -12204,16 +12879,8 @@ char logRankCR (uint    treeID,
                        nodeRightAtRisk);
       free_uimatrix(nodeParentEventCR, 1, RF_eventTypeSize, 1, localEventTimeSize);
       free_uimatrix(nodeLeftEventCR, 1, RF_eventTypeSize, 1, localEventTimeSize);
-      switch(RF_splitRule) {
-      case SURV_CR_LAU:
-        free_uimatrix(nodeParentInclusiveAtRisk, 1, RF_eventTypeSize, 1, localEventTimeSize);
-        free_uimatrix(nodeLeftInclusiveAtRisk, 1, RF_eventTypeSize, 1, localEventTimeSize);
-        break;
-      case SURV_CR_LOG:
-        break;
-      default:
-        break;
-      }
+      free_uimatrix(nodeParentInclusiveAtRisk, 1, RF_eventTypeSize, 1, localEventTimeSize);
+      free_uimatrix(nodeLeftInclusiveAtRisk, 1, RF_eventTypeSize, 1, localEventTimeSize);
     }
     unstackSplitIndicator(repMembrSize,
                           localSplitIndicator,
@@ -12227,10 +12894,10 @@ char logRankCR (uint    treeID,
                             densitySwap);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -12239,2524 +12906,20 @@ char logRankCR (uint    treeID,
                                 deltaMax);
   return result;
 }
-char l2Impute (uint    treeID,
-               Node   *parent,
-               uint   *repMembrIndx,
-               uint    repMembrSize,
-               uint   *allMembrIndx,
-               uint    allMembrSize,
-               uint   *splitParameterMax,
-               double *splitValueMaxCont,
-               uint   *splitValueMaxFactSize,
-               uint  **splitValueMaxFactPtr,
-               double *splitStatistic,
-               char  **splitIndicator,
-               char   *splitMIA,
-               char    multImpFlag) {
-  uint   *randomCovariateIndex;
-  uint    uniformSelectedSlot;
-  uint    uniformSize;
-  double *cdf;
-  uint    cdfSize;
-  uint   *cdfSort;
-  uint   *density;
-  uint    densitySize;
-  uint  **densitySwap;
-  uint     covariate;
-  double  *splitVector;
-  uint     splitVectorSize;
-  uint nonMissMembrSize, nonMissMembrSizeStatic;
-  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
-  uint   *indxx;
-  uint priorMembrIter, currentMembrIter;
-  uint leftSize;
-  char *localSplitIndicator;
-  uint splitLength;
-  void *splitVectorPtr;
-  char factorFlag;
-  uint mwcpSizeAbsolute;
-  char deterministicSplitFlag;
-  char preliminaryResult, result;
-  double delta, deltaMax;
-  uint j, k, m;
-  localSplitIndicator    = NULL;  
-  splitVector            = NULL;  
-  splitVectorSize        = 0;     
-  mwcpSizeAbsolute       = 0;     
-  *splitParameterMax     = 0;
-  *splitValueMaxFactSize = 0;
-  *splitValueMaxFactPtr  = NULL;
-  *splitValueMaxCont     = RF_nativeNaN;
-  deltaMax               = RF_nativeNaN;
-  preliminaryResult = getPreSplitResult(treeID,
-                                        parent,
-                                        repMembrSize,
-                                        repMembrIndx,
-                                        & nonMissMembrSizeStatic,
-                                        & nonMissMembrIndxStatic,
-                                        & parent -> mean,
-                                        multImpFlag,
-                                        FALSE);
-  if (preliminaryResult) {
-    stackSplitIndicator(repMembrSize,
-                        & localSplitIndicator,
-                        & splitVector);
-    stackRandomCovariates(treeID,
-                          parent,
-                          repMembrSize,
-                          multImpFlag,
-                          & randomCovariateIndex,
-                          & uniformSize,
-                          & cdf,
-                          & cdfSize,
-                          & cdfSort,
-                          & density,
-                          & densitySize,
-                          & densitySwap);
-    uint *localEventTimeCount, *localEventTimeIndex;
-    uint  localEventTimeSize;
-    uint *nodeParentEvent,  *nodeLeftEvent,  *nodeRightEvent;
-    uint *nodeParentAtRisk, *nodeLeftAtRisk, *nodeRightAtRisk;
-    double deltaNum, deltaDen;
-    uint   tIndx;
-    localEventTimeSize = 0;  
-    delta = deltaNum = 0;  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndxStatic,
-                           nonMissMembrSizeStatic,
-                           TRUE,
-                           & localEventTimeCount,
-                           & localEventTimeIndex,
-                           & localEventTimeSize,
-                           & nodeParentEvent,
-                           & nodeParentAtRisk,
-                           & nodeLeftEvent,
-                           & nodeLeftAtRisk,
-                           & nodeRightEvent,
-                           & nodeRightAtRisk);
-    }
-    uint actualCovariateCount = 0;
-    uint candidateCovariateCount = 0;
-    while (selectRandomCovariates(treeID,
-                                  parent,
-                                  repMembrIndx,
-                                  repMembrSize,
-                                  randomCovariateIndex,
-                                  & uniformSize,
-                                  & uniformSelectedSlot,
-                                  cdf,
-                                  & cdfSize,
-                                  cdfSort,
-                                  density,
-                                  & densitySize,
-                                  densitySwap,
-                                  & covariate,
-                                  & actualCovariateCount,
-                                  & candidateCovariateCount,
-                                  splitVector,
-                                  & splitVectorSize,
-                                  & indxx,
-                                  nonMissMembrSizeStatic,
-                                  nonMissMembrIndxStatic,
-                                  & nonMissMembrSize,
-                                  & nonMissMembrIndx,
-                                  multImpFlag)) {
-      splitLength = stackAndConstructSplitVector(treeID,
-                                                 repMembrSize,
-                                                 covariate,
-                                                 splitVector,
-                                                 splitVectorSize,
-                                                 & factorFlag,
-                                                 & deterministicSplitFlag,
-                                                 & mwcpSizeAbsolute,
-                                                 & splitVectorPtr);
-      if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-        stackAndGetSplitSurv(treeID,
-                             parent,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             TRUE,
-                             & localEventTimeCount,
-                             & localEventTimeIndex,
-                             & localEventTimeSize,
-                             & nodeParentEvent,
-                             & nodeParentAtRisk,
-                             & nodeLeftEvent,
-                             & nodeLeftAtRisk,
-                             & nodeRightEvent,
-                             & nodeRightAtRisk);
-      }
-      if (localEventTimeSize > 0) {
-        for (j = 1; j <= repMembrSize; j++) {
-          localSplitIndicator[j] = NEITHER;
-        }
-        leftSize = 0;
-        priorMembrIter = 0;
-        if (factorFlag == FALSE) {
-          for (j = 1; j <= nonMissMembrSize; j++) {
-            localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
-          }
-          for (m = 1; m <= localEventTimeSize; m++) {
-            nodeLeftEvent[m] = nodeLeftAtRisk[m] = 0;
-          }
-        }
-        for (j = 1; j < splitLength; j++) {
-          if (factorFlag == TRUE) {
-            priorMembrIter = 0;
-            leftSize = 0;
-          }
-          virtuallySplitNode(treeID,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             covariate,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             indxx,
-                             splitVectorPtr,
-                             j,
-                             localSplitIndicator,
-                             & leftSize,
-                             priorMembrIter,
-                             & currentMembrIter);
-          if (factorFlag == TRUE) {
-            for (m = 1; m <= localEventTimeSize; m++) {
-              nodeLeftEvent[m] = nodeLeftAtRisk[m] = 0;
-            }
-            for (k = 1; k <= nonMissMembrSize; k++) {
-              if (localSplitIndicator[  nonMissMembrIndx[indxx[k]]  ] == LEFT) {
-                tIndx = 0;  
-                for (m = 1; m <= localEventTimeSize; m++) {
-                  if (localEventTimeIndex[m] <= RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]) {
-                    tIndx = m;
-                    nodeLeftAtRisk[tIndx] ++;
-                  }
-                  else {
-                    m = localEventTimeSize;
-                  }
-                }
-                if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > 0) {
-                  nodeLeftEvent[tIndx] ++;
-                }
-              }
-              else {
-              }
-            } 
-          }
-          else {
-            for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
-              tIndx = 0;  
-              for (m = 1; m <= localEventTimeSize; m++) {
-                if (localEventTimeIndex[m] <= RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]) {
-                  tIndx = m;
-                  nodeLeftAtRisk[tIndx] ++;
-                }
-                else {
-                  m = localEventTimeSize;
-                }
-              }
-              if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > 0) {
-                nodeLeftEvent[tIndx] ++;
-              }
-            }
-          }
-          delta = deltaNum = deltaDen =  0.0;
-          for (k=1; k <= localEventTimeSize; k++) {
-            deltaNum = deltaNum + ((double) nodeLeftEvent[k] - ((double) ( nodeLeftAtRisk[k] * nodeParentEvent[k]) / nodeParentAtRisk[k]));
-            if (nodeParentAtRisk[k] >= 2) {
-              deltaDen = deltaDen + (
-                                     ((double) nodeLeftAtRisk[k] / nodeParentAtRisk[k]) *
-                                     (1.0 - ((double) nodeLeftAtRisk[k] / nodeParentAtRisk[k])) *
-                                     ((double) (nodeParentAtRisk[k] - nodeParentEvent[k]) / (nodeParentAtRisk[k] - 1)) * nodeParentEvent[k]
-                                     );
-            }
-          }
-          deltaNum = fabs(deltaNum);
-          deltaDen = sqrt(deltaDen);
-          if (deltaDen <= EPSILON) {
-            if (deltaNum <= EPSILON) {
-              delta = 0.0;
-            }
-            else {
-              delta = deltaNum / deltaDen;
-            }
-          }
-          else {
-            delta = deltaNum / deltaDen;
-          }
-          updateMaximumSplit(treeID,
-                             parent,
-                             delta,
-                             candidateCovariateCount,
-                             covariate,
-                             j,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             repMembrSize,
-                             localSplitIndicator,
-                             & deltaMax,
-                             splitParameterMax,
-                             splitValueMaxCont,
-                             splitValueMaxFactSize,
-                             splitValueMaxFactPtr,
-                             splitVectorPtr,
-                             splitIndicator);
-          if (factorFlag == FALSE) {
-            priorMembrIter = currentMembrIter - 1;
-          }
-        }  
-      }  
-      else {
-      }
-      unstackSplitVector(treeID,
-                         splitVectorSize,
-                         splitLength,
-                         factorFlag,
-                         deterministicSplitFlag,
-                         mwcpSizeAbsolute,
-                         splitVectorPtr);
-      unselectRandomCovariates(treeID,
-                               parent,
-                               repMembrSize,
-                               indxx,
-                               nonMissMembrSizeStatic,
-                               nonMissMembrIndx,
-                               multImpFlag);
-      if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-        unstackSplitSurv(treeID,
-                         parent,
-                         localEventTimeCount,
-                         localEventTimeIndex,
-                         localEventTimeSize,
-                         nodeParentEvent,
-                         nodeParentAtRisk,
-                         nodeLeftEvent,
-                         nodeLeftAtRisk,
-                         nodeRightEvent,
-                         nodeRightAtRisk);
-      }
-    }  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      unstackSplitSurv(treeID,
-                       parent,
-                       localEventTimeCount,
-                       localEventTimeIndex,
-                       localEventTimeSize,
-                       nodeParentEvent,
-                       nodeParentAtRisk,
-                       nodeLeftEvent,
-                       nodeLeftAtRisk,
-                       nodeRightEvent,
-                       nodeRightAtRisk);
-    }
-    unstackRandomCovariates(treeID,
-                            parent,
-                            randomCovariateIndex,
-                            cdf,
-                            cdfSort,
-                            density,
-                            densitySwap);
-    unstackSplitIndicator(repMembrSize,
-                          localSplitIndicator,
-                          splitVector);
-  }  
-  unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE, 
-                  repMembrSize,
-                  nonMissMembrIndxStatic);
-  result = summarizeSplitResult(*splitParameterMax,
-                                *splitValueMaxCont,
-                                *splitValueMaxFactSize,
-                                *splitValueMaxFactPtr,
-                                 splitStatistic,
-                                 deltaMax);
-  return result;
-}
-char wiBrierScore (uint    treeID,
-                 Node   *parent,
-                 uint   *repMembrIndx,
-                 uint    repMembrSize,
-                 uint   *allMembrIndx,
-                 uint    allMembrSize,
-                 uint   *splitParameterMax,
-                 double *splitValueMaxCont,
-                 uint   *splitValueMaxFactSize,
-                 uint  **splitValueMaxFactPtr,
-                 double *splitStatistic,
-                 char  **splitIndicator,
-                 char   *splitMIA,
-                 char    multImpFlag) {
-  uint   *randomCovariateIndex;
-  uint    uniformSelectedSlot;
-  uint    uniformSize;
-  double *cdf;
-  uint    cdfSize;
-  uint   *cdfSort;
-  uint   *density;
-  uint    densitySize;
-  uint  **densitySwap;
-  uint     covariate;
-  double  *splitVector;
-  uint     splitVectorSize;
-  uint nonMissMembrSize, nonMissMembrSizeStatic;
-  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
-  uint   *indxx;
-  uint priorMembrIter, currentMembrIter;
-  uint leftSize, rightSize;
-  char *localSplitIndicator;
-  uint splitLength;
-  void *splitVectorPtr;
-  char factorFlag;
-  uint mwcpSizeAbsolute;
-  char deterministicSplitFlag;
-  char preliminaryResult, result;
-  double delta, deltaMax;
-  uint j, k, m;
-  localSplitIndicator    = NULL;  
-  splitVector            = NULL;  
-  splitVectorSize        = 0;     
-  mwcpSizeAbsolute       = 0;     
-  *splitParameterMax     = 0;
-  *splitValueMaxFactSize = 0;
-  *splitValueMaxFactPtr  = NULL;
-  *splitValueMaxCont     = RF_nativeNaN;
-  deltaMax               = RF_nativeNaN;
-  preliminaryResult = getPreSplitResult(treeID,
-                                        parent,
-                                        repMembrSize,
-                                        repMembrIndx,
-                                        & nonMissMembrSizeStatic,
-                                        & nonMissMembrIndxStatic,
-                                        & parent -> mean,
-                                        multImpFlag,
-                                        FALSE);
-  if (preliminaryResult) {
-    stackSplitIndicator(repMembrSize,
-                        & localSplitIndicator,
-                        & splitVector);
-    stackRandomCovariates(treeID,
-                          parent,
-                          repMembrSize,
-                          multImpFlag,
-                          & randomCovariateIndex,
-                          & uniformSize,
-                          & cdf,
-                          & cdfSize,
-                          & cdfSort,
-                          & density,
-                          & densitySize,
-                          & densitySwap);
-    uint  eventTimeSize;
-    uint *eventTimeCount, *eventTimeIndex;
-    uint *parentEvent,  *leftEvent,  *rightEvent; 
-    uint *parentAtRisk, *leftAtRisk, *rightAtRisk;
-    uint  revEventTimeSize;
-    uint *revEventTimeCount, *revEventTimeIndex;
-    uint *parentRevEvent,  *leftRevEvent,  *rightRevEvent; 
-    uint *parentRevAtRisk, *leftRevAtRisk, *rightRevAtRisk;
-    double *leftLocalRatio, *rightLocalRatio;
-    double *leftLocalSurvival, *rightLocalSurvival;
-    double *leftRevLocalRatio, *rightRevLocalRatio;
-    double *leftRevLocalSurvival, *rightRevLocalSurvival;
-    double *leftBS,  *rightBS;
-    double  leftIBS,  rightIBS;
-    double gHatRightPrevious, gHatRightCurrent, gHatLeftPrevious, gHatLeftCurrent;
-    char escapeFlag, adHocFlag;
-    uint   tIndx;
-    double deltaTime;
-    eventTimeSize = 0;  
-    delta = 0;  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndxStatic,
-                           nonMissMembrSizeStatic,
-                           TRUE,
-                           & eventTimeCount,
-                           & eventTimeIndex,
-                           & eventTimeSize,
-                           & parentEvent,
-                           & parentAtRisk,
-                           & leftEvent,
-                           & leftAtRisk,
-                           & rightEvent,
-                           & rightAtRisk);
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndxStatic,
-                           nonMissMembrSizeStatic,
-                           FALSE,
-                           & revEventTimeCount,
-                           & revEventTimeIndex,
-                           & revEventTimeSize,
-                           & parentRevEvent,
-                           & parentRevAtRisk,
-                           & leftRevEvent,
-                           & leftRevAtRisk,
-                           & rightRevEvent,
-                           & rightRevAtRisk);
-      stackSplitSurv3(treeID,
-                      parent,
-                      eventTimeSize,
-                      & leftLocalRatio,
-                      & rightLocalRatio,
-                      & leftLocalSurvival,
-                      & rightLocalSurvival,
-                      revEventTimeSize,
-                      & leftRevLocalRatio,
-                      & rightRevLocalRatio,
-                      & leftRevLocalSurvival,
-                      & rightRevLocalSurvival,
-                      & leftBS,
-                      & rightBS);
-    }
-    uint actualCovariateCount = 0;
-    uint candidateCovariateCount = 0;
-    while (selectRandomCovariates(treeID,
-                                  parent,
-                                  repMembrIndx,
-                                  repMembrSize,
-                                  randomCovariateIndex,
-                                  & uniformSize,
-                                  & uniformSelectedSlot,
-                                  cdf,
-                                  & cdfSize,
-                                  cdfSort,
-                                  density,
-                                  & densitySize,
-                                  densitySwap,
-                                  & covariate,
-                                  & actualCovariateCount,
-                                  & candidateCovariateCount,
-                                  splitVector,
-                                  & splitVectorSize,
-                                  & indxx,
-                                  nonMissMembrSizeStatic,
-                                  nonMissMembrIndxStatic,
-                                  & nonMissMembrSize,
-                                  & nonMissMembrIndx,
-                                  multImpFlag)) {
-      splitLength = stackAndConstructSplitVector(treeID,
-                                                 repMembrSize,
-                                                 covariate,
-                                                 splitVector,
-                                                 splitVectorSize,
-                                                 & factorFlag,
-                                                 & deterministicSplitFlag,
-                                                 & mwcpSizeAbsolute,
-                                                 & splitVectorPtr);
-      if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-        stackAndGetSplitSurv(treeID,
-                             parent,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             TRUE,
-                             & eventTimeCount,
-                             & eventTimeIndex,
-                             & eventTimeSize,
-                             & parentEvent,
-                             & parentAtRisk,
-                             & leftEvent,
-                             & leftAtRisk,
-                             & rightEvent,
-                             & rightAtRisk);
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndx,
-                           nonMissMembrSize,
-                           FALSE,
-                           & revEventTimeCount,
-                           & revEventTimeIndex,
-                           & revEventTimeSize,
-                           & parentRevEvent,
-                           & parentRevAtRisk,
-                           & leftRevEvent,
-                           & leftRevAtRisk,
-                           & rightRevEvent,
-                           & rightRevAtRisk);
-      stackSplitSurv3(treeID,
-                      parent,
-                      eventTimeSize,
-                      & leftLocalRatio,
-                      & rightLocalRatio,
-                      & leftLocalSurvival,
-                      & rightLocalSurvival,
-                      revEventTimeSize,
-                      & leftRevLocalRatio,
-                      & rightRevLocalRatio,
-                      & leftRevLocalSurvival,
-                      & rightRevLocalSurvival,
-                      & leftBS,
-                      &rightBS);
-      }
-      if (eventTimeSize > 0) {
-        for (j = 1; j <= repMembrSize; j++) {
-          localSplitIndicator[j] = NEITHER;
-        }
-        leftSize = 0;
-        priorMembrIter = 0;
-        if (factorFlag == FALSE) {
-          for (j = 1; j <= nonMissMembrSize; j++) {
-            localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
-          }
-          for (m = 1; m <= eventTimeSize; m++) {
-            leftEvent[m] = leftAtRisk[m] = 0;
-          }
-          for (m = 1; m <= revEventTimeSize; m++) {
-            leftRevEvent[m] = leftRevAtRisk[m] = 0;
-          }
-        }
-        for (j = 1; j < splitLength; j++) {
-          if (factorFlag == TRUE) {
-            priorMembrIter = 0;
-            leftSize = 0;
-          }
-          virtuallySplitNode(treeID,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             covariate,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             indxx,
-                             splitVectorPtr,
-                             j,
-                             localSplitIndicator,
-                             & leftSize,
-                             priorMembrIter,
-                             & currentMembrIter);
-          rightSize = nonMissMembrSize - leftSize;
-          if (factorFlag == TRUE) {
-            for (m = 1; m <= eventTimeSize; m++) {
-              leftEvent[m] = leftAtRisk[m] = 0;
-            }
-            for (m = 1; m <= revEventTimeSize; m++) {
-              leftRevEvent[m] = leftRevAtRisk[m] = 0;
-            }
-            for (k = 1; k <= nonMissMembrSize; k++) {
-              if (localSplitIndicator[  nonMissMembrIndx[indxx[k]]  ] == LEFT) {
-                tIndx = 0;  
-                for (m = 1; m <= eventTimeSize; m++) {
-                  if (eventTimeIndex[m] <= RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]) {
-                    tIndx = m;
-                    leftAtRisk[tIndx] ++;
-                  }
-                  else {
-                    m = eventTimeSize;
-                  }
-                }
-                if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > 0) {
-                  leftEvent[tIndx] ++;
-                }
-                tIndx = 0;  
-                for (m = 1; m <= revEventTimeSize; m++) {
-                  if (revEventTimeIndex[m] <= RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]) {
-                    tIndx = m;
-                    leftRevAtRisk[tIndx] ++;
-                  }
-                  else {
-                    m = revEventTimeSize;
-                  }
-                }
-                if (revEventTimeSize > 0) {
-                  if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] == 0) {
-                    leftRevEvent[tIndx] ++;
-                  }
-                }
-              }
-              else {
-              }
-            } 
-          }
-          else {
-            for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
-              tIndx = 0;  
-              for (m = 1; m <= eventTimeSize; m++) {
-                if (eventTimeIndex[m] <= RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]) {
-                  tIndx = m;
-                  leftAtRisk[tIndx] ++;
-                }
-                else {
-                  m = eventTimeSize;
-                }
-              }
-              if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > 0) {
-                leftEvent[tIndx] ++;
-              }
-            }
-            tIndx = 0;  
-            for (m = 1; m <= revEventTimeSize; m++) {
-              if (revEventTimeIndex[m] <= RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]) {
-                tIndx = m;
-                leftRevAtRisk[tIndx] ++;
-              }
-              else {
-                m = revEventTimeSize;
-              }
-            }
-            if (revEventTimeSize > 0) {
-              if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] == 0) {
-                leftRevEvent[tIndx] ++;
-              }
-            }
-          }
-          for (m = 1; m <= eventTimeSize; m++) {
-            rightEvent[m] = parentEvent[m] - leftEvent[m];
-            rightAtRisk[m] = parentAtRisk[m] - leftAtRisk[m];
-          }
-          for (m = 1; m <= revEventTimeSize; m++) {
-            rightRevEvent[m] = parentRevEvent[m] - leftRevEvent[m];
-            rightRevAtRisk[m] = parentRevAtRisk[m] - leftRevAtRisk[m];
-          }
-          for (m = 1; m <= eventTimeSize; m++) {
-            if (leftEvent[m] > 0) {
-              if (leftAtRisk[m] >= 1) {
-                leftLocalRatio[m] = ((double) leftEvent[m] / leftAtRisk[m]);
-              }
-              else {
-                RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-                RF_nativeError("\nRF-SRC:  Zero At Risk Count encountered in left ratio calculation for split statistic (treeID, nodeID, j, cov) = (%10d, %10d, %10d, %10d)", treeID, parent -> nodeID, j, covariate);
-                RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-                RF_nativeExit();
-              }
-            }
-            else {
-              leftLocalRatio[m] = 0.0;
-            }
-            if (rightEvent[m] > 0) {
-              if (rightAtRisk[m] >= 1) {
-                rightLocalRatio[m] = ((double) rightEvent[m] / rightAtRisk[m]);
-              }
-              else {
-                RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-                RF_nativeError("\nRF-SRC:  Zero At Risk Count encountered in right ratio calculation for split statistic (treeID, nodeID, j, cov) = (%10d, %10d, %10d, %10d)", treeID, parent -> nodeID, j, covariate);
-                RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-                RF_nativeExit();
-              }
-            }
-            else {
-              rightLocalRatio[m] = 0.0;
-            }
-          }
-          for (m = 1; m <= revEventTimeSize; m++) {
-            if (leftRevEvent[m] > 0) {
-              if (leftRevAtRisk[m] >= 1) {
-                leftRevLocalRatio[m] = ((double) leftRevEvent[m] / leftRevAtRisk[m]);
-              }
-              else {
-                RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-                RF_nativeError("\nRF-SRC:  Zero At Risk Count encountered in left reverse ratio calculation for split statistic (treeID, nodeID, j, cov) = (%10d, %10d, %10d, %10d)", treeID, parent -> nodeID, j, covariate);
-                RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-                RF_nativeExit();
-              }
-            }
-            else {
-              leftRevLocalRatio[m] = 0.0;
-            }
-            if (rightRevEvent[m] > 0) {
-              if (rightRevAtRisk[m] >= 1) {
-                rightRevLocalRatio[m] = ((double) rightRevEvent[m] / rightRevAtRisk[m]);
-              }
-              else {
-                RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-                RF_nativeError("\nRF-SRC:  Zero At Risk Count encountered in right reverse ratio calculation for split statistic (treeID, nodeID, j, cov) = (%10d, %10d, %10d, %10d)", treeID, parent -> nodeID, j, covariate);
-                RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-                RF_nativeExit();
-              }
-            }
-            else {
-              rightRevLocalRatio[m] = 0.0;
-            }
-          }
-          for (m = 1; m <= eventTimeSize; m++) {
-            leftLocalSurvival[m]  = 1.0 - leftLocalRatio[m];
-            rightLocalSurvival[m] = 1.0 - rightLocalRatio[m];
-          }
-          for (m = 2; m <= eventTimeSize; m++) {
-            leftLocalSurvival[m]  *= leftLocalSurvival[m-1];
-            rightLocalSurvival[m] *= rightLocalSurvival[m-1];
-          }
-          for (m = 1; m <= revEventTimeSize; m++) {
-            leftRevLocalSurvival[m]  = 1.0 - leftRevLocalRatio[m];
-            rightRevLocalSurvival[m] = 1.0 - rightRevLocalRatio[m];
-          }
-          for (m = 2; m <= revEventTimeSize; m++) {
-            leftRevLocalSurvival[m]  *= leftRevLocalSurvival[m-1];
-            rightRevLocalSurvival[m] *= rightRevLocalSurvival[m-1];
-          }
-          escapeFlag = FALSE;
-          gHatLeftPrevious = gHatLeftCurrent = 1.0;
-          gHatRightPrevious = gHatRightCurrent = 1.0;
-          tIndx = 1;
-          if (revEventTimeSize > 0) {          
-            while (!escapeFlag) {
-              if(tIndx <= revEventTimeSize) {
-                if(revEventTimeIndex[tIndx] < eventTimeIndex[1]) {
-                  gHatLeftPrevious = gHatLeftCurrent = leftRevLocalSurvival[tIndx];
-                  gHatRightPrevious = gHatRightCurrent = rightRevLocalSurvival[tIndx];
-                  tIndx++;
-                }
-                else {
-                  escapeFlag = TRUE;
-                }
-              }
-              else {
-                escapeFlag = TRUE;
-              }
-            }
-          }
-          adHocFlag = FALSE;
-          tIndx = 1;
-          for (m = 1; m <= eventTimeSize; m++) {
-            escapeFlag = FALSE;
-            gHatLeftPrevious = gHatLeftCurrent;
-            gHatRightPrevious = gHatRightCurrent;
-            if (revEventTimeSize > 0) {
-              while (!escapeFlag) {
-                if(tIndx <= revEventTimeSize) {
-                  if(revEventTimeIndex[tIndx] < eventTimeIndex[m]) {                
-                    gHatLeftCurrent = leftRevLocalSurvival[tIndx];
-                    gHatRightCurrent = rightRevLocalSurvival[tIndx];
-                    tIndx++;
-                  }
-                  else {
-                    escapeFlag = TRUE;
-                  }
-                }
-                else {
-                  escapeFlag = TRUE;
-                }
-              }
-            }
-            leftBS[m] = rightBS[m] = 0.0;
-            for (k = 1; k <= nonMissMembrSize; k++) {
-              if (localSplitIndicator[  nonMissMembrIndx[indxx[k]]  ] == LEFT) {
-                if ( RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > eventTimeIndex[m] ) {
-                  if (gHatLeftCurrent > 0) {
-                    leftBS[m] += (1.0 - leftLocalSurvival[m]) * (1.0 - leftLocalSurvival[m]) / gHatLeftCurrent;
-                  }
-                  else {
-                    adHocFlag = TRUE;
-                    k = nonMissMembrSize;
-                    m = eventTimeSize;
-                  }
-                }
-                else {
-                  if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > 0) {
-                    if (gHatLeftPrevious > 0) {
-                      leftBS[m] += leftLocalSurvival[m] * leftLocalSurvival[m] / gHatLeftPrevious;
-                    }
-                    else {
-                      adHocFlag = TRUE;
-                      k = nonMissMembrSize;
-                      m = eventTimeSize;
-                    }
-                  }
-                }
-              }
-              else {
-                if ( RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > eventTimeIndex[m] ) {
-                  if (gHatRightCurrent != 0) {                  
-                    rightBS[m] += (1.0 - rightLocalSurvival[m]) * (1.0 - rightLocalSurvival[m]) / gHatRightCurrent;
-                  }
-                  else {
-                    adHocFlag = TRUE;
-                    k = nonMissMembrSize;
-                    m = eventTimeSize;
-                  }
-                }
-                else {
-                  if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > 0) {                  
-                    if (gHatRightPrevious != 0) {                  
-                      rightBS[m] += rightLocalSurvival[m] * rightLocalSurvival[m] / gHatRightPrevious;
-                    }
-                    else {
-                      adHocFlag = TRUE;
-                      k = nonMissMembrSize;
-                      m = eventTimeSize;
-                    }
-                  }
-                }
-              }
-            }  
-            if (!adHocFlag) {
-              leftBS[m] = leftBS[m] / leftSize;
-              rightBS[m] = rightBS[m] / rightSize;
-            }
-          }  
-          if (!adHocFlag && (eventTimeIndex[1] <= RF_wibsTauTimeIdx)) {
-            leftIBS = rightIBS = 0.0;
-            deltaTime = RF_masterTime[eventTimeIndex[1]];
-            leftIBS  += deltaTime * leftBS[1];
-            rightIBS += deltaTime * rightBS[1];
-            m = 2;
-            while ((eventTimeIndex[m] <= RF_wibsTauTimeIdx) && (m <= eventTimeSize)) {
-              deltaTime = RF_masterTime[eventTimeIndex[m]] - RF_masterTime[eventTimeIndex[m-1]];
-              leftIBS  += deltaTime * (leftBS[m] + leftBS[m-1]);
-              rightIBS += deltaTime * (rightBS[m] + rightBS[m-1]);
-              m++;
-            }
-            leftIBS  = leftIBS / 2.0;
-            rightIBS = rightIBS / 2.0;
-            delta = - ( (((double) leftSize / nonMissMembrSize) * leftIBS) + (((double) rightSize / nonMissMembrSize) * rightIBS));
-          }
-          else {
-            delta = RF_nativeNaN;
-          }
-          updateMaximumSplit(treeID,
-                             parent,
-                             delta,
-                             candidateCovariateCount,
-                             covariate,
-                             j,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             repMembrSize,
-                             localSplitIndicator,
-                             & deltaMax,
-                             splitParameterMax,
-                             splitValueMaxCont,
-                             splitValueMaxFactSize,
-                             splitValueMaxFactPtr,
-                             splitVectorPtr,
-                             splitIndicator);
-          if (factorFlag == FALSE) {
-            priorMembrIter = currentMembrIter - 1;
-          }
-        }  
-      }  
-      else {
-      }
-      unstackSplitVector(treeID,
-                         splitVectorSize,
-                         splitLength,
-                         factorFlag,
-                         deterministicSplitFlag,
-                         mwcpSizeAbsolute,
-                         splitVectorPtr);
-      unselectRandomCovariates(treeID,
-                               parent,
-                               repMembrSize,
-                               indxx,
-                               nonMissMembrSizeStatic,
-                               nonMissMembrIndx,
-                               multImpFlag);
-        if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-          unstackSplitSurv(treeID,
-                           parent,
-                           eventTimeCount,
-                           eventTimeIndex,
-                           eventTimeSize,
-                           parentEvent,
-                           parentAtRisk,
-                           leftEvent,
-                           leftAtRisk,
-                           rightEvent,
-                           rightAtRisk);
-          unstackSplitSurv(treeID,
-                           parent,
-                           revEventTimeCount,
-                           revEventTimeIndex,
-                           revEventTimeSize,
-                           parentRevEvent,
-                           parentRevAtRisk,
-                           leftRevEvent,
-                           leftRevAtRisk,
-                           rightRevEvent,
-                           rightRevAtRisk);
-          unstackSplitSurv3(treeID,
-                            parent,
-                            eventTimeSize,
-                            leftLocalRatio,
-                            rightLocalRatio,
-                            leftLocalSurvival,
-                            rightLocalSurvival,
-                            revEventTimeSize,
-                            leftRevLocalRatio,
-                            rightRevLocalRatio,
-                            leftRevLocalSurvival,
-                            rightRevLocalSurvival,
-                            leftBS,
-                            rightBS);
-        }
-    }  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      unstackSplitSurv(treeID,
-                       parent,
-                       eventTimeCount,
-                       eventTimeIndex,
-                       eventTimeSize,
-                       parentEvent,
-                       parentAtRisk,
-                       leftEvent,
-                       leftAtRisk,
-                       rightEvent,
-                       rightAtRisk);
-      unstackSplitSurv(treeID,
-                       parent,
-                       revEventTimeCount,
-                       revEventTimeIndex,
-                       revEventTimeSize,
-                       parentRevEvent,
-                       parentRevAtRisk,
-                       leftRevEvent,
-                       leftRevAtRisk,
-                       rightRevEvent,
-                       rightRevAtRisk);
-      unstackSplitSurv3(treeID,
-                        parent,
-                        eventTimeSize,
-                        leftLocalRatio,
-                        rightLocalRatio,
-                        leftLocalSurvival,
-                        rightLocalSurvival,
-                        revEventTimeSize,
-                        leftRevLocalRatio,
-                        rightRevLocalRatio,
-                        leftRevLocalSurvival,
-                        rightRevLocalSurvival,
-                        leftBS,
-                        rightBS);
-    }
-    unstackRandomCovariates(treeID,
-                            parent,
-                            randomCovariateIndex,
-                            cdf,
-                            cdfSort,
-                            density,
-                            densitySwap);
-    unstackSplitIndicator(repMembrSize,
-                          localSplitIndicator,
-                          splitVector);
-  }  
-  unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE, 
-                  repMembrSize,
-                  nonMissMembrIndxStatic);
-  result = summarizeSplitResult(*splitParameterMax,
-                                *splitValueMaxCont,
-                                *splitValueMaxFactSize,
-                                *splitValueMaxFactPtr,
-                                 splitStatistic,
-                                 deltaMax);
-  return result;
-}
-char quantileSurvSplit (uint    treeID,
-                        Node   *parent,
-                        uint   *repMembrIndx,
-                        uint    repMembrSize,
-                        uint   *allMembrIndx,
-                        uint    allMembrSize,
-                        uint   *splitParameterMax,
-                        double *splitValueMaxCont,
-                        uint   *splitValueMaxFactSize,
-                        uint  **splitValueMaxFactPtr,
-                        double *splitStatistic,
-                        char  **splitIndicator,
-                        char   *splitMIA,
-                        char    multImpFlag) {
-  uint   *randomCovariateIndex;
-  uint    uniformSelectedSlot;
-  uint    uniformSize;
-  double *cdf;
-  uint    cdfSize;
-  uint   *cdfSort;
-  uint   *density;
-  uint    densitySize;
-  uint  **densitySwap;
-  uint     covariate;
-  double  *splitVector;
-  uint     splitVectorSize;
-  uint nonMissMembrSize, nonMissMembrSizeStatic;
-  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
-  uint   *indxx;
-  uint priorMembrIter, currentMembrIter;
-  uint leftSize, rightSize;
-  char *localSplitIndicator;
-  uint splitLength;
-  void *splitVectorPtr;
-  char factorFlag;
-  uint mwcpSizeAbsolute;
-  char deterministicSplitFlag;
-  char preliminaryResult, result;
-  double delta, deltaMax;
-  uint j, k, m;
-  localSplitIndicator    = NULL;  
-  splitVector            = NULL;  
-  splitVectorSize        = 0;     
-  mwcpSizeAbsolute       = 0;     
-  *splitParameterMax     = 0;
-  *splitValueMaxFactSize = 0;
-  *splitValueMaxFactPtr  = NULL;
-  *splitValueMaxCont     = RF_nativeNaN;
-  deltaMax               = RF_nativeNaN;
-  preliminaryResult = getPreSplitResult(treeID,
-                                        parent,
-                                        repMembrSize,
-                                        repMembrIndx,
-                                        & nonMissMembrSizeStatic,
-                                        & nonMissMembrIndxStatic,
-                                        & parent -> mean,
-                                        multImpFlag,
-                                        FALSE);
-  if (preliminaryResult) {
-    stackSplitIndicator(repMembrSize,
-                        & localSplitIndicator,
-                        & splitVector);
-    stackRandomCovariates(treeID,
-                          parent,
-                          repMembrSize,
-                          multImpFlag,
-                          & randomCovariateIndex,
-                          & uniformSize,
-                          & cdf,
-                          & cdfSize,
-                          & cdfSort,
-                          & density,
-                          & densitySize,
-                          & densitySwap);
-    uint  eventTimeSize;
-    uint *eventTimeCount, *eventTimeIndex;
-    uint *parentEvent,  *leftEvent,  *rightEvent; 
-    uint *parentAtRisk, *leftAtRisk, *rightAtRisk;
-    double *leftLocalRatio, *rightLocalRatio;
-    double *leftLocalSurvival, *rightLocalSurvival;
-    double *parentLocalRatio, *parentLocalSurvival;
-    uint   *leftQuantileTime, *rightQuantileTime;
-    double *leftRevLocalRatio, *rightRevLocalRatio;
-    double *leftRevLocalSurvival, *rightRevLocalSurvival;
-    double leftSum,  rightSum;
-    double sHatLeftPrevious, sHatRightPrevious;
-    double sHatLeftNext,     sHatRightNext;
-    uint   tIndx, itr;
-    char found;
-    eventTimeSize = 0;  
-    delta = 0;          
-    leftQuantileTime  = uivector(1, RF_quantileSize);
-    rightQuantileTime = uivector(1, RF_quantileSize);
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndxStatic,
-                           nonMissMembrSizeStatic,
-                           TRUE,
-                           & eventTimeCount,
-                           & eventTimeIndex,
-                           & eventTimeSize,
-                           & parentEvent,
-                           & parentAtRisk,
-                           & leftEvent,
-                           & leftAtRisk,
-                           & rightEvent,
-                           & rightAtRisk);
-      stackSplitSurv3(treeID,
-                      parent,
-                      eventTimeSize,
-                      & leftLocalRatio,
-                      & rightLocalRatio,
-                      & leftLocalSurvival,
-                      & rightLocalSurvival,
-                      0, 
-                      & leftRevLocalRatio,
-                      & rightRevLocalRatio,
-                      & leftRevLocalSurvival,
-                      & rightRevLocalSurvival,
-                      & parentLocalRatio,
-                      & parentLocalSurvival); 
-    }
-    uint actualCovariateCount = 0;
-    uint candidateCovariateCount = 0;
-    while (selectRandomCovariates(treeID,
-                                  parent,
-                                  repMembrIndx,
-                                  repMembrSize,
-                                  randomCovariateIndex,
-                                  & uniformSize,
-                                  & uniformSelectedSlot,
-                                  cdf,
-                                  & cdfSize,
-                                  cdfSort,
-                                  density,
-                                  & densitySize,
-                                  densitySwap,
-                                  & covariate,
-                                  & actualCovariateCount,
-                                  & candidateCovariateCount,
-                                  splitVector,
-                                  & splitVectorSize,
-                                  & indxx,
-                                  nonMissMembrSizeStatic,
-                                  nonMissMembrIndxStatic,
-                                  & nonMissMembrSize,
-                                  & nonMissMembrIndx,
-                                  multImpFlag)) {
-      splitLength = stackAndConstructSplitVector(treeID,
-                                                 repMembrSize,
-                                                 covariate,
-                                                 splitVector,
-                                                 splitVectorSize,
-                                                 & factorFlag,
-                                                 & deterministicSplitFlag,
-                                                 & mwcpSizeAbsolute,
-                                                 & splitVectorPtr);
-      if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-        stackAndGetSplitSurv(treeID,
-                             parent,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             TRUE,
-                             & eventTimeCount,
-                             & eventTimeIndex,
-                             & eventTimeSize,
-                             & parentEvent,
-                             & parentAtRisk,
-                             & leftEvent,
-                             & leftAtRisk,
-                             & rightEvent,
-                             & rightAtRisk);
-        stackSplitSurv3(treeID,
-                        parent,
-                        eventTimeSize,
-                        & leftLocalRatio,
-                        & rightLocalRatio,
-                        & leftLocalSurvival,
-                        & rightLocalSurvival,
-                        0,
-                        & leftRevLocalRatio,
-                        & rightRevLocalRatio,
-                        & leftRevLocalSurvival,
-                        & rightRevLocalSurvival,
-                        & parentLocalRatio,
-                        & parentLocalSurvival);
-      }
-      if (eventTimeSize > 0) {
-        for (j = 1; j <= repMembrSize; j++) {
-          localSplitIndicator[j] = NEITHER;
-        }
-        leftSize = 0;
-        priorMembrIter = 0;
-        if (factorFlag == FALSE) {
-          for (j = 1; j <= nonMissMembrSize; j++) {
-            localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
-          }
-          for (m = 1; m <= eventTimeSize; m++) {
-            leftEvent[m] = leftAtRisk[m] = 0;
-          }
-        }
-        for (j = 1; j < splitLength; j++) {
-          if (factorFlag == TRUE) {
-            priorMembrIter = 0;
-            leftSize = 0;
-          }
-          virtuallySplitNode(treeID,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             covariate,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             indxx,
-                             splitVectorPtr,
-                             j,
-                             localSplitIndicator,
-                             & leftSize,
-                             priorMembrIter,
-                             & currentMembrIter);
-          rightSize = nonMissMembrSize - leftSize;
-          if (factorFlag == TRUE) {
-            for (m = 1; m <= eventTimeSize; m++) {
-              leftEvent[m] = leftAtRisk[m] = 0;
-            }
-            for (k = 1; k <= nonMissMembrSize; k++) {
-              if (localSplitIndicator[  nonMissMembrIndx[indxx[k]]  ] == LEFT) {
-                tIndx = 0;  
-                for (m = 1; m <= eventTimeSize; m++) {
-                  if (eventTimeIndex[m] <= RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]) {
-                    tIndx = m;
-                    leftAtRisk[tIndx] ++;
-                  }
-                  else {
-                    m = eventTimeSize;
-                  }
-                }
-                if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > 0) {
-                  leftEvent[tIndx] ++;
-                }
-              }
-              else {
-              }
-            } 
-          }
-          else {
-            for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
-              tIndx = 0;  
-              for (m = 1; m <= eventTimeSize; m++) {
-                if (eventTimeIndex[m] <= RF_masterTimeIndex[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]) {
-                  tIndx = m;
-                  leftAtRisk[tIndx] ++;
-                }
-                else {
-                  m = eventTimeSize;
-                }
-              }
-              if (RF_status[treeID][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] > 0) {
-                leftEvent[tIndx] ++;
-              }
-            }
-          }
-          for (m = 1; m <= eventTimeSize; m++) {
-            rightEvent[m] = parentEvent[m] - leftEvent[m];
-            rightAtRisk[m] = parentAtRisk[m] - leftAtRisk[m];
-          }
-          for (m = 1; m <= eventTimeSize; m++) {
-            if (leftEvent[m] > 0) {
-              if (leftAtRisk[m] >= 1) {
-                leftLocalRatio[m] = ((double) leftEvent[m] / leftAtRisk[m]);
-              }
-              else {
-                RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-                RF_nativeError("\nRF-SRC:  Zero At Risk Count encountered in left ratio calculation for split statistic (treeID, nodeID, j, cov) = (%10d, %10d, %10d, %10d)", treeID, parent -> nodeID, j, covariate);
-                RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-                RF_nativeExit();
-              }
-            }
-            else {
-              leftLocalRatio[m] = 0.0;
-            }
-            if (rightEvent[m] > 0) {
-              if (rightAtRisk[m] >= 1) {
-                rightLocalRatio[m] = ((double) rightEvent[m] / rightAtRisk[m]);
-              }
-              else {
-                RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-                RF_nativeError("\nRF-SRC:  Zero At Risk Count encountered in right ratio calculation for split statistic (treeID, nodeID, j, cov) = (%10d, %10d, %10d, %10d)", treeID, parent -> nodeID, j, covariate);
-                RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-                RF_nativeExit();
-              }
-            }
-            else {
-              rightLocalRatio[m] = 0.0;
-            }
-          }
-          for (m = 1; m <= eventTimeSize; m++) {
-            leftLocalSurvival[m]  = 1.0 - leftLocalRatio[m];
-            rightLocalSurvival[m] = 1.0 - rightLocalRatio[m];
-          }
-          for (m = 2; m <= eventTimeSize; m++) {
-            leftLocalSurvival[m]  *= leftLocalSurvival[m-1];
-            rightLocalSurvival[m] *= rightLocalSurvival[m-1];
-          }
-          itr = 1;
-          for (k = 1; k <= RF_quantileSize; k++) {
-            found = FALSE;
-            while (found == FALSE) {
-              leftQuantileTime[k] = itr;
-              if (itr > eventTimeSize) {
-                found = TRUE;
-              }
-              else {
-                if (leftLocalSurvival[itr] > (1.0 - RF_quantile[k])) {
-                  itr ++;
-                }
-                else {
-                  found = TRUE;
-                }
-              }
-            }
-            leftQuantileTime[k] --;
-          }
-          itr = 1;
-          for (k = 1; k <= RF_quantileSize; k++) {
-            found = FALSE;
-            while (found == FALSE) {
-              rightQuantileTime[k] = itr;
-              if (itr > eventTimeSize) {
-                found = TRUE;
-              }
-              else {
-                if (rightLocalSurvival[itr] > (1.0 - RF_quantile[k])) {
-                  itr ++;
-                }
-                else {
-                  found = TRUE;
-                }
-              }
-            }
-            rightQuantileTime[k] --;
-          }
-          sHatLeftPrevious  = 1.0;
-          sHatRightPrevious = 1.0;
-          leftSum = rightSum = 0.0;
-          k = 0;
-          for (k = 1; k <= RF_quantileSize; k++) {
-            sHatLeftNext  = leftLocalSurvival[leftQuantileTime[k]];
-            sHatRightNext = rightLocalSurvival[rightQuantileTime[k]];
-            leftSum  += pow(sHatLeftPrevious - sHatLeftNext, 2.0);
-            rightSum += pow(sHatRightPrevious - sHatRightNext, 2.0);
-            sHatLeftPrevious  = sHatLeftNext;
-            sHatRightPrevious = sHatRightNext;
-          }  
-          leftSum  += pow(sHatLeftPrevious - 0.0, 2.0);
-          rightSum += pow(sHatRightPrevious - 0.0, 2.0);
-          delta =  (((double) leftSize / nonMissMembrSize) * leftSum) + (((double) rightSize / nonMissMembrSize) * rightSum);
-          updateMaximumSplit(treeID,
-                             parent,
-                             delta,
-                             candidateCovariateCount,
-                             covariate,
-                             j,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             repMembrSize,
-                             localSplitIndicator,
-                             & deltaMax,
-                             splitParameterMax,
-                             splitValueMaxCont,
-                             splitValueMaxFactSize,
-                             splitValueMaxFactPtr,
-                             splitVectorPtr,
-                             splitIndicator);
-          if (factorFlag == FALSE) {
-            priorMembrIter = currentMembrIter - 1;
-          }
-        }  
-      }  
-      else {
-      }
-      unstackSplitVector(treeID,
-                         splitVectorSize,
-                         splitLength,
-                         factorFlag,
-                         deterministicSplitFlag,
-                         mwcpSizeAbsolute,
-                         splitVectorPtr);
-      unselectRandomCovariates(treeID,
-                               parent,
-                               repMembrSize,
-                               indxx,
-                               nonMissMembrSizeStatic,
-                               nonMissMembrIndx,
-                               multImpFlag);
-      if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-        unstackSplitSurv(treeID,
-                         parent,
-                         eventTimeCount,
-                         eventTimeIndex,
-                         eventTimeSize,
-                         parentEvent,
-                         parentAtRisk,
-                         leftEvent,
-                         leftAtRisk,
-                         rightEvent,
-                         rightAtRisk);
-        unstackSplitSurv3(treeID,
-                          parent,
-                          eventTimeSize,
-                          leftLocalRatio,
-                          rightLocalRatio,
-                          leftLocalSurvival,
-                          rightLocalSurvival,
-                          0,
-                          leftRevLocalRatio,
-                          rightRevLocalRatio,
-                          leftRevLocalSurvival,
-                          rightRevLocalSurvival,
-                          parentLocalRatio,
-                          parentLocalSurvival); 
-      }
-    }  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      unstackSplitSurv(treeID,
-                       parent,
-                       eventTimeCount,
-                       eventTimeIndex,
-                       eventTimeSize,
-                       parentEvent,
-                       parentAtRisk,
-                       leftEvent,
-                       leftAtRisk,
-                       rightEvent,
-                       rightAtRisk);
-      unstackSplitSurv3(treeID,
-                        parent,
-                        eventTimeSize,
-                        leftLocalRatio,
-                        rightLocalRatio,
-                        leftLocalSurvival,
-                        rightLocalSurvival,
-                        0,
-                        leftRevLocalRatio,
-                        rightRevLocalRatio,
-                        leftRevLocalSurvival,
-                        rightRevLocalSurvival,
-                        parentLocalRatio,
-                        parentLocalSurvival); 
-    }
-    free_uivector(leftQuantileTime, 1, RF_quantileSize);
-    free_uivector(rightQuantileTime, 1, RF_quantileSize);
-    unstackRandomCovariates(treeID,
-                            parent,
-                            randomCovariateIndex,
-                            cdf,
-                            cdfSort,
-                            density,
-                            densitySwap);
-    unstackSplitIndicator(repMembrSize,
-                          localSplitIndicator,
-                          splitVector);
-  }  
-  unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE, 
-                  repMembrSize,
-                  nonMissMembrIndxStatic);
-  result = summarizeSplitResult(*splitParameterMax,
-                                *splitValueMaxCont,
-                                *splitValueMaxFactSize,
-                                *splitValueMaxFactPtr,
-                                 splitStatistic,
-                                 deltaMax);
-  return result;
-}
-char brierScoreGradient1 (uint    treeID,
-                          Node   *parent,
-                          uint   *repMembrIndx,
-                          uint    repMembrSize,
-                          uint   *allMembrIndx,
-                          uint    allMembrSize,
-                          uint   *splitParameterMax,
-                          double *splitValueMaxCont,
-                          uint   *splitValueMaxFactSize,
-                          uint  **splitValueMaxFactPtr,
-                          double *splitStatistic,
-                          char  **splitIndicator,
-                          char   *splitMIA,
-                          char    multImpFlag) {
-  uint   *randomCovariateIndex;
-  uint    uniformSelectedSlot;
-  uint    uniformSize;
-  double *cdf;
-  uint    cdfSize;
-  uint   *cdfSort;
-  uint   *density;
-  uint    densitySize;
-  uint  **densitySwap;
-  uint     covariate;
-  double  *splitVector;
-  uint     splitVectorSize;
-  uint nonMissMembrSize, nonMissMembrSizeStatic;
-  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
-  uint   *indxx;
-  uint priorMembrIter, currentMembrIter;
-  uint leftSize, rightSize;
-  char *localSplitIndicator;
-  uint splitLength;
-  void *splitVectorPtr;
-  char factorFlag;
-  uint mwcpSizeAbsolute;
-  char deterministicSplitFlag;
-  char preliminaryResult, result;
-  double delta, deltaMax;
-  uint j, k;
-  localSplitIndicator    = NULL;  
-  splitVector            = NULL;  
-  splitVectorSize        = 0;     
-  mwcpSizeAbsolute       = 0;     
-  *splitParameterMax     = 0;
-  *splitValueMaxFactSize = 0;
-  *splitValueMaxFactPtr  = NULL;
-  *splitValueMaxCont     = RF_nativeNaN;
-  deltaMax               = RF_nativeNaN;
-  preliminaryResult = getPreSplitResult(treeID,
-                                        parent,
-                                        repMembrSize,
-                                        repMembrIndx,
-                                        & nonMissMembrSizeStatic,
-                                        & nonMissMembrIndxStatic,
-                                        & parent -> mean,
-                                        multImpFlag,
-                                        FALSE);
-  if (preliminaryResult) {
-    stackSplitIndicator(repMembrSize,
-                        & localSplitIndicator,
-                        & splitVector);
-    stackRandomCovariates(treeID,
-                          parent,
-                          repMembrSize,
-                          multImpFlag,
-                          & randomCovariateIndex,
-                          & uniformSize,
-                          & cdf,
-                          & cdfSize,
-                          & cdfSort,
-                          & density,
-                          & densitySize,
-                          & densitySwap);
-    uint  eventTimeSize;
-    uint *eventTimeCount, *eventTimeIndex;
-    uint *parentEvent,  *leftEvent,  *rightEvent; 
-    uint *parentAtRisk, *leftAtRisk, *rightAtRisk;
-    uint  revEventTimeSize;
-    uint *revEventTimeCount, *revEventTimeIndex;
-    uint *revParentEvent,  *revLeftEvent,  *revRightEvent; 
-    uint *revParentAtRisk, *revLeftAtRisk, *revRightAtRisk;
-    double *parentSurvival, *revParentSurvival;
-    double *fZHat;
-    double gHatPrevious, gHatCurrent;
-    uint *quantileTime;
-    double *leftGammaSum, *rightGammaSum;
-    double *leftGammaBar, *rightGammaBar;
-    double  leftSum, rightSum;
-    uint   tIndx;
-    double y_kt, w_kt, gamma_kt;
-    char escapeFlag;
-    char adHocFlag;
-    uint   indv;
-    leftGammaSum = rightGammaSum = leftGammaBar = rightGammaBar = NULL;
-    eventTimeSize = 0;  
-    delta = 0;  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndxStatic,
-                           nonMissMembrSizeStatic,
-                           TRUE,
-                           & eventTimeCount,
-                           & eventTimeIndex,
-                           & eventTimeSize,
-                           & parentEvent,
-                           & parentAtRisk,
-                           & leftEvent,
-                           & leftAtRisk,
-                           & rightEvent,
-                           & rightAtRisk);
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndxStatic,
-                           nonMissMembrSizeStatic,
-                           FALSE,
-                           & revEventTimeCount,
-                           & revEventTimeIndex,
-                           & revEventTimeSize,
-                           & revParentEvent,
-                           & revParentAtRisk,
-                           & revLeftEvent,
-                           & revLeftAtRisk,
-                           & revRightEvent,
-                           & revRightAtRisk);
-      stackAndGetSplitSurv2(treeID,
-                            parent,
-                            eventTimeSize,
-                            parentEvent,
-                            parentAtRisk,
-                            & parentSurvival);
-      stackAndGetSplitSurv2(treeID,
-                            parent,
-                            revEventTimeSize,
-                            revParentEvent,
-                            revParentAtRisk,
-                            & revParentSurvival);
-      stackAndGetFZhat(treeID,
-                       parent,
-                       repMembrIndx,
-                       repMembrSize,
-                       nonMissMembrIndxStatic,
-                       nonMissMembrSizeStatic,
-                       eventTimeIndex,
-                       eventTimeSize,
-                       revEventTimeIndex,
-                       revEventTimeSize,
-                       revParentSurvival,
-                       & fZHat); 
-      stackAndGetQTime(treeID,
-                       parent,
-                       eventTimeSize,
-                       parentSurvival,
-                       & quantileTime);
-      leftGammaSum  = dvector(1, RF_quantileSize);
-      rightGammaSum = dvector(1, RF_quantileSize);
-      leftGammaBar  = dvector(1, RF_quantileSize);
-      rightGammaBar = dvector(1, RF_quantileSize);
-    }
-    uint actualCovariateCount = 0;
-    uint candidateCovariateCount = 0;
-    while (selectRandomCovariates(treeID,
-                                  parent,
-                                  repMembrIndx,
-                                  repMembrSize,
-                                  randomCovariateIndex,
-                                  & uniformSize,
-                                  & uniformSelectedSlot,
-                                  cdf,
-                                  & cdfSize,
-                                  cdfSort,
-                                  density,
-                                  & densitySize,
-                                  densitySwap,
-                                  & covariate,
-                                  & actualCovariateCount,
-                                  & candidateCovariateCount,
-                                  splitVector,
-                                  & splitVectorSize,
-                                  & indxx,
-                                  nonMissMembrSizeStatic,
-                                  nonMissMembrIndxStatic,
-                                  & nonMissMembrSize,
-                                  & nonMissMembrIndx,
-                                  multImpFlag)) {
-      splitLength = stackAndConstructSplitVector(treeID,
-                                                 repMembrSize,
-                                                 covariate,
-                                                 splitVector,
-                                                 splitVectorSize,
-                                                 & factorFlag,
-                                                 & deterministicSplitFlag,
-                                                 & mwcpSizeAbsolute,
-                                                 & splitVectorPtr);
-      if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-        stackAndGetSplitSurv(treeID,
-                             parent,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             TRUE,
-                             & eventTimeCount,
-                             & eventTimeIndex,
-                             & eventTimeSize,
-                             & parentEvent,
-                             & parentAtRisk,
-                             & leftEvent,
-                             & leftAtRisk,        
-                             & rightEvent,
-                             & rightAtRisk);
-        stackAndGetSplitSurv(treeID,
-                             parent,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             FALSE,
-                             & revEventTimeCount,
-                             & revEventTimeIndex,
-                             & revEventTimeSize,
-                             & revParentEvent,
-                             & revParentAtRisk,
-                             & revLeftEvent,      
-                             & revLeftAtRisk,     
-                             & revRightEvent,     
-                             & revRightAtRisk);   
-        stackAndGetSplitSurv2(treeID,
-                              parent,
-                              eventTimeSize,
-                              parentEvent,
-                              parentAtRisk,
-                              & parentSurvival);
-        stackAndGetSplitSurv2(treeID,
-                              parent,
-                              revEventTimeSize,
-                              revParentEvent,
-                              revParentAtRisk,
-                              & revParentSurvival);
-        stackAndGetFZhat(treeID,
-                         parent,
-                         repMembrIndx,
-                         repMembrSize,
-                         nonMissMembrIndx,
-                         nonMissMembrSize,
-                         eventTimeIndex,
-                         eventTimeSize,
-                         revEventTimeIndex,
-                         revEventTimeSize,
-                         revParentSurvival,
-                         & fZHat); 
-        stackAndGetQTime(treeID,
-                         parent,
-                         eventTimeSize,
-                         parentSurvival,
-                         & quantileTime);
-        leftGammaSum  = dvector(1, RF_quantileSize);
-        rightGammaSum = dvector(1, RF_quantileSize);
-        leftGammaBar  = dvector(1, RF_quantileSize);
-        rightGammaBar = dvector(1, RF_quantileSize);
-      }
-      if (eventTimeSize > 0) {
-        for (j = 1; j <= repMembrSize; j++) {
-          localSplitIndicator[j] = NEITHER;
-        }
-        leftSize = 0;
-        priorMembrIter = 0;
-        if (factorFlag == FALSE) {
-          for (j = 1; j <= nonMissMembrSize; j++) {
-            localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
-          }
-        }
-        for (j = 1; j < splitLength; j++) {
-          if (factorFlag == TRUE) {
-            priorMembrIter = 0;
-            leftSize = 0;
-          }
-          virtuallySplitNode(treeID,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             covariate,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             indxx,
-                             splitVectorPtr,
-                             j,
-                             localSplitIndicator,
-                             & leftSize,
-                             priorMembrIter,
-                             & currentMembrIter);
-          rightSize = nonMissMembrSize - leftSize;
-          escapeFlag = FALSE;
-          gHatPrevious = gHatCurrent = 1.0;
-          tIndx = 1;
-          while (!escapeFlag) {
-            if(tIndx <= revEventTimeSize) {
-              if(revEventTimeIndex[tIndx] < quantileTime[1]) {
-                gHatPrevious = gHatCurrent = revParentSurvival[tIndx];
-                tIndx++;
-              }
-              else {
-                escapeFlag = TRUE;
-              }
-            }
-            else {
-              escapeFlag = TRUE;
-            }
-          }
-          adHocFlag = FALSE;
-          leftSum = rightSum = 0.0;
-          for (tIndx = 1; tIndx <= RF_quantileSize; tIndx ++) {
-            leftGammaSum[tIndx] = rightGammaSum[tIndx] = 0.0;
-            for (k = 1; k <= nonMissMembrSize; k++) {
-              indv = repMembrIndx[nonMissMembrIndx[k]];
-              if (RF_masterTimeIndex[treeID][ indv ] > eventTimeIndex[quantileTime[tIndx]]) {      
-                y_kt = 1.0;
-              }
-              else {
-                y_kt = 0.0;
-              }
-              w_kt = getW_kt(treeID,
-                             parent,
-                             indv,
-                             quantileTime[tIndx],
-                             eventTimeIndex,
-                             revEventTimeIndex,
-                             revEventTimeSize,
-                             revParentSurvival,
-                             & gHatPrevious,
-                             & gHatCurrent);
-              if (RF_nativeIsNaN(w_kt) || RF_nativeIsNaN(fZHat[quantileTime[tIndx]])) {
-                adHocFlag = TRUE;
-                k = nonMissMembrSize;
-                tIndx = RF_quantileSize;
-              }
-              else {
-                gamma_kt = - 2.0 * w_kt * (y_kt - fZHat[quantileTime[tIndx]]);
-                if (localSplitIndicator[  nonMissMembrIndx[k]  ] == LEFT) {
-                  leftGammaSum[tIndx]  +=  gamma_kt;
-                }
-                else {
-                  rightGammaSum[tIndx] +=  gamma_kt;   
-                }
-              }
-            }
-            if (!adHocFlag) {
-              leftGammaBar[tIndx] = leftGammaSum[tIndx] / leftSize;
-              rightGammaBar[tIndx] = rightGammaSum[tIndx] / rightSize;
-              leftSum  += pow(leftGammaBar[tIndx],  2);
-              rightSum += pow(rightGammaBar[tIndx], 2);
-            }
-          }  
-          if (!adHocFlag) {
-            delta = ( (((double) leftSize / nonMissMembrSize) * leftSum) + (((double) rightSize / nonMissMembrSize) * rightSum));
-          }
-          else {
-            delta = RF_nativeNaN;
-          }
-          updateMaximumSplit(treeID,
-                             parent,
-                             delta,
-                             candidateCovariateCount,
-                             covariate,
-                             j,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             repMembrSize,
-                             localSplitIndicator,
-                             & deltaMax,
-                             splitParameterMax,
-                             splitValueMaxCont,
-                             splitValueMaxFactSize,
-                             splitValueMaxFactPtr,
-                             splitVectorPtr,
-                             splitIndicator);
-          if (factorFlag == FALSE) {
-            priorMembrIter = currentMembrIter - 1;
-          }
-        }  
-      }  
-      else {
-      }
-      unstackSplitVector(treeID,
-                         splitVectorSize,
-                         splitLength,
-                         factorFlag,
-                         deterministicSplitFlag,
-                         mwcpSizeAbsolute,
-                         splitVectorPtr);
-      unselectRandomCovariates(treeID,
-                               parent,
-                               repMembrSize,
-                               indxx,
-                               nonMissMembrSizeStatic,
-                               nonMissMembrIndx,
-                               multImpFlag);
-        if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-          unstackSplitSurv(treeID,
-                           parent,
-                           eventTimeCount,
-                           eventTimeIndex,
-                           eventTimeSize,
-                           parentEvent,
-                           parentAtRisk,
-                           leftEvent,
-                           leftAtRisk,
-                           rightEvent,
-                           rightAtRisk);
-          unstackSplitSurv(treeID,
-                           parent,
-                           revEventTimeCount,
-                           revEventTimeIndex,
-                           revEventTimeSize,
-                           revParentEvent,
-                           revParentAtRisk,
-                           revLeftEvent,
-                           revLeftAtRisk,
-                           revRightEvent,
-                           revRightAtRisk);
-          unstackAndGetSplitSurv2(treeID,
-                                  parent,
-                                  eventTimeSize,
-                                  parentSurvival);
-          unstackAndGetSplitSurv2(treeID,
-                                  parent,
-                                  revEventTimeSize,
-                                  revParentSurvival);
-          unstackFZhat(treeID, parent, eventTimeSize, fZHat);
-          unstackQTime(quantileTime);
-          free_dvector(leftGammaSum,  1, RF_quantileSize);
-          free_dvector(rightGammaSum, 1, RF_quantileSize);
-          free_dvector(leftGammaBar,  1, RF_quantileSize);
-          free_dvector(rightGammaBar, 1, RF_quantileSize);
-        }
-    }  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      unstackSplitSurv(treeID,
-                       parent,
-                       eventTimeCount,
-                       eventTimeIndex,
-                       eventTimeSize,
-                       parentEvent,
-                       parentAtRisk,
-                       leftEvent,
-                       leftAtRisk,
-                       rightEvent,
-                       rightAtRisk);
-      unstackSplitSurv(treeID,
-                       parent,
-                       revEventTimeCount,
-                       revEventTimeIndex,
-                       revEventTimeSize,
-                       revParentEvent,
-                       revParentAtRisk,
-                       revLeftEvent,
-                       revLeftAtRisk,
-                       revRightEvent,
-                       revRightAtRisk);
-          unstackAndGetSplitSurv2(treeID,
-                                  parent,
-                                  eventTimeSize,
-                                  parentSurvival);
-          unstackAndGetSplitSurv2(treeID,
-                                  parent,
-                                  revEventTimeSize,
-                                  revParentSurvival);
-          unstackFZhat(treeID, parent, eventTimeSize, fZHat);
-          unstackQTime(quantileTime);
-          free_dvector(leftGammaSum,  1, RF_quantileSize);
-          free_dvector(rightGammaSum, 1, RF_quantileSize);
-          free_dvector(leftGammaBar,  1, RF_quantileSize);
-          free_dvector(rightGammaBar, 1, RF_quantileSize);
-    }
-    unstackRandomCovariates(treeID,
-                            parent,
-                            randomCovariateIndex,
-                            cdf,
-                            cdfSort,
-                            density,
-                            densitySwap);
-    unstackSplitIndicator(repMembrSize,
-                          localSplitIndicator,
-                          splitVector);
-  }  
-  unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE, 
-                  repMembrSize,
-                  nonMissMembrIndxStatic);
-  result = summarizeSplitResult(*splitParameterMax,
-                                *splitValueMaxCont,
-                                *splitValueMaxFactSize,
-                                *splitValueMaxFactPtr,
-                                 splitStatistic,
-                                 deltaMax);
-  return result;
-}
-char brierScoreGradient1a (uint    treeID,
-                           Node   *parent,
-                           uint   *repMembrIndx,
-                           uint    repMembrSize,
-                           uint   *allMembrIndx,
-                           uint    allMembrSize,
-                           uint   *splitParameterMax,
-                           double *splitValueMaxCont,
-                           uint   *splitValueMaxFactSize,
-                           uint  **splitValueMaxFactPtr,
-                           double *splitStatistic,
-                           char  **splitIndicator,
-                           char   *splitMIA,
-                           char    multImpFlag) {
-  uint   *randomCovariateIndex;
-  uint    uniformSelectedSlot;
-  uint    uniformSize;
-  double *cdf;
-  uint    cdfSize;
-  uint   *cdfSort;
-  uint   *density;
-  uint    densitySize;
-  uint  **densitySwap;
-  uint     covariate;
-  double  *splitVector;
-  uint     splitVectorSize;
-  uint nonMissMembrSize, nonMissMembrSizeStatic;
-  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
-  uint   *indxx;
-  uint priorMembrIter, currentMembrIter;
-  uint leftSize, rightSize;
-  char *localSplitIndicator;
-  uint splitLength;
-  void *splitVectorPtr;
-  char factorFlag;
-  uint mwcpSizeAbsolute;
-  char deterministicSplitFlag;
-  char preliminaryResult, result;
-  double delta, deltaMax;
-  uint j, k;
-  localSplitIndicator    = NULL;  
-  splitVector            = NULL;  
-  splitVectorSize        = 0;     
-  mwcpSizeAbsolute       = 0;     
-  *splitParameterMax     = 0;
-  *splitValueMaxFactSize = 0;
-  *splitValueMaxFactPtr  = NULL;
-  *splitValueMaxCont     = RF_nativeNaN;
-  deltaMax               = RF_nativeNaN;
-  preliminaryResult = getPreSplitResult(treeID,
-                                        parent,
-                                        repMembrSize,
-                                        repMembrIndx,
-                                        & nonMissMembrSizeStatic,
-                                        & nonMissMembrIndxStatic,
-                                        & parent -> mean,
-                                        multImpFlag,
-                                        FALSE);
-  if (preliminaryResult) {
-    stackSplitIndicator(repMembrSize,
-                        & localSplitIndicator,
-                        & splitVector);
-    stackRandomCovariates(treeID,
-                          parent,
-                          repMembrSize,
-                          multImpFlag,
-                          & randomCovariateIndex,
-                          & uniformSize,
-                          & cdf,
-                          & cdfSize,
-                          & cdfSort,
-                          & density,
-                          & densitySize,
-                          & densitySwap);
-    uint  eventTimeSize;
-    uint *eventTimeCount, *eventTimeIndex;
-    uint *parentEvent,  *leftEvent,  *rightEvent; 
-    uint *parentAtRisk, *leftAtRisk, *rightAtRisk;
-    uint  revEventTimeSize;
-    uint *revEventTimeCount, *revEventTimeIndex;
-    uint *revParentEvent,  *revLeftEvent,  *revRightEvent; 
-    uint *revParentAtRisk, *revLeftAtRisk, *revRightAtRisk;
-    double *parentSurvival, *revParentSurvival;
-    double *fZHat;
-    double gHatPrevious, gHatCurrent;
-    double *leftGammaSum, *rightGammaSum;
-    double *leftGammaBar, *rightGammaBar;
-    double  leftSum, rightSum;
-    uint   tIndx;
-    double y_kt, w_kt, gamma_kt;
-    char escapeFlag;
-    char adHocFlag;
-    uint   indv;
-    leftGammaSum = rightGammaSum = leftGammaBar = rightGammaBar = NULL;
-    eventTimeSize = 0;  
-    delta = 0;  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndxStatic,
-                           nonMissMembrSizeStatic,
-                           TRUE,
-                           & eventTimeCount,
-                           & eventTimeIndex,
-                           & eventTimeSize,
-                           & parentEvent,
-                           & parentAtRisk,
-                           & leftEvent,
-                           & leftAtRisk,
-                           & rightEvent,
-                           & rightAtRisk);
-      stackAndGetSplitSurv(treeID,
-                           parent,
-                           repMembrIndx,
-                           repMembrSize,
-                           nonMissMembrIndxStatic,
-                           nonMissMembrSizeStatic,
-                           FALSE,
-                           & revEventTimeCount,
-                           & revEventTimeIndex,
-                           & revEventTimeSize,
-                           & revParentEvent,
-                           & revParentAtRisk,
-                           & revLeftEvent,
-                           & revLeftAtRisk,
-                           & revRightEvent,
-                           & revRightAtRisk);
-      stackAndGetSplitSurv2(treeID,
-                            parent,
-                            eventTimeSize,
-                            parentEvent,
-                            parentAtRisk,
-                            & parentSurvival);
-      stackAndGetSplitSurv2(treeID,
-                            parent,
-                            revEventTimeSize,
-                            revParentEvent,
-                            revParentAtRisk,
-                            & revParentSurvival);
-      stackAndGetFZhat(treeID,
-                       parent,
-                       repMembrIndx,
-                       repMembrSize,
-                       nonMissMembrIndxStatic,
-                       nonMissMembrSizeStatic,
-                       eventTimeIndex,
-                       eventTimeSize,
-                       revEventTimeIndex,
-                       revEventTimeSize,
-                       revParentSurvival,
-                       & fZHat); 
-      leftGammaSum  = dvector(1, eventTimeSize);
-      rightGammaSum = dvector(1, eventTimeSize);
-      leftGammaBar  = dvector(1, eventTimeSize);
-      rightGammaBar = dvector(1, eventTimeSize);
-    }
-    uint actualCovariateCount = 0;
-    uint candidateCovariateCount = 0;
-    while (selectRandomCovariates(treeID,
-                                  parent,
-                                  repMembrIndx,
-                                  repMembrSize,
-                                  randomCovariateIndex,
-                                  & uniformSize,
-                                  & uniformSelectedSlot,
-                                  cdf,
-                                  & cdfSize,
-                                  cdfSort,
-                                  density,
-                                  & densitySize,
-                                  densitySwap,
-                                  & covariate,
-                                  & actualCovariateCount,
-                                  & candidateCovariateCount,
-                                  splitVector,
-                                  & splitVectorSize,
-                                  & indxx,
-                                  nonMissMembrSizeStatic,
-                                  nonMissMembrIndxStatic,
-                                  & nonMissMembrSize,
-                                  & nonMissMembrIndx,
-                                  multImpFlag)) {
-      splitLength = stackAndConstructSplitVector(treeID,
-                                                 repMembrSize,
-                                                 covariate,
-                                                 splitVector,
-                                                 splitVectorSize,
-                                                 & factorFlag,
-                                                 & deterministicSplitFlag,
-                                                 & mwcpSizeAbsolute,
-                                                 & splitVectorPtr);
-      if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-        stackAndGetSplitSurv(treeID,
-                             parent,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             TRUE,
-                             & eventTimeCount,
-                             & eventTimeIndex,
-                             & eventTimeSize,
-                             & parentEvent,
-                             & parentAtRisk,
-                             & leftEvent,
-                             & leftAtRisk,        
-                             & rightEvent,
-                             & rightAtRisk);
-        stackAndGetSplitSurv(treeID,
-                             parent,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             FALSE,
-                             & revEventTimeCount,
-                             & revEventTimeIndex,
-                             & revEventTimeSize,
-                             & revParentEvent,
-                             & revParentAtRisk,
-                             & revLeftEvent,      
-                             & revLeftAtRisk,     
-                             & revRightEvent,     
-                             & revRightAtRisk);   
-        stackAndGetSplitSurv2(treeID,
-                              parent,
-                              eventTimeSize,
-                              parentEvent,
-                              parentAtRisk,
-                              & parentSurvival);
-        stackAndGetSplitSurv2(treeID,
-                              parent,
-                              revEventTimeSize,
-                              revParentEvent,
-                              revParentAtRisk,
-                              & revParentSurvival);
-        stackAndGetFZhat(treeID,
-                         parent,
-                         repMembrIndx,
-                         repMembrSize,
-                         nonMissMembrIndx,
-                         nonMissMembrSize,
-                         eventTimeIndex,
-                         eventTimeSize,
-                         revEventTimeIndex,
-                         revEventTimeSize,
-                         revParentSurvival,
-                         & fZHat); 
-        leftGammaSum  = dvector(1, eventTimeSize);
-        rightGammaSum = dvector(1, eventTimeSize);
-        leftGammaBar  = dvector(1, eventTimeSize);
-        rightGammaBar = dvector(1, eventTimeSize);
-      }
-      if (eventTimeSize > 0) {
-        for (j = 1; j <= repMembrSize; j++) {
-          localSplitIndicator[j] = NEITHER;
-        }
-        leftSize = 0;
-        priorMembrIter = 0;
-        if (factorFlag == FALSE) {
-          for (j = 1; j <= nonMissMembrSize; j++) {
-            localSplitIndicator[ nonMissMembrIndx[indxx[j]] ] = RIGHT;
-          }
-        }
-        for (j = 1; j < splitLength; j++) {
-          if (factorFlag == TRUE) {
-            priorMembrIter = 0;
-            leftSize = 0;
-          }
-          virtuallySplitNode(treeID,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             covariate,
-                             repMembrIndx,
-                             repMembrSize,
-                             nonMissMembrIndx,
-                             nonMissMembrSize,
-                             indxx,
-                             splitVectorPtr,
-                             j,
-                             localSplitIndicator,
-                             & leftSize,
-                             priorMembrIter,
-                             & currentMembrIter);
-          rightSize = nonMissMembrSize - leftSize;
-          escapeFlag = FALSE;
-          gHatPrevious = gHatCurrent = 1.0;
-          tIndx = 1;
-          while (!escapeFlag) {
-            if(tIndx <= revEventTimeSize) {
-              if(revEventTimeIndex[tIndx] < eventTimeIndex[1]) {
-                gHatPrevious = gHatCurrent = revParentSurvival[tIndx];
-                tIndx++;
-              }
-              else {
-                escapeFlag = TRUE;
-              }
-            }
-            else {
-              escapeFlag = TRUE;
-            }
-          }
-          leftSum = rightSum = 0.0;
-          if (eventTimeIndex[1] <= RF_wibsTauTimeIdx) {
-            tIndx = 1;
-            adHocFlag = FALSE;
-            while ((eventTimeIndex[tIndx] <= RF_wibsTauTimeIdx) && (tIndx <= eventTimeSize) && !adHocFlag) {
-              leftGammaSum[tIndx] = rightGammaSum[tIndx] = 0.0;
-              for (k = 1; k <= nonMissMembrSize; k++) {
-                indv = repMembrIndx[nonMissMembrIndx[k]];
-                if (RF_masterTimeIndex[treeID][ indv ] > eventTimeIndex[tIndx]) {
-                  y_kt = 1.0;
-                }
-                else {
-                  y_kt = 0.0;
-                }
-                w_kt = getW_kt(treeID,
-                               parent,
-                               indv,
-                               tIndx,
-                               eventTimeIndex,
-                               revEventTimeIndex,
-                               revEventTimeSize,
-                               revParentSurvival,
-                               & gHatPrevious,
-                               & gHatCurrent);
-                if (RF_nativeIsNaN(w_kt) || RF_nativeIsNaN(fZHat[tIndx])) {
-                  adHocFlag = TRUE;
-                  k = nonMissMembrSize;
-                  tIndx = eventTimeSize;
-                }
-                else {
-                  gamma_kt = - 2.0 * w_kt * (y_kt - fZHat[tIndx]);
-                  if (localSplitIndicator[  nonMissMembrIndx[k]  ] == LEFT) {
-                    leftGammaSum[tIndx]  +=  gamma_kt;
-                  }
-                  else {
-                    rightGammaSum[tIndx] +=  gamma_kt;   
-                  }
-                }
-              }
-              if (!adHocFlag) {
-                leftGammaBar[tIndx] = leftGammaSum[tIndx] / leftSize;
-                rightGammaBar[tIndx] = rightGammaSum[tIndx] / rightSize;
-                leftSum  += pow(leftGammaBar[tIndx],  2);
-                rightSum += pow(rightGammaBar[tIndx], 2);
-              }
-              tIndx++;
-            }  
-            if (!adHocFlag) {
-              delta = ( (((double) leftSize / nonMissMembrSize) * leftSum) + (((double) rightSize / nonMissMembrSize) * rightSum));
-            }
-            else {
-              delta = RF_nativeNaN;
-            }
-          }
-          else {
-            delta = RF_nativeNaN;
-          }
-          updateMaximumSplit(treeID,
-                             parent,
-                             delta,
-                             candidateCovariateCount,
-                             covariate,
-                             j,
-                             factorFlag,
-                             mwcpSizeAbsolute,
-                             repMembrSize,
-                             localSplitIndicator,
-                             & deltaMax,
-                             splitParameterMax,
-                             splitValueMaxCont,
-                             splitValueMaxFactSize,
-                             splitValueMaxFactPtr,
-                             splitVectorPtr,
-                             splitIndicator);
-          if (factorFlag == FALSE) {
-            priorMembrIter = currentMembrIter - 1;
-          }
-        }  
-      }  
-      else {
-      }
-      unstackSplitVector(treeID,
-                         splitVectorSize,
-                         splitLength,
-                         factorFlag,
-                         deterministicSplitFlag,
-                         mwcpSizeAbsolute,
-                         splitVectorPtr);
-      unselectRandomCovariates(treeID,
-                               parent,
-                               repMembrSize,
-                               indxx,
-                               nonMissMembrSizeStatic,
-                               nonMissMembrIndx,
-                               multImpFlag);
-        if (!((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP)))) {
-          unstackSplitSurv(treeID,
-                           parent,
-                           eventTimeCount,
-                           eventTimeIndex,
-                           eventTimeSize,
-                           parentEvent,
-                           parentAtRisk,
-                           leftEvent,
-                           leftAtRisk,
-                           rightEvent,
-                           rightAtRisk);
-          unstackSplitSurv(treeID,
-                           parent,
-                           revEventTimeCount,
-                           revEventTimeIndex,
-                           revEventTimeSize,
-                           revParentEvent,
-                           revParentAtRisk,
-                           revLeftEvent,
-                           revLeftAtRisk,
-                           revRightEvent,
-                           revRightAtRisk);
-          unstackAndGetSplitSurv2(treeID,
-                                  parent,
-                                  eventTimeSize,
-                                  parentSurvival);
-          unstackAndGetSplitSurv2(treeID,
-                                  parent,
-                                  revEventTimeSize,
-                                  revParentSurvival);
-          unstackFZhat(treeID, parent, eventTimeSize, fZHat);
-          free_dvector(leftGammaSum,  1, eventTimeSize);
-          free_dvector(rightGammaSum, 1, eventTimeSize);
-          free_dvector(leftGammaBar,  1, eventTimeSize);
-          free_dvector(rightGammaBar, 1, eventTimeSize);
-        }
-    }  
-    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
-      unstackSplitSurv(treeID,
-                       parent,
-                       eventTimeCount,
-                       eventTimeIndex,
-                       eventTimeSize,
-                       parentEvent,
-                       parentAtRisk,
-                       leftEvent,
-                       leftAtRisk,
-                       rightEvent,
-                       rightAtRisk);
-      unstackSplitSurv(treeID,
-                       parent,
-                       revEventTimeCount,
-                       revEventTimeIndex,
-                       revEventTimeSize,
-                       revParentEvent,
-                       revParentAtRisk,
-                       revLeftEvent,
-                       revLeftAtRisk,
-                       revRightEvent,
-                       revRightAtRisk);
-          unstackAndGetSplitSurv2(treeID,
-                                  parent,
-                                  eventTimeSize,
-                                  parentSurvival);
-          unstackAndGetSplitSurv2(treeID,
-                                  parent,
-                                  revEventTimeSize,
-                                  revParentSurvival);
-          unstackFZhat(treeID, parent, eventTimeSize, fZHat);
-          free_dvector(leftGammaSum,  1, eventTimeSize);
-          free_dvector(rightGammaSum, 1, eventTimeSize);
-          free_dvector(leftGammaBar,  1, eventTimeSize);
-          free_dvector(rightGammaBar, 1, eventTimeSize);
-    }
-    unstackRandomCovariates(treeID,
-                            parent,
-                            randomCovariateIndex,
-                            cdf,
-                            cdfSort,
-                            density,
-                            densitySwap);
-    unstackSplitIndicator(repMembrSize,
-                          localSplitIndicator,
-                          splitVector);
-  }  
-  unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE, 
-                  repMembrSize,
-                  nonMissMembrIndxStatic);
-  result = summarizeSplitResult(*splitParameterMax,
-                                *splitValueMaxCont,
-                                *splitValueMaxFactSize,
-                                *splitValueMaxFactPtr,
-                                 splitStatistic,
-                                 deltaMax);
-  return result;
-}
-char brierScoreGradient1b (uint    treeID,
-                           Node   *parent,
-                           uint   *repMembrIndx,
-                           uint    repMembrSize,
-                           uint   *allMembrIndx,
-                           uint    allMembrSize,
-                           uint   *splitParameterMax,
-                           double *splitValueMaxCont,
-                           uint   *splitValueMaxFactSize,
-                           uint  **splitValueMaxFactPtr,
-                           double *splitStatistic,
-                           char  **splitIndicator,
-                           char   *splitMIA,
-                           char    multImpFlag) {
+char brierScoreGradient1 (uint       treeID,
+                          Node      *parent,
+                          uint      *repMembrIndx,
+                          uint       repMembrSize,
+                          uint      *allMembrIndx,
+                          uint       allMembrSize,
+                          uint      *splitParameterMax,
+                          double    *splitValueMaxCont,
+                          uint      *splitValueMaxFactSize,
+                          uint     **splitValueMaxFactPtr,
+                          double    *splitStatistic,
+                          char     **splitIndicator,
+                          GreedyObj *greedyMembr,
+                          char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -15231,10 +13394,10 @@ char brierScoreGradient1b (uint    treeID,
                           splitVector);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE, 
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE); 
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -15272,20 +13435,20 @@ void getMembrCountOnly (uint       treeID,
     }
   }
 }
-char unsupervisedSplit (uint    treeID,
-                        Node   *parent,
-                        uint   *repMembrIndx,
-                        uint    repMembrSize,
-                        uint   *allMembrIndx,
-                        uint    allMembrSize,
-                        uint   *splitParameterMax,
-                        double *splitValueMaxCont,
-                        uint   *splitValueMaxFactSize,
-                        uint  **splitValueMaxFactPtr,
-                        double *splitStatistic,
-                        char  **splitIndicator,
-                        char   *splitMIA,
-                        char    multImpFlag) {
+char unsupervisedSplit (uint       treeID,
+                        Node      *parent,
+                        uint      *repMembrIndx,
+                        uint       repMembrSize,
+                        uint      *allMembrIndx,
+                        uint       allMembrSize,
+                        uint      *splitParameterMax,
+                        double    *splitValueMaxCont,
+                        uint      *splitValueMaxFactSize,
+                        uint     **splitValueMaxFactPtr,
+                        double    *splitStatistic,
+                        char     **splitIndicator,
+                        GreedyObj *greedyMembr,
+                        char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -15730,10 +13893,10 @@ char unsupervisedSplit (uint    treeID,
     free_dvector(variance, 1, RF_ytry);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  TRUE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  TRUE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -15742,20 +13905,20 @@ char unsupervisedSplit (uint    treeID,
                                  deltaMax);
   return result;
 }
-char multivariateSplit (uint    treeID,
-                        Node   *parent,
-                        uint   *repMembrIndx,
-                        uint    repMembrSize,
-                        uint   *allMembrIndx,
-                        uint    allMembrSize,
-                        uint   *splitParameterMax,
-                        double *splitValueMaxCont,
-                        uint   *splitValueMaxFactSize,
-                        uint  **splitValueMaxFactPtr,
-                        double *splitStatistic,
-                        char  **splitIndicator,
-                        char   *splitMIA,
-                        char    multImpFlag) {
+char multivariateSplit (uint       treeID,
+                        Node      *parent,
+                        uint      *repMembrIndx,
+                        uint       repMembrSize,
+                        uint      *allMembrIndx,
+                        uint       allMembrSize,
+                        uint      *splitParameterMax,
+                        double    *splitValueMaxCont,
+                        uint      *splitValueMaxFactSize,
+                        uint     **splitValueMaxFactPtr,
+                        double    *splitStatistic,
+                        char     **splitIndicator,
+                        GreedyObj *greedyMembr,
+                        char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -16191,10 +14354,10 @@ char multivariateSplit (uint    treeID,
     free_dvector(variance,   1, RF_ySize);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  TRUE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  TRUE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -16203,20 +14366,20 @@ char multivariateSplit (uint    treeID,
                                  deltaMax);
   return result;
 }
-char customMultivariateSplit (uint    treeID,
-                              Node   *parent,
-                              uint   *repMembrIndx,
-                              uint    repMembrSize,
-                              uint   *allMembrIndx,
-                              uint    allMembrSize,
-                              uint   *splitParameterMax,
-                              double *splitValueMaxCont,
-                              uint   *splitValueMaxFactSize,
-                              uint  **splitValueMaxFactPtr,
-                              double *splitStatistic,
-                              char  **splitIndicator,
-                              char   *splitMIA,
-                              char    multImpFlag) {
+char customMultivariateSplit (uint       treeID,
+                              Node      *parent,
+                              uint      *repMembrIndx,
+                              uint       repMembrSize,
+                              uint      *allMembrIndx,
+                              uint       allMembrSize,
+                              uint      *splitParameterMax,
+                              double    *splitValueMaxCont,
+                              uint      *splitValueMaxFactSize,
+                              uint     **splitValueMaxFactPtr,
+                              double    *splitStatistic,
+                              char     **splitIndicator,
+                              GreedyObj *greedyMembr,
+                              char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -16596,10 +14759,10 @@ char customMultivariateSplit (uint    treeID,
     free_dvector(variance,   1, RF_ySize);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  TRUE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  TRUE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -16608,20 +14771,20 @@ char customMultivariateSplit (uint    treeID,
                                  deltaMax);
   return result;
 }
-char customSurvivalSplit (uint    treeID,
-                          Node   *parent,
-                          uint   *repMembrIndx,
-                          uint    repMembrSize,
-                          uint   *allMembrIndx,
-                          uint    allMembrSize,
-                          uint   *splitParameterMax,
-                          double *splitValueMaxCont,
-                          uint   *splitValueMaxFactSize,
-                          uint  **splitValueMaxFactPtr,
-                          double *splitStatistic,
-                          char  **splitIndicator,
-                          char   *splitMIA,
-                          char    multImpFlag) {
+char customSurvivalSplit (uint       treeID,
+                          Node      *parent,
+                          uint      *repMembrIndx,
+                          uint       repMembrSize,
+                          uint      *allMembrIndx,
+                          uint       allMembrSize,
+                          uint      *splitParameterMax,
+                          double    *splitValueMaxCont,
+                          uint      *splitValueMaxFactSize,
+                          uint     **splitValueMaxFactPtr,
+                          double    *splitStatistic,
+                          char     **splitIndicator,
+                          GreedyObj *greedyMembr,
+                          char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -16916,10 +15079,10 @@ char customSurvivalSplit (uint    treeID,
                           splitVector);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -16928,20 +15091,20 @@ char customSurvivalSplit (uint    treeID,
                                  deltaMax);
   return result;
 }
-char customCompetingRiskSplit (uint    treeID,
-                               Node   *parent,
-                               uint   *repMembrIndx,
-                               uint    repMembrSize,
-                               uint   *allMembrIndx,
-                               uint    allMembrSize,
-                               uint   *splitParameterMax,
-                               double *splitValueMaxCont,
-                               uint   *splitValueMaxFactSize,
-                               uint  **splitValueMaxFactPtr,
-                               double *splitStatistic,
-                               char  **splitIndicator,
-                               char   *splitMIA,
-                               char    multImpFlag) {
+char customCompetingRiskSplit (uint       treeID,
+                               Node      *parent,
+                               uint      *repMembrIndx,
+                               uint       repMembrSize,
+                               uint      *allMembrIndx,
+                               uint       allMembrSize,
+                               uint      *splitParameterMax,
+                               double    *splitValueMaxCont,
+                               uint      *splitValueMaxFactSize,
+                               uint     **splitValueMaxFactPtr,
+                               double    *splitStatistic,
+                               char     **splitIndicator,
+                               GreedyObj *greedyMembr,
+                               char       multImpFlag) {
   uint   *randomCovariateIndex;
   uint    uniformSelectedSlot;
   uint    uniformSize;
@@ -17233,10 +15396,10 @@ char customCompetingRiskSplit (uint    treeID,
                           splitVector);
   }  
   unstackPreSplit(preliminaryResult,
-                  multImpFlag,
-                  FALSE,  
                   repMembrSize,
-                  nonMissMembrIndxStatic);
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
   result = summarizeSplitResult(*splitParameterMax,
                                 *splitValueMaxCont,
                                 *splitValueMaxFactSize,
@@ -17257,11 +15420,14 @@ char getPreSplitResult (uint      treeID,
   uint i, r;
   char mResponseFlag;
   char result;
-  if (repMembrSize >= (2 * RF_nodeSize)) {
-    result = TRUE;
-  }
-  else {
-    result = FALSE;
+  result = TRUE;
+  if (result) {
+    if (repMembrSize >= (2 * RF_nodeSize)) {
+      result = TRUE;
+    }
+    else {
+      result = FALSE;
+    }
   }
   if (result) {
     if (RF_nodeDepth < 0) {
@@ -17362,10 +15528,10 @@ char getPreSplitResult (uint      treeID,
   return result;
 }
 void unstackPreSplit (char      preliminaryResult,
-                      char      multImpFlag,
-                      char      multVarFlag,
                       uint      repMembrSize,
-                      uint     *nonMissMembrIndx) {
+                      uint     *nonMissMembrIndx,
+                      char      multImpFlag,
+                      char      multVarFlag) {
   if (preliminaryResult) {
     if (!((RF_mRecordSize == 0) || multImpFlag || !(RF_optHigh & OPT_MISS_SKIP) || multVarFlag)) {
       free_uivector(nonMissMembrIndx, 1, repMembrSize);
@@ -18034,16 +16200,6 @@ void updateNodeStatistics(Node *parent, double delta, uint candidateCovariateCou
     (parent -> mtryIndx)[candidateCovariateCount] = covariate;
     (parent -> mtryStat)[candidateCovariateCount] = delta;
   }
-}
-void stackAndGetL2Impute(uint     treeID,
-                         Node    *parent,
-                         uint    *repMembrIndx,
-                         uint     repMembrSize,
-                         uint    *nonMissMembrIndx,
-                         uint     nonMissMembrSize,
-                         uint     eventTimeSize,
-                         double  *localSurvival,
-                         double **l2Impute) {
 }
 void stackAndGetSplitSurv(uint    treeID,
                           Node   *parent,
@@ -18736,7 +16892,7 @@ void stackAndGetQETime(uint    treeID,
   else {
     *qeTimeIndex = uivector(1, eventTimeSize + 1);
     *qeTimeSize = 0;
-    if (RF_splitRule == SURV_BSG1A) {
+    if (RF_splitRule == SURV_BSG1) {
       uLimit = (uint) ceil((double) RF_masterTimeSize * RF_quantile[1]);
       for (k = 1; k <= eventTimeSize; k++) {      
         if (eventTimeIndex[k] <= uLimit) {
@@ -18784,17 +16940,6 @@ void initializeTimeArrays(char mode) {
     RF_masterTimeSize = leadingIndex;
     for (i= RF_masterTimeSize + 1; i <= RF_observationSize; i++) {
       RF_masterTime[i] = 0;
-    }
-    if (RF_quantileSize > 0) {
-      for (i = 1; i <= RF_quantileSize; i++) {
-        if ((EPSILON < RF_quantile[i]) && (RF_quantile[i] <= 1.0)) {
-        }
-        else {
-          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-          RF_nativeError("\nRF-SRC:  Quantile value is out of range (0, 1]:  %.10e ", RF_quantile[i]);
-          RF_nativeExit();
-        }
-      }
     }
     RF_opt = RF_opt | OPT_PERF_CALB;
     if (!(RF_opt & OPT_IMPU_ONLY)) {
@@ -19631,7 +17776,7 @@ char stackCompetingArrays(char mode) {
                    RF_eventType);
   switch (mode) {
   case RF_GROW:
-    if ((RF_splitRule == SURV_CR_LAU) || (RF_splitRule == SURV_CR_LOG)) {
+    if (RF_splitRule == SURV_CR_LAU) {
       if (RF_eventTypeSize > 1) {
         RF_opt = RF_opt | OPT_COMP_RISK;
       }
@@ -19691,7 +17836,7 @@ char stackCompetingArrays(char mode) {
         RF_opt = RF_opt | OPT_COMP_RISK;
       }
     }
-    if ((RF_splitRule == SURV_CR_LAU) || (RF_splitRule == SURV_CR_LOG)) {
+    if (RF_splitRule == SURV_CR_LAU) {
       if (RF_eventTypeSize == 1) {
         RF_nativeError("\nRF-SRC:  *** ERROR *** ");
         RF_nativeError("\nRF-SRC:  Split rule specified is for Competing Risk scenarios only.");
@@ -19795,6 +17940,9 @@ char stackCompetingArrays(char mode) {
     }
     free_uivector(feventType, 1, RF_fobservationSize);
   }  
+  else {
+    RF_feventTypeSize = RF_mStatusSize = 0;
+  }
   if (RF_eventTypeSize > 1) {
     if (mode == RF_PRED) {
       if (RF_feventTypeSize > 0) {
@@ -20190,7 +18338,7 @@ void stackDefinedOutputObjects(char      mode,
                                Node   ***pRF_root,
                                uint    **pRF_tLeafCount,
                                double  **pRF_proximity,
-                                
+                               double  **pRF_distance,
                                double  **pRF_weight,
                                int     **pRF_seed,
                                double  **p_imputation,
@@ -20288,7 +18436,9 @@ void stackDefinedOutputObjects(char      mode,
     if (RF_opt & OPT_PROX) {
       RF_stackCount += 1;
     }
-     
+    if (RF_optHigh & OPT_DIST) {
+      RF_stackCount += 1;
+    }
     if (RF_optHigh & OPT_WGHT) {
       RF_stackCount += 1;
     }
@@ -20377,10 +18527,15 @@ void stackDefinedOutputObjects(char      mode,
         }
       }
     }
+    if (RF_opt & OPT_EMPR_RISK) {
+      RF_stackCount += 3;
+    }
     if (RF_opt & OPT_PROX) {
       RF_stackCount += 1;
     }
-     
+    if (RF_optHigh & OPT_DIST) {
+      RF_stackCount += 1;
+    }
     if (RF_optHigh & OPT_WGHT) {
       RF_stackCount += 1;
     }
@@ -20389,10 +18544,10 @@ void stackDefinedOutputObjects(char      mode,
         RF_stackCount += 1;
         RF_stackCount += 2;
         RF_stackCount += 5;
-        if (RF_htry > 0) {  
+        if (RF_hdim > 0) {  
           RF_stackCount += 1;
           RF_stackCount += 1;
-          for (i = 2; i <= RF_htry; i++) {
+          for (i = 2; i <= RF_hdim; i++) {
             RF_stackCount += 6;            
           }
           RF_optHigh = RF_optHigh & (~OPT_MISS_SKIP);
@@ -20740,6 +18895,12 @@ void stackDefinedOutputObjects(char      mode,
       } 
     }
   }  
+  if (RF_opt & OPT_EMPR_RISK) {
+    localSize = (ulong) RF_ntree * RF_lotSize; 
+    RF_splitStatLOT_ = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_STAT_LOT, localSize, RF_nativeNaN, RF_sexpString[RF_STAT_LOT], &RF_splitStatLOTptr, 2, RF_ntree, RF_lotSize);
+    RF_emprRSK_      = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_EMP_RSK, localSize, RF_nativeNaN, RF_sexpString[RF_EMP_RSK], &RF_emprRSKptr, 2, RF_ntree, RF_lotSize);
+    RF_oobEmprRSK_   = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_OEMP_RSK, localSize, RF_nativeNaN, RF_sexpString[RF_OEMP_RSK], &RF_oobEmprRSKptr, 2, RF_ntree, RF_lotSize);
+  }
   if (RF_opt & OPT_VIMP) {
     RF_vimpMRTstd = NULL;
     RF_vimpCLSstd = NULL;
@@ -20920,7 +19081,25 @@ void stackDefinedOutputObjects(char      mode,
       }
     }
   }
-   
+  if (RF_optHigh & OPT_DIST) {
+    localSize = ((ulong) (obsSize + 1) * obsSize) >> 1;
+    *pRF_distance = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_DIST_ID, localSize, 0, RF_sexpString[RF_DIST_ID], NULL, 1, localSize);
+    RF_distanceDen = dvector(1, localSize);
+    (*pRF_distance) --;
+    RF_distancePtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
+    RF_distanceDenPtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
+    RF_distancePtr[1] = *pRF_distance;
+    RF_distanceDenPtr[1] = RF_distanceDen;    
+    RF_distancePtr[1][1] = RF_distanceDenPtr[1][1] = 0.0;
+    for (i = 2; i <= obsSize; i++) {
+      RF_distancePtr[i] = RF_distancePtr[i-1] + i - 1;
+      RF_distanceDenPtr[i] = RF_distanceDenPtr[i-1] + i - 1;
+      for (j = 1; j <= i; j++) {
+        RF_distancePtr[i][j] = 0.0;
+        RF_distanceDenPtr[i][j] = 0.0;
+      }
+    }
+  }
   if (RF_optHigh & OPT_WGHT) {
     localSize = (ulong) obsSize * RF_observationSize;
     *pRF_weight = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_WGHT_ID, localSize, 0, RF_sexpString[RF_WGHT_ID], &RF_weightPtr, 2, obsSize, RF_observationSize);
@@ -21355,7 +19534,12 @@ void unstackDefinedOutputObjects(char      mode) {
     free_new_vvector(RF_proximityPtr, 1, obsSize, NRUTIL_DPTR);
     free_new_vvector(RF_proximityDenPtr, 1, obsSize, NRUTIL_DPTR);
   }
-   
+  if (RF_optHigh & OPT_DIST) {
+    localSize = ((obsSize + 1)  * obsSize) >> 1;
+    free_dvector(RF_distanceDen, 1, localSize);
+    free_new_vvector(RF_distancePtr, 1, obsSize, NRUTIL_DPTR);
+    free_new_vvector(RF_distanceDenPtr, 1, obsSize, NRUTIL_DPTR);
+  }
   if (RF_optHigh & OPT_WGHT) {
     free_uivector(RF_weightDenom, 1, obsSize);
   }
@@ -21402,7 +19586,7 @@ void stackForestOutputObjects(char mode) {
   uint asciiLengthOfHexPortion;
   uint i, j;
   if (RF_opt & OPT_TREE) {
-    j = RF_htry;
+    j = RF_hdim;
     asciiLengthOfHexPortion = 0;
     while (j > 0) {
       asciiLengthOfHexPortion++;
@@ -21410,8 +19594,8 @@ void stackForestOutputObjects(char mode) {
     }
     resultStr = cvector(0, RF_SEXP_ASCII_SIZE + asciiLengthOfHexPortion + 1);
     adjStr =    cvector(0, asciiLengthOfHexPortion + 1);
-    adj = RF_htry;
-    if (RF_htry == 0) {
+    adj = RF_hdim;
+    if (RF_hdim == 0) {
       adj ++;
     }
     if (mode == RF_GROW) {
@@ -21444,47 +19628,47 @@ void stackForestOutputObjects(char mode) {
       RF_mwcpPT_[1] --;
       RF_mwcpCT_[1] = (uint*)   stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_MWCP_CT, (ulong) RF_ntree, 0, RF_sexpString[RF_MWCP_CT], NULL, 1, RF_ntree);
       RF_mwcpCT_[1] --;
-      if (RF_htry > 0) {
+      if (RF_hdim > 0) {
         RF_hcDim_ = (uint*)   stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_HC_DIM, totalNodeCount, 0, RF_sexpString[RF_HC_DIM], NULL, 1, totalNodeCount);
         RF_hcDim_ --;
         RF_contPTR_[1] = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_CONT_PTR, totalNodeCount, 0, RF_sexpString[RF_CONT_PTR], NULL, 1, totalNodeCount);
         RF_contPTR_[1] --;
-        for (i = 2; i <= RF_htry; i++) {
+        for (i = 2; i <= RF_hdim; i++) {
           integerToHexString(i, adjStr);
           strcpy(resultStr, RF_sexpString[RF_PARM_ID]);
           strcat(resultStr, adjStr);
           RF_parmID_[i]   = (uint*)   stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_PARM_ID, totalNodeCount, 0, resultStr, NULL, 1, totalNodeCount);
           RF_parmID_[i]  --;
         }
-        for (i = 2; i <= RF_htry; i++) {
+        for (i = 2; i <= RF_hdim; i++) {
           integerToHexString(i, adjStr);
           strcpy(resultStr, RF_sexpString[RF_CONT_PT]);
           strcat(resultStr, adjStr);
           RF_contPT_[i]   = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_CONT_PT, totalNodeCount, 0, resultStr, NULL, 1, totalNodeCount);
           RF_contPT_[i]  --;
         }
-        for (i = 2; i <= RF_htry; i++) {
+        for (i = 2; i <= RF_hdim; i++) {
           integerToHexString(i, adjStr);
           strcpy(resultStr, RF_sexpString[RF_CONT_PTR]);
           strcat(resultStr, adjStr);
           RF_contPTR_[i]  = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_CONT_PTR, totalNodeCount, 0, resultStr, NULL, 1, totalNodeCount);
           RF_contPTR_[i] --;
         }
-        for (i = 2; i <= RF_htry; i++) {
+        for (i = 2; i <= RF_hdim; i++) {
           integerToHexString(i, adjStr);
           strcpy(resultStr, RF_sexpString[RF_MWCP_SZ]);
           strcat(resultStr, adjStr);
           RF_mwcpSZ_[i]   = (uint*)   stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_MWCP_SZ, totalNodeCount, 0, resultStr, NULL, 1, totalNodeCount);
           RF_mwcpSZ_[i] --;
         }
-        for (i = 2; i <= RF_htry; i++) {
+        for (i = 2; i <= RF_hdim; i++) {
           integerToHexString(i, adjStr);
           strcpy(resultStr, RF_sexpString[RF_MWCP_PT]);
           strcat(resultStr, adjStr);
           RF_mwcpPT_[i]   = (uint*)   stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_MWCP_PT, totalMWCPCount, 0, resultStr, NULL, 1, totalMWCPCount);
           RF_mwcpPT_[i] --;
         }
-        for (i = 2; i <= RF_htry; i++) {
+        for (i = 2; i <= RF_hdim; i++) {
           integerToHexString(i, adjStr);
           strcpy(resultStr, RF_sexpString[RF_MWCP_CT]);
           strcat(resultStr, adjStr);
@@ -21500,8 +19684,8 @@ void stackForestOutputObjects(char mode) {
 void stackAuxForestObjects(char mode) {
   uint adj;
   uint i, k;
-  adj = RF_htry;
-  if (RF_htry == 0) {
+  adj = RF_hdim;
+  if (RF_hdim == 0) {
     adj ++;
   }
   if (mode != RF_GROW) {
@@ -21537,8 +19721,8 @@ void stackAuxForestObjects(char mode) {
 void unstackAuxForestObjects (char mode) {
   uint adj;
   uint k;
-  adj = RF_htry;
-  if (RF_htry == 0) {
+  adj = RF_hdim;
+  if (RF_hdim == 0) {
     adj ++;
   }
   if (mode == RF_GROW) {
@@ -22296,14 +20480,13 @@ void stackIncomingArrays(char mode) {
     }
     if ((RF_timeIndex == 0) && (RF_statusIndex == 0)) {
       if ((RF_splitRule != RAND_SPLIT)  &&
-          (RF_splitRule != REGR_WT_NRM) &&
-          (RF_splitRule != REGR_WT_OFF) &&
-          (RF_splitRule != REGR_WT_HVY) &&
+          (RF_splitRule != REGR_NRM)    &&
+          (RF_splitRule != REGR_SGS)    &&
           (RF_splitRule != REGR_QUANT)  &&
+          (RF_splitRule != LARG_QUANT)  &&
           (RF_splitRule != CLAS_WT_NRM) &&
-          (RF_splitRule != CLAS_WT_OFF) &&
-          (RF_splitRule != CLAS_WT_HVY) &&
-          (RF_splitRule != CLAS_RNKPS)  &&
+          (RF_splitRule != CLAS_AU_ROC) &&
+          (RF_splitRule != CLAS_ENTROP) &&
           (RF_splitRule != MVRG_SPLIT)  &&
           (RF_splitRule != MVCL_SPLIT)  &&
           (RF_splitRule != MVMX_SPLIT)  &&
@@ -22314,12 +20497,12 @@ void stackIncomingArrays(char mode) {
         RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
         RF_nativeExit();
       }
-      if  (RF_splitRule == REGR_QUANT) {
+      if  ((RF_splitRule == REGR_QUANT) || (RF_splitRule == LARG_QUANT)) {
         if (RF_quantileSize > 0) {
         }
         else {
           RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-          RF_nativeError("\nRF-SRC:  Quantile regression split rule requires the presence of a probability vector.");
+          RF_nativeError("\nRF-SRC:  Quantile regression split rules require the presence of a probability vector.");
           RF_nativeExit();
         }
       }
@@ -22327,13 +20510,7 @@ void stackIncomingArrays(char mode) {
     else if ((RF_timeIndex != 0) && (RF_statusIndex != 0)) {
       if ((RF_splitRule != SURV_LGRNK)  &&
           (RF_splitRule != SURV_LRSCR)  &&
-          (RF_splitRule != SURV_WIBS)   &&
           (RF_splitRule != SURV_BSG1)   &&
-          (RF_splitRule != SURV_BSG1A)  &&
-          (RF_splitRule != SURV_BSG1B)  &&
-          (RF_splitRule != SURV_QUANT)  &&
-          (RF_splitRule != SURV_L2IMP)  &&
-          (RF_splitRule != SURV_CR_LOG) &&
           (RF_splitRule != SURV_CR_LAU) &&
           (RF_splitRule != RAND_SPLIT)  &&
           (RF_splitRule != CUST_SPLIT)) {
@@ -22350,12 +20527,16 @@ void stackIncomingArrays(char mode) {
       RF_nativeExit();
     }
   }
-  for (uint i = 1; i <= RF_quantileSize; i++) {
-    if ((RF_quantile[i] <= 0) || (RF_quantile[i] >= 1.0)) {
-      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-      RF_nativeError("\nRF-SRC:  Parameter verification failed.");
-      RF_nativeError("\nRF-SRC:  Quantile probabilities must be in the range (0, 1):  (index, value) = (%10d, %10.4f) \n", i, RF_quantile[i]);
-      RF_nativeExit();
+  if (RF_quantileSize > 0) {
+    for (uint i = 1; i <= RF_quantileSize; i++) {
+      if ((EPSILON < RF_quantile[i]) && (RF_quantile[i] <= 1.0)) {
+      }
+      else {
+        RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+        RF_nativeError("\nRF-SRC:  Parameter verification failed.");
+        RF_nativeError("\nRF-SRC:  Quantile value is out of range (0, 1):  %.10e ", RF_quantile[i]);
+        RF_nativeExit();
+      }
     }
   }
 }
@@ -23522,7 +21703,6 @@ Terminal *makeTerminal() {
   parent -> membrCount           = 0;
   parent -> membrIndx            = NULL;
   parent -> inbagProxy           = 0;
-  parent -> errorSG              = DBL_MAX;
   parent -> membrStream       = NULL;
   return parent;
 }
@@ -24025,18 +22205,8 @@ void unstackTermLMIIndex(Terminal *tTerm) {
     }
   }
 }
-void getTerminalInfo(Terminal *termPtr) {
-  RF_nativePrint("\nTerminalInfo:  %20x", termPtr);
-  RF_nativePrint("\n  nodeID: %10d", termPtr -> nodeID);
-  RF_nativePrint("\n");
-  RF_nativePrint("\n lmiIndex            = %20x", termPtr -> lmiIndex);
-  RF_nativePrint("\n lmiSize             = %20d", termPtr -> lmiSize);
-  RF_nativePrint("\n lmiValue            = %20x", termPtr -> lmiValue);
-}
 void acquireTree(char mode, uint r, uint b) {
-  Node  *rootPtr;
   char multImpFlag, perfFlag;
-  uint *allMembrIndx;
   uint *fallMembrIndx;
   uint bootMembrIndxIter;
   uint rmbrIterator;
@@ -24048,9 +22218,9 @@ void acquireTree(char mode, uint r, uint b) {
   uint i;
 #ifdef _OPENMP
 #endif
-  RF_root[b] = rootPtr = makeNode((mode == RF_GROW) ? RF_xSize : 0,
-                                  (RF_opt & OPT_USPV_STAT) ? RF_ytry : 0,  
-                                  (mode == RF_GROW) ? ( (RF_opt & OPT_NODE_STAT) ? RF_mtry : 0)  : 0);  
+  RF_root[b] = makeNode((mode == RF_GROW) ? RF_xSize : 0,
+                        (RF_opt & OPT_USPV_STAT) ? RF_ytry : 0,  
+                        (mode == RF_GROW) ? ( (RF_opt & OPT_NODE_STAT) ? RF_mtry : 0)  : 0);  
   result = TRUE;
   if (mode != RF_GROW) {
     if (RF_getTree[b] == 0) {
@@ -24059,15 +22229,14 @@ void acquireTree(char mode, uint r, uint b) {
   }    
   if (result) {
   stackAuxiliary(mode, b);
-  allMembrIndx = uivector(1, RF_observationSize);
-  switch (mode) {
-  case RF_PRED:
+  if (mode == RF_PRED) {
     fallMembrIndx = uivector(1, RF_fobservationSize);
-    break;
-  default:
-    fallMembrIndx = NULL;
-    break;
   }
+  else {
+    fallMembrIndx = NULL;
+  }
+  RF_root[b] -> allMembrSizeAlloc = RF_root[b] -> allMembrSize = RF_observationSize;
+  RF_root[b] -> allMembrIndx = uivector(1, RF_root[b] -> allMembrSizeAlloc);
   stackShadow(mode, b);
   RF_tTermMembership[b] = (Terminal **) new_vvector(1, RF_observationSize, NRUTIL_TPTR);
   if (mode == RF_PRED) {
@@ -24095,12 +22264,12 @@ void acquireTree(char mode, uint r, uint b) {
       }
     }
   }
-  rootPtr -> parent = NULL;
-  rootPtr -> nodeID = 1;
+  RF_root[b] -> parent = NULL;
+  RF_root[b] -> nodeID = 1;
   RF_maxDepth[b] = 0;
   bootMembrIndxIter = 0;
   for (i = 1; i <= RF_observationSize; i++) {
-    allMembrIndx[i] = i;
+    RF_root[b] -> allMembrIndx[i] = i;
     RF_nodeMembership[b][i] = RF_root[b];
     RF_bootMembershipFlag[b][i]  = FALSE;
     RF_bootMembershipCount[b][i] = 0;
@@ -24135,18 +22304,25 @@ void acquireTree(char mode, uint r, uint b) {
     RF_tLeafCount[b] = 0;
     stackNodeAndTermList(b, 0);
     rmbrIterator = ambrIterator = 0;
-    result = growTree (r,
-                       TRUE,
-                       multImpFlag,
-                       b,
-                       rootPtr,
-                       NULL,
-                       0,
-                       allMembrIndx,
-                       RF_observationSize,
-                       & bootMembrIndxIter,
-                       & rmbrIterator,
-                       & ambrIterator);
+    if (RF_hdim == 0) {
+      result = growTree (r,
+                         TRUE,
+                         multImpFlag,
+                         b,
+                         RF_root[b],
+                         & bootMembrIndxIter,
+                         & rmbrIterator,
+                         & ambrIterator);
+    }
+    else {
+      result = growTreeGreedy (r,
+                               multImpFlag,
+                               b,
+                               RF_root[b],
+                               & bootMembrIndxIter,
+                               & rmbrIterator,
+                               & ambrIterator);
+    }
     break;
   default:
     if (mode == RF_PRED) {
@@ -24158,17 +22334,17 @@ void acquireTree(char mode, uint r, uint b) {
     if (RF_tLeafCount[b] > 0) {
       stackNodeAndTermList(b, RF_tLeafCount[b]);
     }
-    restoreTree(mode, b, rootPtr);
+    restoreTree(mode, b, RF_root[b]);
     rmbrIterator = ambrIterator = 0;
     result = restoreNodeMembership(r,
                                    mode,
                                    TRUE,
                                    b,
-                                   rootPtr,
+                                   RF_root[b],
                                    NULL,
                                    0,
-                                   allMembrIndx,
-                                   RF_observationSize,
+                                   RF_root[b] -> allMembrIndx,
+                                   RF_root[b] -> allMembrSize,
                                    fallMembrIndx,
                                    RF_fobservationSize,
                                    & bootMembrIndxIter,
@@ -24186,16 +22362,18 @@ void acquireTree(char mode, uint r, uint b) {
         RF_PRUN_ID_ptr[b][i] = RF_pNodeMembership[b][i] -> nodeID;
       }
     }
-    RF_oobSize[b] = 0;
-    RF_ibgSize[b] = 0;
-    for (i=1; i <= RF_observationSize; i++) {
-      if (RF_bootMembershipFlag[b][i] == FALSE) {
-        RF_oobSize[b] ++;
-        RF_oobMembershipIndex[b][RF_oobSize[b]] = i;
-      }
-      else {
-        RF_ibgSize[b] ++;
-        RF_ibgMembershipIndex[b][RF_ibgSize[b]] = i;
+    if ((RF_hdim == 0) || ((RF_hdim > 0) && (mode != RF_GROW))) {
+      RF_oobSize[b] = 0;
+      RF_ibgSize[b] = 0;
+      for (i = 1; i <= RF_observationSize; i++) {
+        if (RF_bootMembershipFlag[b][i] == FALSE) {
+          RF_oobSize[b] ++;
+          RF_oobMembershipIndex[b][RF_oobSize[b]] = i;
+        }
+        else {
+          RF_ibgSize[b] ++;
+          RF_ibgMembershipIndex[b][RF_ibgSize[b]] = i;
+        }
       }
     }
     if (mode != RF_PRED) {
@@ -24339,7 +22517,7 @@ void acquireTree(char mode, uint r, uint b) {
           getPartialNodeMembership(TRUE,
                                    b,
                                    i,
-                                   rootPtr,
+                                   RF_root[b],
                                    RF_identityMembershipIndex,
                                    RF_observationSize,
                                    RF_observation[b],
@@ -24353,7 +22531,9 @@ void acquireTree(char mode, uint r, uint b) {
       if (RF_optHigh & OPT_WGHT) {
           updateWeight(mode, b);
       }
-       
+      if (RF_optHigh & OPT_DIST) {
+          updateDistance(mode, b);
+      }
       if (RF_opt & OPT_PROX) {
         updateProximity(mode, b);
       }
@@ -24422,7 +22602,6 @@ void acquireTree(char mode, uint r, uint b) {
     }
   }
   unstackShadow(mode, b, TRUE, TRUE);
-  free_uivector(allMembrIndx, 1, RF_observationSize);
   if (mode == RF_PRED) {
     free_uivector(fallMembrIndx, 1, RF_fobservationSize);
   }
@@ -24615,8 +22794,193 @@ void updateProximity(char mode, uint b) {
   }
    
 }
- 
- 
+void finalizeDistance(char mode) {
+  uint  obsSize;
+  switch (mode) {
+  case RF_PRED:
+    obsSize = RF_fobservationSize;
+    break;
+  default:
+    obsSize = RF_observationSize;
+    break;
+  }
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(RF_numThreads)
+#endif
+  for (uint i = 1; i <= obsSize; i++) {
+    for (uint j = 1; j <= i; j++) {
+      if (RF_distanceDenPtr[i][j] > 0) {
+        RF_distancePtr[i][j] = RF_distancePtr[i][j] /  RF_distanceDenPtr[i][j];
+      }
+      else {
+        RF_distancePtr[i][j] = RF_nativeNaN;
+      }
+    }
+  }
+}
+void updateDistance(char mode, uint b) {
+  uint     **utTermMembership;
+  uint      *utTermMembershipCount;
+  Terminal **tTermMembership;
+  Node *iNodeMembership, *jNodeMembership;
+  Node *deepNodeMembership, *shallowNodeMembership;
+  uint  iEdgeCount, jEdgeCount;
+  uint  iDepthCount, jDepthCount;
+  uint  *deepEdgeCount;
+  double realDistance;
+  double minDistance;
+  uint  *membershipIndex;
+  uint   membershipSize;
+  uint  mtnmFlag;
+  membershipSize  = 0;  
+  membershipIndex = NULL;  
+  if((RF_optHigh & OPT_DIST_IBG) && (RF_optHigh & OPT_DIST_OOB)) {
+    switch (mode) {
+    case RF_PRED:
+      membershipSize = RF_fobservationSize;
+      membershipIndex = RF_fidentityMembershipIndex;
+      tTermMembership = RF_ftTermMembership[b];
+      break;
+    default:
+      membershipSize = RF_observationSize;
+      membershipIndex = RF_identityMembershipIndex;
+      tTermMembership = RF_tTermMembership[b];
+      break;
+    }
+  }
+  else {
+    if((RF_optHigh & OPT_DIST_IBG)  && !(RF_optHigh & OPT_DIST_OOB)) {
+      membershipIndex = RF_ibgMembershipIndex[b];
+      membershipSize  = RF_ibgSize[b];
+    }
+    else if(!(RF_optHigh & OPT_DIST_IBG)  && (RF_optHigh & OPT_DIST_OOB)) {
+      membershipIndex = RF_oobMembershipIndex[b];
+      membershipSize  = RF_oobSize[b];
+    }
+    else {
+      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+      RF_nativeError("\nRF-SRC:  Illegal updateDistance() call.");
+      RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+      RF_nativeExit();
+    }
+    tTermMembership = RF_tTermMembership[b];
+  }
+  
+  mtnmFlag = FALSE;
+  
+     
+  if (!mtnmFlag) {
+    for (uint i = 1; i <= membershipSize; i++) {
+      uint ii, jj;
+      ii = membershipIndex[i];
+      iNodeMembership = RF_tNodeList[b][tTermMembership[ii] -> nodeID];
+      iDepthCount = iNodeMembership -> depth;
+      for (uint j = 1; j <= i; j++) {
+        jj = membershipIndex[j];
+#ifdef _OPENMP
+#pragma omp atomic update
+#endif
+        RF_distanceDenPtr[ii][jj] ++;
+        jNodeMembership = RF_tNodeList[b][tTermMembership[jj] -> nodeID];
+        jDepthCount = jNodeMembership -> depth;
+        iEdgeCount = jEdgeCount = 0;
+        if ((iNodeMembership -> depth) > (jNodeMembership -> depth)) {
+          deepNodeMembership = iNodeMembership;
+          shallowNodeMembership = jNodeMembership;
+          deepEdgeCount = & iEdgeCount;
+        }
+        else {
+          deepNodeMembership = jNodeMembership;
+          shallowNodeMembership = iNodeMembership;
+          deepEdgeCount = & jEdgeCount;
+        }
+        while ((deepNodeMembership -> depth) > (shallowNodeMembership -> depth)) {
+          deepNodeMembership = deepNodeMembership -> parent;
+          (*deepEdgeCount) ++;
+        }
+        while (deepNodeMembership != shallowNodeMembership) {
+          deepNodeMembership = deepNodeMembership -> parent;
+          shallowNodeMembership = shallowNodeMembership -> parent;
+          iEdgeCount ++;
+          jEdgeCount ++;
+        }
+        if (iDepthCount > 0) { 
+          realDistance = (double) (iEdgeCount + jEdgeCount) / (iDepthCount + jDepthCount);
+        }
+        else {
+          realDistance = 0;
+        }
+#ifdef _OPENMP
+#pragma omp atomic update
+#endif
+        RF_distancePtr[ii][jj] += realDistance;
+      }
+    }
+  }
+  else {
+    utTermMembership =  RF_utTermMembership[b];
+    utTermMembershipCount =  RF_utTermMembershipCount[b];
+    for (uint i = 1; i <= membershipSize; i++) {
+      uint ii, jj;
+      ii = membershipIndex[i];
+      for (uint j = 1; j <= i; j++) {
+        jj = membershipIndex[j];
+#ifdef _OPENMP
+#pragma omp atomic update
+#endif
+        RF_distanceDenPtr[ii][jj] ++;
+        minDistance = 1.0;
+        for (uint ki = 1; ki <= utTermMembershipCount[ii]; ki++) {
+          iNodeMembership = RF_tNodeList[b][utTermMembership[ii][ki]];
+          iDepthCount = iNodeMembership -> depth;
+          for (uint kj = 1; kj <= utTermMembershipCount[jj]; kj++) {
+            jNodeMembership = RF_tNodeList[b][utTermMembership[jj][kj]];
+            jDepthCount = jNodeMembership -> depth;
+            iEdgeCount = jEdgeCount = 0;
+            if ((iNodeMembership -> depth) > (jNodeMembership -> depth)) {
+              deepNodeMembership = iNodeMembership;
+              shallowNodeMembership = jNodeMembership;
+              deepEdgeCount = & iEdgeCount;
+            }
+            else {
+              deepNodeMembership = jNodeMembership;
+              shallowNodeMembership = iNodeMembership;
+              deepEdgeCount = & jEdgeCount;
+            }
+            while ((deepNodeMembership -> depth) > (shallowNodeMembership -> depth)) {
+              deepNodeMembership = deepNodeMembership -> parent;
+              (*deepEdgeCount) ++;
+            }
+            while (deepNodeMembership != shallowNodeMembership) {
+              deepNodeMembership = deepNodeMembership -> parent;
+              shallowNodeMembership = shallowNodeMembership -> parent;
+              iEdgeCount ++;
+              jEdgeCount ++;
+            }
+            if (iDepthCount > 0) { 
+              realDistance = (double) (iEdgeCount + jEdgeCount) / (iDepthCount + jDepthCount);
+            }
+            else {
+              realDistance = 0;
+            }
+            if (realDistance < minDistance) {
+              minDistance = realDistance;
+              if (minDistance == 0) {
+                goto distMarginal;
+              }
+            }
+          }
+        }
+      distMarginal:
+        continue;
+#ifdef _OPENMP
+#pragma omp atomic update
+#endif
+        RF_distancePtr[ii][jj] += minDistance;
+      }
+    }
+  }
+}
 void updateSplitDepth(uint treeID, Node *rootPtr, uint maxDepth) {
   Node  *parent;
   double *localSplitDepth;
@@ -24659,7 +23023,7 @@ void updateSplitDepth(uint treeID, Node *rootPtr, uint maxDepth) {
       }
     }
     free_dvector(localSplitDepth, 1, RF_xSize);
-    freeSplitDepth(treeID);
+    freeSplitPath(treeID);
   }
 }
 char pruneBranch(uint obsSize,
@@ -24816,94 +23180,77 @@ void printPseudoTNInfo(char mode, uint b) {
   getPTNodeList(RF_root[b], RF_pNodeList[b], &i);
   free_new_vvector(RF_pNodeList[b], 1, RF_pLeafCount[b] + 1, NRUTIL_NPTR);
 }      
-Node *getTerminalNode(uint treeID, uint leaf) {
-  uint i, j;
-  Node *parent;
-  parent = NULL;
-  for (j = 1; j <= RF_observationSize; j++) {
-    if ((RF_nodeMembership[treeID][j] -> nodeID) == leaf) {
-      parent = RF_nodeMembership[treeID][j];
-      j = RF_observationSize;
-    }
+void getPTNodeList(Node    *parent,
+                   Node   **list,
+                   uint    *offset) {
+  if (!(parent -> pseudoTerminal)) {
+    getPTNodeList(parent ->  left, list, offset);
+    getPTNodeList(parent -> right, list, offset);
   }
-  if (parent == NULL) {
-    RF_nativePrint("\nDiagnostic Trace of (individual, boot, node, leaf) vectors in data set:  ");
-    RF_nativePrint("\n        index         boot         node         leaf \n");
-    for (i = 1; i <= RF_observationSize; i++) {
-      RF_nativePrint(" %12d %12d %12x %12d \n", i,
-              RF_bootMembershipFlag[treeID][i], RF_nodeMembership[treeID][i],
-              RF_nodeMembership[treeID][i] -> nodeID);
-    }
-    RF_nativePrint("\nDiagnostic State of TRAIN (SHADOW) data:  ");
-    RF_nativePrint("\n       index       status         time   observations -> \n");
-    RF_nativePrint("\n                                      ");
-    for (i=1; i <= RF_xSize; i++) {
-      RF_nativePrint(" %12d", i);
-    }
-    RF_nativePrint("\n");
-    for (j = 1; j <= RF_observationSize; j++) {
-      RF_nativePrint("%12d %12.4f %12.4f", j, RF_status[treeID][j], RF_time[treeID][j]);
-      for (i=1; i <= RF_xSize; i++) {
-        RF_nativePrint(" %12.4f", (RF_observation[treeID][i][j]));
-      }
-      RF_nativePrint("\n");
-    }
-    RF_nativePrint("\nDiagnostic State of TRAIN (INCOMING) data:  ");
-    RF_nativePrint("\n       index       status         time   observations -> \n");
-    RF_nativePrint("\n                                      ");
-    for (i=1; i <= RF_xSize; i++) {
-      RF_nativePrint(" %12d", i);
-    }
-    RF_nativePrint("\n");
-    for (j = 1; j <= RF_observationSize; j++) {
-      RF_nativePrint("%12d %12.4f %12.4f", j, RF_responseIn[RF_statusIndex][j], RF_responseIn[RF_timeIndex][j]);
-      for (i=1; i <= RF_xSize; i++) {
-        RF_nativePrint(" %12.4f", (RF_observationIn[i][j]));
-      }
-      RF_nativePrint("\n");
-    }
+  else {
+    (*offset) ++;
+    list[*offset] = parent;
+  }
+}
+void getSplitPath(uint treeID, Node *parent) {
+  Node *reversePtr;
+  uint i;
+  if (!(RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2))) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-    RF_nativeError("\nRF-SRC:  Proxy member for (tree, node) = (%12d, %12d) not found.", treeID, leaf);
+    RF_nativeError("\nRF-SRC:  Call to calculate split depth without the option being active.");
     RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
     RF_nativeExit();
   }
-  return parent;
+  if (parent -> depth > 0) {
+    RF_maxDepth[treeID] = (parent -> depth > RF_maxDepth[treeID]) ? parent -> depth : RF_maxDepth[treeID];
+    stackSplitDepth(parent, parent -> depth);
+    reversePtr = parent;
+    for (i = 1; i <= parent -> depth; i++) {
+      if ((reversePtr -> parent) == NULL) {
+        RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+        RF_nativeError("\nRF-SRC:  Reverse parsing of tree failed in restoreTree().");
+        RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+        RF_nativeExit();
+      }
+      (parent -> splitDepth)[(parent -> depth) - i + 1] = ((reversePtr -> parent) -> splitInfo) -> randomVar[1];
+      reversePtr = reversePtr -> parent;
+    }
+  }
 }
-void getRawNodeSize(uint  type,
-                    uint  treeID,
-                    Node *parent,
-                    uint *repMembrIndx,
-                    uint *repMembrSize,
-                    uint *allMembrIndx,
-                    uint *allMembrSize) {
-  uint      obsSize;
-  Node   ***nodeMembershipPtr;
-  uint      bootMembrSize;
-  uint i;
-  obsSize           = 0;     
-  nodeMembershipPtr = NULL;  
-  switch (type) {
-  case RF_PRED:
-    obsSize = RF_fobservationSize;
-    nodeMembershipPtr = RF_fnodeMembership;
-    break;
-  default:
-    obsSize = RF_observationSize;
-    nodeMembershipPtr = RF_nodeMembership;
-    break;
+void freeSplitPath(uint treeID) {
+  uint j;
+  for (j = 1; j <= RF_tLeafCount[treeID]; j++) {
+    unstackSplitDepth(RF_tNodeList[treeID][j]);
   }
-  bootMembrSize = RF_bootstrapSize;
-  *repMembrSize = 0;
-  for (i=1; i <= bootMembrSize; i++) {
-    if (RF_nodeMembership[treeID][RF_bootMembershipIndex[treeID][i]] == parent) {
-      repMembrIndx[++(*repMembrSize)] = RF_bootMembershipIndex[treeID][i];
+}
+uint getMaximumDepth(Node *parent) {
+  uint result, rLeft, rRight;
+  result = parent -> depth;
+  if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
+    rLeft = getMaximumDepth(parent ->  left);
+    rRight = getMaximumDepth(parent -> right);
+    result = (rLeft > rRight) ? rLeft : rRight;
+  }
+  return result;
+}
+void getNodesAtDepth(Node *parent, uint tagDepth, Node **nodesAtDepth, uint *nadCount) {
+  char recurseFlag;
+  recurseFlag = TRUE;
+  if (tagDepth == parent -> depth) {
+    if (parent -> splitInfo != NULL) {
+      (*nadCount) ++;
+      nodesAtDepth[*nadCount] = parent;
+    }
+    recurseFlag = FALSE;
+  }
+  else {
+    if (((parent -> left) == NULL) && ((parent -> right) == NULL)) {
+      recurseFlag = FALSE;
     }
   }
-  *allMembrSize = 0;
-  for (i=1; i <= obsSize; i++) {
-    if (nodeMembershipPtr[treeID][i] == parent) {
-      allMembrIndx[++(*allMembrSize)] = i;
-    }
+  if (recurseFlag) {
+    getNodesAtDepth(parent ->  left, tagDepth, nodesAtDepth, nadCount);
+    getNodesAtDepth(parent -> right, tagDepth, nodesAtDepth, nadCount);
   }
 }
 char growTree (uint     r,
@@ -24911,10 +23258,6 @@ char growTree (uint     r,
                char     multImpFlag,
                uint     treeID,
                Node    *parent,
-               uint    *repMembrIndx,
-               uint     repMembrSize,
-               uint    *allMembrIndx,
-               uint     allMembrSize,
                uint    *bootMembrIndxIter,
                uint    *rmbrIterator,
                uint    *ambrIterator) {
@@ -24940,18 +23283,21 @@ char growTree (uint     r,
   uint    *splitValueMaxFactPtr;
   double   splitStatistic;
   char    *splitIndicator;
-  char     splitMIA;
   SplitInfo *splitInfo;
+  GreedyObj *greedyMembr;
+  uint *repMembrIndx, *allMembrIndx;
+  uint  repMembrSize,  allMembrSize;
   uint i, p;
-  if (!rootFlag) {
-    parent -> depth = (parent -> parent) -> depth + 1;
-  }
   bootResult = TRUE;
   terminalFlag = TRUE;
   bsUpdateFlag = FALSE;
   splitIndicator = NULL;
   splitInfo = NULL;
-  splitMIA = SPLIT_MIA_NONE;
+  greedyMembr = NULL;
+  allMembrIndx = parent -> allMembrIndx;
+  allMembrSize = parent -> allMembrSize;
+  repMembrIndx = parent -> repMembrIndx;
+  repMembrSize = parent -> repMembrSize;
   if (rootFlag || ((RF_opt & OPT_BOOT_TYP1) && !(RF_opt & OPT_BOOT_TYP2))) {
     if ( (!(RF_opt & OPT_BOOT_TYP1) && !(RF_opt & OPT_BOOT_TYP2)) ||
          ( (RF_opt & OPT_BOOT_TYP1) &&  (RF_opt & OPT_BOOT_TYP2)) ) {
@@ -24989,8 +23335,8 @@ char growTree (uint     r,
           }
         }
       }
-    }
-  }
+    }  
+  }  
   else {
     bootMembrIndx = repMembrIndx;
     bootMembrSize = repMembrSize;
@@ -25026,7 +23372,6 @@ char growTree (uint     r,
     if (rootFlag) {
       RF_tLeafCount[treeID] = 1;
     }
-    if (RF_htry == 0) {
       splitResult = getBestSplit(treeID,
                                  parent,
                                  bootMembrIndx,
@@ -25039,7 +23384,7 @@ char growTree (uint     r,
                                  & splitValueMaxFactPtr,
                                  & splitStatistic,
                                  & splitIndicator,
-                                 & splitMIA,
+                                 greedyMembr,
                                  multImpFlag);
       if (splitResult == TRUE) {
         splitInfo = makeSplitInfo(0);
@@ -25063,15 +23408,6 @@ char growTree (uint     r,
           ((double *) (splitInfo -> randomPts)[1])[1] = splitValueMaxCont;
         }
       }
-    }
-    else {
-      splitResult = getBestSplitGreedy(treeID,
-                                       parent,
-                                       bootMembrIndx,
-                                       bootMembrSize,
-                                       multImpFlag,
-                                       & splitInfo);
-    }
     if (splitResult == TRUE) {
       terminalFlag = FALSE;
       char *membershipIndicator = cvector(1, RF_observationSize);
@@ -25089,8 +23425,10 @@ char growTree (uint     r,
                                  &leftAllMembrSize,
                                  &rghtAllMembrSize);
       if (forkResult == TRUE) {
-        leftAllMembrIndx  = uivector(1, leftAllMembrSize);
-        rghtAllMembrIndx  = uivector(1, rghtAllMembrSize);
+        (parent -> left)  -> allMembrSizeAlloc = (parent -> left)  -> allMembrSize = leftAllMembrSize;
+        (parent -> right) -> allMembrSizeAlloc = (parent -> right) -> allMembrSize = rghtAllMembrSize;
+        (parent -> left)  -> allMembrIndx = leftAllMembrIndx  = uivector(1, (parent -> left)  -> allMembrSizeAlloc);
+        (parent -> right) -> allMembrIndx = rghtAllMembrIndx  = uivector(1, (parent -> right) -> allMembrSizeAlloc);
         jLeft = jRght = 0;
         for (i = 1; i <= allMembrSize; i++) {
           if (membershipIndicator[allMembrIndx[i]] == LEFT) {
@@ -25101,14 +23439,16 @@ char growTree (uint     r,
           }
         }
         if ( (RF_opt & OPT_BOOT_TYP1) && !(RF_opt & OPT_BOOT_TYP2) ) {
-          leftRepMembrIndx = leftAllMembrIndx;
-          leftRepMembrSize = leftAllMembrSize;
-          rghtRepMembrIndx = rghtAllMembrIndx;
-          rghtRepMembrSize = rghtAllMembrSize;
+          (parent -> left) -> repMembrIndx = leftRepMembrIndx = (parent -> left) -> allMembrIndx;
+          (parent -> left) -> repMembrSizeAlloc = (parent -> left) -> repMembrSize = leftRepMembrSize = (parent ->  left) -> allMembrSize;
+          (parent -> right) -> repMembrIndx = rghtRepMembrIndx = (parent -> right) -> allMembrIndx;
+          (parent -> right) -> repMembrSizeAlloc = (parent -> right) -> repMembrSize = rghtRepMembrSize = (parent ->  right) -> allMembrSize;
         }
         else {
-          leftRepMembrIndx  = uivector(1, bootMembrSize);
-          rghtRepMembrIndx  = uivector(1, bootMembrSize);
+          (parent -> left)  -> repMembrSizeAlloc = bootMembrSize;
+          (parent -> right) -> repMembrSizeAlloc = bootMembrSize;
+          (parent -> left)  -> repMembrIndx      = leftRepMembrIndx  = uivector(1, bootMembrSize);
+          (parent -> right) -> repMembrIndx      = rghtRepMembrIndx  = uivector(1, bootMembrSize);
           leftRepMembrSize = rghtRepMembrSize = 0;
           for (i = 1; i <= bootMembrSize; i++) {
             if (membershipIndicator[bootMembrIndx[i]] == LEFT) {
@@ -25118,6 +23458,8 @@ char growTree (uint     r,
               rghtRepMembrIndx[++rghtRepMembrSize] = bootMembrIndx[i];
             }
           }
+          (parent ->  left) -> repMembrSize = leftRepMembrSize;
+          (parent -> right) -> repMembrSize = rghtRepMembrSize;
         }
         free_cvector(membershipIndicator, 1, RF_observationSize);
         leftResult = growTree (r,
@@ -25125,10 +23467,6 @@ char growTree (uint     r,
                                multImpFlag,
                                treeID,
                                parent -> left,
-                               leftRepMembrIndx,
-                               leftRepMembrSize,
-                               leftAllMembrIndx,
-                               leftAllMembrSize,
                                bootMembrIndxIter,
                                rmbrIterator,
                                ambrIterator);
@@ -25139,22 +23477,26 @@ char growTree (uint     r,
                                multImpFlag,
                                treeID,
                                parent -> right,
-                               rghtRepMembrIndx,
-                               rghtRepMembrSize,
-                               rghtAllMembrIndx,
-                               rghtAllMembrSize,
                                bootMembrIndxIter,
                                rmbrIterator,
                                ambrIterator);
         if(!rghtResult) {
         }
-        free_uivector(leftAllMembrIndx, 1, leftAllMembrSize);
-        free_uivector(rghtAllMembrIndx, 1, rghtAllMembrSize);
+        free_uivector((parent -> left)  -> allMembrIndx, 1, (parent -> left)  -> allMembrSize);
+        free_uivector((parent -> right) -> allMembrIndx, 1, (parent -> right) -> allMembrSize);
+        (parent -> left) -> allMembrIndx = (parent -> right) -> allMembrIndx = NULL;
+        (parent -> left) -> allMembrSize = (parent -> right) -> allMembrSize = 0;
+        (parent -> left) -> allMembrSizeAlloc = (parent -> right) -> allMembrSizeAlloc = 0;
         if ( (RF_opt & OPT_BOOT_TYP1) && !(RF_opt & OPT_BOOT_TYP2) ) {
+          (parent -> left) -> repMembrIndx = (parent -> right) -> repMembrIndx = NULL;
+          (parent -> left) -> repMembrSize = (parent -> right) -> repMembrSize = 0;
+          (parent -> left) -> repMembrSizeAlloc = (parent -> right) -> repMembrSizeAlloc = 0;
         }
         else {
-          free_uivector(leftRepMembrIndx, 1, bootMembrSize);
-          free_uivector(rghtRepMembrIndx, 1, bootMembrSize);
+          free_uivector((parent -> left)  -> repMembrIndx, 1, (parent -> left)  -> repMembrSizeAlloc);
+          free_uivector((parent -> right) -> repMembrIndx, 1, (parent -> right) -> repMembrSizeAlloc);
+          (parent -> left) -> repMembrIndx = (parent -> right) -> repMembrIndx = NULL;
+          (parent -> left) -> repMembrSizeAlloc = (parent -> right) -> repMembrSizeAlloc = 0;
         }
       }
       else {
@@ -25212,7 +23554,7 @@ char growTree (uint     r,
                                  rmbrIterator,
                                  ambrIterator);
       if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {
-        getSplitDepth(treeID, parent);
+        getSplitPath(treeID, parent);
       }
     }
     else {
@@ -25253,37 +23595,6 @@ void freeTree(uint treeID, Node *parent) {
     freeTree(treeID, parent -> right);
   }
   freeNode(parent);
-}
-void getSplitDepth(uint treeID, Node *parent) {
-  Node *reversePtr;
-  uint i;
-  if (!(RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2))) {
-    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-    RF_nativeError("\nRF-SRC:  Call to calculate split depth without the option being active.");
-    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-    RF_nativeExit();
-  }
-  if (parent -> depth > 0) {
-    RF_maxDepth[treeID] = (parent -> depth > RF_maxDepth[treeID]) ? parent -> depth : RF_maxDepth[treeID];
-    stackSplitDepth(parent, parent -> depth);
-    reversePtr = parent;
-    for (i = 1; i <= parent -> depth; i++) {
-      if ((reversePtr -> parent) == NULL) {
-        RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-        RF_nativeError("\nRF-SRC:  Reverse parsing of tree failed in restoreTree().");
-        RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-        RF_nativeExit();
-      }
-      (parent -> splitDepth)[(parent -> depth) - i + 1] = ((reversePtr -> parent) -> splitInfo) -> randomVar[1];
-      reversePtr = reversePtr -> parent;
-    }
-  }
-}
-void freeSplitDepth(uint treeID) {
-  uint j;
-  for (j = 1; j <= RF_tLeafCount[treeID]; j++) {
-    unstackSplitDepth(RF_tNodeList[treeID][j]);
-  }
 }
 void saveStatistics(char     mode,
                     uint     b,
@@ -25334,54 +23645,6 @@ void saveStatistics(char     mode,
     saveStatistics(mode, b, parent -> right, offset, spltST, spltVR, uspvST, mtryID, mtryST);
   }
 }
-uint getMaximumDepth(Node *parent) {
-  uint result, rLeft, rRight;
-  result = parent -> depth;
-  if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
-    rLeft = getMaximumDepth(parent ->  left);
-    rRight = getMaximumDepth(parent -> right);
-    result = (rLeft > rRight) ? rLeft : rRight;
-  }
-  return result;
-}
-void getNodesAtDepth(Node *parent, uint tagDepth, Node **nodesAtDepth, uint *nadCount) {
-  char recurseFlag;
-  recurseFlag = TRUE;
-  if (tagDepth == parent -> depth) {
-    if (parent -> splitInfo != NULL) {
-      (*nadCount) ++;
-      nodesAtDepth[*nadCount] = parent;
-    }
-    recurseFlag = FALSE;
-  }
-  else {
-    if (((parent -> left) == NULL) && ((parent -> right) == NULL)) {
-      recurseFlag = FALSE;
-    }
-  }
-  if (recurseFlag) {
-    getNodesAtDepth(parent ->  left, tagDepth, nodesAtDepth, nadCount);
-    getNodesAtDepth(parent -> right, tagDepth, nodesAtDepth, nadCount);
-  }
-}
-void getTreeInfo(uint treeID, Node *parent) {
-  if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
-    getTreeInfo(treeID, parent ->  left);
-    getTreeInfo(treeID, parent -> right);
-  }
-}
-void getPTNodeList(Node    *parent,
-                   Node   **list,
-                   uint    *offset) {
-  if (!(parent -> pseudoTerminal)) {
-    getPTNodeList(parent ->  left, list, offset);
-    getPTNodeList(parent -> right, list, offset);
-  }
-  else {
-    (*offset) ++;
-    list[*offset] = parent;
-  }
-}
 void initTerminalNodeMembership(uint       treeID,
                                 Terminal  *parent,
                                 uint      *allMembrIndx,
@@ -25390,4 +23653,490 @@ void initTerminalNodeMembership(uint       treeID,
   for (i = 1; i <= allMembrSize; i++) {
     RF_tTermMembership[treeID][allMembrIndx[i]] = parent;
   }
+}
+char growTreeGreedy (uint     r,
+                     char     multImpFlag,
+                     uint     treeID,
+                     Node    *root,
+                     uint    *bootMembrIndxIter,
+                     uint    *rmbrIterator,
+                     uint    *ambrIterator) {
+  char  bootResult;
+  char  splitResult;
+  char  forkResult;
+  uint *bootMembrIndx;
+  uint *leftRepMembrIndx;
+  uint *rghtRepMembrIndx;
+  uint *leftAllMembrIndx;
+  uint *rghtAllMembrIndx;
+  uint bootMembrSize;
+  uint leftAllMembrSize;
+  uint rghtAllMembrSize;
+  uint leftRepMembrSize, jLeft;
+  uint rghtRepMembrSize, jRght;
+  uint *allMembrIndx;
+  uint  allMembrSize;
+  GreedyObj *greedyHead, *greedyMembr;
+  GreedyObj *greedyBest;
+  double sgStatBest;
+  double delta;
+  char updateFlag;
+  Node *nodeParent, *nodeLeft, *nodeRight;
+  uint i, p;
+  bootResult = TRUE;
+  allMembrIndx = root -> allMembrIndx;
+  allMembrSize = root -> allMembrSize; 
+  if (!(RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2)) {
+    bootMembrIndx  = uivector(1, allMembrSize);
+    bootMembrSize = allMembrSize;
+  }
+  else {
+    bootMembrIndx  = uivector(1, RF_bootstrapSize);
+    bootMembrSize = RF_bootstrapSize;
+  }
+  root -> repMembrIndx = bootMembrIndx;
+  root -> repMembrSize = root -> repMembrSizeAlloc = bootMembrSize; 
+  bootResult = bootstrap (RF_GROW,
+                          treeID,
+                          root,
+                          allMembrIndx,
+                          allMembrSize,
+                          bootMembrIndx,
+                          bootMembrSize);
+  if (bootResult) {
+    for (i = 1; i <= bootMembrSize; i++) {
+      RF_bootMembershipIndex[treeID][++(*bootMembrIndxIter)] = bootMembrIndx[i];
+      RF_bootMembershipFlag[treeID][bootMembrIndx[i]] = TRUE;
+      RF_oobMembershipFlag[treeID][bootMembrIndx[i]]  = FALSE;
+      RF_bootMembershipCount[treeID][bootMembrIndx[i]] ++;
+      if (RF_optHigh & OPT_MEMB_USER) {
+        RF_BOOT_CT_ptr[treeID][bootMembrIndx[i]] ++;
+      }
+    }
+    RF_oobSize[treeID] = 0;
+    RF_ibgSize[treeID] = 0;
+    for (i = 1; i <= RF_observationSize; i++) {
+      if (RF_bootMembershipFlag[treeID][i] == FALSE) {
+        RF_oobSize[treeID] ++;
+        RF_oobMembershipIndex[treeID][RF_oobSize[treeID]] = i;
+      }
+      else {
+        RF_ibgSize[treeID] ++;
+        RF_ibgMembershipIndex[treeID][RF_ibgSize[treeID]] = i;
+      }
+    }
+    if (RF_mRecordSize > 0) {
+      for (p = 1; p <= RF_mpIndexSize; p++) {
+        if (RF_mpIndex[p] > 0) {
+          if (root -> mpSign[p] == -1) {
+            (root -> permissibleSplit)[RF_mpIndex[p]] = FALSE;
+          }
+        }
+      }
+    }
+    if (multImpFlag == FALSE) {
+      if (RF_mRecordSize > 0) {
+        imputeNode(RF_GROW,
+                   FALSE,  
+                   TRUE,   
+                   treeID,
+                   root,
+                   root -> repMembrIndx,
+                   root -> repMembrSize,
+                   root -> allMembrIndx,
+                   root -> allMembrSize);
+        if (RF_timeIndex > 0) {
+          if (RF_mTimeFlag == TRUE) {
+            updateTimeIndexArray(treeID,
+                                 root -> allMembrIndx,
+                                 root -> allMembrSize,
+                                 RF_time[treeID],
+                                 FALSE,
+                                 FALSE,
+                                 RF_masterTimeIndex[treeID]);
+          }
+        }
+      }
+    }  
+    RF_tLeafCount[treeID] = 1;
+    greedyHead = makeGreedyObj(NULL, NULL);
+    uint rTarget = 1;
+    greedyHead -> head = greedyHead;
+    greedyMembr = makeGreedyObj(root, greedyHead);
+    greedyHead -> fwdLink = greedyMembr;
+    greedyMembr -> bakLink = greedyHead;
+    char growFlag = TRUE;
+    double rootLossStd = standardVector(treeID,
+                                     TRUE,
+                                     greedyHead,
+                                     RF_response[treeID][rTarget], 
+                                     bootMembrIndx,
+                                     bootMembrSize);
+    double lossOOB = getL2Loss(treeID,
+                               RF_response[treeID][rTarget],
+                               bootMembrIndx,
+                               bootMembrSize,
+                               allMembrIndx,
+                               allMembrSize,
+                               RF_oobMembershipFlag[treeID],
+                               RF_nativeNaN,
+                               TRUE);
+    LatOptTreeObj *lotObj = makeLatOptTreeObj();
+    insertRisk(treeID, lotObj, lossOOB);
+    if (RF_opt & OPT_EMPR_RISK) {      
+      RF_emprRSKptr[treeID][lotObj -> treeSize] = greedyMembr -> eRisk = getL2Loss(treeID,
+                                                                                   RF_response[treeID][rTarget],
+                                                                                   bootMembrIndx,
+                                                                                   bootMembrSize,
+                                                                                   NULL,
+                                                                                   0,
+                                                                                   NULL,
+                                                                                   RF_nativeNaN,
+                                                                                   NEITHER);
+      RF_splitStatLOTptr[treeID][lotObj -> treeSize] = rootLossStd;
+      RF_oobEmprRSKptr[treeID][lotObj -> treeSize] = greedyMembr -> oobEmprRisk = lossOOB;
+    }
+    while (growFlag) {
+      greedyMembr = greedyHead -> fwdLink;      
+      while (greedyMembr != NULL) {
+        if ((greedyMembr -> leafFlag == FALSE) && (greedyMembr -> splitInfo == NULL)) {
+          if (multImpFlag == FALSE) {
+            if (RF_mRecordSize > 0) {
+              imputeNode(RF_GROW,
+                         FALSE,  
+                         TRUE,   
+                         treeID,
+                         greedyMembr -> parent,
+                         (greedyMembr -> parent) -> repMembrIndx,
+                         (greedyMembr -> parent) -> repMembrSize,
+                         (greedyMembr -> parent) -> allMembrIndx,
+                         (greedyMembr -> parent) -> allMembrSize);
+              if (RF_timeIndex > 0) {
+                if (RF_mTimeFlag == TRUE) {
+                  updateTimeIndexArray(treeID,
+                                       (greedyMembr -> parent) -> allMembrIndx,
+                                       (greedyMembr -> parent) -> allMembrSize,
+                                       RF_time[treeID],
+                                       FALSE,
+                                       FALSE,
+                                       RF_masterTimeIndex[treeID]);
+                }
+              }
+            }
+          }  
+          if (lotObj -> treeSize < RF_lotSize) {
+            splitResult = getBestSplitGreedy(treeID,
+                                             multImpFlag,
+                                             greedyMembr);
+            if (splitResult) {
+            }
+            else {
+              (greedyMembr -> parent) -> splitFlag = FALSE;
+              free_cvector((greedyMembr -> parent)-> permissibleSplit, 1, (greedyMembr -> parent) -> xSize);
+              (greedyMembr -> parent) -> permissibleSplit = NULL;
+              (greedyMembr -> parent) -> xSize = 0;
+              (greedyMembr -> parent) -> splitInfo = NULL;
+              greedyMembr -> leafFlag = TRUE;
+            }
+          }
+          else {
+          }              
+        }
+        else {
+        }
+        greedyMembr = greedyMembr -> fwdLink;
+      }  
+      greedyBest = NULL;
+      sgStatBest  = RF_nativeNaN;
+      if (lotObj -> treeSize < RF_lotSize) {
+        greedyMembr = greedyHead -> fwdLink;
+        while (greedyMembr != NULL) {
+          if ((greedyMembr -> leafFlag == FALSE) && (greedyMembr -> splitInfo != NULL)) {
+            if (greedyBest == NULL) {
+              greedyBest = greedyMembr;
+              sgStatBest = greedyMembr -> sgStat;
+            }
+            else {
+              delta = greedyMembr -> sgStat - sgStatBest; 
+              if (delta > 0.0) {
+                updateFlag = TRUE;
+              }
+              else if (delta < 0.0) {
+                updateFlag = FALSE;
+              }
+              else {
+                if (ran1B(treeID) <= 0.5) {
+                  updateFlag = TRUE;
+                }
+                else {
+                  updateFlag = FALSE;
+                }
+              }
+              if (updateFlag) {
+                greedyBest = greedyMembr;
+                sgStatBest = greedyMembr -> sgStat;
+              }
+              else {
+              }
+            }
+          }
+          else {
+            if (greedyMembr -> leafFlag == TRUE) {
+            }
+            else {
+              RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+              RF_nativeError("\nRF-SRC:  Inconsistent Naked Super-Greedy Node encountered:  %20x:  (treeID, node): (%10d, %10d)", greedyMembr, treeID, (greedyMembr -> parent) -> nodeID);
+              RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+              RF_nativeExit();
+            }
+          }
+          greedyMembr = greedyMembr -> fwdLink;
+        }  
+      }  
+      if (greedyBest != NULL) {
+        char *membershipIndicator = cvector(1, RF_observationSize);
+        forkResult = forkAndUpdate(treeID,
+                                   greedyBest -> parent,
+                                   (greedyBest -> parent) -> repMembrIndx,
+                                   (greedyBest -> parent) -> repMembrSize,
+                                   (greedyBest -> parent) -> allMembrIndx,
+                                   (greedyBest -> parent) -> allMembrSize,
+                                   multImpFlag,
+                                   greedyBest -> splitInfo,
+                                   &RF_tLeafCount[treeID],
+                                   membershipIndicator,
+                                   RF_nodeMembership[treeID],
+                                   &leftAllMembrSize,
+                                   &rghtAllMembrSize);
+        if (forkResult == TRUE) {
+          (lotObj -> treeSize) ++;
+          nodeParent = greedyBest -> parent;
+          nodeLeft   = (greedyBest -> parent) -> left;
+          nodeRight  = (greedyBest -> parent) -> right;
+          if (RF_opt & OPT_EMPR_RISK) {
+            RF_splitStatLOTptr[treeID][lotObj -> treeSize] = greedyBest -> sgStat;
+          }
+          nodeLeft -> allMembrSizeAlloc = nodeLeft -> allMembrSize = leftAllMembrSize;
+          nodeRight -> allMembrSizeAlloc = nodeRight -> allMembrSize = rghtAllMembrSize;
+          nodeLeft  -> allMembrIndx = leftAllMembrIndx  = uivector(1, leftAllMembrSize);
+          nodeRight -> allMembrIndx = rghtAllMembrIndx  = uivector(1, rghtAllMembrSize);
+          jLeft = jRght = 0;
+          for (i = 1; i <= nodeParent -> allMembrSize; i++) {
+            if (membershipIndicator[(nodeParent -> allMembrIndx)[i]] == LEFT) {
+              leftAllMembrIndx[++jLeft] = (nodeParent -> allMembrIndx)[i];
+            }
+            else {
+              rghtAllMembrIndx[++jRght] = (nodeParent -> allMembrIndx)[i];
+            }
+          }
+          nodeLeft  -> repMembrSizeAlloc = nodeParent -> repMembrSize;
+          nodeRight -> repMembrSizeAlloc = nodeParent -> repMembrSize;
+          nodeLeft  -> repMembrIndx      = leftRepMembrIndx  = uivector(1, nodeParent -> repMembrSize);
+          nodeRight -> repMembrIndx      = rghtRepMembrIndx = uivector(1, nodeParent -> repMembrSize);
+          leftRepMembrSize = rghtRepMembrSize = 0;
+          for (i = 1; i <= nodeParent -> repMembrSize; i++) {
+            if (membershipIndicator[(nodeParent -> repMembrIndx)[i]] == LEFT) {
+              leftRepMembrIndx[++leftRepMembrSize] = (nodeParent -> repMembrIndx)[i];
+            }
+            else {
+              rghtRepMembrIndx[++rghtRepMembrSize] = (nodeParent -> repMembrIndx)[i];
+            }
+          }
+          nodeLeft -> repMembrSize = leftRepMembrSize;
+          nodeRight -> repMembrSize = rghtRepMembrSize;
+          free_cvector(membershipIndicator, 1, RF_observationSize);
+          GreedyObj *greedyNakedLeft = makeGreedyObj(nodeLeft, greedyHead);
+          GreedyObj *greedyNakedRight = makeGreedyObj(nodeRight, greedyHead);
+          greedyNakedLeft  -> sgStat = greedyBest -> G_nR_h_l;
+          greedyNakedRight -> sgStat = greedyBest -> G_nR_h_r;
+          if (RF_opt & OPT_EMPR_RISK) {          
+            greedyNakedLeft -> oobEmprRisk = getL2Loss(treeID,
+                                                 RF_response[treeID][rTarget],
+                                                 leftRepMembrIndx,
+                                                 leftRepMembrSize,
+                                                 leftAllMembrIndx,
+                                                 leftAllMembrSize,
+                                                 RF_oobMembershipFlag[treeID],
+                                                 RF_nativeNaN,
+                                                 TRUE);
+            greedyNakedRight -> oobEmprRisk = getL2Loss(treeID,
+                                                  RF_response[treeID][rTarget],
+                                                  rghtRepMembrIndx,
+                                                  rghtRepMembrSize,
+                                                  rghtAllMembrIndx,
+                                                  rghtAllMembrSize,
+                                                  RF_oobMembershipFlag[treeID],
+                                                  RF_nativeNaN,
+                                                  TRUE);
+            RF_oobEmprRSKptr[treeID][lotObj -> treeSize] = RF_oobEmprRSKptr[treeID][lotObj -> treeSize - 1] - (greedyBest -> oobEmprRisk) + (greedyNakedLeft -> oobEmprRisk) + (greedyNakedRight -> oobEmprRisk); 
+            insertRisk(treeID, lotObj, RF_oobEmprRSKptr[treeID][lotObj -> treeSize]);
+            greedyBest -> eRisk = getL2Loss(treeID,
+                                            RF_response[treeID][rTarget],
+                                            nodeParent -> repMembrIndx,
+                                            nodeParent -> repMembrSize,
+                                            NULL,
+                                            0,
+                                            NULL,
+                                            RF_nativeNaN,
+                                            NEITHER);
+            greedyNakedLeft -> eRisk = getL2Loss(treeID,
+                                                 RF_response[treeID][rTarget],
+                                                 leftRepMembrIndx,
+                                                 leftRepMembrSize,
+                                                 NULL,
+                                                 0,
+                                                 NULL,
+                                                 RF_nativeNaN,
+                                                 NEITHER);
+            greedyNakedRight -> eRisk = getL2Loss(treeID,
+                                                  RF_response[treeID][rTarget],
+                                                  rghtRepMembrIndx,
+                                                  rghtRepMembrSize,
+                                                  NULL,
+                                                  0,
+                                                  NULL,
+                                                  RF_nativeNaN,
+                                                  NEITHER);
+            RF_emprRSKptr[treeID][lotObj -> treeSize] = RF_emprRSKptr[treeID][lotObj -> treeSize - 1] - (greedyBest -> eRisk) + (greedyNakedLeft -> eRisk) + (greedyNakedRight -> eRisk); 
+          }
+          (greedyBest -> bakLink) -> fwdLink = greedyNakedLeft;
+          greedyNakedLeft -> bakLink = greedyBest -> bakLink;
+          greedyNakedLeft -> fwdLink = greedyNakedRight;
+          greedyNakedRight -> bakLink = greedyNakedLeft;
+          greedyNakedRight -> fwdLink = greedyBest -> fwdLink;
+          if (greedyBest -> fwdLink != NULL) {
+            (greedyBest -> fwdLink) -> bakLink = greedyNakedRight;
+          }
+          nodeLeft ->  depth = (nodeParent -> depth) + 1;
+          nodeRight -> depth = (nodeParent -> depth) + 1;
+          if (greedyBest -> G_nR_h_l <  -EPSILON) {
+            greedyNakedLeft -> leafFlag = TRUE;
+            SplitInfo *info = greedyBest -> splitInfo;
+            RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+            RF_nativeError("\n Super-Greedy Object is terminal due to left-monotonicity:  (bestObj, nodeID, depth) = (%20x, %10d, %10d)", greedyBest, nodeParent -> nodeID, nodeParent -> depth);
+            RF_nativeError("\n Super-Greedy Object actual G_nR_h_l  at left-monotonicity:  %10.10e", greedyBest -> G_nR_h_l);
+            RF_nativeError("\n");
+            for (uint ii = 1; ii <= info -> hcDim; ii++) {
+              uint covariate = info -> randomVar[ii];
+              if (info -> mwcpSizeAbs[ii] > 0) {
+                RF_nativeError(" (cov = %10d, mwcpPT =", covariate);
+                for (uint m = 1; m <= info -> mwcpSizeAbs[ii]; m++) {
+                  RF_nativeError(" %10x", ((uint *) info -> randomPts[ii])[m]);
+                }
+                RF_nativeError(")");
+              }
+              else {
+                RF_nativeError(" (cov = %10d, spltPT = %12.4f, spltPTright = %12.4f) ", covariate, ((double *) info -> randomPts[ii])[1], ((double *) info -> randomPtsRight[ii])[1]);
+              }
+              RF_nativeError("\n");
+            }
+            RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RF_nativeExit();
+          }
+          else if (greedyBest -> G_nR_h_r < -EPSILON) {
+            greedyNakedRight -> leafFlag = TRUE;
+            SplitInfo *info = greedyBest -> splitInfo;
+            RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+            RF_nativeError("\n Super-Greedy Object is terminal due to right-monotonicity:  (bestObj, nodeID, depth) = (%20x, %10d, %10d)", greedyBest, nodeParent -> nodeID, nodeParent -> depth);
+            RF_nativeError("\n Super-Greedy Object actual G_nR_h_l  at right-monotonicity:  %10.10e", greedyBest -> G_nR_h_l);
+            RF_nativeError("\n");
+            for (uint ii = 1; ii <= info -> hcDim; ii++) {
+              uint covariate = info -> randomVar[ii];
+              if (info -> mwcpSizeAbs[ii] > 0) {
+                RF_nativeError(" (cov = %10d, mwcpPT =", covariate);
+                for (uint m = 1; m <= info -> mwcpSizeAbs[ii]; m++) {
+                  RF_nativeError(" %10x", ((uint *) info -> randomPts[ii])[m]);
+                }
+                RF_nativeError(")");
+              }
+              else {
+                RF_nativeError(" (cov = %10d, spltPT = %12.4f, spltPTright = %12.4f) ", covariate, ((double *) info -> randomPts[ii])[1], ((double *) info -> randomPtsRight[ii])[1]);
+              }
+              RF_nativeError("\n");
+            }
+            RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RF_nativeExit();
+          }
+          greedyBest -> splitInfo = NULL;
+          freeGreedyObj(greedyBest);
+        }
+        else {
+          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+          RF_nativeError("\nRF-SRC:  forkAndUpdate(%10d) failed.", treeID);
+          RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+          RF_nativeExit();
+        }
+      }  
+      else {
+        growFlag = FALSE;
+      }
+      if (lotObj -> strikeout >= RF_lotStrikeout) {
+        growFlag = FALSE;
+      }
+    }  
+    if (RF_opt & OPT_EMPR_RISK) {          
+      for (i = 1; i <= lotObj -> treeSize; i++) {
+        RF_oobEmprRSKptr[treeID][i] = RF_oobEmprRSKptr[treeID][i] / RF_oobSize[treeID];  
+      }
+    }
+    greedyMembr = greedyHead -> fwdLink ;
+    while (greedyMembr != NULL) {
+      nodeParent = greedyMembr -> parent;
+      nodeParent -> pseudoTerminal = TRUE;
+      RF_tNodeList[treeID][nodeParent -> nodeID] = nodeParent;
+      RF_tTermList[treeID][nodeParent -> nodeID] = makeTerminal();
+      RF_tTermList[treeID][nodeParent -> nodeID] -> nodeID = nodeParent -> nodeID;
+      if (RF_opt & OPT_MISS) {
+        imputeNodeAndSummarize(r,
+                               RF_GROW,
+                               treeID,
+                               nodeParent,
+                               nodeParent -> repMembrIndx,
+                               nodeParent -> repMembrSize,
+                               nodeParent -> allMembrIndx,
+                               nodeParent -> allMembrSize,
+                               NULL,
+                               0);
+      }
+      if (r == RF_nImpute) {
+        if (RF_optHigh & OPT_MEMB_USER) {
+          for (i = 1; i <= nodeParent -> allMembrSize; i++) {
+            RF_MEMB_ID_ptr[treeID][nodeParent -> allMembrIndx[i]] = nodeParent -> nodeID;
+          }
+        }
+        updateTerminalNodeOutcomes(RF_GROW,
+                                   treeID,
+                                   RF_tTermList[treeID][nodeParent -> nodeID],
+                                   nodeParent -> repMembrIndx,
+                                   nodeParent -> repMembrSize,
+                                   nodeParent -> allMembrIndx,
+                                   nodeParent -> allMembrSize,
+                                   rmbrIterator,
+                                   ambrIterator);
+        if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {
+          getSplitPath(treeID, nodeParent);
+        }
+      }
+      else {
+        initTerminalNodeMembership(treeID,
+                                   RF_tTermList[treeID][nodeParent -> nodeID],
+                                   nodeParent -> allMembrIndx,
+                                   nodeParent -> allMembrSize);
+      }
+      greedyMembr = greedyMembr -> fwdLink;
+    }
+    if (!(RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2)) {
+      free_uivector(bootMembrIndx, 1, allMembrSize);
+    }
+    else {
+      free_uivector(bootMembrIndx, 1, RF_bootstrapSize);
+    }
+    freeGreedyObjList(greedyHead);
+    freeLatOptTreeObj(lotObj);
+  }  
+  else {
+  }
+  root -> repMembrIndx = NULL;
+  root -> repMembrSize = root -> repMembrSizeAlloc = 0;
+  return bootResult;
 }

@@ -94,11 +94,12 @@ partial.rfsrc <- function(
   yvar <- as.matrix(data.matrix(object$yvar))
   ## Set the y dimension.
   r.dim <- ncol(cbind(yvar))
-  ## Remove row and column names for proper processing by the native
-  ## code.  Set the dimensions.
+  ## remove row and column names for proper processing by the native code
+  ## set the dimensions.
   rownames(xvar) <- colnames(xvar) <- NULL
   n.xvar <- ncol(xvar)
   n <- nrow(xvar)
+  sampsize <- round(object$sampsize(n))
   ## There is no test data.
   outcome = "train"
   ## Process the get.tree vector that specifies which trees we want
@@ -114,13 +115,13 @@ partial.rfsrc <- function(
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
   seed <- get.seed(seed)
   do.trace <- get.trace(do.trace)
-  ## Check that htry is initialized.  If not, set it zero.
+  ## Check that hdim is initialized.  If not, set it zero.
   ## This is necessary for backwards compatibility with 2.3.0
-    if (is.null(object$htry)) {
-        htry <- 0
+    if (is.null(object$hdim)) {
+        hdim <- 0
     }
     else {
-        htry <- object$htry
+        hdim <- object$hdim
     }
     ## Marker for start of native forest topology.  This can change with the outputs requested.
     ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
@@ -150,38 +151,38 @@ partial.rfsrc <- function(
                                   as.character(xvar.types),
                                   as.integer(xvar.nlevels),
                                   as.double(xvar),
-                                  as.integer(object$sampsize),
+                                  as.integer(sampsize),
                                   as.integer(object$samp),
                                   as.double(object$case.wt),
                                   as.integer(length(event.info$time.interest)),
                                   as.double(event.info$time.interest),
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
-                                  as.integer(htry),
+                                  as.integer(hdim),
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
                                   list(as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeFactorArray)$mwcpPT)),
-                                  if (htry > 0) {
+                                  if (hdim > 0) {
                                       list(as.integer((object$nativeArray)$hcDim),
                                       as.double((object$nativeArray)$contPTR))
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeArray[, 8 + (4 * x)])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, 8 + (4 * x)])})
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.double(object$nativeArray[, 9 +  (4 * x)])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[, 9 +  (4 * x)])})
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.double(object$nativeArray[, 10 + (4 * x)])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[, 10 + (4 * x)])})
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeArray[, 11 + (4 * x)])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, 11 + (4 * x)])})
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
                                   } else { NULL },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),

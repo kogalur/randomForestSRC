@@ -1,10 +1,9 @@
-\name{plot.competing.risk}
-\alias{plot.competing.risk}
+\name{plot.competing.risk.rfsrc}
 \alias{plot.competing.risk.rfsrc}
+\alias{plot.competing.risk}
 \title{Plots for Competing Risks}
 \description{
-  Plot the ensemble cumulative incidence function (CIF) and
-  cause-specific cumulative hazard function (CSCHF) from a competing risk
+  Plot useful summary curves from a random survival forest competing risk
   analysis.
 }
 \usage{\method{plot.competing.risk}{rfsrc}(x, plots.one.page = FALSE, ...)}
@@ -15,17 +14,30 @@
   \item{...}{Further arguments passed to or from other methods.}
 }
 \details{
-  Ensemble ensemble CSCHF and CIF functions for each event type.
-  Does not apply to right-censored data.    Whenever possible,
-  out-of-bag (OOB) values are displayed.
+
+  Given a random survival forest object from a competing risk analysis
+  (Ishwaran et al. 2014), plots from top to bottom, left to right: (1)
+  cause-specific cumulative hazard function (CSCHF) for each event, (2)
+  cumulative incidence function (CIF) for each event, and (3) continuous
+  probability curves (CPC) for each event (Pepe and Mori, 1993).
+  
+  Does not apply to right-censored data.  Whenever possible, out-of-bag
+  (OOB) values are displayed.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }
 \references{
+  
   Ishwaran H., Gerds T.A., Kogalur U.B., Moore R.D., Gange S.J. and Lau
   B.M. (2014). Random survival forests for competing risks.
   \emph{Biostatistics}, 15(4):757-773.
+
+  Pepe, M.S. and Mori, M., (1993). Kaplan-Meier, marginal or conditional
+  probability curves in summarizing competing risks failure time
+  data? \emph{Statistics in Medicine}, 12(8):737-751.
+ 
+  
 }
 \seealso{
   \command{\link{follic}},

@@ -143,6 +143,9 @@ public class HelloRandomForestSRC {
         // We set ntree here.
         modelArg.set_bootstrap(4, "auto", "swr", 0, null, null);
 
+        // We set the lot parameters here.
+        modelArg.set_lot();
+
         // Set blockSize explicitly.
         modelArg.set_blockSize(1);
         
@@ -175,7 +178,7 @@ public class HelloRandomForestSRC {
 
             growModel.set_trace(15 + (1<<4) + (1<<8) + (1<<16));
 
-            if (growModel.getModelArg().get_htry() == 0) {
+            if (growModel.getModelArg().get_hdim() == 0) {
                 // growModel.setEnsembleArg("importance", "permute");
                 growModel.setEnsembleArg("importance", "no");
                 growModel.set_xImportance();

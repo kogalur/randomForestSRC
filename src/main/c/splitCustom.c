@@ -271,6 +271,8 @@ double getCustomSplitStatisticMultivariateClassification (unsigned int n,
   return delta;
 }
 
+// TBD TBD put documentation in for eventT*
+
 double getCustomSplitStatisticSurvival (unsigned int n,
                                         char        *membership,
                                         double      *time,
@@ -290,6 +292,14 @@ double getCustomSplitStatisticSurvival (unsigned int n,
 {
 
   // EXAMPLE:  Survival (logrank)
+
+  // unsigned int eventTimeSize
+  //   - number of unique event times in the node.
+  // double *eventTime
+  //   - vector of sorted uniquified times of death in the node, of
+  //     length eventTimeSize.
+  // unsigned int eventTypeSize
+  //   - number of unique event types, trivially one (1) in survival.
 
   // Local variables needed for this example:
   unsigned int   *nodeLeftEvent,  *nodeParentEvent;
@@ -429,6 +439,14 @@ double getCustomSplitStatisticCompetingRisk (unsigned int n,
 {
 
   // EXAMPLE:  Competing Risk (logrankCR)
+
+  // unsigned int eventTimeSize
+  //   - number of unique event times in the node.
+  // double *eventTime
+  //   - vector of sorted uniquified times of death in the node, of
+  //     length eventTimeSize.
+  // unsigned int eventTypeSize
+  //   - number of unique event types in the data set.
 
   // Local variables needed for this example:
   unsigned int   *nodeLeftEvent,  *nodeParentEvent;

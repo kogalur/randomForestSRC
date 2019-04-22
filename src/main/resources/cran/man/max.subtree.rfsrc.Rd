@@ -1,6 +1,6 @@
-\name{max.subtree}
-\alias{max.subtree}
+\name{max.subtree.rfsrc}
 \alias{max.subtree.rfsrc}
+\alias{max.subtree}
 \title{Acquire Maximal Subtree Information}
 \description{
     Extract maximal subtree information from a RF-SRC object.  Used for
@@ -108,9 +108,9 @@
     Mining}, 4:115-132.
 }
 \seealso{
-  \command{\link{find.interaction}},
-  \command{\link{var.select}},
-  \command{\link{vimp}}
+  \command{\link{holdout.vimp.rfsrc}},
+  \command{\link{var.select.rfsrc}},
+  \command{\link{vimp.rfsrc}}
 }
 \examples{
 \donttest{

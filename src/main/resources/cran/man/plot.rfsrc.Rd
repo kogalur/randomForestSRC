@@ -36,10 +36,6 @@
   Ishwaran H. and Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7(2):25-31.
 }
-\seealso{
-  \command{\link{predict.rfsrc}},
-  \command{\link{rfsrc}}
-}
 \examples{
 \donttest{
 ## ------------------------------------------------------------

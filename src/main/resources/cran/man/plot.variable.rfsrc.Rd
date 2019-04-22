@@ -1,6 +1,6 @@
-\name{plot.variable}
-\alias{plot.variable}
+\name{plot.variable.rfsrc}
 \alias{plot.variable.rfsrc}
+\alias{plot.variable}
 \title{Plot Marginal Effect of Variables}
 \description{
   Plot the marginal effect of an x-variable on the class probability
@@ -141,7 +141,7 @@
 }
 \seealso{
   \command{\link{rfsrc}},
-  \command{\link{rfsrcSyn}},
+  \command{\link{synthetic.rfsrc}},
   \command{\link{partial.rfsrc}},
   \command{\link{predict.rfsrc}}
 }

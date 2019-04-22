@@ -202,7 +202,7 @@ generic.predict.rfsrc <-
   gk.quantile <- get.gk.quantile(gk.quantile)
   prob.assign <- global.prob.assign(if (is.null(prob)) object$prob else prob,
                                     if (is.null(prob.epsilon)) object$prob.epsilon else prob.epsilon,
-                                    gk.quantile, splitrule, nrow(object$xvar))
+                                    gk.quantile, object$quantile.regr, splitrule, nrow(object$xvar))
   prob <- prob.assign$prob
   prob.epsilon <- prob.assign$prob.epsilon
   ## Determine the immutable yvar factor map which is needed for
@@ -391,7 +391,7 @@ generic.predict.rfsrc <-
     xvar <- as.matrix(data.matrix(object$xvar))
     yvar <- as.matrix(data.matrix(object$yvar))
     ## Respect the training options related to bootstrapping:
-    sampsize <- object$sampsize
+    sampsize <- round(object$sampsize(nrow(xvar)))
     case.wt <- object$case.wt
     samp <- object$samp
   }
@@ -401,34 +401,34 @@ generic.predict.rfsrc <-
     ## From the R side, it is convenient to now pretend we are
     ## in restore mode, so we swap the training data out with the test data
     ## Performance is always requested for this setting
-    ## Swap the data
+    ## swap the data
     xvar <- xvar.newdata
     yvar <- yvar.newdata
     restore.mode <- TRUE
-    ## Pretend there is no test data, but do *not* get rid of it
+    ## pretend there is no test data, but do *not* get rid of it
     ## we need (and use) this data *after* the native code call
     n.newdata <- 0
     r.dim.newdata <- 0
-    ## Override the training options related to bootstrapping:
-    sampsize <- nrow(xvar)
+    ## set the sample size
+    ## "swor" now handled because we now make sampsize a function of n
+    sampsize <- round(object$sampsize(nrow(xvar)))
     case.wt <- get.weight(NULL, nrow(xvar))
     samp <- NULL
-    ## (TBD TBD) We have not changed samptype.
   }
   ## Set the y dimension
   r.dim <- ncol(cbind(yvar))
-  ## Remove row and column names for proper processing by the native library
+  ## remove row and column names for proper processing by the native library
   ## set the dimensions
   rownames(xvar) <- colnames(xvar) <- NULL
   n.xvar <- ncol(xvar)
   n <- nrow(xvar)
-  ## Initialize the number of trees in the forest
+  ## initialize the number of trees in the forest
   ntree <- object$ntree
-  ## Process the get.tree vector that specifies which trees we want
+  ## process the get.tree vector that specifies which trees we want
   ## to extract from the forest.  This is only relevant to restore mode.
   ## The parameter is ignored in predict mode.
   get.tree <- get.tree.index(get.tree, ntree)
-  ## Initialize the low bits
+  ## initialize the low bits
   ensemble.bits <- get.ensemble(ensemble)
   importance.bits <- get.importance(importance)
   proximity.bits <- get.proximity(restore.mode, proximity)
@@ -479,13 +479,13 @@ generic.predict.rfsrc <-
         stop("'subset' not set properly")
       }
     }
-  ## Check that htry is initialized.  If not, set it zero.
+  ## Check that hdim is initialized.  If not, set it zero.
   ## This is necessary for backwards compatibility with 2.3.0
-  if (is.null(object$htry)) {
-    htry <- 0
+  if (is.null(object$hdim)) {
+    hdim <- 0
   }
   else {
-    htry <- object$htry
+    hdim <- object$hdim
   }
     do.trace <- get.trace(do.trace)
     ## Marker for start of native forest topology.  This can change with the outputs requested.
@@ -534,31 +534,31 @@ generic.predict.rfsrc <-
                                   as.double(event.info$time.interest),
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
-                                  as.integer(htry),
+                                  as.integer(hdim),
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
                                   list(as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeFactorArray)$mwcpPT)),
-                                  if (htry > 0) {
+                                  if (hdim > 0) {
                                       list(as.integer((object$nativeArray)$hcDim),
                                       as.double((object$nativeArray)$contPTR))
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeArray[, 8 + (4 * x)])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, 8 + (4 * x)])})
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.double(object$nativeArray[, 9 +  (4 * x)])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[, 9 +  (4 * x)])})
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.double(object$nativeArray[, 10 + (4 * x)])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[, 10 + (4 * x)])})
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeArray[, 11 + (4 * x)])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, 11 + (4 * x)])})
                                   } else { NULL },
-                                  if (htry > 1) {
-                                      lapply(0:(htry-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
+                                  if (hdim > 1) {
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
                                   } else { NULL },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
@@ -1106,7 +1106,7 @@ generic.predict.rfsrc <-
                             array(nativeOutput$allEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                   c(n.observed, levels.count[target.idx]), dimnames=ens.names) else NULL)
             classOutput[[target.idx]] <- list(predicted = predicted)
-            response <- (if (!is.null(predicted)) bayes.rule(predicted, pi.hat) else NULL)
+            response <- (if (!is.null(predicted)) get.bayes.rule(predicted, pi.hat) else NULL)
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], class = list(response))
             remove(predicted)
             remove(response)
@@ -1114,7 +1114,7 @@ generic.predict.rfsrc <-
                                 array(nativeOutput$oobEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                       c(n.observed, levels.count[target.idx]), dimnames=ens.names) else NULL)
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], predicted.oob = list(predicted.oob))
-            response.oob <- (if (!is.null(predicted.oob)) bayes.rule(predicted.oob, pi.hat) else NULL)
+            response.oob <- (if (!is.null(predicted.oob)) get.bayes.rule(predicted.oob, pi.hat) else NULL)
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], class.oob = list(response.oob))
             remove(predicted.oob)
             remove(response.oob)

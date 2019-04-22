@@ -21,15 +21,22 @@ plot.competing.risk.rfsrc <- function (x, plots.one.page = FALSE, ...) {
   ## save par settings
   opar <- par(no.readonly = TRUE)
   on.exit(par(opar))
-  if (plots.one.page) par(mfrow = c(1,1)) else par(mfrow = c(1,2))
-  ## plot the results - use OOB whenever possible
+  if (plots.one.page) par(mfrow = c(1,1)) else par(mfrow = c(2,2))
+  ## acquire the estimators - use OOB whenever possible
   if (!is.null(x$chf.oob)) {
-    matPlot(apply(x$chf.oob, c(2, 3), mean, na.rm = TRUE), "OOB CHF", "OOB CSCHF", pos = 2)
-    matPlot(100 * apply(x$cif.oob, c(2, 3), mean, na.rm = TRUE), "Probability (%)", "OOB CIF", 2)
+    cschf <- apply(x$chf.oob, c(2, 3), mean, na.rm = TRUE)
+    cif <- apply(x$cif.oob, c(2, 3), mean, na.rm = TRUE)
   }
   else {
-   matPlot(apply(x$chf, c(2, 3), mean, na.rm = TRUE), "CHF", "CSCHF", pos = 2)
-    matPlot(100 * apply(x$cif, c(2, 3), mean, na.rm = TRUE), "Probability (%)", "CIF", 2)
-  } 
+    cschf <- apply(x$chf, c(2, 3), mean, na.rm = TRUE)
+    cif <- apply(x$cif, c(2, 3), mean, na.rm = TRUE)
+  }
+  cpc <- do.call(cbind, lapply(1:ncol(cif), function(j) {
+    cif[, j] / (1 - rowSums(cif[, -j, drop = FALSE]))
+  }))
+  ## plot the results 
+  matPlot(cschf, "Cause-Specific CHF", "CSCHF", pos = 2)
+  matPlot(100 * cif, "Probability (%)", "CIF", 2)
+  matPlot(100 * cpc, "Probability (%)", "CPC", 2)
 }
 plot.competing.risk <- plot.competing.risk.rfsrc

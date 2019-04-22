@@ -11,6 +11,15 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Added new splitrules "auc" and "entropy" for classification.
+Improvements to quantile regression.  Updates to holdout vimp.  Some
+function names were changed as a general move towards name uniformity
+in the package.  Updates to function imbalanced used for class
+imbalanced data.
+
+---------------------------------------------------------------------------------
+RELEASE 2.8.0
+---------------------------------------------------------------------------------
 Ensembles in regression now support Greenwald-Khanna approximate
 quantile queries via rfsrc(), predict.rfsrc() and the new wrapper
 quantileReg.rfsrc(). Related to this, a new split rule "quantile.regr"

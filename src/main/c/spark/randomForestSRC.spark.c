@@ -7,7 +7,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
                                                                     jint         splitRule,
                                                                     jint         nsplit,
                                                                     jint         mtry,
-                                                                    jint         htry,
+                                                                    jobject      lot,
                                                                     jint         vtry,
                                                                     jintArray    vtryArray,
                                                                     jint         ytry,
@@ -48,7 +48,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_grow(JNIEnv      
   RF_splitRule            = (uint) splitRule;
   RF_nsplit               = (uint) nsplit;
   RF_mtry                 = (uint) mtry;
-  RF_htry                 = (uint) htry;
+  populateLotObject(lot);
   RF_ytry                 = (uint) ytry;
   RF_nodeSize             = (uint) nodeSize;
   RF_nodeDepth            = (int)  nodeDepth;
@@ -115,7 +115,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
                                                                        jdoubleArray timeInterest,
                                                                        jint         totalNodeCount,
                                                                        jintArray    seed,
-                                                                       jint         htry,
+                                                                       jint         hdim,
                                                                        jintArray    treeID,
                                                                        jintArray    nodeID,
                                                                        jobject      hc_zero,
@@ -179,7 +179,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   RF_timeInterest         = (double *) copy1DObject(timeInterest, NATIVE_TYPE_NUMERIC, &RF_jni1DInfoListSize, FALSE);
   RF_totalNodeCount       = (uint) totalNodeCount;
   RF_seed_                = (int *) copy1DObject(seed, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
-  RF_htry                 = (uint) htry;
+  RF_hdim                 = (uint) hdim;
   RF_treeID_              = (uint *)   copy1DObject(treeID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_nodeID_              = (uint *)   copy1DObject(nodeID, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
   RF_RMBR_ID_             = (uint *)   copy1DObject(tnRMBR, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, TRUE);
@@ -897,7 +897,7 @@ void populateHyperZeroObject(jobject obj) {
 void populateHyperOneObject(jobject obj) {
   jclass objClass;
   jfieldID objFieldID;
-  if (RF_htry > 0) {
+  if (RF_hdim > 0) {
     if ((*RF_java_env) -> IsSameObject(RF_java_env, obj, NULL)) {
       RF_nativeError("\nRF-SRC:  Incoming object com/kogalur/randomforest/HCone is NULL. \n");
       RF_nativeError("\nRF-SRC:  The application will now exit.\n");
@@ -1006,6 +1006,47 @@ void populatePartialObject(jobject obj) {
     }
     else {
       RF_partialValue2 = NULL;
+    }
+  }
+}
+void populateLotObject(jobject obj) {
+  jclass objClass;
+  jfieldID objFieldID;
+  RF_hdim = 0;
+  RF_lotSize = 0;
+  RF_lotLag = 0;
+  RF_lotStrikeout = 0;
+  if (! (*RF_java_env) -> IsSameObject(RF_java_env, obj, NULL)) {
+    objClass = (*RF_java_env) -> GetObjectClass(RF_java_env, obj);
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "hdim", "I");
+    if (objFieldID == NULL) {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/Lot : hdim \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    RF_hdim = (uint) (*RF_java_env) -> GetIntField(RF_java_env, objClass, objFieldID);
+    if (RF_hdim > 0) {
+      objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "treesize", "I");
+      if (objFieldID == NULL) {
+        RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/Lot : treesize \n");
+        RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+        RF_nativeExit();
+      }
+      RF_lotSize = (uint) (*RF_java_env) -> GetIntField(RF_java_env, objClass, objFieldID);
+      objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "lag", "I");
+      if (objFieldID == NULL) {
+        RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/Lot : lag \n");
+        RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+        RF_nativeExit();
+      }
+      RF_lotLag = (uint) (*RF_java_env) -> GetIntField(RF_java_env, objClass, objFieldID);
+      objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "strikeout", "I");
+      if (objFieldID == NULL) {
+        RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/Lot : strikeout \n");
+        RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+        RF_nativeExit();
+      }
+      RF_lotStrikeout = (uint) (*RF_java_env) -> GetIntField(RF_java_env, objClass, objFieldID);
     }
   }
 }

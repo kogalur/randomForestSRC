@@ -53,6 +53,7 @@ subsample.rfsrc <- function(obj,
                  "split.wt",
                  "cause.wt",
                  "block.size")
+   
   ## list of parameters to be obtained from the forest object
   forest.prms <- c("bootstrap",
                    "sampsize",
@@ -90,31 +91,16 @@ subsample.rfsrc <- function(obj,
   if (!bootstrap && rf.prms$bootstrap != "by.root") {
     stop("subsampling is not permitted on grow objects where sampling is not 'by.root'")
   }
-  ## need to handle the subtle case where the user has applied
-  ## non standard sampling in the grow object and is requesting subsampling
-  if (!bootstrap && rf.prms$bootstrap == "by.root") {
-    if (rf.prms$sampsize == n) {
-      ## standard scenario: set all sampling parameters to default values
-      rf.prms$bootstrap <- rf.prms$sampsize <- rf.prms$samptype <- NULL
-    }
-    else {
-    ## the user has requested a smaller sample size than n
-    ## need to scale this to subratio - make sure it's a least 1
-    rf.prms$sampsize <- max(1, rf.prms$sampsize * subratio)
-    }
+  ## for subsampling we need to determine the subsampling tree sample size
+  ## this is now handled by forest$sampsize which is a function
+  ## for double bootstrapping we do NOT allow custom sampling for grow object
+  if (bootstrap && rf.prms$bootstrap != "by.root") {
+    stop("double bootstrapping is only permitted for breiman (bootstrap) forests")
   }
-  ## if the user has requested double bootstrapping, custom sampling is 
-  ## not permitted in the grow object
-  if (bootstrap) {
-    if (! (rf.prms$bootstrap == "by.root"
-      && rf.prms$sampsize == n
-      && rf.prms$samptype == "swr") ) {
-      stop("double bootstrapping is not permitted on forests grown under non-standard sampling")
-    }
-    else {
-      ## everything is OK - set all sampling parameters to default values
-      rf.prms$bootstrap <- rf.prms$sampsize <- rf.prms$samptype <- NULL
-    }
+  else {
+    ##everything is OK - set bootstrap parameter to NULL for later custom bootstrap
+    ## leave $samptype and $sampsize in place to be used for making double bootstrap
+    rf.prms$bootstrap <- NULL
   }
   ##--------------------------------------------------------------
   ##
@@ -246,7 +232,14 @@ extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, sta
   ## coerce the (potentially) multivariate rf object
   m.target <- get.univariate.target(obj$rf, m.target)
   obj$rf <- coerce.multivariate(obj$rf, m.target)
-  ## coerce the (potentially) multivariate vimp object
+  ## coerce the (potentially) multivariate original grow vimp
+  if (is.null(m.target)) {
+    vmp <- obj$vmp[[1]][, 1 + target, drop = FALSE]
+  }
+  else {
+    vmp <- obj$vmp[[m.target]][, 1 + target, drop = FALSE]
+  }
+  ## coerce the (potentially) multivariate subsampled vimp 
   if (is.null(m.target)) {
     obj$vmpS <- lapply(obj$vmpS, data.frame)
   }
@@ -256,7 +249,6 @@ extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, sta
     })
   }  
   ## extract necessary objects
-  vmp <- obj$vmp[[1]][, 1 + target, drop = FALSE]
   theta.hat <- get.standardize.vimp(obj$rf, vmp, standardize)[, 1]
   theta.star <- get.standardize.vimp(obj$rf, rbind(sapply(obj$vmpS, "[[", 1 + target)), standardize)
   rownames(theta.star) <- xvar.names <- rownames(vmp)
@@ -376,17 +368,22 @@ get.standardize.vimp <- function(obj, vmp, standardize = FALSE) {
 ## double bootstrap sampling
 ##
 ###################################################################
-make.double.boot.sample <- function(ntree, n, smp)
+make.double.boot.sample <- function(ntree, n, smp, size = function(x) {x}, replace = TRUE)
 {
   dbl.smp <- do.call(cbind, mclapply(1:ntree, function(bb) {
     inb <- rep(0, n)
-    smp.2 <- sample(smp, replace = TRUE)
+    smp.2 <- sample(smp, size = size(n), replace = replace)
     frq <- tapply(smp.2, smp.2, length)
     idx <- as.numeric(names(frq))
     inb[idx] <- frq
     inb
   }))
-  dbl.smp[-setdiff(1:n, smp),, drop = FALSE]
+  if (length(setdiff(1:n, smp)) > 0) {
+    dbl.smp[-setdiff(1:n, smp),, drop = FALSE]
+  }
+  else {
+    dbl.smp
+  }
 }
 ###################################################################
 ##
@@ -502,7 +499,8 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, verbose) {
     ## double bootstrap sample
     smp <- sample(1:n, size = n, replace = TRUE)
     smp.unq <- sort(unique(smp))
-    dbl.smp <- make.double.boot.sample(rf.prms$ntree, n, smp)
+    dbl.smp <- make.double.boot.sample(rf.prms$ntree, n, smp,
+                             size = rf.prms$sampsize, replace = rf.prms$samptype == "swr")
     ## pull VIMP from the double boostrap forest
     rf.b <- do.call("rfsrc",
      c(list(data = dta[smp.unq,, drop = FALSE], importance = TRUE, bootstrap = "by.user", samp = dbl.smp), rf.prms))

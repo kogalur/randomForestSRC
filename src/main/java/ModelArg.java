@@ -61,7 +61,11 @@ public class ModelArg {
     private int        nSplit;
 
     private int        mtry;
-    private int        htry;
+
+    private int        hdim;
+    private int        lotSize;
+    private int        lotLag;
+    private int        lotStrikeout;
 
     private int        vtry;
     private int[][]    vtryArray;
@@ -143,25 +147,26 @@ public class ModelArg {
     private static final HashMap <String, Integer> splitRuleID;
     static
     {
-        splitRuleID = new HashMap<String, Integer> (16);
+        splitRuleID = new HashMap<String, Integer> (19);
         splitRuleID.put("logrank",               1);
         splitRuleID.put("logrankscore",          2);
         splitRuleID.put("logrankCR",             3);
-        splitRuleID.put("logrankACR",            4);
-        splitRuleID.put("random",                5);
-        splitRuleID.put("mse",                   6);
-        splitRuleID.put("mse.unwt",              7);
-        splitRuleID.put("mse.hvwt",              8);
-        splitRuleID.put("gini",                  9);
-        splitRuleID.put("gini.u nwt",           10);
-        splitRuleID.put("gini.h vwt",           11);
-        splitRuleID.put("unsupv",               12);
-        splitRuleID.put("mv.mse",               13);
-        splitRuleID.put("mv.gini",              14);
-        splitRuleID.put("mv.mix",               15);
-        splitRuleID.put("custom",               16);
-        splitRuleID.put("l2.impute",            17);
-        splitRuleID.put("rps",                  18);
+        splitRuleID.put("random",                4);
+        splitRuleID.put("mse",                   5);
+        splitRuleID.put("gini",                  6);
+        splitRuleID.put("unsupv",                7);
+        splitRuleID.put("mv.mse",                8);
+        splitRuleID.put("mv.gini",               9);
+        splitRuleID.put("mv.mix",               10);
+        splitRuleID.put("custom",               11);
+        splitRuleID.put("quantile.regr",        12);
+        splitRuleID.put("la.quantile.regr",     13);
+        splitRuleID.put("bs.gradient",          14);
+        splitRuleID.put("auc",                  15);
+        splitRuleID.put("entropy",              16);
+        splitRuleID.put("sg.regr",              17);
+        splitRuleID.put("sg.class",             18);
+        splitRuleID.put("sg.surv",              19);
     }
     
     // HashMap containing types for x-vars and y-vars.
@@ -1105,8 +1110,8 @@ public class ModelArg {
         // Default value of mtry.
         set_mtry();
 
-        // Default value of htry.
-        set_htry(0);
+        // Default value of the lot object.
+        set_lot();
 
         // Default bootstrap.
         set_bootstrap();
@@ -1904,48 +1909,25 @@ public class ModelArg {
 
 
 
+     
 
 
-    /**
-     * Sets the maximum hypercube dimension to be considered in Greedy Splitting.  
-     * @param htry The maximum hypercube dimension to be considered in Greedy Splitting.
-     * If htry = 0, Standard Splitting is in effect.  If htry &gt; 0, Greedy Splitting is in effect.
-     * If the value is out of range, the default value of zero will be applied:
-     * <pre> <code> 
-     * <table class= "myColumnPadding">
-     *  <tr>
-     *    <th>htry</th>
-     *    <th>Protocol</th>
-     *  </tr>
-     *  <tr>
-     *    <td>0</td>
-     *    <td>standard splitting</td>
-     *  </tr>
-     *  <tr>
-     *    <td>htry &gt; 0</td>     
-     *    <td>greedy splitting</td>
-     *  </tr>
-     * </table></p>
-     */
-    public void set_htry(int htry) {
-        if (htry < 0) {
-            this.htry = 0;
-        }
-        else {
-            this.htry = htry;
-        }
+    
+    public void set_lot() {
+        // Traditional non-greedy splitting.
+        this.hdim = 0;
+        this.lotSize = 0;
+        this.lotLag = 0;
+        this.lotStrikeout = 0;
     }
 
-
-    /** 
-     * Returns the maximum hypercube dimension to be considered in Greedy Splitting.
-     * @return The maximum hypercube dimension to be considered in Greedy Splitting.
-     * @see #set_htry(int)
-     */
-    public int get_htry() {
-        return htry;
+    public int get_hdim() {
+        return hdim;
     }
     
+    
+
+        
 
     /** 
      * Sets the number of iterations for the missing data algorithm.
@@ -3028,6 +3010,10 @@ public class ModelArg {
         result += customSplitBit;
         
         return result;
+    }
+
+    Lot getLot() {
+        return new Lot(this.hdim, this.lotSize, this.lotLag, this.lotStrikeout);
     }
 
 

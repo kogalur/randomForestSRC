@@ -67,3 +67,4 @@ uint getUserTraceFlag ();
 void populatePartialObject(jobject obj);
 void populateHyperZeroObject(jobject obj);
 void populateHyperOneObject(jobject obj);
+void populateLotObject(jobject obj);

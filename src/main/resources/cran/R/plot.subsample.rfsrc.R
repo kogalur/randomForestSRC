@@ -1,6 +1,6 @@
-plot.subsample.rfsrc <- function(x, alpha = .05,
+plot.subsample.rfsrc <- function(x, alpha = .01,
                           standardize = TRUE, normal = TRUE, jknife = TRUE,
-                          target, m.target = NULL, pmax = 75, main = "", cex = 1,
+                          target, m.target = NULL, pmax = 75, main = "", 
                           ...)
 {
   ##--------------------------------------------------------------
@@ -26,23 +26,13 @@ plot.subsample.rfsrc <- function(x, alpha = .05,
   x$rf <- coerce.multivariate(x$rf, m.target)
   ##--------------------------------------------------------------
   ##
-  ## coerce the (potentially) multivariate vimp object
-  ##
-  ##--------------------------------------------------------------
-  if (is.null(m.target)) {
-    x$vmp <- lapply(x$vmp, function(oo) {names(oo) = NULL; data.frame(oo)})
-  }
-  else {
-    x$vmp <- x$vmp[m.target]
-  }  
-  ##--------------------------------------------------------------
-  ##
   ## family specific details
   ## - set the target if not supplied
   ## - assign pretty labels for the horizontal axis
   ##
   ##--------------------------------------------------------------
   fmly <- x$rf$family
+  ## labels
   if (standardize) {
     if (fmly == "regr") {
       xlab <- "standardized vimp"
@@ -54,7 +44,13 @@ plot.subsample.rfsrc <- function(x, alpha = .05,
   else {
     xlab <- "vimp"
   }
-  vmp.col.names <- colnames(x$vmp[[1]])
+  ## extract vimp column names - be careful if this is multivariate
+  if (is.null(m.target)) {  
+    vmp.col.names <- colnames(x$vmp[[1]])
+  }
+  else {
+    vmp.col.names <- colnames(x$vmp[[m.target]])
+  }
   if (fmly == "regr" || fmly == "surv") {
     target <- 0
     xlab <- paste(xlab, " (", vmp.col.names, ")", sep = "")
@@ -103,11 +99,11 @@ plot.subsample.rfsrc <- function(x, alpha = .05,
   ##
   ##--------------------------------------------------------------
   if (subsample) {
-    oo <- extract.subsample(x, alpha = alpha, target = target, standardize = standardize)
+    oo <- extract.subsample(x, alpha = alpha, target = target, m.target = m.target, standardize = standardize)
     boxplot.dta <- oo$boxplot.dta
   }
   else {
-    oo <- extract.bootsample(x, alpha = alpha, target = target, standardize = standardize)
+    oo <- extract.bootsample(x, alpha = alpha, target = target, m.target = m.target, standardize = standardize)
     boxplot.dta <- oo[[1]]
   }
   if (normal) {
@@ -149,26 +145,29 @@ plot.subsample.rfsrc <- function(x, alpha = .05,
   colr <- c("blue", "red")[1 + col.pt]
   ##--------------------------------------------------------------
   ##
-  ## finesse ... unnamed options to be passed to bxp
+  ## finesse ... unnamed options to be passed to bxp and axis
   ##
   ##--------------------------------------------------------------
   ## pull the unnamed options
   dots <- list(...)
   bxp.names <- c(names(formals(bxp)),
                  "xaxt", "yaxt", "las", "cex.axis", 
-                 "col.axis", "main", "cex.main",
+                 "col.axis", "cex.main",
                  "col.main", "sub", "cex.sub", "col.sub", 
                  "ylab", "cex.lab", "col.lab")
-  ## over-ride xlab
+  axis.names <- formals(axis)
+  axis.names$tick <- axis.names$las <- axis.names$labels <- NULL
+  axis.names <- c(names(axis.names), "cex.axis") 
+  ## override xlab
   if (!is.null(dots$xlab)) {
     xlab <- dots$xlab
   }
-  ## over-lay ylab when user mistakenly uses it  
+  ## overlay ylab when user mistakenly uses it  
   if (!is.null(dots$ylab) && length(dots$ylab) == p) {
     bp$names <- dots$ylab[o.pt]
     bxp.names <- bxp.names[bxp.names != "ylab"]
   }
-  ## over-lay names
+  ## overlay names
   if (!is.null(dots$names)) {
     bp$names <- dots$names[o.pt]
   }
@@ -181,8 +180,9 @@ plot.subsample.rfsrc <- function(x, alpha = .05,
                         boxfill = colr, xaxt = "n", yaxt = "n",
                         outline = FALSE, horizontal = TRUE),
                    dots[names(dots) %in% bxp.names]))
-  axis(1, at = pretty(c(bp$stats)), tck = .02)
-  axis(2, at = 1:length(bp$names), labels = bp$names, las = 2, cex.axis = cex, tick = FALSE)
+  do.call("axis", c(list(side = 1, at = pretty(c(bp$stats)), tick = .02), dots[names(dots) %in% axis.names]))
+  do.call("axis", c(list(side = 2, at = 1:length(bp$names), labels = bp$names,
+                las = 2, tick = FALSE), dots[names(dots) %in% axis.names]))
   abline(h = 1:length(bp$names), col = gray(.9), lty = 1)
   abline(v = 0, lty = 1, lwd = 1.5, col = gray(.8))
   bxp(bp, boxfill=colr,xaxt="n",yaxt="n",

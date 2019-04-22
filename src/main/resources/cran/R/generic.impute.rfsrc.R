@@ -26,7 +26,7 @@ generic.impute.rfsrc <- function(data,
                            forest = FALSE), dots))
   }
   else {## user has requested the fast forest interface
-    object <- do.call("rfsrcFast",
+    object <- do.call("rfsrc.fast",
                     c(list(data = data,
                            ntree = ntree,
                            nodesize = nodesize,

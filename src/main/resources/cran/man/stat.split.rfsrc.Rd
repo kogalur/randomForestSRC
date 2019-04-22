@@ -1,6 +1,6 @@
-\name{stat.split}
-\alias{stat.split}
+\name{stat.split.rfsrc}
 \alias{stat.split.rfsrc}
+\alias{stat.split}
 \title{Acquire Split Statistic Information}
 \description{
   Extract split statistic information from the forest.  The function

@@ -3,10 +3,11 @@ rfsrc <- function(formula, data, ntree = 1000,
                   nodesize = NULL, nodedepth = NULL,
                   splitrule = NULL, nsplit = 10,
                   importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
-                  block.size = if (importance == "none" || as.character(importance) == "FALSE") NULL else 10,
+                  block.size = if (any(is.element(as.character(importance), c("none", "FALSE")))) NULL else 10,
                   ensemble = c("all", "oob", "inbag"),
                   bootstrap = c("by.root", "by.node", "none", "by.user"),
-                  samptype = c("swr", "swor"), sampsize = NULL, samp = NULL, membership = FALSE,
+                  samptype = c("swor", "swr"),  samp = NULL, membership = FALSE,
+                  sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
                   na.action = c("na.omit", "na.impute"), nimpute = 1,
                   ntime, cause,
                   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
@@ -29,11 +30,14 @@ rfsrc <- function(formula, data, ntree = 1000,
   perf.type <- is.hidden.perf.type(user.option)
   rfq <- is.hidden.rfq(user.option)
   gk.quantile <- is.hidden.gk.quantile(user.option)
+  quantile.regr <- is.hidden.quantile.regr(user.option)
   prob <- is.hidden.prob(user.option)
   prob.epsilon <- is.hidden.prob.epsilon(user.option)
-  htry <- is.hidden.htry(user.option)
+  lot <- is.hidden.lot(user.option)    
+  hdim <- lot$hdim
   vtry <- is.hidden.vtry(user.option)
   holdout.array <- is.hidden.holdout.array(user.option)
+  empirical.risk <- is.hidden.empirical.risk(user.option)
   ## verify key options
   ensemble <- match.arg(ensemble, c("all", "oob", "inbag"))  
   bootstrap <- match.arg(bootstrap, c("by.root", "by.node", "none", "by.user"))
@@ -129,34 +133,33 @@ rfsrc <- function(formula, data, ntree = 1000,
   n <- nrow(xvar)
   n.xvar <- ncol(xvar)
   mtry <- get.grow.mtry(mtry, n.xvar, family)
-  samptype <- match.arg(samptype, c("swr", "swor"))
+  samptype <- match.arg(samptype, c("swor", "swr"))
+  ## bootstrap case
   if (bootstrap == "by.root") {
-    ## Set the default value for the size of the bootstrap
-    if(missing(sampsize) | is.null(sampsize)) {
-      if (samptype == "swr") {
-        sampsize <- nrow(xvar)
-      }
-      if (samptype == "swor") {
-        sampsize <- round(nrow(xvar) * (1 - exp(-1)))
-      }
+    if (!is.function(sampsize) && !is.numeric(sampsize)) {
+      stop("sampsize must be a function or number specifying size of subsampled data")
+    }
+    if (is.function(sampsize)) {
+      sampsize.function <- sampsize
     }
     else {
-      sampsize <- round(sampsize)
-      if (sampsize < 1) {
-        stop("sampsize must be greater than zero")
-      }
-      if (samptype == "swr") {
-        ## Size is not limited.
-      }
-      if (samptype == "swor") {
-        ## Size is limited by the number of cases.
-        sampsize <- min(sampsize, nrow(xvar))
-      }
+      ## convert user passed sample size to a function
+      sampsize.function <- make.samplesize.function(sampsize / nrow(xvar))
+    }
+    sampsize <- round(sampsize.function(nrow(xvar)))
+    if (sampsize < 1) {
+      stop("sampsize must be greater than zero")
+    }
+    ## for swor size is limited by the number of cases
+    if (samptype == "swor" && (sampsize > nrow(xvar))) {
+      sampsize.function <- function(x){x}
+      sampsize <- nrow(xvar)
     }
     samp <- NULL
   }
+  ## user specified bootstrap
   else if (bootstrap == "by.user") {    
-    ## Check for coherent sample.  It will of be dim [n] x [ntree].
+    ## check for coherent sample: it will of be dim [n] x [ntree]
     if (is.null(samp)) {
       stop("samp must not be NULL when bootstrapping by user")
     }
@@ -166,13 +169,17 @@ rfsrc <- function(formula, data, ntree = 1000,
     if (sum(sampsize == sampsize[1]) != ntree) {
       stop("sampsize must be identical for each tree")
     }
+    ## set the sample size and function
     sampsize <- sampsize[1]
+    sampsize.function <- make.samplesize.function(sampsize[1] / nrow(xvar))
   }
+  ## none of the above
   else {
-    ## Override sample size when not bootstrapping by root or user.
-    sampsize = nrow(xvar)
-    ## Override sample type when not bootstrapping by root or user.
+    ## override sample size when not bootstrapping by root or user
+    sampsize <- nrow(xvar)    
+    ## override sample type when not bootstrapping by root or user
     samptype <- "swr"
+    sampsize.function <- function(x){x}
   }
   ## Set the weight matrix for xvar, split
   ## Set the flag for forest weight  
@@ -227,7 +234,7 @@ rfsrc <- function(formula, data, ntree = 1000,
   ## Get event information and dimensioning for families
   event.info <- get.grow.event.info(yvar, family, ntime = ntime)
   ## Initialize nsplit, noting that it may be been overridden.
-  splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, htry, nsplit, event.info$event.type)
+  splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, hdim, nsplit, event.info$event.type)
   ## Set the cause weights for the split statistic calculation.
   if (family == "surv" || family == "surv-CR") {
     if (length(event.info$event.type) > 1) {
@@ -304,23 +311,21 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## other than imputed data.
     ## na.action    <- "na.impute"
   }
-  ## get holdout array which is NULL unless the user passes in an array
-  ## or specifies a non-zero vtry 
-  if (is.null(holdout.array)) {
-    holdout.array <- make.holdout.array(vtry, mtry, n.xvar, ntree)
-  }
-  else {##user specified array - set vtry=1 to trigger holdout algorithm
+  ## deal with user specified holdout array
+  ## confirm dimension is right
+  ## set vtry to 1 to trigger holdout algorithm
+  if (!is.null(holdout.array)) {
     if (nrow(holdout.array) != n.xvar | ncol(holdout.array) != ntree) {
       stop("dimension of holdout.array does not conform to p x ntree")
     }
-    vtry <- 1
+    vtry <- 1##this only needs to be non-zero to trigger holdout
   }
   ## !!! here's where prob and prob.epsilon are set globally !!!
   ## for the user convenience if not set make coherent
   ## global assingments for  prob and prob.epsilon values
   ## takes into account splitrule and whether gk.quantile is requested
   gk.quantile <- get.gk.quantile(gk.quantile)
-  prob.assign <- global.prob.assign(prob, prob.epsilon, gk.quantile, splitinfo$name, n)
+  prob.assign <- global.prob.assign(prob, prob.epsilon, gk.quantile, quantile.regr, splitinfo$name, n)
   prob <- prob.assign$prob
   prob.epsilon <- prob.assign$prob.epsilon
   ## Bit dependencies:
@@ -346,6 +351,7 @@ rfsrc <- function(formula, data, ntree = 1000,
   rfq <- get.rfq(rfq)
   rfq.bits  <- get.rfq.bits(rfq, family)
   gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
+  empirical.risk.bits <- get.empirical.risk.bits(empirical.risk)
   ## Assign high bits for the native code
   samptype.bits <- get.samptype(samptype)
   forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
@@ -369,7 +375,8 @@ rfsrc <- function(formula, data, ntree = 1000,
                                              perf.bits +
                                              rfq.bits +
                                              gk.quantile.bits +
-                                             statistics.bits),
+                                             statistics.bits +
+                                             empirical.risk.bits),
                                   as.integer(samptype.bits +
                                              forest.wt.bits +
                                              distance.bits + 
@@ -381,7 +388,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                                   as.integer(splitinfo$index),
                                   as.integer(splitinfo$nsplit),
                                   as.integer(mtry),
-                                  as.integer(htry),
+                                  lot, ## object containing lot settings
                                   as.integer(vtry),
                                   as.integer(holdout.array),
                                   as.integer(formulaDetail$ytry),
@@ -518,13 +525,13 @@ rfsrc <- function(formula, data, ntree = 1000,
       ## theoretical maximum.  This is trimmed below to the actual
       ## size.
       nativeArraySize = 0
-      if (htry == 0) {
+      if (hdim == 0) {
           mwcpCountSummary = rep (0, 1)
           nativeFactorArray <- vector("list", 1)
       }
       else {
-          mwcpCountSummary = rep (0, htry)
-          nativeFactorArray <- vector("list", htry)
+          mwcpCountSummary = rep (0, hdim)
+          nativeFactorArray <- vector("list", hdim)
       }
     ## Marker for start of native forest topology.  This can change with the outputs requested.
     ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
@@ -536,9 +543,9 @@ rfsrc <- function(formula, data, ntree = 1000,
         ## and external (terminal) nodes in the forest.
         nativeArraySize <<- nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
         mwcpCountSummary[1] <<- mwcpCountSummary[1] + nativeOutput$mwcpCT[b]
-          if (htry > 1) {
-            for (i in 0:(htry-2)) {
-              mwcpCountSummary[i+2] <<- mwcpCountSummary[i+2] + nativeOutput[[pivot + 9 + (5 *(htry-1)) + i]][b]
+          if (hdim > 1) {
+            for (i in 0:(hdim-2)) {
+              mwcpCountSummary[i+2] <<- mwcpCountSummary[i+2] + nativeOutput[[pivot + 9 + (5 *(hdim-1)) + i]][b]
             }
         }
       }
@@ -564,7 +571,7 @@ rfsrc <- function(formula, data, ntree = 1000,
       nativeFactorArray[[1]] <- nativeOutput$mwcpPT[1:mwcpCountSummary[1]]
     }
     nativeFactorArrayHeader <- "mwcpPT"
-    if (htry > 0) {
+    if (hdim > 0) {
       nativeArray <- as.data.frame(cbind(nativeArray,
                                          nativeOutput[[pivot + 7]][1:nativeArraySize]))
       nativeArrayHeader <- c(nativeArrayHeader, "hcDim")
@@ -572,23 +579,23 @@ rfsrc <- function(formula, data, ntree = 1000,
                                          nativeOutput[[pivot + 8]][1:nativeArraySize]))
       nativeArrayHeader <- c(nativeArrayHeader, "contPTR")
     }
-      if (htry > 1) {
-          for (i in 0:(htry-2)) {
+      if (hdim > 1) {
+          for (i in 0:(hdim-2)) {
               nativeArray <- as.data.frame(cbind(nativeArray,
-                                                 nativeOutput[[pivot + 9 + (0 * (htry-1)) + i]][1:nativeArraySize]))
+                                                 nativeOutput[[pivot + 9 + (0 * (hdim-1)) + i]][1:nativeArraySize]))
               nativeArrayHeader <- c(nativeArrayHeader, paste("parmID", i+2, sep=""))
               nativeArray <- as.data.frame(cbind(nativeArray,
-                                                 nativeOutput[[pivot + 9 + (1 * (htry-1)) + i]][1:nativeArraySize]))
+                                                 nativeOutput[[pivot + 9 + (1 * (hdim-1)) + i]][1:nativeArraySize]))
               nativeArrayHeader <- c(nativeArrayHeader, paste("contPT", i+2, sep=""))
               nativeArray <- as.data.frame(cbind(nativeArray,
-                                                 nativeOutput[[pivot + 9 + (2 * (htry-1)) + i]][1:nativeArraySize]))
+                                                 nativeOutput[[pivot + 9 + (2 * (hdim-1)) + i]][1:nativeArraySize]))
               nativeArrayHeader <- c(nativeArrayHeader, paste("contPTR", i+2, sep=""))
               nativeArray <- as.data.frame(cbind(nativeArray,
-                                                 nativeOutput[[pivot + 9 + (3 * (htry-1)) + i]][1:nativeArraySize]))
+                                                 nativeOutput[[pivot + 9 + (3 * (hdim-1)) + i]][1:nativeArraySize]))
               nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpSZ", i+2, sep=""))
               if (mwcpCountSummary[i+2] > 0) {
                   ## This can be NULL if there are no factor splits along this dimension.
-                  nativeFactorArray[[i+2]] <- nativeOutput[[pivot + 9 + (4 * (htry-1)) + i]][1:mwcpCountSummary[i+2]]
+                  nativeFactorArray[[i+2]] <- nativeOutput[[pivot + 9 + (4 * (hdim-1)) + i]][1:mwcpCountSummary[i+2]]
               }
               nativeFactorArrayHeader <- c(nativeFactorArrayHeader, paste("mwcpPT", i+2, sep=""))
           }
@@ -693,7 +700,7 @@ rfsrc <- function(formula, data, ntree = 1000,
     else {
       nativeArrayTNDS <- NULL
     }
-    forest.out <- list(htry = htry,
+    forest.out <- list(hdim = hdim,
                        nativeArray = nativeArray,
                        nativeFactorArray = nativeFactorArray,
                        totalNodeCount = dim(nativeArray)[1],
@@ -708,7 +715,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                        xvar.names = xvar.names,
                        seed = nativeOutput$seed,
                        bootstrap = bootstrap,
-                       sampsize = sampsize,
+                       sampsize = sampsize.function,
                        samptype = samptype,
                        samp = samp,
                        case.wt = case.wt,
@@ -720,6 +727,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                        perf.type = perf.type,
                        rfq = rfq,
                        gk.quantile = gk.quantile,
+                       quantile.regr = quantile.regr,
                        prob = prob,
                        prob.epsilon = prob.epsilon,
                        block.size = block.size)
@@ -836,6 +844,20 @@ rfsrc <- function(formula, data, ntree = 1000,
       node.mtry.index <- NULL
       node.ytry.index <- NULL
     }
+  if (empirical.risk) {
+      if (!is.null(nativeOutput$emprRisk)) {
+          empr.risk <- array(nativeOutput$emprRisk, c(lot$treesize, ntree))
+          nativeOutput$emprRisk <- NULL
+      }
+      if (!is.null(nativeOutput$oobEmprRisk)) {
+          oob.empr.risk <- array(nativeOutput$oobEmprRisk, c(lot$treesize, ntree))
+          nativeOutput$oobEmprRisk <- NULL
+      }
+  }
+  else {
+      empr.risk = NULL
+      oob.empr.risk = NULL
+  }
   ## make the output object
   rfsrcOutput <- list(
     call = my.call,
@@ -872,7 +894,9 @@ rfsrc <- function(formula, data, ntree = 1000,
     node.ytry.index = node.ytry.index,
     ensemble = ensemble,
     holdout.array = holdout.array,
-    block.size = block.size
+    block.size = block.size,
+    empr.risk = empr.risk,
+    oob.empr.risk = oob.empr.risk
   )
   ## memory management
   remove(yvar)
@@ -889,6 +913,8 @@ rfsrc <- function(formula, data, ntree = 1000,
   if (n.miss > 0) remove(imputed.data)
   remove(split.depth.out)
   remove(holdout.array)
+  remove(empr.risk)
+  remove(oob.empr.risk)
   ## save the outputs
   survOutput <- NULL
   classOutput <- NULL
@@ -1175,7 +1201,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                         array(nativeOutput$allEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                               c(n, levels.count[i]), dimnames=ens.names) else NULL)
           classOutput[[i]] <- list(predicted = predicted)
-          response <- (if (!is.null(predicted)) bayes.rule(predicted, pi.hat) else NULL)
+          response <- (if (!is.null(predicted)) get.bayes.rule(predicted, pi.hat) else NULL)
           classOutput[[i]] <- c(classOutput[[i]], class = list(response))
           remove(predicted)
           remove(response)
@@ -1183,7 +1209,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                             array(nativeOutput$oobEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                   c(n, levels.count[i]), dimnames=ens.names) else NULL)
           classOutput[[i]] <- c(classOutput[[i]], predicted.oob = list(predicted.oob))
-          response.oob <- (if (!is.null(predicted.oob)) bayes.rule(predicted.oob, pi.hat) else NULL)
+          response.oob <- (if (!is.null(predicted.oob)) get.bayes.rule(predicted.oob, pi.hat) else NULL)
           classOutput[[i]] <- c(classOutput[[i]], class.oob = list(response.oob))
           remove(predicted.oob)
           remove(response.oob)

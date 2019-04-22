@@ -1,7 +1,8 @@
 tune.rfsrc <- function(formula, data,
       mtryStart = ncol(data) / 2,
       nodesizeTry = c(1:9, seq(10, 100, by = 5)), ntreeTry = 50,
-      stepFactor = 1.25, improve = 1e-3, strikeout = 3, maxIter = 25,
+      sampsize = function(x){min(x * .632, max(150, x ^ (3/4)))},
+      nsplit = 10, stepFactor = 1.25, improve = 1e-3, strikeout = 3, maxIter = 25,
       trace = FALSE, doBest = TRUE, ...) 
 {
   ## inital checks - all are fatal
@@ -21,7 +22,7 @@ tune.rfsrc <- function(formula, data,
   for (nsz in nodesizeTry) {
     counter1 <- counter1 + 1
     ## acquire the starting error rate
-    o <- rfsrcFast(formula, data, ntree = ntreeTry, mtry = mtryStart, nodesize = nsz,  ...)
+    o <- rfsrc.fast(formula, data, ntree = ntreeTry, mtry = mtryStart, nodesize = nsz, sampsize = sampsize, ...)
     mtryStart <- o$mtry
     mtryMax <- length(o$xvar.names)
     errorOld <- mean(get.mv.error(o, TRUE), na.rm = TRUE)
@@ -62,8 +63,8 @@ tune.rfsrc <- function(formula, data,
         if (mtryCur == mtryOld) {
           break
         }
-        errorCur <- mean(get.mv.error(rfsrcFast(formula, data, ntree = ntreeTry, 
-                        mtry = mtryCur, nodesize = nsz, ...), TRUE), na.rm = TRUE)
+        errorCur <- mean(get.mv.error(rfsrc.fast(formula, data, ntree = ntreeTry, 
+                        mtry = mtryCur, nodesize = nsz, sampsize = sampsize, ...), TRUE), na.rm = TRUE)
         if (trace) {
           cat("nodesize = ", nsz,
               " mtry =", mtryCur,
@@ -94,7 +95,7 @@ tune.rfsrc <- function(formula, data,
   ## fit the optimized forest?
   rf <- NULL
   if (doBest) {
-    rf <- rfsrcFast(formula, data, mtry = res[opt.idx, 2], nodesize = res[opt.idx, 1], ...)
+    rf <- rfsrc.fast(formula, data, mtry = res[opt.idx, 2], nodesize = res[opt.idx, 1], sampsize = sampsize)
   }
   ## return the goodies
   list(results = res, optimal = res[opt.idx, -3], rf = rf)

@@ -44,6 +44,30 @@ plot.variable.rfsrc <- function(
     xvar[object$imputed.indv, ] <- object$imputed.data[, object$xvar.names]
   }
   n <- nrow(xvar)
+  ## obtain hidden options - set matched options to NULL
+  dots <- list(...)
+  bxp.names <- unique(c(names(formals(bxp)),
+                 "xaxt", "yaxt", "las", "cex.axis", 
+                 "col.axis", "main", "cex.main",
+                 "col.main", "sub", "cex.sub", "col.sub", 
+                 "xlab", "ylab", "cex.lab", "col.lab", "boxfill","varwidth"))
+  axis.names <- unique(c(names(formals(axis)), "las", "cex.axis"))
+  ## by default xlab and ylab are extracted from the data
+  ## over-ridden only by hidden options
+  xlab.flag <- ylab.flag <- TRUE
+  if (!is.null(dots$xlab)) {
+    xlab.flag <- FALSE
+  }
+  if (!is.null(dots$ylab)) {
+    ylab.flag <- FALSE
+  }
+  ## default notch, boxfill
+  if (is.null(dots$notch)) {
+    dots$notch <- TRUE
+  }
+  if (is.null(dots$boxfill)) {
+    dots$boxfill <- "bisque"
+  }
   ## --------------------------------------------------------------------------------------------
   ## do the following if the class is NOT "plot.variable" 
   ## (i.e. the object has not already been processed by the wraper)
@@ -82,10 +106,6 @@ plot.variable.rfsrc <- function(
       if (length(time) > 1) {
         stop("time must be a single value:  ", time)
       }
-        ## Check for a wierd NULL surv.type.  This just makes life easier later.
-      if (is.null(surv.type)) {
-        stop("surv.type is specified incorrectly:  ", surv.type)
-      }
       ## CR analysis.
       if (family == "surv-CR") {
         if (missing(target)) {
@@ -97,9 +117,9 @@ plot.variable.rfsrc <- function(
             }
           }
         VIMP <- object$importance[, target]
-        ## Pick the first occurrence.  This allows the omission of a value for surv.type.
-        pred.type <- setdiff(surv.type, c("rel.freq", "mort", "chf", "surv"))[1]
-        pred.type <- match.arg(pred.type, c("years.lost", "cif", "chf"))
+        ## set the surv.type
+        surv.type <- setdiff(surv.type, c("mort", "rel.freq", "surv"))[1]
+        pred.type <- match.arg(surv.type, c("years.lost", "cif", "chf"))
         ylabel <- switch(pred.type,
                          "years.lost" = paste("Years lost for event ", target),
                          "cif"        = paste("CIF for event ", target, " (time=", time, ")", sep = ""),
@@ -109,9 +129,9 @@ plot.variable.rfsrc <- function(
         else {
           target <- 1
           VIMP <- object$importance
-          ## Pick the first occurrence.  This allows the omission of a value for surv.type.
-          pred.type <- setdiff(surv.type, c("years.lost", "cif", "chf"))[1]
-          pred.type <- match.arg(pred.type, c("rel.freq", "mort", "chf", "surv"))
+          ## set the surv.type
+          surv.type <- setdiff(surv.type, c("years.lost", "cif", "chf"))[1]
+          pred.type <- match.arg(surv.type, c("rel.freq", "mort", "chf", "surv"))
           ylabel <- switch(pred.type,
                            "rel.freq"   = "standardized mortality",
                            "mort"       = "mortality",
@@ -123,7 +143,7 @@ plot.variable.rfsrc <- function(
       else {
         ## assign a null time value
         event.info <- time <- NULL
-        ## Factor outcome.
+        ## Factor outcome
         if(is.factor(coerce.multivariate(object, m.target)$yvar)) {
           object.yvar.levels <- levels(coerce.multivariate(object, m.target)$yvar)
           pred.type <- match.arg(class.type, c("prob", "bayes"))
@@ -225,29 +245,38 @@ plot.variable.rfsrc <- function(
                                             target)
           ## Results in the mean along an x-value over n.
           if (!is.null(dim(pred.temp))) {
-            mean.temp <- apply(pred.temp, 2, mean, na.rm = TRUE)
+            mean.temp <- colMeans(pred.temp, na.rm = TRUE)
           }
-            else {
-              mean.temp <- mean(pred.temp, na.rm = TRUE)
-            }
+          else {
+            mean.temp <- mean(pred.temp, na.rm = TRUE)
+          }
           if (!factor.x) {
             yhat <- mean.temp
             if (coerce.multivariate(object, m.target)$family == "class") {
               yhat.se <- mean.temp * (1 - mean.temp) / sqrt(n)
             }
-              else {
-                sd.temp <- apply(pred.temp, 2, sd, na.rm = TRUE)
-                yhat.se <- sd.temp / sqrt(n)                
-              }
+            else {
+              sd.temp <- apply(pred.temp, 2, sd, na.rm = TRUE)
+              yhat.se <- sd.temp / sqrt(n)                
+            }
           }
+          else {
+            if (!is.null(dim(pred.temp))) {
+              #pred.temp <- t(mean.temp + (t(pred.temp) - mean.temp) / sqrt(n))
+              pred.temp <- t(apply(pred.temp, 1, function(yhat) {
+                se <- (yhat - mean.temp) / sqrt(n)
+                mean.temp + sign(se) * abs(se)
+              }))
+            }
             else {
               pred.temp <- mean.temp + (pred.temp - mean.temp) / sqrt(n)
-              yhat <- c(yhat, pred.temp)
-              x.uniq <- unique(x)##map factor back to original labels
             }
-          list(xvar.name = xvar.names[k], yhat = yhat, yhat.se = yhat.se, n.x = n.x, x.uniq = x.uniq, x = x)
+            yhat <- c(yhat, pred.temp)
+            x.uniq <- sort(unique(x))##map factor back to original labels
+          }
+          list(xvar.names = xvar.names[k], yhat = yhat, yhat.se = yhat.se, n.x = n.x, x.uniq = x.uniq, x = x)
         })
-      }
+    }
     plots.per.page <- max(round(min(plots.per.page,nvar)), 1)
     granule <- max(round(granule), 1)
     ## save the plot.variable object
@@ -320,13 +349,16 @@ plot.variable.rfsrc <- function(
       x <- xvar[, which(colnames(xvar) == xvar.names[k])]
       x.uniq <- unique(x)
       n.x <- length(x.uniq)
+      ## hidden options
+      if (xlab.flag) {
+        dots$xlab <- xvar.names[k]
+      }
+      if (ylab.flag) {
+        dots$ylab <- ylabel
+      }
       ## x-continuous-plot
       if (!is.factor(x) & n.x > granule) {
-        plot(x,
-             yhat,
-             xlab = xvar.names[k],
-             ylab = ylabel,
-             type = "n", ...) 
+        do.call("plot", c(list(x = x, y = yhat, type = "n"), dots))
         if (grepl("surv", family)) {
           points(x[cens == target], yhat[cens == target], pch = 16, col = 4, cex = cex.pt)
           points(x[cens == 0], yhat[cens == 0], pch = 16, cex = cex.pt)
@@ -334,22 +366,15 @@ plot.variable.rfsrc <- function(
         lines(lowess(x[!is.na(x)], yhat[!is.na(x)]), col = 2, lwd=3)
       }
       ## x-factor-plots
-        else {
-          if (is.factor(x)) x <- factor(x, exclude = NULL)          
-          boxplot(yhat ~ x, na.action = "na.omit",
-                  xlab = xvar.names[k],
-                  ylab = ylabel,
-                  notch = TRUE,
-                  outline = FALSE,
-                  col = "bisque",
-                  names = rep("", n.x),
-                  xaxt = "n", ...)
-          at.pretty <- unique(round(pretty(1:n.x, min(30, n.x))))
-          at.pretty <- at.pretty[at.pretty >= 1 & at.pretty <= n.x]
-          axis(1,
-               at = at.pretty,
-               labels = format(sort(x.uniq)[at.pretty], trim = TRUE, digits = 4),
-               tick = TRUE)
+      else {
+        if (is.factor(x)) x <- factor(x, exclude = NULL)
+        bp <- boxplot(yhat ~ x, na.action = "na.omit", names = rep("", n.x), plot = FALSE)
+        do.call("bxp", c(list(z = bp, outline = FALSE, xaxt = "n"), dots[names(dots) %in% bxp.names]))
+        at.pretty <- unique(round(pretty(1:n.x, min(30, n.x))))
+        at.pretty <- at.pretty[at.pretty >= 1 & at.pretty <= n.x]
+        do.call("axis", c(list(side = 1, at = at.pretty,
+             labels = format(sort(x.uniq)[at.pretty], trim = TRUE, digits = 4),
+             tick = TRUE), dots[names(dots) %in% axis.names]))
         }
     }
   }
@@ -375,13 +400,18 @@ plot.variable.rfsrc <- function(
       yhat <- prtl[[k]]$yhat
       yhat.se <- prtl[[k]]$yhat.se
       factor.x <- !(!is.factor(x) & (n.x > granule))
+      ## hidden options
+      if (xlab.flag) {
+        dots$xlab <- prtl[[k]]$xvar.names
+      }
+      if (ylab.flag) {
+        dots$ylab <- ylabel
+      }
       ## x-continuous-plot
       if (!factor.x) {
-        plot(c(min(x), x.uniq, max(x), x.uniq, x.uniq),
-             c(NA, yhat, NA, yhat + 2 * yhat.se, yhat - 2 * yhat.se),
-             xlab = prtl[[k]]$xvar.name,
-             ylab = ylabel,
-             type = "n", ...)
+        do.call("plot", c(list(x = c(min(x), x.uniq, max(x), x.uniq, x.uniq),
+                               y = c(NA, yhat, NA, yhat + 2 * yhat.se, yhat - 2 * yhat.se),
+                               type = "n"), dots))
         points(x.uniq, yhat, pch = 16, cex = cex.pt, col = 2)
         if (!is.na(yhat.se) && any(yhat.se > 0)) {
           if (smooth.lines) {
@@ -404,25 +434,17 @@ plot.variable.rfsrc <- function(
       ## x-factor-plots
         else {
           y.se <- 0.005
-          bxp.call <- boxplot(yhat ~ rep(x.uniq, rep(n, n.x)), range = 2, plot = FALSE)
-          boxplot(yhat ~ rep(x.uniq, rep(n, n.x)),
-                  xlab = xvar.names[k],
-                  ylab = ylabel,
-                  notch = TRUE,
-                  outline = FALSE,
-                  range = 2,
-                  ylim = c(min(bxp.call$stats[1,], na.rm=TRUE) * ( 1 - y.se ),
-                    max(bxp.call$stats[5,], na.rm=TRUE) * ( 1 + y.se )),
-                  col = "bisque",
-                  names = rep("",n.x),
-                  xaxt = "n", ...)
+          bp <- boxplot(yhat ~ rep(x.uniq, rep(n, n.x)), names = rep("", n.x), plot = FALSE)
+          do.call("bxp", c(list(z = bp, outline = FALSE, range = 2,
+                                ylim = c(min(bp$stats[1,], na.rm = TRUE) * ( 1 - y.se ),
+                                         max(bp$stats[5,], na.rm = TRUE) * ( 1 + y.se )),
+                                xaxt = "n"), dots[names(dots) %in% bxp.names]))
           at.pretty <- unique(round(pretty(1:n.x, min(30,n.x))))
           at.pretty <- at.pretty[at.pretty >= 1 & at.pretty <= n.x]
-          axis(1,
-               at = at.pretty,
-               labels = format(sort(x.uniq)[at.pretty], trim = TRUE, digits = 4),
-               tick = TRUE)
-        }
+          do.call("axis", c(list(side = 1, at = at.pretty,
+             labels = format(sort(x.uniq)[at.pretty], trim = TRUE, digits = 4),
+             tick = TRUE), dots[names(dots) %in% axis.names]))
+      }
     }
   }
   ## Restore par settings
@@ -502,7 +524,7 @@ extract.pred <- function(obj, type, subset, time, m.target, target, oob = oob) {
       prob <- pred[subset,, drop = FALSE]
       return(switch(type,
                     "prob" = prob[, target],
-                    "bayes" =  bayes.rule(prob)))
+                    "bayes" =  get.bayes.rule(prob)))
     }
     else {      
       n <- length(pred)

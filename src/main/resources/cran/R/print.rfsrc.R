@@ -84,11 +84,13 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       event.freq <- NA
     }
     if (!is.null(x$err.rate)) {
-      conf.matx <- table(x$yvar, if(!is.null(x$class.oob) && !all(is.na(x$class.oob))) x$class.oob else x$class)
-      conf.matx <- cbind(conf.matx,  class.error = round(1 - diag(conf.matx)/rowSums(conf.matx, na.rm = TRUE), 4))
+      conf.matx <- get.confusion(x$yvar,
+             if(!is.null(x$class.oob) && !all(is.na(x$class.oob))) x$class.oob else x$class)
       names(dimnames(conf.matx)) <- c("  observed", "predicted")
-      brierS <- brier(x$yvar, if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
-      aucS <- auc(x$yvar, if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
+      brierS <- get.brier.error(x$yvar,
+             if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
+      aucS <- get.auc(x$yvar,
+             if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
       ## special processing needed to handle class imbalanced rfq classifier
       if (grow.mode) {
         rfqO <- list(rfq = x$forest$rfq, perf.type = x$forest$perf.type)
@@ -174,10 +176,10 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       cat("              Total no. of responses: ", yvar.dim,   "\n", sep="")
       cat("         User has requested response: ", outcome.target,         "\n", sep="")
     }
-    cat("       Resampling used to grow trees: ", sampUsed,                 "\n",sep="")
-    cat("    Resample size used to grow trees: ", x$forest$sampsize,        "\n",sep="")
-    cat("                            Analysis: ", familyPretty,             "\n", sep="")
-    cat("                              Family: ", familyOrg,                "\n", sep="")
+    cat("       Resampling used to grow trees: ", sampUsed,                     "\n",sep="")
+    cat("    Resample size used to grow trees: ", round(x$forest$sampsize(x$n)),"\n",sep="")
+    cat("                            Analysis: ", familyPretty,                 "\n", sep="")
+    cat("                              Family: ", familyOrg,                    "\n", sep="")
     if (x$nsplit > 0 & x$splitrule != "random") {
       cat("                      Splitting rule: ", paste(x$splitrule,"*random*"),"\n", sep="")
       cat("       Number of random split points: ", x$nsplit                   ,  "\n", sep="")
@@ -211,6 +213,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       print(conf.matx)
       cat("\n\tOverall error rate:", overall.err.rate, "\n")
     }
+     
   }
   #################################################################################
   ##
@@ -240,10 +243,10 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       cat("         Total no. of grow responses: ", yvar.dim,   "\n", sep="")
       cat("         User has requested response: ", outcome.target,         "\n", sep="")
     }
-    cat("       Resampling used to grow trees: ", sampUsed,                 "\n",sep="")
-    cat("    Resample size used to grow trees: ", x$forest$sampsize,        "\n",sep="")
-    cat("                            Analysis: ", familyPretty,             "\n", sep="")
-    cat("                              Family: ", familyOrg,                "\n", sep="")
+    cat("       Resampling used to grow trees: ", sampUsed,                     "\n",sep="")
+    cat("    Resample size used to grow trees: ", round(x$forest$sampsize(x$n)),"\n",sep="")
+    cat("                            Analysis: ", familyPretty,                 "\n", sep="")
+    cat("                              Family: ", familyOrg,                    "\n", sep="")
     if (!is.null(err.rate)) {
       if (x$family == "regr") {
         cat("                % variance explained: ", per.var, "\n", sep="")
@@ -270,6 +273,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       print(conf.matx)
       cat("\n\tOverall error rate:", overall.err.rate, "\n")
     }
+     
   }
   #################################################################################
   ##

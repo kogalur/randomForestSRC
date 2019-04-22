@@ -13,5 +13,9 @@
   Modeling wine preferences by data mining from physicochemical properties.
   In \emph{Decision Support Systems}, Elsevier, 47(4):547-553.
 }
-\examples{data(wine, package = "_PROJECT_PACKAGE_NAME_")}
+\examples{
+## load wine and convert to a multiclass problem
+data(wine, package = "_PROJECT_PACKAGE_NAME_")
+wine$quality <- factor(wine$quality)
+}
 \keyword{datasets}

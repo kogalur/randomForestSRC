@@ -1,4 +1,4 @@
-\name{imbalanced}
+\name{imbalanced.rfsrc}
 \alias{imbalanced.rfsrc}
 \alias{imbalanced}
 \title{Imbalanced Two Class Problems}
@@ -11,18 +11,18 @@
 }
 \usage{\method{imbalanced}{rfsrc}(formula, data, ntree = 3000, 
   method = c("rfq", "brf", "standard"),
-  perf.type = NULL,
-  fast = FALSE,
-  ratio = NULL,
-  optimize = FALSE,
-  ngrid = 1e4,
+  block.size = NULL, perf.type = NULL, fast = FALSE,
+  ratio = NULL, optimize = FALSE, ngrid = 1e4,
   ...)
 }
 \arguments{
   \item{formula}{A symbolic description of the model to be fit.}
+  
   \item{data}{Data frame containing the two-class y-outcome and
     x-variables.}
+
   \item{ntree}{Number of trees.}
+
   \item{method}{Method used for fitting the classifier.  The default is
     \code{rfq} which is the random forests quantile-classifer (RFQ)
     approach of O'Brien and Ishwaran (2017).  The method \code{brf}
@@ -30,6 +30,7 @@
     al. (2004) which undersamples the majority class so that its
     cardinality matches that of the minority class.  The method
     \code{standard} implements a standard random forest analysis.}
+
   \item{perf.type}{Measure used for assessing performance (and all
     downstream calculations based on it such as variable importance).
     The default for \code{rfq} and \code{brf} is to use the G-mean
@@ -38,20 +39,31 @@
     measure by manually selecting either \code{g.mean} for the G-mean,
     \code{misclass} for misclassification error, or \code{brier} for the
     normalized Brier score. See the examples below.}
-  \item{fast}{Use fast random forests, \code{rfsrcFast}, in place of
+
+    \item{block.size}{Should the cumulative error rate be calculated on
+    every tree?  When \code{NULL}, it will only be calculated on the
+    last tree. If importance is requested, VIMP is calculated in
+    "blocks" of size equal to \code{block.size}.}
+
+  \item{fast}{Use fast random forests, \code{rfsrc.fast}, in place of
     \code{rfsrc}?  Improves speed but is less accurate.  Only applies to
     RFQ.}
+
   \item{ratio}{This is an optional parameter for expert users 
     and included only for experimental purposes.  Used to specify the
-    ratio (between 0 and 1) for undersampling the majority class.  Option
-    is ignored for BRF.}   
+    ratio (between 0 and 1) for undersampling the majority class.
+    Sampling is without replacement.  Option is ignored for BRF.} 
+
   \item{optimize}{Calculate the G-mean under various threshold values?
     Returns out-of-bag G-mean values for each tested threshold value.
     See examples below for illustration.}
+
   \item{ngrid}{Number of threshold values attempted when \code{optimize}
     is requested}
+
   \item{...}{Further arguments to be passed to the \command{rfsrc}
     function to specify random forest parameters.}
+
 }
 \details{
   Imbalanced data, or the so-called imbalanced minority class problem,
@@ -86,14 +98,16 @@
   110.
   
   Kubat, M., Holte, R. and Matwin, S. (1997). Learning when negative
-  examples abound. \emph{Machine learning}, ECML-97: 146-153.
+  examples abound. \emph{Machine Learning}, ECML-97: 146-153.
 
-  O'Brien R. and Ishwaran H. (2017).  A random forests quantile
-  classifier for class imbalanced data.
+  O'Brien R. and Ishwaran H. (2019).  A random forests quantile
+  classifier for class imbalanced data. \emph{Pattern Recognition},
+  90, 232-249
+  
 }
 \seealso{
   \command{\link{rfsrc}},
-  \command{\link{rfsrcFast}}
+  \command{\link{rfsrc.fast}}
 }
 \examples{
 \donttest{
@@ -106,8 +120,9 @@ breast <- na.omit(breast)
 f <- as.formula(status ~ .)
 
 ##----------------------------------------------------------------
-## example 1: default RFQ call
+## default RFQ call
 ##----------------------------------------------------------------
+
 o.rfq <- imbalanced(f, breast)
 print(o.rfq)
 
@@ -115,48 +130,60 @@ print(o.rfq)
 ## rfsrc(f, breast, rfq =  TRUE, perf.type = "g.mean") 
 
 ##----------------------------------------------------------------
-## example 2: RFQ call with fast rfsrc
+## RFQ with AUC splitting
 ##----------------------------------------------------------------
+
+print(imbalanced(f, breast, splitrule = "auc"))
+
+##----------------------------------------------------------------
+## RFQ call with fast rfsrc
+##----------------------------------------------------------------
+
 o.rfq <- imbalanced(f, breast, fast = TRUE)
 print(o.rfq)
 
 ## equivalent to:
-## rfsrcFast(f, breast, rfq =  TRUE, perf.type = "g.mean") 
+## rfsrc.fast(f, breast, rfq =  TRUE, perf.type = "g.mean") 
 
 ##-----------------------------------------------------------------
-## example 3: standard RF (uses misclassification)
+## standard RF (uses misclassification)
 ## ------------------------------------------------------------
+
 o.std <- imbalanced(f, breast, method = "stand")
 
 ##-----------------------------------------------------------------
-## example 4: standard RF using G-mean performance
+## standard RF using G-mean performance
 ## ------------------------------------------------------------
+
 o.std <- imbalanced(f, breast, method = "stand", perf.type = "g.mean")
 
 ## equivalent to:
 ## rfsrc(f, breast, perf.type = "g.mean")
 
 ##----------------------------------------------------------------
-## example 5: default BRF call 
+## default BRF call 
 ##----------------------------------------------------------------
+
 o.brf <- imbalanced(f, breast, method = "brf")
 
 ## equivalent to:
 ## imbalanced(f, breast, method = "brf", perf.type = "g.mean")
 
 ##----------------------------------------------------------------
-## example 6: BRF call with misclassification performance 
+## BRF call with misclassification performance 
 ##----------------------------------------------------------------
+
 o.brf <- imbalanced(f, breast, method = "brf", perf.type = "misclass")
 
 ##----------------------------------------------------------------
-## example 7: RFQ with optimized threshold
+## RFQ with optimized threshold
 ##----------------------------------------------------------------
+
 o.rfq.opt <- imbalanced(f, breast, optimize = TRUE)
 plot(o.rfq.opt$gmean, type = "l")
 
 ##----------------------------------------------------------------
-## example 8: train/test example
+## train/test example
 ##----------------------------------------------------------------
 
 trn <- sample(1:nrow(breast), size = nrow(breast) / 2)
@@ -167,12 +194,54 @@ print(o.tst)
 print(100 * cbind(o.trn$impo[, 1], o.tst$impo[, 1]))
 
 ##----------------------------------------------------------------
-## example 9: simulation example using the caret R-package
-## simulate classification data with strong and noisy predictors
-## create imbalanced data by randomly sampling the class 1 data
+## simulation example using the caret R-package
+## creates imbalanced data by randomly sampling the class 1 data
 ##
-## illustrates the effectiveness of blocked VIMP
-## note that rfsrc uses blocked VIMP by default
+## uses SMOTE from "imbalance" package to oversample the minority
+## illustrates RFQ with and without SMOTE
+##
+##----------------------------------------------------------------
+
+if (library("caret", logical.return = TRUE) &
+    library("imbalance", logical.return = TRUE)) {
+
+  ## experimental settings
+  n <- 5000
+  q <- 20
+  ir <- 6
+  f <- as.formula(Class ~ .)
+ 
+  ## simulate the data, create minority class data
+  d <- twoClassSim(n, linearVars = 15, noiseVars = q)
+  d$Class <- factor(as.numeric(d$Class) - 1)
+  idx.0 <- which(d$Class == 0)
+  idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
+  d <- d[c(idx.0,idx.1),, drop = FALSE]
+  d <- d[sample(1:nrow(d)), ]
+
+  ## define train/test split
+  trn <- sample(1:nrow(d), size = nrow(d) / 2, replace = FALSE)
+
+  ## now make SMOTE training data
+  newd.50 <- mwmote(d[trn, ], numInstances = 50, classAttr = "Class")
+  newd.500 <- mwmote(d[trn, ], numInstances = 500, classAttr = "Class")
+
+  ## fit RFQ with and without SMOTE
+  o.with.50 <- imbalanced(f, rbind(d[trn, ], newd.50)) 
+  o.with.500 <- imbalanced(f, rbind(d[trn, ], newd.500))
+  o.without <- imbalanced(f, d[trn, ])
+  
+  ## compare performance on test data
+  print(predict(o.with.50, d[-trn, ]))
+  print(predict(o.with.500, d[-trn, ]))
+  print(predict(o.without, d[-trn, ]))
+  
+}
+
+##----------------------------------------------------------------
+## simulation example using the caret R-package simar to above
+##
+## illustrates effectiveness of blocked VIMP
 ##
 ##----------------------------------------------------------------
 

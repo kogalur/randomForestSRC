@@ -1,4 +1,4 @@
-\name{impute}
+\name{impute.rfsrc}
 \alias{impute.rfsrc}
 \alias{impute}
 \title{Impute Only Mode}
@@ -131,8 +131,8 @@
   algorithms.  \emph{Statistical Analysis and Data Mining}, 10, 363-377.
 }
 \seealso{
-  \command{\link{rfsrc}}
-  \command{\link{rfsrcFast}}
+  \command{\link{rfsrc}},
+  \command{\link{rfsrc.fast}}
 }
 \examples{
 \donttest{

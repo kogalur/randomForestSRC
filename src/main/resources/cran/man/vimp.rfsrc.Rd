@@ -1,13 +1,13 @@
-\name{vimp}
-\alias{vimp}
+\name{vimp.rfsrc}
 \alias{vimp.rfsrc}
+\alias{vimp}
 \title{VIMP for Single or Grouped Variables}
 \description{
   Calculate variable importance (VIMP) for a single variable or group of
   variables for training or test data.
 }
 \usage{\method{vimp}{rfsrc}(object, xvar.names, m.target = NULL, 
-  importance = c("permute", "random", "anti"), block.size = 1,
+  importance = c("permute", "random", "anti"), block.size = 10,
   joint = FALSE, subset, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
@@ -57,6 +57,7 @@
   trees and forests,  \emph{Electronic J. Statist.}, 1:519-537.
 }
 \seealso{
+  \command{\link{holdout.vimp.rfsrc}},
   \command{\link{rfsrc}}
 }
 \examples{
@@ -80,6 +81,7 @@ print(vimp(iris.obj, joint = TRUE)$importance)
 # Paired vimp
 print(vimp(iris.obj, c("Petal.Length", "Petal.Width"), joint = TRUE)$importance)
 print(vimp(iris.obj, c("Sepal.Length", "Petal.Width"), joint = TRUE)$importance)
+
 
 
 ## ------------------------------------------------------------

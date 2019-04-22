@@ -1,38 +1,19 @@
 \name{_PROJECT_PACKAGE_NAME_-package}
 \alias{_PROJECT_PACKAGE_NAME_-package}
-\alias{cindex}
-\alias{extract.bootsample}
-\alias{extract.subsample}
-\alias{get.mv.error}
-\alias{get.mv.error.block}
-\alias{get.mv.formula}
-\alias{get.mv.predicted}
-\alias{get.mv.vimp}
-\alias{perf.metric}
 \docType{package}
 \title{
-  Random Forests for Survival, Regression, and Classification (RF-SRC)
+  Fast Unified Random Forests for Survival, Regression, and Classification (RF-SRC)
 }
 \description{
 
-  Fast OpenMP parallel processing unified treatment of Breiman's random
-  forests (Breiman 2001) for a variety of data settings.  Regression and
-  classification forests are grown when the response is numeric or
-  categorical (factor), while survival and competing risk forests
-  (Ishwaran et al. 2008, 2012) are grown for right-censored survival
-  data.  Multivariate regression and classification responses as well as
-  mixed outcomes (regression/classification responses) are also handled.
-  Also includes unsupervised forests and quantile regression forests,
-  \command{\link{quantileReg}}.  Different splitting rules invoked under
-  deterministic or random splitting are available for all families.
-  Variable predictiveness can be assessed using variable importance
-  (VIMP) measures for single, as well as grouped variables.  Missing
-  data (for x-variables and y-outcomes) can be imputed on both training
-  and test data.  The underlying code is based on Ishwaran and Kogalur's
-  now retired \pkg{randomSurvivalForest} package (Ishwaran and Kogalur
-  2007), and has been significantly refactored for improved
-  computational speed.
-  
+  Fast OpenMP parallel computing for unified Breiman random forests
+  (Breiman 2001) for regression, classification, survival analysis,
+  competing risks, multivariate, unsupervised, quantile regression, and
+  class imbalanced q-classification.  Missing data imputation includes
+  missForest and multivariate missForest. New fast subsampling random
+  forests. Confidence intervals for variable importance.  New holdout
+  vimp.
+
 }
 
 \section{Package Overview}{
@@ -50,9 +31,16 @@
     as a RF-SRC grow object.  Formally, the resulting object has class
     \code{(rfsrc, grow)}.
 
-    \item \code{\link{rfsrcFast}}
+    \item \code{\link{rfsrc.fast}}
     
     A fast implementation of \code{rfsrc} using subsampling.
+
+    \item \code{\link{quantreg.rfsrc}}
+
+    Univariate and multivariate quantile regression forest for training
+    and testing.  Different methods available including the
+    Greenwald-Khanna (2001) algorithm, which is especially suitable for
+    big data due to its high memory efficiency.
 
     \item \code{\link{predict.rfsrc}}, \code{predict}
     
@@ -61,14 +49,25 @@
     has class \code{(rfsrc, predict)}.
     
     
-    \item \code{\link{max.subtree}}, \code{\link{var.select}}
+    \item \code{\link{vimp.rfsrc}}, \link{subsample.rfsrc},
+    \code{\link{holdout.vimp.rfsrc}}
     
-    Used for variable selection.  The function \code{max.subtree}
-    extracts maximal subtree information from a RF-SRC object which is
-    used for selecting variables by making use of minimal depth variable
-    selection.  The function \code{var.select} provides
-    an extensive set of variable selection options and is a wrapper to
-    \code{max.subtree}.
+    
+    Used for variable selection:
+    \enumerate{
+
+      \item \code{vimp} calculates variable imporance (VIMP) from a
+      RF-SRC grow/predict object by noising up the variable (for example
+      by permutation).  Note that grow/predict calls can always directly
+      request VIMP.
+
+      \item \code{subsample} calculates VIMP confidence itervals via
+      subsampling.
+
+      \item \code{holdout.vimp} measures the importance of a variable
+      when it is removed from the model.
+
+    }
     
     \item \code{\link{impute.rfsrc}}
     
@@ -161,45 +160,57 @@
   Ishwaran H. (2015).  The effect of splitting on random forests.
   \emph{Machine Learning}, 99:75-118.
   
-  Ishwaran H. and Lu M.  (2018).  Standard errors and confidence
+  Lu M., Sadiq S., Feaster D.J. and Ishwaran H. (2018). Estimating
+  individual treatment effect in observational data using random forest
+  methods. \emph{J. Comp. Graph. Statist}, 27(1), 209-219
+
+  Ishwaran H. and Lu M.  (2019).  Standard errors and confidence
   intervals for variable importance in random forest regression,
-  classification, and survival. Statistics in Medicine (in press).
+  classification, and survival. \emph{Statistics in Medicine}, 38,
+  558-582.
 
-  Mantero A. and Ishwaran H. (2017). Unsupervised random forests.
-
-  O'Brien R. and Ishwaran H. (2017).  A random forests quantile
-  classifier for class imbalanced data.
+  O'Brien R. and Ishwaran H. (2019).  A random forests quantile
+  classifier for class imbalanced data. \emph{Pattern Recognition},
+  90, 232-249
 
   Tang F. and Ishwaran H. (2017).  Random forest missing data
-  algorithms.  \emph{Statistical Analysis and Data Mining}, 10, 363-377.
+  algorithms.  \emph{Statistical Analysis and Data Mining},
+  10, 363-377.
+  
 }
 \seealso{
-  \command{\link{find.interaction}},
+  \command{\link{find.interaction.rfsrc}},
 
-   
+  \command{\link{holdout.vimp.rfsrc}},
 
-  \command{\link{impute}},
-  \command{\link{max.subtree}},
+  \command{\link{imbalanced.rfsrc}},
+  \command{\link{impute.rfsrc}},
 
-   
+  \command{\link{max.subtree.rfsrc}},
 
-  \command{\link{plot.competing.risk}},
+  \command{\link{partial.rfsrc}},
+  \command{\link{plot.competing.risk.rfsrc}},
   \command{\link{plot.rfsrc}},
-  \command{\link{plot.survival}},
-  \command{\link{plot.variable}},
+  \command{\link{plot.survival.rfsrc}},
+  \command{\link{plot.variable.rfsrc}},
   \command{\link{predict.rfsrc}},
   \command{\link{print.rfsrc}},
-  \command{\link{quantileReg}},
-  \command{\link{rfsrcFast}},
-  \command{\link{rfsrcSyn}},
+
+  \command{\link{quantreg.rfsrc}},
+
+  \command{\link{rfsrc}},
+  \command{\link{rfsrc.cart}},
+  \command{\link{rfsrc.fast}},
 
    
 
-  \command{\link{subsample}},
+  \command{\link{stat.split.rfsrc}},
+  \command{\link{subsample.rfsrc}},
+  \command{\link{synthetic.rfsrc}},
+  
+  \command{\link{tune.rfsrc}},
 
-  \command{\link{stat.split}},
-  \command{\link{tune}},
-  \command{\link{var.select}},
-  \command{\link{vimp}}
+  \command{\link{var.select.rfsrc}},
+  \command{\link{vimp.rfsrc}}
 }
 \keyword{package}

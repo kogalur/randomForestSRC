@@ -4,14 +4,13 @@ predict.rfsrc <-
            m.target = NULL,
            importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
            get.tree = NULL,
-           block.size = NULL,
+           block.size = if (any(is.element(as.character(importance), c("none", "FALSE")))) NULL else 10,
            ensemble = NULL,
            na.action = c("na.omit", "na.impute"),
            outcome = c("train", "test"),
            proximity = FALSE,
            forest.wt = FALSE,
            ptn.count = 0,
-            
            distance = FALSE,
            var.used = c(FALSE, "all.trees", "by.tree"),
            split.depth = c(FALSE, "all.trees", "by.tree"),
@@ -19,6 +18,7 @@ predict.rfsrc <-
            do.trace = FALSE,
            membership = FALSE,
            statistics = FALSE,
+            
            ...)
 {
   result.predict <- generic.predict.rfsrc(object,

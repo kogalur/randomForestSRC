@@ -1,11 +1,8 @@
 imbalanced.rfsrc <- function(formula, data, ntree = 3000,
-                             method = c("rfq", "brf", "standard"),
-                             perf.type = NULL,
-                             fast = FALSE,                             
-                             ratio = NULL,
-                             optimize = FALSE,
-                             ngrid = 1e4,
-                             ...)
+                 method = c("rfq", "brf", "standard"),
+                 block.size = NULL, perf.type = NULL, fast = FALSE,
+                 ratio = NULL, optimize = FALSE, ngrid = 1e4,
+                 ...)
 {
   ## preliminary checks: all are fatal
   ## parse the formula to ensure this is a two-class problem
@@ -46,23 +43,27 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
     ## TBD TBD currently cannot handle missing values TBD TBD TBD
     data <- na.omit(data)
     yvar <- data[, formulaPrelim$yvar.names]
+    ## for legacy reasons we maintain swr here
+    ## TBD TBD consider swor
     o <- rfsrc(formula, data, ntree = ntree, 
-          perf.type = perf.type,
-          case.wt = make.wt(yvar),
-          sampsize = make.size(yvar), ...)
+               perf.type = perf.type,
+               block.size = block.size,
+               case.wt = make.wt(yvar),
+               sampsize = make.size(yvar),
+               samptype = "swr", ...)
   }
   ##----------------------------------------
   ## standard and rfq method
   ##----------------------------------------
   else {
     ##-------------------------------------------------
-    ## determine the grow interface - rfsrc or rfsrcFast?
+    ## determine the grow interface - rfsrc or rfsrc.fast?
     ##-------------------------------------------------
     if (!fast) {
       rfsrc.grow <- "rfsrc"
     }
     else {
-      rfsrc.grow <- "rfsrcFast"
+      rfsrc.grow <- "rfsrc.fast"
     }
     ##-------------------------------------------------
     ## acquire the user specified additional options
@@ -78,7 +79,7 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
       samp <- make.imbalanced.sample(ntree = ntree, ratio = ratio, y = yvar)
       dots$bootstrap <- dots$samp <- NULL
       o <- do.call(rfsrc.grow, c(list(formula = formula, data = data, ntree = ntree,
-                                 rfq = rfq.flag, perf.type = perf.type,
+                                 rfq = rfq.flag, perf.type = perf.type, block.size = block.size,
                                  samp = samp, bootstrap = "by.user"), dots))
     }
     ##-----------------------------------------------------------
@@ -88,7 +89,7 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
     ##-----------------------------------------------------------
     else {
       o <- do.call(rfsrc.grow, c(list(formula = formula, data = data, ntree = ntree,
-                                 rfq = rfq.flag, perf.type = perf.type), dots))
+                                 rfq = rfq.flag, perf.type = perf.type, block.size = block.size), dots))
       ## optimization
       if (method == "rfq" && optimize) {
         pi.hat <- table(o$yvar) / length(o$yvar)
@@ -97,7 +98,7 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
         gmeanS <-  unlist(mclapply(threshold, function(thresh) {
           fake.prob <- o$predicted.oob
           fake.prob[, minority] <- fake.prob[, minority] >= thresh 
-          gmean(o$yvar, fake.prob)
+          get.gmean(o$yvar, fake.prob)
         }))
         o$gmean <- data.frame(threshold = threshold, gmean = gmeanS)
       }

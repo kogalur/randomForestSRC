@@ -159,7 +159,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP splitRule,
                SEXP nsplit,
                SEXP mtry,
-               SEXP htry,
+               SEXP lot,
                SEXP vtry,
                SEXP vtryArray,
                SEXP ytry,
@@ -200,7 +200,24 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_splitRule            = INTEGER(splitRule)[0];
   RF_nsplit               = INTEGER(nsplit)[0];
   RF_mtry                 = INTEGER(mtry)[0];
-  RF_htry                 = INTEGER(htry)[0];
+  RF_hdim = 0;
+  RF_lotSize = 0;
+  RF_lotLag = 0;
+  RF_lotStrikeout = 0;
+  if (VECTOR_ELT(lot, 0) != R_NilValue) {
+    RF_hdim = INTEGER(VECTOR_ELT(lot, 0))[0];
+  }
+  if (RF_hdim > 0) {
+    if (VECTOR_ELT(lot, 1) != R_NilValue) {
+      RF_lotSize = INTEGER(VECTOR_ELT(lot, 1))[0];
+    }
+    if (VECTOR_ELT(lot, 2) != R_NilValue) {
+      RF_lotLag          = INTEGER(VECTOR_ELT(lot, 2))[0];
+    }
+    if (VECTOR_ELT(lot, 3) != R_NilValue) {
+      RF_lotStrikeout    = INTEGER(VECTOR_ELT(lot, 3))[0];
+    }
+  }
   RF_ytry                 = INTEGER(ytry)[0];
   RF_nodeSize             = INTEGER(nodeSize)[0];
   RF_nodeDepth            = INTEGER(nodeDepth)[0];
@@ -266,7 +283,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP timeInterest,
                   SEXP totalNodeCount,
                   SEXP seed,
-                  SEXP htry,
+                  SEXP hdim,
                   SEXP treeID,
                   SEXP nodeID,
                   SEXP hc_zero,
@@ -330,7 +347,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_timeInterest         = REAL(timeInterest);  RF_timeInterest --;
   RF_totalNodeCount       = INTEGER(totalNodeCount)[0];
   RF_seed_                = INTEGER(seed); RF_seed_ --;
-  RF_htry                 = INTEGER(htry)[0];
+  RF_hdim                 = INTEGER(hdim)[0];
   RF_treeID_              = (uint *) INTEGER(treeID);  RF_treeID_ --;
   RF_nodeID_              = (uint *) INTEGER(nodeID);  RF_nodeID_ --;
   RF_RMBR_ID_             = (uint *) INTEGER(tnRMBR);
@@ -396,7 +413,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
   else {
     RF_mwcpPT_[1] = NULL;
   }
-  if (RF_htry > 0) {
+  if (RF_hdim > 0) {
     RF_hcDim_                = (uint *) INTEGER(VECTOR_ELT(hc_one, 0));  RF_hcDim_  --;
     RF_contPTR_[1]           =          REAL(VECTOR_ELT(hc_one, 1));     RF_contPTR_[1] --;
   }
@@ -404,8 +421,8 @@ SEXP rfsrcPredict(SEXP traceFlag,
     RF_hcDim_      = NULL;
     RF_contPTR_[1] = NULL;
   }
-  if (RF_htry > 1) {
-    for (i = 2; i <= RF_htry; i++) {
+  if (RF_hdim > 1) {
+    for (i = 2; i <= RF_hdim; i++) {
       RF_parmID_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_parmID, i-2));  RF_parmID_[i] --;
       RF_contPT_[i]            =          REAL(VECTOR_ELT(hc_contPT, i-2));     RF_contPT_[i] --;
       RF_contPTR_[i]           =          REAL(VECTOR_ELT(hc_contPTR, i-2));    RF_contPTR_[i] --;

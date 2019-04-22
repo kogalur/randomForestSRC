@@ -1,4 +1,4 @@
-\name{plot.subsample}
+\name{plot.subsample.rfsrc}
 \alias{plot.subsample.rfsrc}
 \alias{plot.subsample}
 \title{Plot Subsampled VIMP Confidence Intervals}
@@ -6,9 +6,9 @@
   Plots VIMP (variable importance) confidence regions obtained from
   subsampling a forest.
 }
-\usage{\method{plot.subsample}{rfsrc}(x, alpha = .05,
+\usage{\method{plot.subsample}{rfsrc}(x, alpha = .01,
  standardize = TRUE, normal = TRUE, jknife = TRUE,
- target, m.target = NULL, pmax = 75, main = "", cex = 1, ...)}
+ target, m.target = NULL, pmax = 75, main = "", ...)}
 \arguments{
   \item{x}{An object obtained from calling \command{subample}.}
   \item{alpha}{Desired level of significance.}
@@ -29,7 +29,6 @@
     algorithm will choose a default target.}
   \item{pmax}{Trims the data to this number of variables (sorted by VIMP).}
   \item{main}{Title used for plot.}
-  \item{cex}{Character expansion used for variable names.}
   \item{...}{Further arguments that can be passed to \command{bxp}.}
 }
 \author{
@@ -48,7 +47,7 @@
   estimation. \emph{The Annals of Statistics}, 17(3):1176-1197.
 }
 \seealso{
-  \command{\link{subsample}}
+  \command{\link{subsample.rfsrc}}
 }
 \examples{
 \donttest{

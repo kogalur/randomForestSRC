@@ -1,4 +1,4 @@
-\name{find.interaction}
+\name{find.interaction.rfsrc}
 \alias{find.interaction}
 \alias{find.interaction.rfsrc}
 \title{Find Interactions Between Pairs of Variables}
@@ -104,9 +104,10 @@
     Mining}, 4:115-132.
 }
 \seealso{
-  \command{\link{max.subtree}},
-  \command{\link{var.select}},
-  \command{\link{vimp}}
+  \command{\link{holdout.vimp.rfsrc}},
+  \command{\link{max.subtree.rfsrc}},
+  \command{\link{var.select.rfsrc}},
+  \command{\link{vimp.rfsrc}}
 }
 \examples{
 \donttest{

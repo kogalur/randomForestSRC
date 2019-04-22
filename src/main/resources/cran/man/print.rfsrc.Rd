@@ -21,10 +21,6 @@
   Ishwaran H. and Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7/2:25-31.
 }
-\seealso{
-  \command{\link{rfsrc}}, \command{\link{rfsrcSyn}},
-  \command{\link{predict.rfsrc}}
-}
 \examples{
   iris.obj <- rfsrc(Species ~., data = iris, ntree=100)
   print(iris.obj)

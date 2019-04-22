@@ -1,4 +1,4 @@
-\name{partial}
+\name{partial.rfsrc}
 \alias{partial.rfsrc}
 \alias{partial}
 \title{Acquire Partial Effect of a Variable}

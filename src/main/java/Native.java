@@ -71,10 +71,10 @@ class Native {
                                 int          nSplit,
 
                                 int          mtry,
-                                int          htry,
+                                Lot          lot,
 
-                                int         vtry,
-                                int[][]     vtryArray,
+                                int          vtry,
+                                int[][]      vtryArray,
                                 
                                 int          ytry,
 
@@ -156,14 +156,14 @@ class Native {
                                    int[]        treeID,
                                    int[]        nodeID,
 
-                                   HCzero      hc_zero,
-                                   HCmulti     hc_multi,
+                                   HCzero       hc_zero,
+                                   HCmulti      hc_multi,
 
-                                   int         parmID,
-                                   int         contPT,
-                                   int         contPTR,
-                                   int         mwcpSZ,
-                                   int         mwcpPT,
+                                   int          parmID,
+                                   int          contPT,
+                                   int          contPTR,
+                                   int          mwcpSZ,
+                                   int          mwcpPT,
 
                                    int[]        tnRMBR,
                                    int[]        tnAMBR,

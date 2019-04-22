@@ -1,6 +1,6 @@
-\name{var.select}
-\alias{var.select}
+\name{var.select.rfsrc}
 \alias{var.select.rfsrc}
+\alias{var.select}
 \title{Variable Selection}
 \description{
   Variable selection using minimal depth.
@@ -208,9 +208,10 @@
     Mining}, 4:115-132.
 }
 \seealso{
-  \command{\link{find.interaction}},
-  \command{\link{max.subtree}},
-  \command{\link{vimp}}
+  \command{\link{find.interaction.rfsrc}},
+  \command{\link{holdout.vimp.rfsrc}},
+  \command{\link{max.subtree.rfsrc}},
+  \command{\link{vimp.rfsrc}}
 }
 \examples{
 \donttest{

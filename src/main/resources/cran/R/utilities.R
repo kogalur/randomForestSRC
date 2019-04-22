@@ -597,6 +597,34 @@ get.gk.quantile.bits <-  function (gk.quantile) {
     return (0)
   }
 }
+get.empirical.risk.bits <-  function (empirical.risk) {
+  if (empirical.risk) {
+    return (2^18)
+  }
+  else {
+    return (0)
+  }
+}
+get.lot <- function(hdim = 5, treesize = function(x){min(50, x * .25)}, lag = 8, strikeout = 3) {
+    ## The size of tree can be specified as a function or an integer.
+    ## If a function is specified, it MUST be processed downstream and
+    ## converted to an integer before passing the lot object into the
+    ## native code.
+    if (!is.function(treesize) && !is.numeric(treesize)) {
+        stop("treesize must be a function or number specifying size of tree")
+    }
+    else {
+        if (is.function(treesize)) {
+            lot = list(as.integer(hdim), treesize, as.integer(lag), as.integer(strikeout))
+        }
+        if (is.numeric(treesize)) {
+            lot = list(as.integer(hdim), as.integer(treesize), as.integer(lag), as.integer(strikeout))            
+        }
+    }
+    names(lot) = c("hdim", "treesize", "lag", "strikeout")
+    class(lot) = "lot"
+    return (lot)
+}
 get.var.used <- function (var.used) {
     ## Convert var.used option into native code parameter.
     if (!is.null(var.used)) {
@@ -636,6 +664,14 @@ get.var.used <- function (var.used) {
       }
   }
   ## HIDDEN VARIABLES FOLLOW:
+  is.hidden.empirical.risk <-  function (user.option) {
+    if (is.null(user.option$empirical.risk)) {
+      FALSE
+    }
+    else {
+      as.logical(as.character(user.option$empirical.risk))
+    }
+  }
   is.hidden.gk.quantile <-  function (user.option) {
     if (is.null(user.option$gk.quantile)) {
       NULL
@@ -644,13 +680,49 @@ get.var.used <- function (var.used) {
       as.logical(as.character(user.option$gk.quantile))
     }
   }
-is.hidden.impute.only <-  function (user.option) {
+  is.hidden.hdim <-  function (user.option) {
+    if (is.null(user.option$hdim)) {
+      hdim = 0
+    }
+    else {
+      hdim = as.integer(user.option$hdim)
+      if (hdim < 0) {
+        stop("Invalid choice for 'hdim' option:  ", user.option$hdim)
+      }
+    }
+    return (hdim)
+  }
+  is.hidden.holdout.array <-  function (user.option) {
+    if (is.null(user.option$holdout.array)) {
+      NULL
+    }
+    else {
+      user.option$holdout.array
+    }
+  }
+  is.hidden.impute.only <-  function (user.option) {
     if (is.null(user.option$impute.only)) {
       FALSE
     }
-      else {
-        as.logical(as.character(user.option$impute.only))
-      }
+    else {
+      as.logical(as.character(user.option$impute.only))
+    }
+  }
+  is.hidden.lot <-  function (user.option) {
+    if (is.null(user.option$lot)) {
+        ## Traditional non-greedy recursive growth.  Parameter hdim must be zero.
+        lot <- get.lot(hdim = 0, treesize = 0, lag = 0, strikeout = 0) 
+    }
+    else {
+        ## Check the class of the object.
+        if (class(user.option$lot) == "lot") {
+            lot <- user.option$lot
+        }
+        else {
+            stop("Invalid choice for 'lot' option:  ", user.option$lot)
+        }
+    }
+    return (lot)
   }
   is.hidden.perf.type <-  function (user.option) {
     ## Default value is NULL
@@ -682,13 +754,12 @@ is.hidden.impute.only <-  function (user.option) {
       prob.epsilon
     }
   }
-  is.hidden.holdout.array <-  function (user.option) {
-    ## Default value is NULL
-    if (is.null(user.option$holdout.array)) {
-      NULL
+  is.hidden.quantile.regr <-  function (user.option) {
+    if (is.null(user.option$quantile.regr)) {
+      FALSE
     }
     else {
-      user.option$holdout.array
+      as.logical(as.character(user.option$quantile.regr))
     }
   }
   is.hidden.rfq <-  function (user.option) {
@@ -700,7 +771,6 @@ is.hidden.impute.only <-  function (user.option) {
     }
   }
   is.hidden.terminal.qualts <-  function (user.option) {
-    ## Default value is !FALSE
     if (is.null(user.option$terminal.qualts)) {
       !FALSE
     }
@@ -709,7 +779,6 @@ is.hidden.impute.only <-  function (user.option) {
       }
   }
   is.hidden.terminal.quants <-  function (user.option) {
-    ## Default value is FALSE
     if (is.null(user.option$terminal.quants)) {
       FALSE
     }
@@ -733,36 +802,4 @@ is.hidden.impute.only <-  function (user.option) {
     else {
       as.integer(user.option$ytry)
     }
-  }
-  is.hidden.htry <-  function (user.option) {
-    if (is.null(user.option$htry)) {
-      htry = 0
-    }
-    else {
-      htry = as.integer(user.option$htry)
-      if (htry < 0) {
-        stop("Invalid choice for 'htry' option:  ", user.option$htry)
-      }
-    }
-    return (htry)
-  }
-  make.holdout.array <- function(vtry = 0, mtry, p, ntree) {
-    ##default is triggered by vtry = 0
-    if (vtry == 0) {
-      return(NULL)
-    }
-    ##vtry has to be positive
-    if (vtry < 0) {
-      stop("vtry must be positive")
-    }
-    ## non-default setting
-    if ((mtry + vtry) > p) {
-      stop("vtry is set too high, consider changing vtry or mtry")
-    }
-    ## everything is OK, go ahead and make the p x ntree array
-    do.call(cbind, lapply(1:ntree, function(b) {
-      holdout <- rep(0, p)
-      holdout[sample(1:p, size = vtry, replace = FALSE)] <- 1
-      holdout
-    }))
   }
