@@ -46,6 +46,7 @@ plot.variable.rfsrc <- function(
   n <- nrow(xvar)
   ## obtain hidden options - set matched options to NULL
   dots <- list(...)
+  plot.names <- names(formals(plot.default))
   bxp.names <- unique(c(names(formals(bxp)),
                  "xaxt", "yaxt", "las", "cex.axis", 
                  "col.axis", "main", "cex.main",
@@ -358,7 +359,7 @@ plot.variable.rfsrc <- function(
       }
       ## x-continuous-plot
       if (!is.factor(x) & n.x > granule) {
-        do.call("plot", c(list(x = x, y = yhat, type = "n"), dots))
+        do.call("plot", c(list(x = x, y = yhat, type = "n"), dots[names(dots) %in% plot.names]))
         if (grepl("surv", family)) {
           points(x[cens == target], yhat[cens == target], pch = 16, col = 4, cex = cex.pt)
           points(x[cens == 0], yhat[cens == 0], pch = 16, cex = cex.pt)
@@ -411,7 +412,7 @@ plot.variable.rfsrc <- function(
       if (!factor.x) {
         do.call("plot", c(list(x = c(min(x), x.uniq, max(x), x.uniq, x.uniq),
                                y = c(NA, yhat, NA, yhat + 2 * yhat.se, yhat - 2 * yhat.se),
-                               type = "n"), dots))
+                               type = "n"), dots[names(dots) %in% plot.names]))
         points(x.uniq, yhat, pch = 16, cex = cex.pt, col = 2)
         if (!is.na(yhat.se) && any(yhat.se > 0)) {
           if (smooth.lines) {

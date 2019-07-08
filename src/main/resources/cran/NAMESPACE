@@ -4,7 +4,7 @@ importFrom("parallel", mclapply)
 importFrom("graphics", "abline", "axis", "box", "boxplot", "bxp",
            "legend", "lines", "matlines", "matplot", "mtext", "par", "plot",
            "plot.new", "plot.window", "points", "rug", "segments",
-           "strwidth", "text", "title", "grconvertX", "grconvertY")
+           "strwidth", "text", "title", "grconvertX", "grconvertY", "plot.default")
 importFrom("stats", "as.dist", "as.formula", "cutree", "dlnorm", "formula",
            "hclust", "lowess", "median", "model.matrix", "na.omit",
            "optim", "pgamma", "plnorm", "pnorm", "predict", 

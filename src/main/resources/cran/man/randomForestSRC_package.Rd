@@ -35,7 +35,7 @@
     
     A fast implementation of \code{rfsrc} using subsampling.
 
-    \item \code{\link{quantreg.rfsrc}}
+    \item \code{\link{quantreg.rfsrc}}, \code{\link{quantreg}}
 
     Univariate and multivariate quantile regression forest for training
     and testing.  Different methods available including the
@@ -89,13 +89,13 @@
   \enumerate{
 
     \item Regular stable releases of this package are available on CRAN
-    at \url{cran.r-project.org/package=randomForestSRC}
+    at \url{https://cran.r-project.org/package=randomForestSRC}
 
     \item Interim unstable development builds with bug fixes and sometimes additional
     functionality are available at
-    \url{github.com/kogalur/randomForestSRC}
+    \url{https://github.com/kogalur/randomForestSRC}
 
-    \item Bugs may be reported via \url{github.com/kogalur/randomForestSRC/issues/new}.
+    \item Bugs may be reported via \url{https://github.com/kogalur/randomForestSRC/issues/new}.
     Please provide the accompanying information with any reports:
     \enumerate{
       \item \code{sessionInfo()}
@@ -118,7 +118,7 @@
 
   Additional instructions for configuring OpenMP parallel processing
   are available at
-  \url{kogalur.github.io/randomForestSRC/building.html}.
+  \url{https://kogalur.github.io/randomForestSRC/building.html}.
   
   An understanding of resource utilization (CPU and RAM) is necessary
   when running the package using OpenMP and Open MPI parallel execution.

@@ -11,6 +11,11 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Bug fixes to quantreg and some minor updates to other functions.
+
+---------------------------------------------------------------------------------
+RELEASE 2.9.0
+---------------------------------------------------------------------------------
 Added new splitrules "auc" and "entropy" for classification.
 Improvements to quantile regression.  Updates to holdout vimp.  Some
 function names were changed as a general move towards name uniformity

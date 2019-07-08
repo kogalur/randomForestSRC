@@ -16,7 +16,7 @@
   classification and right-censored survival and competing risks
   (Ishwaran et al. 2008, 2012). Other key applications include
   multivariate regression/classification, unsupervised forests,
-  quantile regression (see \command{\link{quantreg.rfsrc}}), and new
+  quantile regression (see \command{\link{quantreg}}), and new
   solutions for class imbalanced data (see \command{\link{imbalanced}}).
   Different splitting rules invoked under deterministic or random
   splitting are available for all families.  Variable importance (VIMP),
@@ -40,7 +40,7 @@ rfsrc(formula, data, ntree = 1000,
   splitrule = NULL, nsplit = 10,
   importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
   block.size = if (any(is.element(as.character(importance),
-    c("none", "FALSE")))) NULL else 10,
+                     c("none", "FALSE")))) NULL else 10,
   ensemble = c("all", "oob", "inbag"),
   bootstrap = c("by.root", "by.node", "none", "by.user"),
   samptype = c("swor", "swr"), samp = NULL, membership = FALSE,
@@ -126,7 +126,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
   \item{samptype}{Type of bootstrap when \code{by.root} is in effect.
     Choices are \code{swor} (sampling without replacement) and
-    \code{swr} (sampling without replacement).  Unlike Breiman's random
+    \code{swr} (sampling with replacement).  Unlike Breiman's random
     forests, the default action here is sampling without replacement.
     Thus out-of-bag (OOB) technically means out-of-sample, but for
     legacy reasons we retain the term OOB.}
@@ -141,7 +141,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \item{sampsize}{Function specifying size of bootstrap data when
     \code{by.root} is in effect.  For sampling without replacement, it is
     the requested size of the sample, which by default is .632 times the
-    sample size.  For sampling without replacement, it is the sample size.
+    sample size.  For sampling with replacement, it is the sample size.
     Can also be specified by using a number.}
 
   \item{na.action}{Action taken if the data contains \code{NA}'s.
@@ -823,7 +823,6 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   intervals for variable importance in random forest regression,
   classification, and survival. \emph{Statistics in Medicine}, 38,
   558-582.
-
   
   LeBlanc M. and Crowley J. (1993).  Survival trees by goodness of split,
   \emph{J. Amer. Statist. Assoc.}, 88:457-467.

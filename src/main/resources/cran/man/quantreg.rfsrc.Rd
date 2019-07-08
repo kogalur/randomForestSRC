@@ -161,7 +161,7 @@ plot(get.quantile.crps(o), type = "l")
 
 ## train (grow) call followed by test call
 o <- quantreg(mpg ~ ., mtcars[1:20,])
-o.tst <- quantreg(object = o, newdata = mtcars[-(1:20),-1])
+o.tst <- quantreg(object = o, newdata = mtcars[-(1:20),])
 
 ## extract test set quantiles and conditional statistics
 print(get.quantile(o.tst))

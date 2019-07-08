@@ -187,7 +187,7 @@ typedef unsigned long ulong;
 #define SURV_CR_LAU  3
 #define RAND_SPLIT   4
 #define REGR_NRM     5
-#define CLAS_WT_NRM  6
+#define CLAS_NRM     6
 #define USPV_SPLIT   7
 #define MVRG_SPLIT   8 
 #define MVCL_SPLIT   9 
@@ -1023,8 +1023,16 @@ double getL2Loss(uint    treeID,
                  uint   *allMembrIndx,
                  uint    allMembrSize,
                  char   *membershipFlag,
-                 double  trainingMean,
                  char    selectFlag);
+double getNegLogLikelihood(uint    treeID,
+                           uint    maxLevel,
+                           double *response,
+                           uint   *repMembrIndx,
+                           uint    repMembrSize,
+                           uint   *allMembrIndx,
+                           uint    allMembrSize,
+                           char   *membershipFlag,
+                           char    selectFlag);
 void defineHyperCubeDimension(uint  treeID,
                               Node *parent,
                               uint  proxy,
@@ -1057,6 +1065,20 @@ char getBestSplitSubTree(uint       treeID,
                          GreedyObj *greedyMembr,
                          char       multImpFlag);
 char regressionSGS (uint       treeID,
+                    Node      *parent,
+                    uint      *repMembrIndx,
+                    uint       repMembrSize,
+                    uint      *allMembrIndx,
+                    uint       allMembrSize,
+                    uint      *splitParameterMax,
+                    double    *splitValueMaxCont,
+                    uint      *splitValueMaxFactSize,
+                    uint     **splitValueMaxFactPtr,
+                    double    *splitStatistic,
+                    char     **splitIndicator,
+                    GreedyObj *greedyMembr,
+                    char       multImpFlag);
+char classificationSGS (uint       treeID,
                     Node      *parent,
                     uint      *repMembrIndx,
                     uint       repMembrSize,

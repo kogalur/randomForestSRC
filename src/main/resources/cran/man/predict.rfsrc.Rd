@@ -11,7 +11,7 @@
   importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
   get.tree = NULL,
   block.size = if (any(is.element(as.character(importance),
-    c("none", "FALSE")))) NULL else 10,
+                     c("none", "FALSE")))) NULL else 10,
   ensemble = NULL,
   na.action = c("na.omit", "na.impute"),
   outcome = c("train", "test"),

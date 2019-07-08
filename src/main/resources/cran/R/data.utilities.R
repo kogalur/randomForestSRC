@@ -696,7 +696,8 @@ fmly <- formula.detail$family
             if ((splitrule != "rps") &
                 (splitrule != "auc") &
                 (splitrule != "entropy") &
-                (splitrule != "gini")) {
+                (splitrule != "gini") &
+                (splitrule != "sg.class")) {
                 stop("Invalid split rule specified:  ", splitrule)
             }
             splitrule.idx <- which(splitrule.names == splitrule)

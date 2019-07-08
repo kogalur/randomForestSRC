@@ -11,6 +11,8 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
   ## splitrule <- "quantile.regr"
   ## --------------------------------------------------------------------------------
   ##
+  ## grow mode
+  ##
   ## if no object is present, then the user is requesting a quantile regression forest
   ##
   ## --------------------------------------------------------------------------------
@@ -51,8 +53,40 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
     dots$quantile.regr <- TRUE
     ## grow a quantile regression forest
     object <- do.call(rfsrc.grow, c(list(formula = formula, data = data, splitrule = splitrule), dots))
-    ## save the grow yvar - this will be crucial downstream
+    ## save the grow yvar - this will be crucial downstream for prediction
     object$yvar.grow <- object$yvar
+    ## ----------------------------------------------------------------------
+    ##
+    ## save the grow residual - this will be crucial downstream for prediction
+    ##
+    ## ----------------------------------------------------------------------
+    ## pull the target outcome names
+    if (object$family == "regr") {
+      ynames <- object$yvar.names
+    }
+    else {
+      ynames <- names(object$regrOutput)
+    }
+    ## cycle over ynames, extract residual
+    if (ncol(cbind(object$yvar.grow)) > 1) {
+      object$res.grow <- do.call(cbind, lapply(ynames, function(yn) {
+        if (oob && !is.null(object$regrOutput[[yn]]$predicted.oob)) {
+          object$yvar[, yn] - object$regrOutput[[yn]]$predicted.oob
+        }
+        else {
+          object$yvar[, yn] - object$regrOutput[[yn]]$predicted
+        }
+      }))
+      colnames(object$res.grow) <- ynames
+    }
+    else {##only one yvar - vectorize it
+      if (oob && !is.null(object$predicted.oob)) {
+        object$res.grow <- object$yvar - object$predicted.oob
+      }
+        else {
+        object$res.grow <- object$yvar - object$predicted
+      }
+    }
   }
   ## user has passed in an object - is it a quantile object?
   else {
@@ -78,7 +112,7 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
   prob.grow <- object$forest$prob
   ## ---------------------------------------
   ##
-  ##  we are in prediction mode
+  ##  prediction mode
   ##
   ## -----------------------------------------
   if (!grow || !missing(newdata)) {
@@ -93,6 +127,10 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
       dots$prob <- prob.grow
     }
     dots$prob.epsilon <- prob.epsilon
+    ## grow mode is in effect, but new data is present --> oob cannot be TRUE
+    if (!missing(newdata)) {
+      oob <- FALSE
+    }
     ## forest method -> set GK to false and request forest weights
     if (method == "forest") {
       dots$gk.quantile <- FALSE
@@ -104,8 +142,9 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
     else {
       dots$gk.quantile <- TRUE
     }
-    ## save grow yvar before restore/predict over-writes it
+    ## save grow information before restore/predict over-writes it
     yvar.grow <- object$yvar.grow
+    res.grow <- object$res.grow
     ## restore call on grow data 
     if (missing(newdata)) {
       object <- do.call(predict, c(list(object = object), dots))
@@ -114,8 +153,9 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
     else {
       object <- do.call(predict, c(list(object = object, newdata = newdata), dots))
     }
-    ## restore grow yvar
+    ## restore grow information
     object$yvar.grow <- yvar.grow
+    object$res.grow <- res.grow
   }
   ## -----------------------------------
   ##
@@ -142,7 +182,11 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
   ## step function interpolation
   sIndex <- function(x1, x2) {sapply(1:length(x2), function(j) {sum(x1 <= x2[j])})}
   rO <- lapply(ynames, function(yn) {
+    ## ------------------------------------
+    ##
     ## GK method - also clean up the object   
+    ##
+    ## ------------------------------------
     if (method != "forest") {
       if (ncol(cbind(object$yvar.grow)) > 1) {
         y <- object$yvar.grow[, yn]
@@ -178,31 +222,27 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
       ## density
       density <- t(apply(cbind(0, cdf), 1, diff))
     }
+    ## ------------------------------------
+    ##
     ## forest weight method
+    ##
+    ## ------------------------------------
     else {
+      ## pull grow y and grow residual
       if (ncol(cbind(object$yvar.grow)) > 1) {
         y <- object$yvar.grow[, yn]
-        if (oob && !is.null(object$regrOutput[[yn]]$predicted.oob)) {
-          yhat <- object$regrOutput[[yn]]$predicted.oob
-        }
-        else {
-          yhat <- object$regrOutput[[yn]]$predicted
-        }
-        res <- object$yvar[, yn] - yhat
+        res <- object$res.grow[, yn]
       }
       else {
         y <- object$yvar.grow
-        if (oob && !is.null(object$predicted.oob)) {
-          yhat <- object$predicted.oob
-        }
-        else {
-          yhat <- object$predicted
-        }
-        res <- object$yvar - yhat
+        res <- object$res.grow
       }
+      ## now obtain grow yhat 
+      yhat <- y - res
       ## unique y values
       yunq <- sort(unique(y))
-      ## locally adjusted cdf 
+      ## locally adjusted cdf (now correctly applies to both grow and predict mode)
+      ## predict mode only needs predict forest weights, all other quantities are grow values 
       cdf <- do.call(rbind, mclapply(1:nrow(object$forest.wt), function(i) {
         ind.matx <- do.call(rbind, lapply(yunq, function(yy) {res <= (yy - yhat[i])}))
         c(ind.matx %*% object$forest.wt[i, ])
@@ -214,8 +254,6 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
       ## density
       density <- t(apply(cbind(0, cdf), 1, diff))
     }
-    ## yhat
-    #yhat <- density %*% yunq
     ## return the object
     list(quantiles = quant,
          prob = prob,

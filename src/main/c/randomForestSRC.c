@@ -8732,7 +8732,7 @@ char getBestSplit(uint       treeID,
   case LARG_QUANT:
     genericSplit = &locallyAdaptiveQuantileRegrSplit;
     break;
-  case CLAS_WT_NRM:
+  case CLAS_NRM:
     genericSplit = &classificationXwghtSplit;
     break;
   case CLAS_AU_ROC:
@@ -9816,16 +9816,29 @@ char getBestSplitGreedy (uint         treeID,
       subGreedyMembr -> leafFlag = TRUE;
       subGreedyHead -> fwdLink = subGreedyMembr;
       subGreedyMembr -> bakLink = subGreedyHead;
-      subGreedyHead -> standardResponse = (greedyMembr -> head) -> standardResponse;
-      subGreedyHead -> eRisk = getL2Loss(treeID,
-                                         subGreedyHead -> standardResponse,
-                                         repMembrIndx,
-                                         repMembrSize,
-                                         NULL,
-                                         0,
-                                         NULL,
-                                         RF_nativeNaN,
-                                         NEITHER);
+      uint rTarget = 1;
+      if ((RF_splitRule == REGR_SGS) || (RF_splitRule == REGR_NRM)) {
+        subGreedyHead -> standardResponse = (greedyMembr -> head) -> standardResponse;
+        subGreedyHead -> eRisk = getL2Loss(treeID,
+                                           subGreedyHead -> standardResponse,
+                                           repMembrIndx,
+                                           repMembrSize,
+                                           NULL,
+                                           0,
+                                           NULL,
+                                           NEITHER);
+      }
+      else if ((RF_splitRule == CLAS_SGS) || (RF_splitRule == CLAS_NRM)) {
+        subGreedyHead -> eRisk = getNegLogLikelihood(treeID,
+                                                     RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                                     RF_response[treeID][rTarget],
+                                                     repMembrIndx,
+                                                     repMembrSize,
+                                                     NULL,
+                                                     0,
+                                                     NULL,
+                                                     NEITHER);
+      }
       subGreedyHead -> parent = subRoot;
       subGreedyMembr -> parent = subRoot;
       growSubTree(TRUE,
@@ -10513,19 +10526,15 @@ double getL2Loss(uint    treeID,
                  uint   *allMembrIndx,
                  uint    allMembrSize,
                  char   *membershipFlag,
-                 double  trainingMean,
                  char    selectFlag) {
   uint i;
   double localMean;
   double result;
-  localMean = trainingMean;
-  if (RF_nativeIsNaN(localMean)) {
-    localMean = 0.0;
-    for (i = 1; i <= repMembrSize; i++) {
-      localMean += response[repMembrIndx[i]];
-    }
-    localMean = localMean / repMembrSize;
+  localMean = 0.0;
+  for (i = 1; i <= repMembrSize; i++) {
+    localMean += response[repMembrIndx[i]];
   }
+  localMean = localMean / repMembrSize;
   result = 0.0;
   if (allMembrSize == 0) {
     for (i = 1; i <= repMembrSize; i++) {
@@ -10539,6 +10548,44 @@ double getL2Loss(uint    treeID,
       }
     }
   }
+  return result;
+}
+double getNegLogLikelihood(uint    treeID,
+                           uint    maxLevel,
+                           double *response,
+                           uint   *repMembrIndx,
+                           uint    repMembrSize,
+                           uint   *allMembrIndx,
+                           uint    allMembrSize,
+                           char   *membershipFlag,
+                           char    selectFlag) {
+  uint i, k;
+  double *piHat;
+  double result;
+  piHat = dvector(1, maxLevel);
+  for (k = 1; k <= maxLevel; k++) {
+    piHat[k] = 0.0;
+  }
+  for (i = 1; i <= repMembrSize; i++) {
+    piHat[(uint) response[repMembrIndx[i]]] += 1.0; 
+  }
+  for (k = 1; k <= maxLevel; k++) {
+    piHat[k] = piHat[k] / repMembrSize;
+  }
+  result = 0.0;
+  if (allMembrSize == 0) {
+    for (i = 1; i <= repMembrSize; i++) {
+      result -= log(piHat[(uint) response[repMembrIndx[i]]]);
+    }
+  }
+  else {
+    for (i = 1; i <= allMembrSize; i++) {
+      if (membershipFlag[allMembrIndx[i]] == selectFlag) {
+        result -= log(piHat[(uint) response[allMembrIndx[i]]]);
+      }
+    }
+  }
+  free_dvector(piHat, 1, maxLevel);
   return result;
 }
 void defineHyperCubeDimension(uint treeID,
@@ -10787,6 +10834,12 @@ char getBestSplitSubTree(uint       treeID,
   case REGR_NRM:
     genericSplit = &regressionSGS;
     break;
+  case CLAS_SGS:
+    genericSplit = &classificationSGS;
+    break;
+  case CLAS_NRM:
+    genericSplit = &classificationSGS;
+    break;
   default:
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Split rule not found:  %10d", RF_splitRule);
@@ -10902,7 +10955,7 @@ char regressionSGS (uint       treeID,
     membershipLeftComplement  = membershipLeft  = NULL;  
     membershipRightComplement = membershipRight = NULL;  
     commonComplementSize = 0;  
-    l2LossHead = 0;          
+    l2LossHead = 0;            
     G_nR_h_l = G_nR_h_r = 0;   
     actualCovariateCount = candidateCovariateCount = 0;
     if (RF_splitRule == REGR_SGS) {
@@ -11048,7 +11101,6 @@ char regressionSGS (uint       treeID,
                                  NULL,
                                  0,
                                  NULL,
-                                 RF_nativeNaN,
                                  NEITHER);
           l2LossRight = getL2Loss(treeID,
                                   (greedyMembr -> head) -> standardResponse,
@@ -11057,7 +11109,6 @@ char regressionSGS (uint       treeID,
                                   NULL,
                                   0,
                                   NULL,
-                                  RF_nativeNaN,
                                   NEITHER);
           l2LossLeftCompl = getL2Loss(treeID,
                                            (greedyMembr -> head) -> standardResponse,
@@ -11066,7 +11117,6 @@ char regressionSGS (uint       treeID,
                                            NULL,
                                            0,
                                            NULL,
-                                           RF_nativeNaN,
                                            NEITHER);
           l2LossRightCompl = getL2Loss(treeID,
                                             (greedyMembr -> head) -> standardResponse,
@@ -11075,7 +11125,6 @@ char regressionSGS (uint       treeID,
                                             NULL,
                                             0,
                                             NULL,
-                                            RF_nativeNaN,
                                             NEITHER);
           G_nR_h_l = l2LossHead - (l2LossLeft  + l2LossLeftCompl);
           G_nR_h_r = l2LossHead - (l2LossRight + l2LossRightCompl);
@@ -11138,6 +11187,373 @@ char regressionSGS (uint       treeID,
                           localSplitIndicator,
                           splitVector);
     if (RF_splitRule == REGR_SGS) {
+      free_uivector(membershipLeftComplement, 1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      free_uivector(membershipRightComplement, 1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      free_uivector(membershipLeft, 1, repMembrSize);
+      free_uivector(membershipRight, 1, repMembrSize);
+    }
+  }  
+  unstackPreSplit(preliminaryResult,
+                  repMembrSize,
+                  nonMissMembrIndxStatic,
+                  multImpFlag,
+                  FALSE);  
+  result = summarizeSplitResult(*splitParameterMax,
+                                *splitValueMaxCont,
+                                *splitValueMaxFactSize,
+                                *splitValueMaxFactPtr,
+                                splitStatistic,
+                                deltaMax);
+  return result;
+}
+char classificationSGS (uint       treeID,
+                    Node      *parent,
+                    uint      *repMembrIndx,
+                    uint       repMembrSize,
+                    uint      *allMembrIndx,
+                    uint       allMembrSize,
+                    uint      *splitParameterMax,
+                    double    *splitValueMaxCont,
+                    uint      *splitValueMaxFactSize,
+                    uint     **splitValueMaxFactPtr,
+                    double    *splitStatistic,
+                    char     **splitIndicator,
+                    GreedyObj *greedyMembr,
+                    char       multImpFlag) {
+  uint   *randomCovariateIndex;
+  uint    uniformSelectedSlot;
+  uint    uniformSize;
+  double *cdf;
+  uint    cdfSize;
+  uint   *cdfSort;
+  uint   *density;
+  uint    densitySize;
+  uint  **densitySwap;
+  uint     covariate;
+  double  *splitVector;
+  uint     splitVectorSize;
+  uint actualCovariateCount, candidateCovariateCount;
+  uint nonMissMembrSize, nonMissMembrSizeStatic;
+  uint *nonMissMembrIndx, *nonMissMembrIndxStatic;
+  uint   *indxx;
+  uint priorMembrIter, currentMembrIter;
+  uint leftSize, rghtSize;
+  char *localSplitIndicator;
+  uint splitLength;
+  void *splitVectorPtr;
+  char factorFlag;
+  uint mwcpSizeAbsolute;
+  char deterministicSplitFlag;
+  char preliminaryResult, result;
+  double G_nR_h_l, G_nR_h_r;
+  double l2LossHead, l2LossLeft, l2LossRight, l2LossLeftCompl, l2LossRightCompl;
+  uint itrLeft, itrRight, itrLeftCompl, itrRightCompl;
+  uint  *membershipLeftComplement, *membershipRightComplement, *membershipLeft, *membershipRight;
+  uint commonComplementSize;
+  double sumLeft, sumRght, sumLeftSqr, sumRghtSqr;
+  double delta, deltaMax;
+  uint j, k, p;
+  localSplitIndicator    = NULL;  
+  splitVector            = NULL;  
+  splitVectorSize        = 0;     
+  mwcpSizeAbsolute       = 0;     
+  *splitParameterMax     = 0;
+  *splitValueMaxFactSize = 0;
+  *splitValueMaxFactPtr  = NULL;
+  *splitValueMaxCont     = RF_nativeNaN;
+  deltaMax               = RF_nativeNaN;
+  if (repMembrSize != (greedyMembr -> parent) -> repMembrSize) {
+    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+    RF_nativeError("\nRF-SRC:  Replicate count inncorrectly conveyed to split rule:  %10d versus %10d", repMembrSize, (greedyMembr -> parent) -> repMembrSize);
+    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+    RF_nativeExit();
+  }
+  preliminaryResult = getPreSplitResult(treeID,
+                                        parent,
+                                        repMembrSize,
+                                        repMembrIndx,
+                                        & nonMissMembrSizeStatic,
+                                        & nonMissMembrIndxStatic,
+                                        & parent -> mean,
+                                        multImpFlag,
+                                        FALSE);
+  if (preliminaryResult) {
+    stackSplitIndicator(repMembrSize,
+                        & localSplitIndicator,
+                        & splitVector);
+    stackRandomCovariates(treeID,
+                          parent,
+                          repMembrSize,
+                          multImpFlag,
+                          & randomCovariateIndex,
+                          & uniformSize,
+                          & cdf,
+                          & cdfSize,
+                          & cdfSort,
+                          & density,
+                          & densitySize,
+                          & densitySwap);
+    sumLeft = sumRght = sumLeftSqr = sumRghtSqr = 0;     
+    delta = 0;                                           
+    membershipLeftComplement  = membershipLeft  = NULL;  
+    membershipRightComplement = membershipRight = NULL;  
+    commonComplementSize = 0;  
+    l2LossHead = 0;            
+    G_nR_h_l = G_nR_h_r = 0;   
+    actualCovariateCount = candidateCovariateCount = 0;
+    uint rTarget = 1;
+    uint responseClassCount = RF_classLevelSize[1];
+    uint *parentClassProp = uivector(1, responseClassCount);
+    uint *leftClassProp   = uivector(1, responseClassCount);
+    uint *rghtClassProp   = uivector(1, responseClassCount);
+    if (RF_splitRule == CLAS_SGS) {
+      membershipLeftComplement = uivector(1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      membershipRightComplement = uivector(1, ((greedyMembr -> head) -> parent) -> repMembrSize);
+      membershipLeft = uivector(1, repMembrSize);
+      membershipRight = uivector(1, repMembrSize);
+      commonComplementSize = 0;
+      for (k = 1; k <= ((greedyMembr -> head) -> parent) -> repMembrSize - (greedyMembr -> parent) -> repMembrSize; k++) {
+        membershipRightComplement[++commonComplementSize] = greedyMembr -> membershipComplement[k];
+        membershipLeftComplement[commonComplementSize]    = greedyMembr -> membershipComplement[k];
+      }
+      l2LossHead = (greedyMembr -> head) -> eRisk;
+    }
+    while (selectRandomCovariates(treeID,
+                                  parent,
+                                  repMembrIndx,
+                                  repMembrSize,
+                                  randomCovariateIndex,
+                                  & uniformSize,
+                                  & uniformSelectedSlot,
+                                  cdf,
+                                  & cdfSize,
+                                  cdfSort,
+                                  density,
+                                  & densitySize,
+                                  densitySwap,
+                                  & covariate,
+                                  & actualCovariateCount,
+                                  & candidateCovariateCount,
+                                  splitVector,
+                                  & splitVectorSize,
+                                  & indxx,
+                                  nonMissMembrSizeStatic,
+                                  nonMissMembrIndxStatic,
+                                  & nonMissMembrSize,
+                                  & nonMissMembrIndx,
+                                  multImpFlag)) {
+      for (k = 1; k <= repMembrSize; k++) {
+        localSplitIndicator[k] = NEITHER;
+      }
+      for (p=1; p <= responseClassCount; p++) {
+        parentClassProp[p] = 0;
+      }
+      for (k = 1; k <= repMembrSize; k++) {
+        parentClassProp[RF_classLevelIndex[1][ (uint) RF_response[treeID][1][ repMembrIndx[k] ]]] ++;
+      }
+      leftSize = 0;
+      priorMembrIter = 0;
+      splitLength = stackAndConstructSplitVector(treeID,
+                                                 repMembrSize,
+                                                 covariate,
+                                                 splitVector,
+                                                 splitVectorSize,
+                                                 & factorFlag,
+                                                 & deterministicSplitFlag,
+                                                 & mwcpSizeAbsolute,
+                                                 & splitVectorPtr);
+      if (factorFlag == FALSE) {
+        if (RF_splitRule == CLAS_NRM) {
+          for (k = 1; k <= repMembrSize; k++) {
+            localSplitIndicator[k] = RIGHT;
+          }
+          for (p = 1; p <= responseClassCount; p++) {
+            rghtClassProp[p] = parentClassProp[p];
+            leftClassProp[p] = 0;
+          }
+        }
+      }
+      for (j = 1; j < splitLength; j++) {
+        if (factorFlag == TRUE) {
+          priorMembrIter = 0;
+          leftSize = 0;
+        }
+        virtuallySplitNode(treeID,
+                           factorFlag,
+                           mwcpSizeAbsolute,
+                           covariate,
+                           repMembrIndx,
+                           repMembrSize,
+                           nonMissMembrIndx,
+                           nonMissMembrSize,
+                           indxx,
+                           splitVectorPtr,
+                           j,
+                           localSplitIndicator,
+                           & leftSize,
+                           priorMembrIter,
+                           & currentMembrIter);
+        rghtSize = nonMissMembrSize - leftSize;
+        if (RF_splitRule == CLAS_NRM) {
+          if (factorFlag == TRUE) {
+            for (p=1; p <= responseClassCount; p++) {
+              leftClassProp[p] = 0;
+            }
+            for (k = 1; k <= repMembrSize; k++) {
+              if (localSplitIndicator[ k ] == LEFT)  {
+                leftClassProp[RF_classLevelIndex[1][ (uint) RF_response[treeID][1][ repMembrIndx[k] ]]] ++;
+              }
+            }
+            for (p=1; p <= responseClassCount; p++) {
+              rghtClassProp[p] = parentClassProp[p] - leftClassProp[p];
+            }
+          }
+          else {
+            for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
+              leftClassProp[RF_classLevelIndex[1][(uint) RF_response[treeID][1][ repMembrIndx[indxx[k]] ]]] ++;
+              rghtClassProp[RF_classLevelIndex[1][(uint) RF_response[treeID][1][ repMembrIndx[indxx[k]] ]]] --;
+            }
+          }
+          sumLeft = sumRght = 0.0;
+          for (p=1; p <= responseClassCount; p++) {
+            sumLeft += (double) upower(leftClassProp[p], 2);
+            sumRght += (double) upower(rghtClassProp[p], 2);
+          }
+          sumLeftSqr = sumLeft / leftSize;
+          sumRghtSqr  = sumRght / rghtSize;
+          delta = (sumLeftSqr + sumRghtSqr) / nonMissMembrSize;
+        } 
+        else {
+          itrLeft = itrRight = 0;
+          itrLeftCompl = itrRightCompl = commonComplementSize;
+          for (k = 1; k <= repMembrSize; k++) {
+            if (localSplitIndicator[k] == LEFT) {
+              membershipLeft[++itrLeft] = repMembrIndx[k];
+              membershipRightComplement[++itrRightCompl] = repMembrIndx[k];
+            }
+            else {
+              membershipRight[++itrRight] = repMembrIndx[k];
+              membershipLeftComplement[++itrLeftCompl] = repMembrIndx[k];
+            }
+          }
+          if ((itrLeft + itrRight) != repMembrSize) {
+            RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+            RF_nativeError("\nRF-SRC:  left + right in-bag size incorrect:  (%10d + %10d != %10d)", itrLeft, itrRight, repMembrSize);
+            RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RF_nativeExit();
+          }
+          if (itrLeft + itrLeftCompl != ((greedyMembr -> head) -> parent) -> repMembrSize) {
+            RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+            RF_nativeError("\nRF-SRC:  left + left complement in-bag size incorrect:  (%10d + %10d != %10d)", itrLeft, itrLeftCompl, ((greedyMembr -> head) -> parent) -> repMembrSize);
+            RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RF_nativeExit();
+          }
+          if ((itrRight + itrRightCompl) != ((greedyMembr -> head) -> parent) -> repMembrSize) {
+            RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+            RF_nativeError("\nRF-SRC:  right + right complement in-bag size incorrect:  (%10d + %10d != %10d)", itrRight, itrRightCompl, ((greedyMembr -> head) -> parent) -> repMembrSize);
+            RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+            RF_nativeExit();
+          }
+          l2LossLeft = getNegLogLikelihood(treeID,
+                                           RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                           RF_response[treeID][rTarget],
+                                           membershipLeft,
+                                           itrLeft,
+                                           NULL,
+                                           0,
+                                           NULL,
+                                           NEITHER);
+          l2LossRight = getNegLogLikelihood(treeID,
+                                            RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                            RF_response[treeID][rTarget],
+                                            membershipRight,
+                                            itrRight,
+                                            NULL,
+                                            0,
+                                            NULL,
+                                            NEITHER);
+          l2LossLeftCompl = getNegLogLikelihood(treeID,
+                                                RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                                RF_response[treeID][rTarget],
+                                                membershipLeftComplement,
+                                                itrLeftCompl,
+                                                NULL,
+                                                0,
+                                                NULL,
+                                                NEITHER);
+          l2LossRightCompl = getNegLogLikelihood(treeID,
+                                                 RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                                 RF_response[treeID][rTarget],
+                                                 membershipRightComplement,
+                                                 itrRightCompl,
+                                                 NULL,
+                                                 0,
+                                                 NULL,
+                                                 NEITHER);
+          G_nR_h_l = l2LossHead - (l2LossLeft  + l2LossLeftCompl);
+          G_nR_h_r = l2LossHead - (l2LossRight + l2LossRightCompl);
+          delta = (G_nR_h_l + G_nR_h_r) / 2.0; 
+        }
+        result = updateMaximumSplit(treeID,
+                                    parent,
+                                    delta,
+                                    candidateCovariateCount,
+                                    covariate,
+                                    j,
+                                    factorFlag,
+                                    mwcpSizeAbsolute,
+                                    repMembrSize,
+                                    localSplitIndicator,
+                                    & deltaMax,
+                                    splitParameterMax,
+                                    splitValueMaxCont,
+                                    splitValueMaxFactSize,
+                                    splitValueMaxFactPtr,
+                                    splitVectorPtr,
+                                    splitIndicator);
+        if (result) {
+          if (RF_splitRule == CLAS_NRM) {
+            greedyMembr -> G_nR_h_l = sumLeftSqr;
+            greedyMembr -> G_nR_h_r = sumRghtSqr;
+          }
+          else {
+            greedyMembr -> G_nR_h_l = G_nR_h_l;
+            greedyMembr -> G_nR_h_r = G_nR_h_r;
+          }
+        }
+        if (factorFlag == FALSE) {
+          priorMembrIter = currentMembrIter - 1;
+        }
+      }  
+      unstackSplitVector(treeID,
+                         splitVectorSize,
+                         splitLength,
+                         factorFlag,
+                         deterministicSplitFlag,
+                         mwcpSizeAbsolute,
+                         splitVectorPtr);
+      unselectRandomCovariates(treeID,
+                               parent,
+                               repMembrSize,
+                               indxx,
+                               nonMissMembrSizeStatic,
+                               nonMissMembrIndx,
+                               multImpFlag);
+    }  
+    unstackRandomCovariates(treeID,
+                            parent, 
+                            randomCovariateIndex,
+                            cdf,
+                            cdfSort,
+                            density,
+                            densitySwap);
+    unstackSplitIndicator(repMembrSize,
+                          localSplitIndicator,
+                          splitVector);
+    free_uivector (parentClassProp, 1, responseClassCount);
+    free_uivector (leftClassProp,   1, responseClassCount);
+    free_uivector (rghtClassProp,   1, responseClassCount);
+    if (RF_splitRule == CLAS_SGS) {
       free_uivector(membershipLeftComplement, 1, ((greedyMembr -> head) -> parent) -> repMembrSize);
       free_uivector(membershipRightComplement, 1, ((greedyMembr -> head) -> parent) -> repMembrSize);
       free_uivector(membershipLeft, 1, repMembrSize);
@@ -20484,7 +20900,8 @@ void stackIncomingArrays(char mode) {
           (RF_splitRule != REGR_SGS)    &&
           (RF_splitRule != REGR_QUANT)  &&
           (RF_splitRule != LARG_QUANT)  &&
-          (RF_splitRule != CLAS_WT_NRM) &&
+          (RF_splitRule != CLAS_NRM)    &&
+          (RF_splitRule != CLAS_SGS)    &&
           (RF_splitRule != CLAS_AU_ROC) &&
           (RF_splitRule != CLAS_ENTROP) &&
           (RF_splitRule != MVRG_SPLIT)  &&
@@ -23679,8 +24096,11 @@ char growTreeGreedy (uint     r,
   GreedyObj *greedyHead, *greedyMembr;
   GreedyObj *greedyBest;
   double sgStatBest;
+  double rootLossStd;
+  double lossOOB;
   double delta;
-  char updateFlag;
+  char   updateFlag;
+  char   growFlag;
   Node *nodeParent, *nodeLeft, *nodeRight;
   uint i, p;
   bootResult = TRUE;
@@ -23765,36 +24185,64 @@ char growTreeGreedy (uint     r,
     greedyMembr = makeGreedyObj(root, greedyHead);
     greedyHead -> fwdLink = greedyMembr;
     greedyMembr -> bakLink = greedyHead;
-    char growFlag = TRUE;
-    double rootLossStd = standardVector(treeID,
-                                     TRUE,
-                                     greedyHead,
-                                     RF_response[treeID][rTarget], 
-                                     bootMembrIndx,
-                                     bootMembrSize);
-    double lossOOB = getL2Loss(treeID,
-                               RF_response[treeID][rTarget],
-                               bootMembrIndx,
-                               bootMembrSize,
-                               allMembrIndx,
-                               allMembrSize,
-                               RF_oobMembershipFlag[treeID],
-                               RF_nativeNaN,
-                               TRUE);
+    growFlag = TRUE;
+    rootLossStd = lossOOB = 0.0;      
+    if ((RF_splitRule == REGR_SGS) || (RF_splitRule == REGR_NRM)) {
+      rootLossStd = standardVector(treeID,
+                                   TRUE,
+                                   greedyHead,
+                                   RF_response[treeID][rTarget], 
+                                   bootMembrIndx,
+                                   bootMembrSize);
+      lossOOB = getL2Loss(treeID,
+                          RF_response[treeID][rTarget],
+                          bootMembrIndx,
+                          bootMembrSize,
+                          allMembrIndx,
+                          allMembrSize,
+                          RF_oobMembershipFlag[treeID],
+                          TRUE);
+    }
+    else if ((RF_splitRule == CLAS_SGS) || (RF_splitRule == CLAS_NRM)) {
+      rootLossStd = getNegLogLikelihood(treeID,
+                                        RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                        RF_response[treeID][rTarget],
+                                        bootMembrIndx,
+                                        bootMembrSize,
+                                        NULL,
+                                        0,
+                                        NULL,
+                                        NEITHER);
+      lossOOB = getNegLogLikelihood(treeID,
+                                    RF_rFactorSize[RF_rFactorMap[rTarget]],                                    
+                                    RF_response[treeID][rTarget],
+                                    bootMembrIndx,
+                                    bootMembrSize,
+                                    allMembrIndx,
+                                    allMembrSize,
+                                    RF_oobMembershipFlag[treeID],
+                                    TRUE);
+    }
     LatOptTreeObj *lotObj = makeLatOptTreeObj();
     insertRisk(treeID, lotObj, lossOOB);
     if (RF_opt & OPT_EMPR_RISK) {      
-      RF_emprRSKptr[treeID][lotObj -> treeSize] = greedyMembr -> eRisk = getL2Loss(treeID,
-                                                                                   RF_response[treeID][rTarget],
-                                                                                   bootMembrIndx,
-                                                                                   bootMembrSize,
-                                                                                   NULL,
-                                                                                   0,
-                                                                                   NULL,
-                                                                                   RF_nativeNaN,
-                                                                                   NEITHER);
-      RF_splitStatLOTptr[treeID][lotObj -> treeSize] = rootLossStd;
-      RF_oobEmprRSKptr[treeID][lotObj -> treeSize] = greedyMembr -> oobEmprRisk = lossOOB;
+      if ((RF_splitRule == REGR_SGS) || (RF_splitRule == REGR_NRM)) {
+        RF_emprRSKptr[treeID][lotObj -> treeSize] = greedyMembr -> eRisk = getL2Loss(treeID,
+                                                                                     RF_response[treeID][rTarget],
+                                                                                     bootMembrIndx,
+                                                                                     bootMembrSize,
+                                                                                     NULL,
+                                                                                     0,
+                                                                                     NULL,
+                                                                                     NEITHER);
+        RF_splitStatLOTptr[treeID][lotObj -> treeSize] = rootLossStd;
+        RF_oobEmprRSKptr[treeID][lotObj -> treeSize] = greedyMembr -> oobEmprRisk = lossOOB;
+      }
+      else if ((RF_splitRule == CLAS_SGS) || (RF_splitRule == CLAS_NRM)) {
+        RF_emprRSKptr[treeID][lotObj -> treeSize] = greedyMembr -> eRisk = rootLossStd;
+        RF_splitStatLOTptr[treeID][lotObj -> treeSize] = rootLossStd;
+        RF_oobEmprRSKptr[treeID][lotObj -> treeSize] = greedyMembr -> oobEmprRisk = lossOOB;
+      }
     }
     while (growFlag) {
       greedyMembr = greedyHead -> fwdLink;      
@@ -23950,54 +24398,101 @@ char growTreeGreedy (uint     r,
           greedyNakedLeft  -> sgStat = greedyBest -> G_nR_h_l;
           greedyNakedRight -> sgStat = greedyBest -> G_nR_h_r;
           if (RF_opt & OPT_EMPR_RISK) {          
-            greedyNakedLeft -> oobEmprRisk = getL2Loss(treeID,
-                                                 RF_response[treeID][rTarget],
-                                                 leftRepMembrIndx,
-                                                 leftRepMembrSize,
-                                                 leftAllMembrIndx,
-                                                 leftAllMembrSize,
-                                                 RF_oobMembershipFlag[treeID],
-                                                 RF_nativeNaN,
-                                                 TRUE);
-            greedyNakedRight -> oobEmprRisk = getL2Loss(treeID,
-                                                  RF_response[treeID][rTarget],
-                                                  rghtRepMembrIndx,
-                                                  rghtRepMembrSize,
-                                                  rghtAllMembrIndx,
-                                                  rghtAllMembrSize,
-                                                  RF_oobMembershipFlag[treeID],
-                                                  RF_nativeNaN,
-                                                  TRUE);
-            RF_oobEmprRSKptr[treeID][lotObj -> treeSize] = RF_oobEmprRSKptr[treeID][lotObj -> treeSize - 1] - (greedyBest -> oobEmprRisk) + (greedyNakedLeft -> oobEmprRisk) + (greedyNakedRight -> oobEmprRisk); 
-            insertRisk(treeID, lotObj, RF_oobEmprRSKptr[treeID][lotObj -> treeSize]);
-            greedyBest -> eRisk = getL2Loss(treeID,
-                                            RF_response[treeID][rTarget],
-                                            nodeParent -> repMembrIndx,
-                                            nodeParent -> repMembrSize,
-                                            NULL,
-                                            0,
-                                            NULL,
-                                            RF_nativeNaN,
-                                            NEITHER);
-            greedyNakedLeft -> eRisk = getL2Loss(treeID,
-                                                 RF_response[treeID][rTarget],
-                                                 leftRepMembrIndx,
-                                                 leftRepMembrSize,
-                                                 NULL,
-                                                 0,
-                                                 NULL,
-                                                 RF_nativeNaN,
-                                                 NEITHER);
-            greedyNakedRight -> eRisk = getL2Loss(treeID,
-                                                  RF_response[treeID][rTarget],
-                                                  rghtRepMembrIndx,
-                                                  rghtRepMembrSize,
-                                                  NULL,
-                                                  0,
-                                                  NULL,
-                                                  RF_nativeNaN,
-                                                  NEITHER);
-            RF_emprRSKptr[treeID][lotObj -> treeSize] = RF_emprRSKptr[treeID][lotObj -> treeSize - 1] - (greedyBest -> eRisk) + (greedyNakedLeft -> eRisk) + (greedyNakedRight -> eRisk); 
+            if ((RF_splitRule == REGR_SGS) || (RF_splitRule == REGR_NRM)) {
+              greedyNakedLeft -> oobEmprRisk = getL2Loss(treeID,
+                                                         RF_response[treeID][rTarget],
+                                                         leftRepMembrIndx,
+                                                         leftRepMembrSize,
+                                                         leftAllMembrIndx,
+                                                         leftAllMembrSize,
+                                                         RF_oobMembershipFlag[treeID],
+                                                         TRUE);
+              greedyNakedRight -> oobEmprRisk = getL2Loss(treeID,
+                                                          RF_response[treeID][rTarget],
+                                                          rghtRepMembrIndx,
+                                                          rghtRepMembrSize,
+                                                          rghtAllMembrIndx,
+                                                          rghtAllMembrSize,
+                                                          RF_oobMembershipFlag[treeID],
+                                                          TRUE);
+              RF_oobEmprRSKptr[treeID][lotObj -> treeSize] = RF_oobEmprRSKptr[treeID][lotObj -> treeSize - 1] - (greedyBest -> oobEmprRisk) + (greedyNakedLeft -> oobEmprRisk) + (greedyNakedRight -> oobEmprRisk); 
+              insertRisk(treeID, lotObj, RF_oobEmprRSKptr[treeID][lotObj -> treeSize]);
+              greedyBest -> eRisk = getL2Loss(treeID,
+                                              RF_response[treeID][rTarget],
+                                              nodeParent -> repMembrIndx,
+                                              nodeParent -> repMembrSize,
+                                              NULL,
+                                              0,
+                                              NULL,
+                                              NEITHER);
+              greedyNakedLeft -> eRisk = getL2Loss(treeID,
+                                                   RF_response[treeID][rTarget],
+                                                   leftRepMembrIndx,
+                                                   leftRepMembrSize,
+                                                   NULL,
+                                                   0,
+                                                   NULL,
+                                                   NEITHER);
+              greedyNakedRight -> eRisk = getL2Loss(treeID,
+                                                    RF_response[treeID][rTarget],
+                                                    rghtRepMembrIndx,
+                                                    rghtRepMembrSize,
+                                                    NULL,
+                                                    0,
+                                                    NULL,
+                                                    NEITHER);
+              RF_emprRSKptr[treeID][lotObj -> treeSize] = RF_emprRSKptr[treeID][lotObj -> treeSize - 1] - (greedyBest -> eRisk) + (greedyNakedLeft -> eRisk) + (greedyNakedRight -> eRisk); 
+            }
+            else if ((RF_splitRule == CLAS_SGS) || (RF_splitRule == CLAS_NRM)) {
+              greedyNakedLeft -> oobEmprRisk = getNegLogLikelihood(treeID,
+                                                                   RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                                                   RF_response[treeID][rTarget],
+                                                                   leftRepMembrIndx,
+                                                                   leftRepMembrSize,
+                                                                   leftAllMembrIndx,
+                                                                   leftAllMembrSize,
+                                                                   RF_oobMembershipFlag[treeID],
+                                                                   TRUE);
+              greedyNakedRight -> oobEmprRisk = getNegLogLikelihood(treeID,
+                                                                    RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                                                    RF_response[treeID][rTarget],
+                                                                    rghtRepMembrIndx,
+                                                                    rghtRepMembrSize,
+                                                                    rghtAllMembrIndx,
+                                                                    rghtAllMembrSize,
+                                                                    RF_oobMembershipFlag[treeID],
+                                                                    TRUE);
+              RF_oobEmprRSKptr[treeID][lotObj -> treeSize] = RF_oobEmprRSKptr[treeID][lotObj -> treeSize - 1] - (greedyBest -> oobEmprRisk) + (greedyNakedLeft -> oobEmprRisk) + (greedyNakedRight -> oobEmprRisk); 
+              insertRisk(treeID, lotObj, RF_oobEmprRSKptr[treeID][lotObj -> treeSize]);
+              greedyBest -> eRisk = getNegLogLikelihood(treeID,
+                                                        RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                                        RF_response[treeID][rTarget],
+                                                        nodeParent -> repMembrIndx,
+                                                        nodeParent -> repMembrSize,
+                                                        NULL,
+                                                        0,
+                                                        NULL,
+                                                        NEITHER);
+              greedyNakedLeft -> eRisk = getNegLogLikelihood(treeID,
+                                                             RF_rFactorSize[RF_rFactorMap[rTarget]],
+                                                             RF_response[treeID][rTarget],
+                                                             leftRepMembrIndx,
+                                                             leftRepMembrSize,
+                                                             NULL,
+                                                             0,
+                                                             NULL,
+                                                             NEITHER);
+              greedyNakedRight -> eRisk = getNegLogLikelihood(treeID,
+                                                              RF_rFactorSize[RF_rFactorMap[rTarget]],                                                    
+                                                              RF_response[treeID][rTarget],
+                                                              rghtRepMembrIndx,
+                                                              rghtRepMembrSize,
+                                                              NULL,
+                                                              0,
+                                                              NULL,
+                                                              NEITHER);
+              RF_emprRSKptr[treeID][lotObj -> treeSize] = RF_emprRSKptr[treeID][lotObj -> treeSize - 1] - (greedyBest -> eRisk) + (greedyNakedLeft -> eRisk) + (greedyNakedRight -> eRisk); 
+            }
           }
           (greedyBest -> bakLink) -> fwdLink = greedyNakedLeft;
           greedyNakedLeft -> bakLink = greedyBest -> bakLink;

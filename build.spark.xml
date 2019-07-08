@@ -146,6 +146,7 @@
         <include name="HCzero.java"/>
         <include name="HCmulti.java"/>
         <include name="Partial.java"/>
+        <include name="Lot.java"/>
       </fileset>
 
       <filterchain>
