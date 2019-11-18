@@ -605,6 +605,19 @@ get.empirical.risk.bits <-  function (empirical.risk) {
     return (0)
   }
 }
+get.base.learner <- function(trial.depth = 2,
+     rule = c("none", "multiplication", "division", "addition", "subtraction")) {
+  ## No verificiation is done here, or before conveyance to the native code.  So be careful.
+  ## trial.depth is the depth of the trial sub-tree that is grown to determine interactions.  Thus,
+  ## a value of 2 or greater is necessary for interactions. This does not guarantee that there
+  ## will be interactions.  It is just a pre-requisite.
+  valid.rule <- c("none", "multiplication", "division", "addition", "subtraction")
+  rule <- match.arg(rule, valid.rule)
+  base.learner = list(as.integer(trial.depth), as.integer(which(valid.rule == rule) - 1))
+  names(base.learner) = c("trial.depth", "rule")
+  class(base.learner) = "base.learner"
+  return (base.learner)
+}
 get.lot <- function(hdim = 5, treesize = function(x){min(50, x * .25)}, lag = 8, strikeout = 3) {
     ## The size of tree can be specified as a function or an integer.
     ## If a function is specified, it MUST be processed downstream and
@@ -618,7 +631,7 @@ get.lot <- function(hdim = 5, treesize = function(x){min(50, x * .25)}, lag = 8,
             lot = list(as.integer(hdim), treesize, as.integer(lag), as.integer(strikeout))
         }
         if (is.numeric(treesize)) {
-            lot = list(as.integer(hdim), as.integer(treesize), as.integer(lag), as.integer(strikeout))            
+            lot = list(as.integer(hdim), as.integer(treesize), as.integer(lag), as.integer(strikeout))
         }
     }
     names(lot) = c("hdim", "treesize", "lag", "strikeout")
@@ -663,6 +676,17 @@ get.var.used <- function (var.used) {
         stop("Invalid choice for 'vimp.only' option:  ", vimp.only)
       }
   }
+## Check for presence of forest
+is.forest.missing <- function(object) {
+  ## for backwards compatability
+  if(is.null(object$forest$forest)) {
+    is.null(object$forest)
+  }
+  ## current stealth build moving forward
+  else {
+    !object$forest$forest
+  }
+}
   ## HIDDEN VARIABLES FOLLOW:
   is.hidden.empirical.risk <-  function (user.option) {
     if (is.null(user.option$empirical.risk)) {
@@ -707,6 +731,25 @@ get.var.used <- function (var.used) {
     else {
       as.logical(as.character(user.option$impute.only))
     }
+  }
+  is.hidden.base.learner <-  function (user.option) {
+    if (is.null(user.option$base.learner)) {
+        ## Traditional non-augmented data matrix, with default base-learners, i.e. x-vars.
+        ## trial.depth is the trial sub-tree depth, we need a value of 2 for potential pairs.
+        ## rule can be "multiplication", "division", "addition", and "substraction".  Note
+        ## that division by zero is a possibility and not handled, so be careful. 
+        base.learner <- get.base.learner(trial.depth = 0, rule = "none") 
+    }
+    else {
+        ## Check the class of the object.
+        if (class(user.option$base.learner) == "base.learner") {
+            base.learner <- user.option$base.learner
+        }
+        else {
+            stop("Invalid choice for 'base.learner' option:  ", user.option$base.learner)
+        }
+    }
+    return (base.learner)
   }
   is.hidden.lot <-  function (user.option) {
     if (is.null(user.option$lot)) {
@@ -792,10 +835,20 @@ get.var.used <- function (var.used) {
       0
     }
     else {
-      user.option$vtry
+        user.option$vtry
     }
   }
-  is.hidden.ytry <-  function (user.option) {
+is.hidden.holdout.specs <-  function (user.option) {
+    ## Default value is NULL
+    if (is.null(user.option$holdout.specs)) {
+        obj <- NULL
+    }
+    else {
+        obj <- user.option$holdout.specs
+    }
+    return (obj)
+}
+is.hidden.ytry <-  function (user.option) {
     if (is.null(user.option$ytry)) {
       NULL
     }

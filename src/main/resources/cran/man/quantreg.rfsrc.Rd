@@ -17,7 +17,7 @@
   both training and testing purposes.
 }
 \usage{\method{quantreg}{rfsrc}(formula, data, object, newdata,
-  method = "forest", splitrule = NULL, prob = NULL, prob.epsilon = NULL,
+  method = "local", splitrule = NULL, prob = NULL, prob.epsilon = NULL,
   oob = TRUE, fast = FALSE, maxn = 1e3, ...)
 }
 \arguments{
@@ -31,11 +31,19 @@
   \item{object}{(Optional) A previously grown quantile regression
     forest.}
 
-  \item{method}{Method used to calculate quantiles.  Forest weighted
-    averaging is used by default.  While this works well for standard
-    data, consider using the Greenwald-Khanna algorithm for big data.
-    The latter is specified by any one of the following: "gk", "GK",
-    "G-K", "g-k".}
+  \item{method}{Method used to calculate quantiles.  Three methods are
+    provided. Forest weighted averaging (\code{method = "forest"}) is
+    the standard method provided in most random forest packages.  A
+    second method is the Greenwald-Khanna algorithm which is suited for
+    big data and is specified by any one of the following: "gk", "GK",
+    "G-K", "g-k".  The third method (\code{method = "local"}) is the
+    default method used and uses the local adjusted cdf approach of
+    Zhang et al. (2019).  This does not use forest weights and is
+    therefore reasonably fast and can be used for large data - however
+    it relies on the assumption of a homogeneous (equal variance) error
+    distribution which can be a strong assumption and undesireable
+    consequences can result if the assumption is violated.  See below
+    for further discussion.}
 
   \item{splitrule}{The default action is local adaptive quantile regression splitting,
     but this can be over-ridden by the user.}
@@ -65,13 +73,14 @@
 }
 \details{
   
-  The default method for calculating quantiles is \code{method}="forest"
-  which uses forest weights as in Meinshausen (2006).  However the
-  method here differs from Meinshuasen (2006) in two important ways: (1)
-  local adaptive quantile regression splitting is used instead of CART
-  regression mean squared splitting, and (2) quantiles are estimated
-  using a local cumulative distribution function estimator.  Thus
-  results may differ substantially from Meinshausen (2006).
+  The most common method for calculating RF quantiles uses forest
+  weights (Meinshausen, 2006).  However we note that the forest weighted
+  method used here (specified using \code{method}="forest") differs from
+  Meinshuasen (2006) in two important ways: (1) local adaptive quantile
+  regression splitting is used instead of CART regression mean squared
+  splitting, and (2) quantiles are estimated using a weighted local
+  cumulative distribution function estimator.  For this reason, results
+  may differ from Meinshausen (2006).
 
   A second method uses the Greenwald-Khanna (2001) algorithm (invoked by
   \code{method}="gk", "GK", "G-K" or "g-k").  While this will not be as
@@ -106,6 +115,17 @@
   unspecified.  This will be slow, especially for big data, and less
   stringent choices should be used if computational speed is of concern.
 
+  Finally the default method, \code{method}="local", implements the
+  locally adjusted cdf estimator of Zhang et al. (2019).  This is the
+  default procedure used here as it does not rely on forest weights and
+  is therefore fast and can be used for large data.  However be aware
+  this relies on the assumption of homogeneity of the error
+  distribution, i.e. that errors are iid and therefore have equal
+  variance.  Now while reasonably robust to departures of homogeneity,
+  there are instances where this may perform poorly; see Zhang et
+  al. (2019) for details.  If hetereogeneity is suspected we recommend
+  \code{method}="forest" instead.
+  
 }
 \value{
   
@@ -131,6 +151,9 @@
   
   Meinshausen N. (2006) Quantile regression forests, \emph{Journal of
   Machine Learning Research}, 7:983--999.
+
+  Zhang H., Zimmerman J., Nettleton D. and Nordman D.J. (2019).  Random
+  forest prediction intervals.    
 }
 \seealso{
   \command{\link{rfsrc}}
@@ -169,14 +192,14 @@ print(get.quantile.stat(o.tst))
 
 
 ## ------------------------------------------------------------
-## quantile regression for Boston Housing with mse splitting
+## quantile regression for Boston Housing using forest method
 ## ------------------------------------------------------------
 
 if (library("mlbench", logical.return = TRUE)) {
 
   ## quantile regression with mse splitting
   data(BostonHousing)
-  o <- quantreg(medv ~ ., BostonHousing, splitrule = "mse", nodesize = 1)
+  o <- quantreg(medv ~ ., BostonHousing, method = "forest", nodesize = 1)
 
   ## continuous rank probabiliy score (crps) 
   plot(get.quantile.crps(o), type = "l")
@@ -251,10 +274,24 @@ housing <- impute(SalePrice ~ ., housing,
 
 ## Greenwald-Khanna algorithm 
 ## request a small number of quantiles 
-o <- quantreg(SalePrice ~ ., housing, prob = (1:20) / 20,
-        prob.epsilon = 1 / 20, ntree = 250)
+o <- quantreg(SalePrice ~ ., housing, method = "gk",
+        prob = (1:20) / 20, prob.epsilon = 1 / 20, ntree = 250)
 plot.quantreg(o)
   
+## ------------------------------------------------------------
+## using mse splitting with local cdf method for large data
+## ------------------------------------------------------------
+
+## load the data and do quick and dirty imputation
+data(housing, package = "_PROJECT_PACKAGE_NAME_")
+housing <- impute(SalePrice ~ ., housing,
+         ntree = 50, nimpute = 1, splitrule = "random")
+
+## use mse splitting and reduce number of trees
+o <- quantreg(SalePrice ~ ., housing, splitrule = "mse", ntree = 250)
+plot.quantreg(o)
+  
+
 
 }}
 \keyword{quantile regression forests}

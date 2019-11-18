@@ -109,13 +109,13 @@ synthetic.rfsrc <-
         }
         if (oob) {
           do.call(rfsrc.grow,
-                  c(list(formula = f.org, data = data, ensemble = "all",
+                  c(list(formula = f.org, data = data, ensemble = "all", forest = TRUE,
                          ntree = ntree, mtry = mm, nodesize = nn, nsplit = nsplit[1],
                          bootstrap = "by.user", samp = samp)))
         }
         else {
           do.call(rfsrc.grow,
-                  c(list(formula = f.org, data = data, ensemble = "all",
+                  c(list(formula = f.org, data = data, ensemble = "all", forest = TRUE,
                          ntree = ntree, mtry = mm, nodesize = nn, nsplit = nsplit[1])))
         }
       })
@@ -197,13 +197,13 @@ synthetic.rfsrc <-
     rfSyn.f <- as.formula(paste("Multivar(", paste(yvar.names, collapse = ","), paste(") ~ ."), sep = ""))
     if (oob) {
       rfSyn <- do.call(rfsrc.grow,
-                       c(list(formula = rfSyn.f, data = data,
+                       c(list(formula = rfSyn.f, data = data, forest = TRUE,
                               ntree = ntree, mtry = mtry, nodesize = nodesize, nsplit = nsplit[1],
                               bootstrap = "by.user", samp = samp), dots))
     }
     else {
       rfSyn <- do.call(rfsrc.grow,
-                       c(list(formula = rfSyn.f, data = data,
+                       c(list(formula = rfSyn.f, data = data, forest = TRUE,
                               ntree = ntree, mtry = mtry, nodesize = nodesize, nsplit = nsplit[1]), dots))
     }
   }

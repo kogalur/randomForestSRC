@@ -11,6 +11,13 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Bug fixes: Fix to Windows 10 OpenMP stack allocation error encountered
+when survival and large n are encountered (Bug 50 on GitHub).  Fix to 
+get.quantile.stat() (Bug 51 on GitHub).
+
+---------------------------------------------------------------------------------
+RELEASE 2.9.1
+---------------------------------------------------------------------------------
 Bug fixes to quantreg and some minor updates to other functions.
 
 ---------------------------------------------------------------------------------

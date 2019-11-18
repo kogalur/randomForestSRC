@@ -204,7 +204,9 @@ if (library("caret", logical.return = TRUE)) {
   d <- twoClassSim(1000, linearVars = 15, noiseVars = 5)
 
   ## use a subsampled forest with Brier score performance
-  o <- rfsrc.fast(Class ~ ., d, ntree = 100, perf.type = "brier")
+  ## remember to request forests in rfsrc.fast
+  o <- rfsrc.fast(Class ~ ., d, ntree = 100,
+           forest = TRUE, perf.type = "brier")
   so <- subsample(o, B = 100)
   plot.subsample(so, cex = .7)
 }

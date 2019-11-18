@@ -32,6 +32,7 @@ export(extract.bootsample,
        get.quantile,
        get.quantile.crps,
        get.quantile.stat,
+        
        holdout.vimp,
        holdout.vimp.rfsrc,
        imbalanced,

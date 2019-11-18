@@ -34,8 +34,8 @@ plot.variable.rfsrc <- function(
     stop("this function does not apply to unsupervised forests")
   }
   ## terminate if a partial plot is requested but no forest is found
-  if (partial && is.null(object$forest)) {
-    stop("forest is empty:  re-run rfsrc (grow) call with forest=TRUE")
+  if (partial && (is.null(object$forest) || !object$forest$forest)) {
+    stop("forest is empty:  re-run rfsrc (grow call) with forest=TRUE")
   }
   ## if missing data was imputed then overlay the missing data for x
   ## bug reported by John Ehrlinger

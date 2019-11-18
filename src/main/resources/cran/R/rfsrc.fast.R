@@ -8,6 +8,7 @@ rfsrc.fast <- function(formula, data,
                        samp = NULL,
                        ntime = 50,
                        forest = FALSE,
+                       terminal.qualts = FALSE,
                        ...)
 {
   ## --------------------------------------------------------------
@@ -34,14 +35,15 @@ rfsrc.fast <- function(formula, data,
   rfnames <- c(rfnames, "rfq", "perf.type", "gk.quantile", "prob", "prob.epsilon", "vtry")
    
   ## restrict to allowed values
-  rfnames <- rfnames[rfnames != "ntree"     &
-                     rfnames != "nsplit"    &
-                     rfnames != "bootstrap" &
-                     rfnames != "ensemble"  &
-                     rfnames != "sampsize"  &
-                     rfnames != "samptype"  &
-                     rfnames != "ntime"     &
-                     rfnames != "forest"    ]
+  rfnames <- rfnames[rfnames != "ntree"              &
+                     rfnames != "nsplit"             &
+                     rfnames != "bootstrap"          &
+                     rfnames != "ensemble"           &
+                     rfnames != "sampsize"           &
+                     rfnames != "samptype"           &
+                     rfnames != "ntime"              &
+                     rfnames != "forest"             &
+                     rfnames != "terminal.qualts"    ]
   ## get the permissible hidden options
   ## add formula if present
   dots <- list(...)
@@ -69,5 +71,6 @@ rfsrc.fast <- function(formula, data,
                  samptype = samptype,
                  samp = samp,
                  ntime = ntime,
+                 terminal.qualts = terminal.qualts,
                  forest = forest), dots)))
 }

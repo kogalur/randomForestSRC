@@ -55,7 +55,8 @@ subsample.rfsrc <- function(obj,
                  "block.size")
    
   ## list of parameters to be obtained from the forest object
-  forest.prms <- c("bootstrap",
+  forest.prms <- c("forest",
+                   "bootstrap",
                    "sampsize",
                    "samptype",
                    "case.wt",

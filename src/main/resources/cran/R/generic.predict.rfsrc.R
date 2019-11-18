@@ -39,9 +39,16 @@ generic.predict.rfsrc <-
   if (missing(object)) {
     stop("object is missing!")
   }
+  ## incoming object must be a grow forest or a forest object
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2    &
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2)
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
+  ## grow forests must have true forest information
+  if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
+    if (is.forest.missing(object)) {
+      stop("Forest information for prediction is missing.  Re-run rfsrc (grow call) with forest=TRUE")
+    }
+  }
   ## verify the importance option
   importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
                                                          "none", "permute", "random", "anti",
@@ -110,17 +117,14 @@ generic.predict.rfsrc <-
   }
   ## REDUCES THE OBJECT TO THE FOREST -- REDUCTION STARTS HERE
   ## hereafter we only need the forest and reassign "object" to the forest
-  ## (TBD) memory management "big.data" not currently implemented: TBD
+  ## (TBD, TBD, TBD) memory management "big.data" not currently implemented: (TBD, TBD, TBD)
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
-    if (is.null(object$forest)) {
-      stop("The forest is empty.  Re-run rfsrc (grow) call with forest=TRUE")
-    }
     if (inherits(object, "bigdata")) {
       big.data <- TRUE
     }
-      else {
-        big.data <- FALSE
-      }
+    else {
+      big.data <- FALSE
+    }
     object <- object$forest
   }
   else {
@@ -203,8 +207,6 @@ generic.predict.rfsrc <-
   prob.assign <- global.prob.assign(if (is.null(prob)) object$prob else prob,
                                     if (is.null(prob.epsilon)) object$prob.epsilon else prob.epsilon,
                                     gk.quantile, object$quantile.regr, splitrule, nrow(object$xvar))
-  prob <- prob.assign$prob
-  prob.epsilon <- prob.assign$prob.epsilon
   ## Determine the immutable yvar factor map which is needed for
   ## classification sexp dimensioning.  But, first convert object$yvar
   ## to a data frame which is required for factor processing
@@ -487,13 +489,35 @@ generic.predict.rfsrc <-
   else {
     hdim <- object$hdim
   }
-    do.trace <- get.trace(do.trace)
-    ## Marker for start of native forest topology.  This can change with the outputs requested.
-    ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
-    ## particular, stackForestOutputObjects().
-    ## WARNING:  Note that the maximum number of slots in the following foreign function call is 64.
-    ## Ensure that this limit is not exceeded.  Otherwise, the program will error on the call.
-    nativeOutput <- tryCatch({.Call("rfsrcPredict",
+  do.trace <- get.trace(do.trace)
+  ## Marker for start of native forest topology.  This can change
+  ## with the outputs requested.  For the arithmetic related to the
+  ## pivot point, refer to rfsrc.R, in the POST PROCESSING section,
+  ## after $nativeArray has been defined.  This is the structure
+  ## that is parsed below.  Prior code in rfsrc.R is parsing the
+  ## native code output from the grow call and is irrelevant here.
+  ## WARNING: Note that the maximum number of slots in the following
+  ## foreign function call is 64.  Ensure that this limit is not
+  ## exceeded.  Otherwise, the program will error on the call.
+  if (hdim == 0) {
+    offset = 0
+    chunk = 0
+  } else {
+    ## Offset starts at parmID2. We adjust for the presence of interactions.
+    offset = 7
+    ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2.
+    chunk = 4
+    if (!is.null(object$base.learner)) {
+      if (object$base.learner$trial.depth > 1) {
+        ## Offset with interactions is adjusted.
+        ## Adjusted for AUGM_X1, AUGM_X2.
+        offset = 9
+        ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2, augmXone2, augmXtwo2.
+        chunk = 6
+      }
+    }
+  }
+  nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
                                   as.integer(ensemble.bits +
@@ -508,14 +532,13 @@ generic.predict.rfsrc <-
                                              cr.bits +
                                              gk.quantile.bits +
                                              statistics.bits),
-                                  as.integer(
-                                    forest.wt.bits +
-                                        distance.bits +
-                                        samptype.bits +
-                                        na.action.bits +
-                                        membership.bits +
-                                        terminal.qualts.bits +
-                                        terminal.quants.bits),
+                                  as.integer(forest.wt.bits +
+                                             distance.bits +
+                                             samptype.bits +
+                                             na.action.bits +
+                                             membership.bits +
+                                             terminal.qualts.bits +
+                                             terminal.quants.bits),
                                   ## >>>> start of maxi forest object >>>>
                                   as.integer(ntree),
                                   as.integer(n),
@@ -530,35 +553,72 @@ generic.predict.rfsrc <-
                                   as.integer(sampsize),
                                   as.integer(samp),
                                   as.double(case.wt),
-                                  as.integer(length(event.info$time.interest)),
-                                  as.double(event.info$time.interest),
+                                  list(if(is.null(event.info$time.interest)) as.integer(0) else as.integer(length(event.info$time.interest)),
+                                       if(is.null(event.info$time.interest)) NULL else as.double(event.info$time.interest)),
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
                                   as.integer(hdim),
+                                  ## Object containing base learner settings, this is never NULL.
+                                  object$base.learner, 
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
+                                  ## This is hc_zero.  It is never NULL.
                                   list(as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeFactorArray)$mwcpPT)),
+                                  ## This slot is hc_zero_aug.  This slot can be NULL.
+                                  if (!is.null(object$base.learner)) {
+                                      if (object$base.learner$trial.depth > 1) {
+                                          list(as.integer((object$nativeArray)$augmXone),
+                                               as.integer((object$nativeArray)$augmXtwo))
+                                      } else { NULL }
+                                  } else { NULL },
+                                  ## This slot is hc_one.  This slot can be NULL.                                  
                                   if (hdim > 0) {
                                       list(as.integer((object$nativeArray)$hcDim),
                                       as.double((object$nativeArray)$contPTR))
                                   } else { NULL },
+                                  ## See the offset documentation in
+                                  ## rfsrc.R after the nativeArray
+                                  ## SEXP objects are populated in the
+                                  ## post-forest parsing for an
+                                  ## explanation of the offsets below.
                                   if (hdim > 1) {
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, 8 + (4 * x)])})
+                                      ## parmIDx
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 1 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[, 9 +  (4 * x)])})
+                                      ## contPTx
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , offset + 2 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[, 10 + (4 * x)])})
+                                      ## contPTRx
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , offset + 3 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, 11 + (4 * x)])})
+                                      ## mwcpSZx
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 4 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
+                                      ## mwcpPTx
                                       lapply(0:(hdim-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
+                                  } else { NULL },
+                                  if (hdim > 1) {
+                                      if (!is.null(object$base.learner)) {
+                                          if (object$base.learner$trial.depth > 1) {
+                                              ## augmXonex
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 5 + (chunk * x)])})
+                                          } else { NULL }
+                                      } else { NULL }
+                                  } else { NULL },
+                                  if (hdim > 1) {
+                                      if (!is.null(object$base.learner)) {
+                                          if (object$base.learner$trial.depth > 1) {
+                                              ## augmXtwox
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 6 + (chunk * x)])})
+                                          } else { NULL }
+                                      } else { NULL }
                                   } else { NULL },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
@@ -572,12 +632,12 @@ generic.predict.rfsrc <-
                                   as.double((object$nativeArrayTNDS$tnREGR)),
                                   as.integer((object$nativeArrayTNDS$tnCLAS)),
                                   ## <<<< end of maxi forest object <<<<
-                                  as.integer(m.target.idx),
-                                  as.integer(length(m.target.idx)),
+                                  list(if (is.null(m.target.idx)) as.integer(0) else as.integer(length(m.target.idx)),
+                                       if (is.null(m.target.idx)) NULL else as.integer(m.target.idx)),
                                   as.integer(ptn.count),
                                     
-                                  as.integer(length(importance.xvar.idx)),
-                                  as.integer(importance.xvar.idx),
+                                  list(if (is.null(importance.xvar.idx)) as.integer(0) else as.integer(length(importance.xvar.idx)),
+                                       if (is.null(importance.xvar.idx)) NULL else as.integer(importance.xvar.idx)),
                                   ## Partial variables disabled.
                                   list(as.integer(0), as.integer(0), as.integer(0), NULL, as.integer(0), NULL, NULL),
                                   as.integer(length(subset)),
@@ -587,9 +647,9 @@ generic.predict.rfsrc <-
                                   as.double(if (outcome != "test") yvar.newdata else NULL),
                                   as.double(if (outcome != "test") xvar.newdata else NULL),
                                   as.integer(block.size),
-                                  as.integer(length(prob)),
-                                  as.double(prob),
-                                  as.double(prob.epsilon),
+                                  list(if (is.null(prob.assign$prob)) as.integer(0) else as.integer(length(prob.assign$prob)),
+                                       if (is.null(prob.assign$prob)) NULL else as.double(prob.assign$prob),
+                                       if (is.null(prob.assign$prob.epsilon)) as.double(0) else as.double(prob.assign$prob.epsilon)),
                                   as.integer(get.tree),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)

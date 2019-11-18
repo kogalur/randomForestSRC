@@ -17,8 +17,8 @@ partial.rfsrc <- function(
   user.option <- list(...)
   terminal.qualts <- is.hidden.terminal.qualts(user.option)
   terminal.quants <- is.hidden.terminal.quants(user.option)
-  ## Object consistency.  Note that version checking is NOT
-  ## implemented in this mode. (TBD)
+  ## Object consistency
+  ## (TBD, TBD, TBD) Version checking is NOT implemented in this mode (TBD, TBD, TBD)
   if (missing(object)) {
     stop("object is missing!")
   }
@@ -28,8 +28,8 @@ partial.rfsrc <- function(
   }
   ## acquire the forest
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
-    if (is.null(object$forest)) {
-      stop("The forest is empty.  Re-run rfsrc (grow) call with forest=TRUE")
+    if (is.forest.missing(object)) {
+      stop("The forest is empty.  Re-run rfsrc (grow call) with forest=TRUE")
     }
     object <- object$forest
   }
@@ -117,16 +117,35 @@ partial.rfsrc <- function(
   do.trace <- get.trace(do.trace)
   ## Check that hdim is initialized.  If not, set it zero.
   ## This is necessary for backwards compatibility with 2.3.0
-    if (is.null(object$hdim)) {
-        hdim <- 0
+  if (is.null(object$hdim)) {
+    hdim <- 0
+  }
+  else {
+    hdim <- object$hdim
+  }
+  ## Marker for start of native forest topology.  This can change with the outputs requested.
+  ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
+  ## particular, stackForestOutputObjects().
+  ## added from generic.predict.rfsrc.R per UBK instruction 11/04/2019
+  if (hdim == 0) {
+    offset = 0
+    chunk = 0
+  } else {
+    ## Offset starts at parmID2. We adjust for the presence of interactions.
+    offset = 7
+    ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2.
+    chunk = 4
+    if (!is.null(object$base.learner)) {
+      if (object$base.learner$trial.depth > 1) {
+        ## Offset with interactions is adjusted.
+        ## Adjusted for AUGM_X1, AUGM_X2.
+        offset = 9
+        ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2, augmXone2, augmXtwo2.
+        chunk = 6
+      }
     }
-    else {
-        hdim <- object$hdim
-    }
-    ## Marker for start of native forest topology.  This can change with the outputs requested.
-    ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
-    ## particular, stackForestOutputObjects().
-    pivot <- which(names(object$nativeArray) == "treeID")
+  }
+  pivot <- which(names(object$nativeArray) == "treeID")
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
@@ -135,7 +154,7 @@ partial.rfsrc <- function(
                                       bootstrap.bits +
                                       cr.bits), 
                                   as.integer(
-                                    samptype.bits +
+                                      samptype.bits +
                                       na.action.bits +
                                         terminal.qualts.bits +
                                           terminal.quants.bits +
@@ -154,35 +173,72 @@ partial.rfsrc <- function(
                                   as.integer(sampsize),
                                   as.integer(object$samp),
                                   as.double(object$case.wt),
-                                  as.integer(length(event.info$time.interest)),
-                                  as.double(event.info$time.interest),
+                                  list(if(is.null(event.info$time.interest)) as.integer(0) else as.integer(length(event.info$time.interest)),
+                                       if(is.null(event.info$time.interest)) NULL else as.double(event.info$time.interest)),
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
                                   as.integer(hdim),
+                                  ## Object containing base learner settings, this is never NULL.
+                                  object$base.learner, 
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
+                                  ## This is hc_zero.  It is never NULL.
                                   list(as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeFactorArray)$mwcpPT)),
+                                  ## This slot is hc_zero_aug.  This slot can be NULL.
+                                  if (!is.null(object$base.learner)) {
+                                      if (object$base.learner$trial.depth > 1) {
+                                          list(as.integer((object$nativeArray)$augmXone),
+                                               as.integer((object$nativeArray)$augmXtwo))
+                                      } else { NULL }
+                                  } else { NULL },
+                                  ## This slot is hc_one.  This slot can be NULL.                                  
                                   if (hdim > 0) {
                                       list(as.integer((object$nativeArray)$hcDim),
                                       as.double((object$nativeArray)$contPTR))
                                   } else { NULL },
+                                  ## See the offset documentation in
+                                  ## rfsrc.R after the nativeArray
+                                  ## SEXP objects are populated in the
+                                  ## post-forest parsing for an
+                                  ## explanation of the offsets below.
                                   if (hdim > 1) {
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, 8 + (4 * x)])})
+                                      ## parmIDx
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 1 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[, 9 +  (4 * x)])})
+                                      ## contPTx
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , offset + 2 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[, 10 + (4 * x)])})
+                                      ## contPTRx
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , offset + 3 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, 11 + (4 * x)])})
+                                      ## mwcpSZx
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 4 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
+                                      ## mwcpPTx
                                       lapply(0:(hdim-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
+                                  } else { NULL },
+                                  if (hdim > 1) {
+                                      if (!is.null(object$base.learner)) {
+                                          if (object$base.learner$trial.depth > 1) {
+                                              ## augmXonex
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 5 + (chunk * x)])})
+                                          } else { NULL }
+                                      } else { NULL }
+                                  } else { NULL },
+                                  if (hdim > 1) {
+                                      if (!is.null(object$base.learner)) {
+                                          if (object$base.learner$trial.depth > 1) {
+                                              ## augmXtwox
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 6 + (chunk * x)])})
+                                          } else { NULL }
+                                      } else { NULL }
                                   } else { NULL },
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
@@ -196,12 +252,11 @@ partial.rfsrc <- function(
                                   as.double((object$nativeArrayTNDS$tnREGR)),
                                   as.integer((object$nativeArrayTNDS$tnCLAS)),
                                   ## <<<< end of maxi forest object <<<<
-                                  as.integer(m.target.idx),
-                                  as.integer(length(m.target.idx)),
+                                  list(if (is.null(m.target.idx)) as.integer(0) else as.integer(length(m.target.idx)),
+                                       if (is.null(m.target.idx)) NULL else as.integer(m.target.idx)),
                                   as.integer(0),  ## Pruning disabled
                                     
-                                  as.integer(0),     ## Importance disabled
-                                  as.integer(NULL),  ## Importance disabled
+                                  list(as.integer(0), NULL), ## Importance disabled.
                                   ## Partial variables enabled.  Note the as.integer is needed.
                                   list(as.integer(get.type(family, partial.type)),
                                        as.integer(which(xvar.names == partial.xvar)),
@@ -217,9 +272,7 @@ partial.rfsrc <- function(
                                   as.double(NULL),  ## New data disabled.
                                   as.double(NULL),  ## New data disabled.
                                   as.integer(ntree), ## block.size is hard-coded.
-                                  as.integer(0),     ## Quantiles disabled
-                                  as.double(NULL),   ## Quantiles disabled
-                                  as.double(0),      ## Quantiles disabled
+                                  list(as.integer(0), NULL, as.double(0)), ## Quantiles disabled.
                                   as.integer(get.tree),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)

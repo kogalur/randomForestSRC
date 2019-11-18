@@ -271,7 +271,7 @@ double getCustomSplitStatisticMultivariateClassification (unsigned int n,
   return delta;
 }
 
-// TBD TBD put documentation in for eventT*
+// TBD TBD put documentation in for eventTime.
 
 double getCustomSplitStatisticSurvival (unsigned int n,
                                         char        *membership,

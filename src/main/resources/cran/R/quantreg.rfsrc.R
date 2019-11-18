@@ -1,12 +1,12 @@
 quantreg.rfsrc <- function(formula, data, object, newdata,
-                              method = "forest", splitrule = NULL,
+                              method = "local", splitrule = NULL,
                               prob = NULL, prob.epsilon = NULL,
                               oob = TRUE, fast = FALSE, maxn = 1e3, ...)
 {
   ## we intialize the grow primary operation as false
   grow <- FALSE
   ## which method will be used?
-  method <- match.arg(method, c("forest", "gk", "GK", "G-K", "g-k"))
+  method <- match.arg(method, c("forest", "local", "gk", "GK", "G-K", "g-k"))
   ## we now allow other regression splitting rules to be used 
   ## splitrule <- "quantile.regr"
   ## --------------------------------------------------------------------------------
@@ -46,6 +46,11 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
       dots$gk.quantile <- FALSE
       dots$forest.wt <- if (oob) "oob" else TRUE
     }
+    ## if user wants local method, set GK to false
+    else if (method == "local") {
+      dots$gk.quantile <- FALSE
+    }
+    ## user is requesting GK method
     else {
       dots$gk.quantile <- TRUE
     }
@@ -139,6 +144,11 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
         dots$forest.wt <- "oob"
       }
     }
+    ## local method -> set GK to false and request forest weights
+    else if (method == "local") {
+      dots$gk.quantile <- FALSE
+    }
+    ## user is requesting GK method
     else {
       dots$gk.quantile <- TRUE
     }
@@ -187,7 +197,7 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
     ## GK method - also clean up the object   
     ##
     ## ------------------------------------
-    if (method != "forest") {
+    if (!(method == "forest" || method == "local")) {
       if (ncol(cbind(object$yvar.grow)) > 1) {
         y <- object$yvar.grow[, yn]
         if (oob && !is.null(object$regrOutput[[yn]]$quantile.oob)) {
@@ -224,29 +234,46 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
     }
     ## ------------------------------------
     ##
-    ## forest weight method
+    ## forest weight or local method
     ##
     ## ------------------------------------
     else {
-      ## pull grow y and grow residual
+      ## pull grow y, grow residual, and yhat (either grow/predicted)
       if (ncol(cbind(object$yvar.grow)) > 1) {
         y <- object$yvar.grow[, yn]
         res <- object$res.grow[, yn]
+        if (oob && !is.null(object$regrOutput[[yn]]$predicted.oob)) {
+          yhat <- object$regrOutput[[yn]]$predicted.oob
+        }
+        else {
+          yhat <- object$regrOutput[[yn]]$predicted
+        }
       }
       else {
         y <- object$yvar.grow
         res <- object$res.grow
+         if (oob && !is.null(object$predicted.oob)) {
+          yhat <- object$predicted.oob
+        }
+        else {
+          yhat <- object$predicted
+        }
       }
-      ## now obtain grow yhat 
-      yhat <- y - res
-      ## unique y values
+      ## extract unique y values
       yunq <- sort(unique(y))
-      ## locally adjusted cdf (now correctly applies to both grow and predict mode)
-      ## predict mode only needs predict forest weights, all other quantities are grow values 
-      cdf <- do.call(rbind, mclapply(1:nrow(object$forest.wt), function(i) {
-        ind.matx <- do.call(rbind, lapply(yunq, function(yy) {res <= (yy - yhat[i])}))
-        c(ind.matx %*% object$forest.wt[i, ])
-      }))
+      ## forest weight method, locally adjusts cdf using forest weights
+      if (method == "forest") {
+        cdf <- do.call(rbind, mclapply(1:nrow(object$forest.wt), function(i) {
+          ind.matx <- do.call(rbind, lapply(yunq, function(yy) {res <= (yy - yhat[i])}))
+          c(ind.matx %*% object$forest.wt[i, ])
+        }))
+      }
+      else {
+        ## locally adjusted cdf 
+        cdf <- do.call(rbind, mclapply(1:length(yhat), function(i) {
+          sapply(yunq, function(yy) {mean(res <= (yy - yhat[i]))})
+        }))
+      }
       ## quantiles
       quant <- t(apply(cdf, 1, function(pr) {
         c(min(yunq, na.rm = TRUE), yunq)[1 + sIndex(pr, prob)]
@@ -254,14 +281,23 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
       ## density
       density <- t(apply(cbind(0, cdf), 1, diff))
     }
-    ## return the object
+    ## ------------------------------------
+    ##
+    ## ends loop for specific yvar
+    ## return various quantities as list
+    ##
+    ## ------------------------------------
     list(quantiles = quant,
          prob = prob,
          cdf = cdf,
          density = density,
          yunq = yunq)
   })
-  ## return the goodies
+  ## ------------------------------------
+  ##
+  ## finished -- return final goodies
+  ##
+  ## ------------------------------------
   if (object$family == "regr") {
     rO <- rO[[1]]
   }
