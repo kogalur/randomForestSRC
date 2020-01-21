@@ -131,6 +131,7 @@ ulong     RF_totalTerminalCount;
 uint     *RF_theoreticalMaxtLeafCount;
 ulong    *RF_restoreTreeOffset;
 ulong   **RF_restoreMWCPoffset;
+uint     *RF_orderedTreeIndex;
 uint     *RF_serialTreeIndex;
 uint      RF_serialTreeID;
 uint     *RF_restoreTreeID;
@@ -3909,8 +3910,8 @@ void imputeCommon(char      mode,
                   uint     *serialTreePtr,
                   char      selectionFlag,
                   char      predictorFlag) {
-  uint *localSerialIndex;
   uint  rgIdentifier;
+  uint *overriddenSerialTreePtr;
   char mFlag;
   char outcomeFlag;
   uint     mRecordSize;
@@ -3944,7 +3945,6 @@ void imputeCommon(char      mode,
   mRecordIndex = 0;  
   mRecordSize  = 0;  
   termMembershipPtr = NULL;  
-  localSerialIndex = NULL;  
   if ((selectionFlag != TRUE) && (selectionFlag != FALSE) && (selectionFlag != ACTIVE)) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Invalid selectionFlag in imputeCommon():  %10d", selectionFlag);
@@ -3991,12 +3991,10 @@ void imputeCommon(char      mode,
     RF_nativeExit();
   }
   if ((loSerialTreeID == 1) && (hiSerialTreeID == RF_ntree)) {
-    localSerialIndex = uivector(1, RF_ntree);
-    for (tree = 1; tree <= RF_ntree; tree++) {
-      localSerialIndex[tree] = tree;
-    }
+    overriddenSerialTreePtr = RF_orderedTreeIndex;
   }
   else {
+    overriddenSerialTreePtr = serialTreePtr;
   }
   rgIdentifier = hiSerialTreeID;
   imputedValue = 0.0;  
@@ -4023,9 +4021,9 @@ void imputeCommon(char      mode,
         if (mpSign[unsignedSignatureIndex][i] == 1) {
           localDistributionSize = 0;
           for (tree = loSerialTreeID; tree <= hiSerialTreeID; tree++) {
-            if (RF_tLeafCount[serialTreePtr[tree]] > 0) {
-              if ((RF_dmRecordBootFlag[serialTreePtr[tree]][i] == selectionFlag) || (selectionFlag == ACTIVE)) {
-                info = termMembershipPtr[serialTreePtr[tree]][mRecordIndex[i]];
+            if (RF_tLeafCount[overriddenSerialTreePtr[tree]] > 0) {
+              if ((RF_dmRecordBootFlag[overriddenSerialTreePtr[tree]][i] == selectionFlag) || (selectionFlag == ACTIVE)) {
+                info = termMembershipPtr[overriddenSerialTreePtr[tree]][mRecordIndex[i]];
                 for (v = 1; v <= info -> lmiSize; v++) {
                   if ((info -> lmiIndex)[v] == p) {
                         if (!RF_nativeIsNaN((info -> lmiValue)[v])) {
@@ -4137,9 +4135,6 @@ void imputeCommon(char      mode,
       p = mpIndexSize;
     }
   }  
-  if ((loSerialTreeID == 1) && (hiSerialTreeID == RF_ntree)) {
-    free_uivector(localSerialIndex, 1, RF_ntree);
-  }
   free_dvector(localDistribution, 1, maxDistributionSize);
   free_cvector(naiveFlag, 1, mpIndexSize);
   free_cmatrix(naiveSign, 1, mRecordSize, 1, mpIndexSize);
@@ -6874,7 +6869,6 @@ void rfsrc(char mode, int seedValue) {
                               &RF_tNodeList,
                               &RF_tNodeListLength,
                               &RF_tTermList,
-                              &RF_serialTreeIndex,
                               &RF_root);
   switch (mode) {
   case RF_PRED:
@@ -7149,12 +7143,12 @@ void rfsrc(char mode, int seedValue) {
       }
 #endif
     }  
+    RF_ensbUpdtCount = 0;
+    RF_serialBlockID = 0;
     for(b = 1; b <= RF_ntree; b++) {
       RF_serialTreeIndex[b] = 0;
     }
     RF_serialTreeID = 0;
-    RF_ensbUpdtCount = 0;
-    RF_serialBlockID = 0;
     if (getUserTraceFlag()) {
       RF_userTimeStart = RF_userTimeSplit = time(NULL);
     }
@@ -7379,7 +7373,6 @@ void rfsrc(char mode, int seedValue) {
                                 RF_tNodeList,
                                 RF_tNodeListLength,
                                 RF_tTermList,
-                                RF_serialTreeIndex,
                                 RF_root);
   unstackIncomingArrays(mode);
 #ifdef _OPENMP
@@ -19591,6 +19584,7 @@ void unstackClassificationArrays(char mode) {
     }
   }
 }
+#ifdef _OPENMP
 void stackLocksOpenMP(char mode) {
   uint i, j;
   omp_init_lock(&RF_lockEnsbUpdtCount);
@@ -19817,6 +19811,10 @@ void stackLocksOpenMP(char mode) {
     }
   }
 }
+#else
+void stackLocksOpenMP(char mode) { }
+#endif
+#ifdef _OPENMP
 void unstackLocksOpenMP(char mode) {
   uint i, j;
   omp_destroy_lock(&RF_lockEnsbUpdtCount);
@@ -20043,6 +20041,9 @@ void unstackLocksOpenMP(char mode) {
     }
   }
 }
+#else
+void unstackLocksOpenMP(char mode) { }
+#endif
 void stackDefinedOutputObjects(char      mode,
                                char    **RF_sexpString,
                                Node   ***pRF_root,
@@ -22605,7 +22606,6 @@ void stackPreDefinedCommonArrays(Node      ****nodeMembership,
                                  Node      ****tNodeList,
                                  uint        **tNodeListLength,
                                  Terminal  ****tTermList,
-                                 uint        **serialTreeIndex,
                                  Node       ***root) {
   uint maxSize;
   uint i, j, k;
@@ -22648,7 +22648,11 @@ void stackPreDefinedCommonArrays(Node      ****nodeMembership,
   RF_oobSize = uivector(1, RF_ntree);
   RF_ibgSize = uivector(1, RF_ntree);
   RF_maxDepth = uivector(1, RF_ntree);
-  *serialTreeIndex = uivector(1, RF_ntree);
+  RF_orderedTreeIndex = uivector(1, RF_ntree);
+  for (i = 1; i <= RF_ntree; i++) {
+    RF_orderedTreeIndex[i] = i;
+  }
+  RF_serialTreeIndex = uivector(1, RF_ntree);
   if (RF_timeIndex > 0) {
     RF_masterTime  = dvector(1, RF_observationSize);
     RF_masterTimeIndexIn  = uivector(1, RF_observationSize);
@@ -22696,7 +22700,6 @@ void unstackPreDefinedCommonArrays(Node      ***nodeMembership,
                                    Node      ***tNodeList,
                                    uint        *tNodeListLength,
                                    Terminal  ***tTermList,
-                                   uint        *serialTreeIndex,
                                    Node       **root) {
   uint maxSize;
   free_new_vvector(RF_nodeMembership, 1, RF_ntree, NRUTIL_NPTR2);
@@ -22720,6 +22723,7 @@ void unstackPreDefinedCommonArrays(Node      ***nodeMembership,
   free_uivector(RF_oobSize, 1, RF_ntree);
   free_uivector(RF_ibgSize, 1, RF_ntree);
   free_uivector(RF_maxDepth, 1, RF_ntree);
+  free_uivector(RF_orderedTreeIndex, 1, RF_ntree);
   free_uivector(RF_serialTreeIndex, 1, RF_ntree);
   if (RF_timeIndex > 0) {
     free_dvector(RF_masterTime, 1, RF_observationSize);
@@ -25154,8 +25158,8 @@ void postProcessTree(char mode, char multImpFlag, uint r, uint b) {
   char perfFlag;
   uint i;
     if (r == RF_nImpute) {
-      if ((RF_opt & OPT_PERF) |
-          (RF_opt & OPT_OENS) |
+      if ((RF_opt & OPT_PERF) ||
+          (RF_opt & OPT_OENS) ||
           (RF_opt & OPT_FENS)) {
 #ifdef _OPENMP
         omp_set_lock(&RF_lockPerf);

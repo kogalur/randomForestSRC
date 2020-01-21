@@ -7,9 +7,17 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
   https://github.com/kogalur/randomForestSRC
 ---------------------------------------------------------------------------------
 
-
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
+---------------------------------------------------------------------------------
+Bug fixes: Serious impute() issue introduced in the last build (Bug 59
+on GitHub).  Fix to compile time error on systems that do not support
+OpenMP.  Here, the OpenMP code that was inadvertently exposed is now
+protected when OpenMP support is not detected.  Also updated
+impute.rfsc.Rd with a salient example.
+
+---------------------------------------------------------------------------------
+RELEASE 2.9.2
 ---------------------------------------------------------------------------------
 Bug fixes: Fix to Windows 10 OpenMP stack allocation error encountered
 when survival and large n are encountered (Bug 50 on GitHub).  Fix to 

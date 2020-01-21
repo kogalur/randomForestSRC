@@ -181,6 +181,52 @@ pbc.d <- impute(data = pbc, mf.q = 1, nodesize = 20, splitrule = "random")
 ## missForest but faster by using rfsrcFast
 pbc.d <- impute(data = pbc, mf.q = 1, fast = TRUE)
 
+## ------------------------------------------------------------
+## another example of multivariate missForest imputation
+## (suggested by John Sheffield)
+## ------------------------------------------------------------
+
+test_rows <- 1000
+
+set.seed(1234)
+
+a <- rpois(test_rows, 500)
+b <- a + rnorm(test_rows, 50, 50)
+c <- b + rnorm(test_rows, 50, 50)
+d <- c + rnorm(test_rows, 50, 50)
+e <- d + rnorm(test_rows, 50, 50)
+f <- e + rnorm(test_rows, 50, 50)
+g <- f + rnorm(test_rows, 50, 50)
+h <- g + rnorm(test_rows, 50, 50)
+i <- h + rnorm(test_rows, 50, 50)
+
+fake_data <- data.frame(a, b, c, d, e, f, g, h, i)
+
+fake_data_missing <- data.frame(lapply(fake_data, function(x) {
+  x[runif(test_rows) <= 0.4] <- NA
+  x
+}))
+  
+imputed_data <- impute(
+  data = fake_data_missing,
+  mf.q = 0.2,
+  ntree = 100,
+  verbose = TRUE
+)
+
+par(mfrow=c(3,3))
+o=lapply(1:ncol(imputed_data), function(j) {
+  pt <- is.na(fake_data_missing[, j])
+  x <- fake_data[pt, j]
+  y <- imputed_data[pt, j]
+  plot(x, y, pch = 16, cex = 0.8, xlab = "raw data",
+    ylab = "imputed data", col = 2)
+  points(x, y, pch = 1, cex = 0.8, col = gray(.9))
+  lines(supsmu(x, y, span = .25), lty = 1, col = 4, lwd = 4)
+  mtext(colnames(imputed_data)[j])
+  NULL
+})
+
 }
 }
 \keyword{missing data}

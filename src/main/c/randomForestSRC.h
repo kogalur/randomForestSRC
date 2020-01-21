@@ -1874,14 +1874,12 @@ void stackPreDefinedCommonArrays(Node      ****nodeMembership,
                                  Node      ****tNodeList,
                                  uint        **tNodeListLength,
                                  Terminal  ****tTermList,
-                                 uint        **serialTreeIndex,
                                  Node       ***root);
 void unstackPreDefinedCommonArrays(Node      ***nodeMembership,
                                    Terminal  ***tTermMembership,
                                    Node      ***tNodeList,
                                    uint        *tNodeListLength,
                                    Terminal  ***tTermList,
-                                   uint        *serialTreeIndex,
                                    Node       **root);
 void stackPreDefinedGrowthArrays();
 void unstackPreDefinedGrowthArrays();
