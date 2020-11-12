@@ -1016,7 +1016,6 @@ void populateLotObject(jobject obj) {
   RF_lotSize = 0;
   RF_lotLag = 0;
   RF_lotStrikeout = 0;
-  RF_lotInteract = FALSE;
   if (! (*RF_java_env) -> IsSameObject(RF_java_env, obj, NULL)) {
     objClass = (*RF_java_env) -> GetObjectClass(RF_java_env, obj);
     objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "hdim", "I");
