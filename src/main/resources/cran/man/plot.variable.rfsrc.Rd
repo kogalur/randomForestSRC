@@ -18,8 +18,7 @@
 }
 \arguments{
   \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc,
-    synthetic)}, or \code{(rfsrc, plot.variable)}.  See the examples
-    below for illustration of the latter.}
+    synthetic)}, or \code{(rfsrc, plot.variable)}.}
   \item{xvar.names}{Names of the x-variables to be used.}
   \item{target}{For classification, an integer or
     character value specifying the class to focus on (defaults to the
@@ -64,7 +63,8 @@
     
     \item For classification, it is the predicted class probability
     specified by \option{target}, or the class of maximum
-    probability depending on \option{class.type}.
+    probability depending on \option{class.type} is set to "prob" or
+    "bayes".
     
     \item For multivariate families, it is the predicted value of the
     outcome specified by \option{m.target} and if that is a

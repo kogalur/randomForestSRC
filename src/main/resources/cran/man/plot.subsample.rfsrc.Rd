@@ -31,6 +31,17 @@
   \item{main}{Title used for plot.}
   \item{...}{Further arguments that can be passed to \command{bxp}.}
 }
+\details{
+  Most of the options used by the R function bxp will work here and can
+  be used for customization of plots.  Currently the following
+  parameters will work:
+
+  "xaxt", "yaxt", "las", "cex.axis", 
+  "col.axis", "cex.main",
+  "col.main", "sub", "cex.sub", "col.sub", 
+  "ylab", "cex.lab", "col.lab"
+		 
+}
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }
@@ -56,7 +67,7 @@ oo <- subsample(o)
 plot.subsample(oo)
 plot.subsample(oo, jknife = FALSE)
 plot.subsample(oo, alpha = .01)
-plot(oo)
+plot(oo,cex.axis=.5)
 }
 }
 \keyword{plot}

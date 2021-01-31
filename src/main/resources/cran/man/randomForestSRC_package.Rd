@@ -6,14 +6,21 @@
 }
 \description{
 
-  Fast OpenMP parallel computing for unified Breiman random forests
-  (Breiman 2001) for regression, classification, survival analysis,
-  competing risks, multivariate, unsupervised, quantile regression, and
-  class imbalanced q-classification.  Missing data imputation includes
-  missForest and multivariate missForest. New fast subsampling random
-  forests. Confidence intervals for variable importance.  New holdout
-  vimp.
-
+  Fast OpenMP parallel computing of Breiman random forests (Breiman
+  2001) for regression, classification, survival analysis (Ishwaran
+  2008), competing risks (Ishwaran 2012), multivariate (Segal and Xiao
+  2011), unsupervised (Mantero and Ishwaran 2020), quantile regression
+  (Meinhausen 2006, Zhang et al. 2019), and class imbalanced
+  q-classification (O'Brien and Ishwaran 2019).  Different splitting
+  rules invoked under deterministic or random splitting (Geurts et
+  al. 2006, Ishwaran 2015) are available for all families.  Variable
+  importance (VIMP), and holdout VIMP, as well as confidence regions
+  (Ishwaran and Lu 2019) can be calculated for single and grouped
+  variables.  Fast interface for missing data imputation using a variety
+  of different random forest methods (Tang and Ishwaran 2017).
+  Visualize trees on your Safari or Google Chrome browser (works for all
+  families, see \command{\link{get.tree}}).
+  
 }
 
 \section{Package Overview}{
@@ -47,10 +54,15 @@
     Used for prediction.  Predicted values are obtained by dropping the
     user supplied test data down the grow forest.  The resulting object
     has class \code{(rfsrc, predict)}.
+
+    \item \code{\link{sidClustering.rfsrc}}, \code{sidClustering}
     
+    Clustering of unsupervised data using SID (Staggered Interaction
+    Data).  Also implements the artificial two-class approach of Breiman
+    (2003).
+
     
-    \item \code{\link{vimp.rfsrc}}, \link{subsample.rfsrc},
-    \code{\link{holdout.vimp.rfsrc}}
+    \item \code{\link{vimp}}, \code{\link{subsample}}, \code{\link{holdout.vimp}}
     
     
     Used for variable selection:
@@ -68,15 +80,20 @@
       when it is removed from the model.
 
     }
+
+    \item \code{\link{imbalanced.rfsrc}}, \code{\link{imbalanced}}
     
-    \item \code{\link{impute.rfsrc}}
+    q-classification and G-mean VIMP for class imbalanced data.
+
+    
+    \item \code{\link{impute.rfsrc}}, \code{\link{impute}}
     
     Fast imputation mode for RF-SRC.  Both \code{rfsrc} and
     \code{predict.rfsrc} are capable of imputing missing data.
     However, for users whose only interest is imputing data, this function
     provides an efficient and fast interface for doing so.
 
-    \item \code{\link{partial.rfsrc}}
+    \item \code{\link{partial.rfsrc}}, \code{\link{partial}}
     
     Used to extract the partial effects of a variable or variables on the ensembles.
 
@@ -126,13 +143,24 @@
   enabled.  Diligence should be used not to overtax the hardware available.
 
 }
+\section{Reproducibility}{With respect to reproducibility, a model is
+defined by a seed, the topology of the trees in the forest, and terminal
+node membership of the training data. This allows the user to restore a
+model and, in particular, its terminal node statistics.  On the other
+hand, VIMP and many other statistics are dependent on additional
+randomization, which we do not consider part of the model. These
+statistics are susceptible to Monte Carlo effects.}
+
 
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }
 \references{
   Breiman L. (2001). Random forests, \emph{Machine Learning}, 45:5-32.
-  
+
+  Geurts, P., Ernst, D. and Wehenkel, L., (2006). Extremely randomized
+  trees. \emph{Machine learning}, 63(1):3-42.
+
   Ishwaran H. and Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7(2):25-31.
   
@@ -160,26 +188,41 @@
   Ishwaran H. (2015).  The effect of splitting on random forests.
   \emph{Machine Learning}, 99:75-118.
   
-  Lu M., Sadiq S., Feaster D.J. and Ishwaran H. (2018). Estimating
-  individual treatment effect in observational data using random forest
-  methods. \emph{J. Comp. Graph. Statist}, 27(1), 209-219
-
   Ishwaran H. and Lu M.  (2019).  Standard errors and confidence
   intervals for variable importance in random forest regression,
   classification, and survival. \emph{Statistics in Medicine}, 38,
   558-582.
 
+  Lu M., Sadiq S., Feaster D.J. and Ishwaran H. (2018). Estimating
+  individual treatment effect in observational data using random forest
+  methods. \emph{J. Comp. Graph. Statist}, 27(1), 209-219
+
+  Mantero A. and Ishwaran H. (2020).  Unsupervised random forests.
+  To appear in \emph{Statistical Analysis and Data Mining}.
+
+  Meinshausen N. (2006) Quantile regression forests, \emph{Journal of
+  Machine Learning Research}, 7:983-999.
+
   O'Brien R. and Ishwaran H. (2019).  A random forests quantile
   classifier for class imbalanced data. \emph{Pattern Recognition},
   90, 232-249
 
+  Segal M.R. and Xiao Y. Multivariate random
+  forests. (2011). \emph{Wiley Interdisciplinary Reviews: Data Mining
+  and Knowledge Discovery}. 1(1):80-87.
+
   Tang F. and Ishwaran H. (2017).  Random forest missing data
-  algorithms.  \emph{Statistical Analysis and Data Mining},
-  10, 363-377.
+  algorithms.  \emph{Statistical Analysis and Data Mining}, 10:363-377.
+
+  Zhang H., Zimmerman J., Nettleton D. and Nordman D.J. (2019).  Random
+  forest prediction intervals. \emph{The American Statistician}. 4:1-5.
+
   
 }
 \seealso{
   \command{\link{find.interaction.rfsrc}},
+
+  \command{\link{get.tree.rfsrc}},
 
   \command{\link{holdout.vimp.rfsrc}},
 

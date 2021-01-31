@@ -605,17 +605,59 @@ get.empirical.risk.bits <-  function (empirical.risk) {
     return (0)
   }
 }
-get.base.learner <- function(trial.depth = 2,
-     rule = c("none", "multiplication", "division", "addition", "subtraction")) {
-  ## No verificiation is done here, or before conveyance to the native code.  So be careful.
-  ## trial.depth is the depth of the trial sub-tree that is grown to determine interactions.  Thus,
-  ## a value of 2 or greater is necessary for interactions. This does not guarantee that there
-  ## will be interactions.  It is just a pre-requisite.
-  valid.rule <- c("none", "multiplication", "division", "addition", "subtraction")
-  rule <- match.arg(rule, valid.rule)
-  base.learner = list(as.integer(trial.depth), as.integer(which(valid.rule == rule) - 1))
-  names(base.learner) = c("trial.depth", "rule")
-  class(base.learner) = "base.learner"
+get.tdc.rule.bits <- function (tdc.rule) {
+    if (is.null(tdc.rule)) {
+        ## Allow splits on everything.
+        result <- 2^24 + 2^25 + 2^26
+    }
+    else if (tdc.rule == "all") {
+        ## Allow splits on everything.
+        result <- 2^24 + 2^25 + 2^26
+    }
+    else if (tdc.rule == "time") {
+        ## Allow splits only on time.
+        result <- 2^24
+    }
+    else if (tdc.rule == "tdx") {
+        ## Allow splits on time dependent x-variables only, and not on time.
+        result <- 2^25
+    }
+    else if (tdc.rule == "tsx") {
+        ## Allow splits on time static x-variables only, and not on time.
+        result <- 2^26
+    }
+    else if (tdc.rule == "time.and.tsx") {
+        ## Allow splits on time and time static x-variables only.
+        result <- 2^24 + 2^26
+    }
+    else if (tdc.rule == "time.and.tdx") {
+        ## Allow splits on time and time dependent x-variables only.
+        result <- 2^24 + 2^25
+    }
+    return (result)
+}
+get.base.learner <- function(interact.depth = 2,
+                             interact.rule = c("multiplication", "division", "addition", "subtraction"),
+                             synthetic.depth = 0,
+                             dim.reduce = TRUE) {
+    ## No verificiation is done here, or before conveyance to the
+    ## native code.  So be careful.
+    ## When augmentation is of the interaction type, interact.depth is
+    ## the number of sub-terminal nodes grown to
+    ## determine interactions.  Thus, a value of 2 or greater is
+    ## necessary for interactions. The number of interactions considered is interact.depth - 1.
+    ## This does not guarantee
+    ## that there will be interactions.  It is just a pre-requisite.
+    ## When augmentation is of the synthetic type, synthetic.depth is the
+    ## number of sub-terminal nodes in the sub-tree that is grown to
+    ## determine the synthetic x-variable.  Thus, a value of 2 or
+    ## great is necessary for synthetic interactions.
+  ## Don't mess with the order here.  The matching of position is relevant to the C-side code.
+  valid.rule <- c("multiplication", "division", "addition", "subtraction")
+  rule <- match.arg(interact.rule, valid.rule)
+  base.learner <- list(as.integer(interact.depth), as.integer(which(valid.rule == rule)), as.integer(synthetic.depth), as.integer(dim.reduce))
+    names(base.learner) = c("interact.depth", "interact.rule", "synthetic.depth", "dim.reduce")
+    class(base.learner) = "base.learner"
   return (base.learner)
 }
 get.lot <- function(hdim = 5, treesize = function(x){min(50, x * .25)}, lag = 8, strikeout = 3) {
@@ -688,6 +730,22 @@ is.forest.missing <- function(object) {
   }
 }
   ## HIDDEN VARIABLES FOLLOW:
+  is.hidden.do.trace <-  function (user.option) {
+    if (is.null(user.option$do.trace)) {
+      FALSE
+    }
+    else {
+      user.option$do.trace
+    }
+  }
+is.hidden.tdc.rule <-  function (user.option) {
+    if (is.null(user.option$tdc.rule)) {
+      NULL
+    }
+    else {
+      user.option$tdc.rule
+    }
+  }
   is.hidden.empirical.risk <-  function (user.option) {
     if (is.null(user.option$empirical.risk)) {
       FALSE
@@ -734,11 +792,18 @@ is.forest.missing <- function(object) {
   }
   is.hidden.base.learner <-  function (user.option) {
     if (is.null(user.option$base.learner)) {
-        ## Traditional non-augmented data matrix, with default base-learners, i.e. x-vars.
-        ## trial.depth is the trial sub-tree depth, we need a value of 2 for potential pairs.
-        ## rule can be "multiplication", "division", "addition", and "substraction".  Note
-        ## that division by zero is a possibility and not handled, so be careful. 
-        base.learner <- get.base.learner(trial.depth = 0, rule = "none") 
+        ## Traditional non-augmented data matrix, with default
+        ## base-learners, i.e. x-vars.  trial.depth is the trial
+        ## sub-tree depth, in the case of interactions, and the
+        ## sub-terminal node count in the case of synthetic cuts.
+        ## Thus, a value of 3 implies we have 2 splits, and 3
+        ## sub-terminal nodes.  We need a value of 2 in either case
+        ## for base learner injection.  Rules can be "multiplication",
+        ## "division", "addition", and "substraction" in the case of
+        ## interactions.  If synthetic cuts are requested, the rule is
+        ## "synthetic".  Note that division by zero is a possibility
+        ## in interactions and not handled, so be careful.
+        base.learner <- get.base.learner(interact.depth = 0, synthetic.depth = 0) 
     }
     else {
         ## Check the class of the object.

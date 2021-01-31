@@ -147,6 +147,7 @@ family.pretty <- function(x) {
   switch(fmly,
          "surv"     = "RSF",
          "surv-CR"  = "RSF",
+         "surv-TDC" = "RHF",
          "regr"     = "RF-R",
          "class"    = "RF-C",
          "unsupv"   = "RF-U",
@@ -157,39 +158,46 @@ family.pretty <- function(x) {
          )
 }
 finalizeFormula <- function(formula.obj, data) {
-  ## parse the formula object
-  yvar.names <- formula.obj$yvar.names
-  all.names  <- formula.obj$all.names
-  index      <- length(yvar.names)
-  fmly       <- formula.obj$family
-  ytry       <- formula.obj$ytry
-  ## total number of variables should exceed number of yvars
-  if (length(all.names) <= index) {
-    stop("formula is misspecified: total number of variables does not exceed total number of y-variables")
-  }
-  ## extract the xvar names
-  if (all.names[index + 1] == ".") {
-    if(index == 0) {
-      xvar.names <- names(data)
-    }
-      else {
-        xvar.names <- names(data)[!is.element(names(data), all.names[1:index])]
-      }
-  }
-    else {
-      if(index == 0) {
-        xvar.names <- all.names
-      }
-        else {
-          xvar.names <- all.names[-c(1:index)]
+    ## parse the formula object
+    yvar.names <- formula.obj$yvar.names
+    subj.names <- formula.obj$subj.names
+    all.names  <- formula.obj$all.names
+    fmly       <- formula.obj$family
+    ytry       <- formula.obj$ytry
+    index <- length(yvar.names)
+    ## Adjust the index for the presence of subject names.
+    if (fmly == "surv") {
+        if (!is.null(subj.names)) {
+            index <- index + 1
         }
-      not.specified <- !is.element(xvar.names, names(data))
-      if (sum(not.specified) > 0) {
-        stop("formula is misspecified, object ", xvar.names[not.specified], " not found")
-      }
     }
-  ## return the goodies
-  return (list(family=fmly, yvar.names=yvar.names, xvar.names=xvar.names, ytry=ytry))
+    ## total number of variables should exceed number of yvars
+    if (length(all.names) <= index) {
+        stop("formula is misspecified: total number of variables does not exceed total number of y-variables")
+    }
+    ## extract the xvar names
+    if (all.names[index + 1] == ".") {
+        if(index == 0) {
+            xvar.names <- names(data)
+        }
+        else {
+            xvar.names <- names(data)[!is.element(names(data), all.names[1:index])]
+        }
+    }
+    else {
+        if(index == 0) {
+            xvar.names <- all.names
+        }
+        else {
+            xvar.names <- all.names[-c(1:index)]
+        }
+        not.specified <- !is.element(xvar.names, names(data))
+        if (sum(not.specified) > 0) {
+            stop("formula is misspecified, object ", xvar.names[not.specified], " not found")
+        }
+    }
+    ## return the goodies
+    return (list(family=fmly, subj.names=subj.names, yvar.names=yvar.names, xvar.names=xvar.names, ytry=ytry))
 }
 finalizeData <- function(fnames, data, na.action, miss.flag = TRUE) {
   ## restrict data to the target variables
@@ -276,6 +284,7 @@ get.auc <- function(y, prob) {
     mean(AUC, na.rm = TRUE)
   }
 }                          
+## bayes rule 
 get.bayes.rule <- function(prob, pi.hat = NULL) {
   class.labels <- colnames(prob)
   if (is.null(pi.hat)) {
@@ -367,29 +376,39 @@ get.cindex <- function (time, censoring, predicted, do.trace = FALSE) {
   }
   return (nativeOutput$err)
 }
-get.coerced.survival.fmly <- function(fmly, event.type, splitrule = NULL) {
-  if (grepl("surv", fmly)) {
-    ## assume no coercion
-    coerced.fmly <- "surv"
-    if (!is.null(splitrule)) {
-      ## either competing risks or right censoring competing risks
-      ## is coerced to right censoring in some settings
-        if ((length(event.type) > 1) &&
-            (splitrule != "l2.impute") &&
-            (splitrule != "logrankscore")) {
-        coerced.fmly <- "surv-CR"
-      }
-    }
-      else {
-        if (length(event.type) > 1) {
-          coerced.fmly <- "surv-CR"
+get.coerced.survival.fmly <- function(fmly, subj, event.type, splitrule = NULL) {
+    if (grepl("surv", fmly)) {
+        ## assume no coercion
+        coerced.fmly <- "surv"
+        if (!is.null(splitrule)) {
+            if (is.null(subj)) {             
+                ## either competing risks or right censoring competing risks
+                ## is coerced to right censoring in some settings
+                if ((length(event.type) > 1) &&
+                    (splitrule != "l2.impute") &&
+                    (splitrule != "logrankscore")) {
+                    coerced.fmly <- "surv-CR"
+                }
+            }
+            else {
+                coerced.fmly <- "surv-TDC"
+            }
         }
-      }
-  }
-    else {
-      stop("attempt to coerce a non-survival family")
+        else {
+            if (is.null(subj)) { 
+                if (length(event.type) > 1) {
+                    coerced.fmly <- "surv-CR"
+                }
+            }
+            else {
+                coerced.fmly <- "surv-TDC"
+            }
+        }
     }
-  coerced.fmly
+    else {
+        stop("attempt to coerce a non-survival family")
+    }
+    coerced.fmly
 }
 get.event.info <- function(obj, subset = NULL) {
   ## survival case
@@ -398,9 +417,17 @@ get.event.info <- function(obj, subset = NULL) {
       if (is.null(subset)) {
         subset <- (1:nrow(cbind(obj$yvar)))
       }
-      r.dim <- 2
-      time <- obj$yvar[subset, 1]
-      cens <- obj$yvar[subset, 2]
+        if (is.null(obj$subj)) { 
+            r.dim <- 2
+            time <- obj$yvar[subset, 1]
+            cens <- obj$yvar[subset, 2]
+        }
+        else {
+            r.dim <- 3
+            start.time <- obj$yvar[subset, 1]
+            time <- obj$yvar[subset, 2]
+            cens <- obj$yvar[subset, 3]
+        }
       ## censoring must be coded coherently
       if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
         stop("for survival families censoring variable must be coded as a non-negative integer")
@@ -474,48 +501,102 @@ get.gmean <- function(y, prob, rfq = FALSE, robust = FALSE) {
 }
 get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
   if (grepl("surv", fmly)) {
-    r.dim <- 2
-    time <- yvar[, 1]
-    cens <- yvar[, 2]
-    ## censoring must be coded coherently
-    if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
-      stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
-    }
-    ## check if deaths are available (if user specified)
-    if (need.deaths && (all(na.omit(cens) == 0))) {
-      stop("no deaths in data!")
-    }
-    ## Check for event time consistency.
-    ## we over-ride this now to allow for negative time (see Stute)
-    ##if (!all(na.omit(time) >= 0)) {
-    ##  stop("time must be  positive")
-    ##}
-    ## Extract the unique event types.
-    event.type <- unique(na.omit(cens))
-    ## Ensure they are all greater than or equal to zero.
-    if (sum(event.type >= 0) != length(event.type)) {
-      stop("censoring variable must be coded as NA, 0, or greater than 0.")
-    }
-    ## Discard the censored state, if it exists.
-    event <- na.omit(cens)[na.omit(cens) > 0]
-    event.type <- unique(event)
-    ## Set grid of time points.
-    nonMissingOutcome <- which(!is.na(cens) & !is.na(time))
-    nonMissingDeathFlag <- (cens[nonMissingOutcome] != 0)
-    time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
-    ## trim the time points if the user has requested it
-    ## we also allow the user to pass requested time points
-    if (!missing(ntime)) {
-      if (length(ntime) == 1 && length(time.interest) > ntime) {
-        time.interest <- time.interest[
-                                       unique(round(seq.int(1, length(time.interest), length.out = ntime)))]
+      ## Survival, Competing Risk, Time Dependent Covariates:
+      if (dim(yvar)[2] == 2) {
+          ## Survival or Competing Risk:
+          r.dim <- 2
+          time <- yvar[, 1]
+          cens <- yvar[, 2]
+          start.time <- NULL
+          ## censoring must be coded coherently
+          if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
+              stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
+          }
+          ## check if deaths are available (if user specified)
+          if (need.deaths && (all(na.omit(cens) == 0))) {
+              stop("no deaths in data!")
+          }
+          ## Check for event time consistency.
+          ## we over-ride this now to allow for negative time (see Stute)
+          ##if (!all(na.omit(time) >= 0)) {
+          ##  stop("time must be  positive")
+          ##}
+          ## Extract the unique event types.
+          event.type <- unique(na.omit(cens))
+          ## Ensure they are all greater than or equal to zero.
+          if (sum(event.type >= 0) != length(event.type)) {
+              stop("censoring variable must be coded as NA, 0, or greater than 0.")
+          }
+          ## Discard the censored state, if it exists.
+          event <- na.omit(cens)[na.omit(cens) > 0]
+          event.type <- unique(event)
+          ## Set grid of time points.
+          nonMissingOutcome <- which(!is.na(cens) & !is.na(time))
+          nonMissingDeathFlag <- (cens[nonMissingOutcome] != 0)
+          time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
+          ## trim the time points if the user has requested it
+          ## we also allow the user to pass requested time points
+          if (!missing(ntime)) {
+              if (length(ntime) == 1 && length(time.interest) > ntime) {
+                  time.interest <- time.interest[
+                      unique(round(seq.int(1, length(time.interest), length.out = ntime)))]
+              }
+              if (length(ntime) > 1) {
+                  time.interest <- unique(sapply(ntime, function(tt) {
+                      time.interest[max(1, sum(tt >= time.interest, na.rm = TRUE))]
+                  }))
+              }
+          }
       }
-      if (length(ntime) > 1) {
-        time.interest <- unique(sapply(ntime, function(tt) {
-          time.interest[max(1, sum(tt >= time.interest, na.rm = TRUE))]
-        }))
+      else {
+          ## Time Dependent Covariates:
+          r.dim <- 3
+          start.time <- yvar[, 1]
+          time <- yvar[, 2]
+          cens <- yvar[, 3]
+          ## censoring must be coded coherently
+          if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
+              stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
+          }
+          ## check if deaths are available (if user specified)
+          if (need.deaths && (all(na.omit(cens) == 0))) {
+              stop("no deaths in data!")
+          }
+          ## Check for event time consistency.
+          if (!all(na.omit(time) >= 0)) {
+            stop("time must be  positive")
+          }
+          ## Extract the unique event types.
+          event.type <- unique(na.omit(cens))
+          ## Ensure they are all greater than or equal to zero.
+          if (sum(event.type >= 0) != length(event.type)) {
+              stop("censoring variable must be coded as NA, 0, or greater than 0.")
+          }
+          ## Discard the censored state, if it exists.
+          event <- na.omit(cens)[na.omit(cens) > 0]
+          event.type <- unique(event)
+          ## Set grid of time points.
+          nonMissingOutcome <- which(!is.na(cens) & !is.na(time))
+          nonMissingDeathFlag <- (cens[nonMissingOutcome] != 0)
+          time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
+          ## trim the time points if the user has requested it
+          ## we also allow the user to pass requested time points
+          if (!missing(ntime)) {
+            if (length(ntime) == 1 && length(time.interest) > ntime) {
+              ## select evenly spaced values over [0,1] and not event times 
+              time.interest <- seq(0,  min(1, max(time[nonMissingOutcome])), length = ntime)
+              time.interest <- time.interest[time.interest > 0]
+            }
+            if (length(ntime) > 1) {
+              ## over-ride the default setting and allow the user to specify anything they want between [0,1]
+              time.pt <- ntime <= min(1, max(time[nonMissingOutcome])) & ntime > 0
+              if (sum(time.pt) == 0) {
+                stop("the ntime vector supplied must be between [0,1]:", ntime)
+              }
+              time.interest <- sort(unique(ntime[time.pt]))
+            }
+          }
       }
-    }
   }
   ## handle other families
     else {
@@ -530,11 +611,11 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
               r.dim <- 1
             }
         }
-      event <- event.type <- cens <- time.interest <- cens <- time <- NULL
+      event <- event.type <- cens <- time.interest <- cens <- time <- start.time <- NULL
     }
   return(list(event = event, event.type = event.type, cens = cens,
               time.interest = time.interest,
-              time = time, r.dim = r.dim))
+              time = time, start.time = start.time, r.dim = r.dim))
 }
 get.grow.mtry <- function (mtry = NULL, n.xvar, fmly) {
   if (!is.null(mtry)) {
@@ -560,6 +641,12 @@ get.grow.nodesize <- function(fmly, nodesize) {
   }
   ## Default node size for competing risks
     else if (fmly == "surv-CR"){
+      if (is.null(nodesize)) {
+        nodesize <- 15
+      }
+    }
+  ## Default node size for time dependent covariates
+    else if (fmly == "surv-TDC"){
       if (is.null(nodesize)) {
         nodesize <- 15
       }
@@ -595,28 +682,29 @@ get.grow.nodesize <- function(fmly, nodesize) {
   ## Nodesize should be rounded if non-integer
   nodesize <- round(nodesize)
 }
-get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.type) {
-  ## CAUTION:  HARD CODED ON NATIVE SIDE
-  splitrule.names <- c("logrank",              ##  1
-                       "logrankscore",         ##  2
-                       "logrankCR",            ##  3
-                       "random",               ##  4
-                       "mse",                  ##  5
-                       "gini",                 ##  6
-                       "unsupv",               ##  7
-                       "mv.mse",               ##  8 --  reg/class/mix
-                       "mv.gini",              ##  9 --  reg/class/mix
-                       "mv.mix",               ## 10 --  reg/class/mix
-                       "custom",               ## 11
-                       "quantile.regr",        ## 12
-                       "la.quantile.regr",     ## 13
-                       "bs.gradient",          ## 14
-                       "auc",                  ## 15
-                       "entropy",              ## 16
-                       "sg.regr",              ## 17
-                       "sg.class",             ## 18
-                       "sg.surv")              ## 19
-fmly <- formula.detail$family
+get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.info) {
+    ## CAUTION:  HARD CODED ON NATIVE SIDE
+    splitrule.names <- c("logrank",              ##  1
+                         "logrankscore",         ##  2
+                         "logrankCR",            ##  3
+                         "random",               ##  4
+                         "mse",                  ##  5
+                         "gini",                 ##  6
+                         "unsupv",               ##  7
+                         "mv.mse",               ##  8 --  reg/class/mix
+                         "mv.gini",              ##  9 --  reg/class/mix
+                         "mv.mix",               ## 10 --  reg/class/mix
+                         "custom",               ## 11
+                         "quantile.regr",        ## 12
+                         "la.quantile.regr",     ## 13
+                         "bs.gradient",          ## 14
+                         "auc",                  ## 15
+                         "entropy",              ## 16
+                         "sg.regr",              ## 17
+                         "sg.class",             ## 18
+                         "sg.surv",              ## 19
+                         "tdc.gradient")         ## 20
+    fmly <- formula.detail$family
     ## Preliminary check for consistency.
     if (hdim > 0) {
         if(!is.null(nsplit)) {
@@ -640,145 +728,165 @@ fmly <- formula.detail$family
             nsplit = 0
         }
     }
-  cust.idx <- NULL
-  splitpass <- FALSE
-  if (!is.null(splitrule)) {
-    if(grepl("custom", splitrule)) {
-      splitrule.idx <- which(splitrule.names == "custom")
-      cust.idx <- as.integer(sub("custom", "", splitrule))
-      if (is.na(cust.idx)) cust.idx <- 1
-      splitpass <- TRUE
-    }
-      else if (splitrule == "random") {
-        splitrule.idx <- which(splitrule.names == "random")
-        ## Override the nsplit value in the case of pure random
-        ## splitting.  It is set to the defalut value of one (1). In the native code,
-        ## values greater than one are ignored in the case of pure random splitting!
-        nsplit <- 1
-        splitpass <- TRUE
-      }
-  }
-  if (!splitpass) {
-    if (grepl("surv", fmly)) {
-      if (is.null(splitrule)) {
-        ## No split rule specified, use default.
-        if (length(event.type) ==  1) {
-          splitrule.idx <- which(splitrule.names == "logrank")
+    cust.idx <- NULL
+    splitpass <- FALSE
+    if (!is.null(splitrule)) {
+        if(grepl("custom", splitrule)) {
+            splitrule.idx <- which(splitrule.names == "custom")
+            cust.idx <- as.integer(sub("custom", "", splitrule))
+            if (is.na(cust.idx)) cust.idx <- 1
+            splitpass <- TRUE
         }
-          else {
-            splitrule.idx <- which(splitrule.names == "logrankCR")
-          }
-        splitrule <- splitrule.names[splitrule.idx]
-      }
-        else {
-          ## User split rule specified.
-          splitrule.idx <- which(splitrule.names == splitrule)
-          if (length(splitrule.idx) != 1) {
-            stop("Invalid split rule specified:  ", splitrule)
-          }
-          if ((length(event.type) ==  1) & (splitrule.idx == which(splitrule.names == "logrankCR"))) {
-            stop("Cannot specify logrankCR splitting for right-censored data")
-          }
-          if ((length(event.type) >   1) & (splitrule.idx == which(splitrule.names == "logrank"))) {
-            ## Override the splitrule to access the CR split rule.
-            splitrule.idx <- which(splitrule.names == "logrankCR")
-          }
+        else if (splitrule == "random") {
+            splitrule.idx <- which(splitrule.names == "random")
+            ## Override the nsplit value in the case of pure random
+            ## splitting.  It is set to the defalut value of one (1). In the native code,
+            ## values greater than one are ignored in the case of pure random splitting!
+            nsplit <- 1
+            splitpass <- TRUE
         }
     }
-    if (fmly == "class") {
-      if (is.null(splitrule)) {
-        ## No split rule specified, use default.
-        splitrule.idx <- which(splitrule.names == "gini")
-        splitrule <- splitrule.names[splitrule.idx]
-      }
-        else {
-            ## User specified split rule.
-            if ((splitrule != "rps") &
-                (splitrule != "auc") &
-                (splitrule != "entropy") &
-                (splitrule != "gini") &
-                (splitrule != "sg.class")) {
-                stop("Invalid split rule specified:  ", splitrule)
+    if (!splitpass) {
+        if (grepl("surv", fmly)) {
+            if (is.null(splitrule)) {
+                ## No split rule specified, use default.
+                if (event.info$r.dim == 2) {
+                    ## Survival or Competing Risk:
+                    if (length(event.info$event.type) ==  1) {
+                        splitrule.idx <- which(splitrule.names == "logrank")
+                    }
+                    else {
+                        splitrule.idx <- which(splitrule.names == "logrankCR")
+                    }
+                }
+                else if (event.info$r.dim == 3) {
+                    ## Time Dependent Covariates:                    
+                    splitrule.idx <- which(splitrule.names == "tdc.gradient")
+                }
+                else {
+                    stop("Invalid r.dim encountered in split rule:  ", event.info$r.dim)
+                }
+                splitrule <- splitrule.names[splitrule.idx]
             }
-            splitrule.idx <- which(splitrule.names == splitrule)
+            else {
+                ## User split rule specified.
+                splitrule.idx <- which(splitrule.names == splitrule)
+                if (length(splitrule.idx) != 1) {
+                    stop("Invalid split rule specified:  ", splitrule)
+                }
+                if (event.info$r.dim == 2) {
+                    if ((length(event.info$event.type) ==  1) & (splitrule.idx == which(splitrule.names == "logrankCR"))) {
+                        stop("Cannot specify logrankCR splitting for right-censored data")
+                    }
+                    if ((length(event.info$event.type) >   1) & (splitrule.idx == which(splitrule.names == "logrank"))) {
+                        ## Override the splitrule to access the CR split rule.
+                        splitrule.idx <- which(splitrule.names == "logrankCR")
+                    }
+                }
+                else if (event.info$r.dim == 3) {
+                    if (splitrule.idx != which(splitrule.names == "tdc.gradient")) {
+                        stop("Must specify tdc.gradient for time dependent covariates")                        
+                    }
+                }
+                else {
+                    stop("Invalid r.dim encountered in split rule:  ", event.info$r.dim)
+                }
+            }
+        }
+        if (fmly == "class") {
+            if (is.null(splitrule)) {
+                ## No split rule specified, use default.
+                splitrule.idx <- which(splitrule.names == "gini")
+                splitrule <- splitrule.names[splitrule.idx]
+            }
+            else {
+                ## User specified split rule.
+                if ((splitrule != "rps") &
+                    (splitrule != "auc") &
+                    (splitrule != "entropy") &
+                    (splitrule != "gini") &
+                    (splitrule != "sg.class")) {
+                    stop("Invalid split rule specified:  ", splitrule)
+                }
+                splitrule.idx <- which(splitrule.names == splitrule)
+            }
+        }
+        if (fmly == "regr") {
+            if (is.null(splitrule)) {
+                ## No split rule specified, use default.
+                splitrule.idx <- which(splitrule.names == "mse")
+                splitrule <- splitrule.names[splitrule.idx]
+            }
+            else {
+                ## User specified split rule.
+                if ((splitrule != "mse") &
+                    (splitrule != "sg.regr") &
+                    (splitrule != "la.quantile.regr") &
+                    (splitrule != "quantile.regr")) {
+                    stop("Invalid split rule specified:  ", splitrule)
+                }
+                splitrule.idx <- which(splitrule.names == splitrule)
+            }
+        }
+        if (fmly == "regr+") {
+            if (is.null(splitrule)) {
+                ## No split rule specified, use default.
+                splitrule.idx <- which(splitrule.names == "mv.mse")
+                splitrule <- splitrule.names[splitrule.idx]
+            }
+            else {
+                ## User specified split rule.
+                if ((splitrule != "mv.mse")) {
+                    stop("Invalid split rule specified:  ", splitrule)
+                }
+                splitrule.idx <- which(splitrule.names == splitrule)
+            }
+        }
+        if (fmly == "class+") {
+            if (is.null(splitrule)) {
+                ## No split rule specified, use default.
+                splitrule.idx <- which(splitrule.names == "mv.gini")
+                splitrule <- splitrule.names[splitrule.idx]
+            }
+            else {
+                ## User specified split rule.
+                if ((splitrule != "mv.gini")) {
+                    stop("Invalid split rule specified:  ", splitrule)
+                }
+                splitrule.idx <- which(splitrule.names == splitrule)
+            }
+        }
+        if (fmly == "mix+") {
+            if (is.null(splitrule)) {
+                ## No split rule specified, use default.
+                splitrule.idx <- which(splitrule.names == "mv.mse")
+                splitrule <- "mv.mix"
+            }
+            else {
+                ## User specified split rule.
+                if ((splitrule != "mv.mix")) {
+                    stop("Invalid split rule specified:  ", splitrule)
+                }
+                splitrule.idx <- which(splitrule.names == splitrule)
+            }
+        }
+        if (fmly == "unsupv") {
+            if (is.null(splitrule)) {
+                ## No split rule specified, use default.
+                splitrule.idx <- which(splitrule.names == "unsupv")
+                splitrule <- splitrule.names[splitrule.idx]
+            }
+            else {
+                ## User specified split rule.
+                if ((splitrule != "unsupv")) {
+                    stop("Invalid split rule specified:  ", splitrule)
+                }
+                splitrule.idx <- which(splitrule.names == splitrule)
+            }
         }
     }
-    if (fmly == "regr") {
-      if (is.null(splitrule)) {
-        ## No split rule specified, use default.
-        splitrule.idx <- which(splitrule.names == "mse")
-        splitrule <- splitrule.names[splitrule.idx]
-      }
-        else {
-          ## User specified split rule.
-            if ((splitrule != "mse") &
-                (splitrule != "sg.regr") &
-                (splitrule != "la.quantile.regr") &
-              (splitrule != "quantile.regr")) {
-            stop("Invalid split rule specified:  ", splitrule)
-          }
-          splitrule.idx <- which(splitrule.names == splitrule)
-        }
-    }
-    if (fmly == "regr+") {
-      if (is.null(splitrule)) {
-        ## No split rule specified, use default.
-        splitrule.idx <- which(splitrule.names == "mv.mse")
-        splitrule <- splitrule.names[splitrule.idx]
-      }
-        else {
-          ## User specified split rule.
-          if ((splitrule != "mv.mse")) {
-            stop("Invalid split rule specified:  ", splitrule)
-          }
-          splitrule.idx <- which(splitrule.names == splitrule)
-        }
-    }
-    if (fmly == "class+") {
-      if (is.null(splitrule)) {
-        ## No split rule specified, use default.
-        splitrule.idx <- which(splitrule.names == "mv.gini")
-        splitrule <- splitrule.names[splitrule.idx]
-      }
-        else {
-          ## User specified split rule.
-          if ((splitrule != "mv.gini")) {
-            stop("Invalid split rule specified:  ", splitrule)
-          }
-          splitrule.idx <- which(splitrule.names == splitrule)
-        }
-    }
-    if (fmly == "mix+") {
-      if (is.null(splitrule)) {
-        ## No split rule specified, use default.
-        splitrule.idx <- which(splitrule.names == "mv.mse")
-        splitrule <- "mv.mix"
-      }
-        else {
-          ## User specified split rule.
-          if ((splitrule != "mv.mix")) {
-            stop("Invalid split rule specified:  ", splitrule)
-          }
-          splitrule.idx <- which(splitrule.names == splitrule)
-        }
-    }
-    if (fmly == "unsupv") {
-      if (is.null(splitrule)) {
-        ## No split rule specified, use default.
-        splitrule.idx <- which(splitrule.names == "unsupv")
-        splitrule <- splitrule.names[splitrule.idx]
-      }
-        else {
-          ## User specified split rule.
-          if ((splitrule != "unsupv")) {
-            stop("Invalid split rule specified:  ", splitrule)
-          }
-          splitrule.idx <- which(splitrule.names == splitrule)
-        }
-    }
-  }
-  splitinfo <- list(name = splitrule, index = splitrule.idx, cust = cust.idx, nsplit = nsplit)
-  return (splitinfo)
+    splitinfo <- list(name = splitrule, index = splitrule.idx, cust = cust.idx, nsplit = nsplit)
+    return (splitinfo)
 }
 get.importance.xvar <- function(importance.xvar, importance, object) {
   ## Check that importance has been requested
@@ -1058,7 +1166,7 @@ get.weight <- function(weight, n) {
   ## set the default weight
   if (!is.null(weight)) {
     if (any(weight < 0)      ||
-        all(weight == 0)     ||
+##        all(weight == 0)     ||
         length(weight) != n  ||
         any(is.na(weight))) {
       stop("Invalid weight vector specified.")
@@ -1092,7 +1200,12 @@ get.yvar.type <- function(fmly, generic.types, yvar.names, coerce.factor = NULL)
   }
     else {
       if (grepl("surv", fmly)) {
-        yvar.type <- c("T", "S")
+          if (length(yvar.names) == 2) {
+              yvar.type <- c("T", "S")
+          }
+          else {
+              yvar.type <- c("t", "T", "S")
+          }
       }
         else {
           yvar.type <- generic.types
@@ -1264,7 +1377,196 @@ make.sample <- function(ntree, samp.size, boot.size = NULL, replace = FALSE) {
     inb
   }))
 }
- 
+##  make SH data (modes 1 and 2)
+make.sh <- function(dat, mode = 1) {
+  ## extract sample size dimension
+  nr <- dim(dat)[[1]]
+  nc <- dim(dat)[[2]]
+  if (nc == 0) {
+    stop("can't make SH data ... not enough unique values\n")
+  }
+  ## coerce to data frame format
+  if (!is.data.frame(dat)) {
+    dat <- data.frame(dat)
+  }
+  ## mode 1
+  if (mode == 1) {
+    data.frame(classes = factor(c(rep(1, nr), rep(2, nr))),
+      rbind(dat, data.frame(mclapply(dat, sample, replace = TRUE))))
+  }
+  ## mode 2
+  else {
+    data.frame(classes = factor(c(rep(1, nr), rep(2, nr))),
+      rbind(dat, data.frame(mclapply(dat, function(x) {
+        if (is.factor(x)) {
+          sample(x, replace = TRUE)
+        }
+        else {
+          runif(nr, min(x, na.rm = TRUE), max(x, na.rm = TRUE))
+        }
+      }))))
+  }
+}
+##  make sid (staggered interaction data)
+make.sid <- function(dat, order.by.range = TRUE, delta = NULL) {
+  ## coerce to data frame format
+  if (!is.data.frame(dat)) {
+    dat <- data.frame(dat)
+  }
+  ## remove any column with less than two unique values
+  void.var <- sapply(dat, function(x) {length(unique(x, na.rm = TRUE)) < 2})
+  if (sum(void.var) > 0) {
+    dat[, which(void.var)] <- NULL
+  }
+  ## there might be nothing left (small sample size issue)
+  if (ncol(dat) == 0) {
+    stop("can't make sid data ... not enough unique values\n")
+  }
+  ## order columns by range of values: noted improvement Alex 04/30/2018
+  ## we do this before positivity and translation - but we could just as
+  ## well have done this afterwards
+  if (order.by.range) {
+    order.range <- order(sapply(dat, function(x) {
+    if (is.factor(x)) {
+      1##changed from -Inf to 1 which is the correct value of a factor noted by Alex 06/05/2018
+    }
+    else {
+      diff(range(x, na.rm = TRUE))
+    }
+  }), decreasing = TRUE)
+  dat <- dat[, order.range, drop = FALSE]
+  }
+  ## make continuous variables positive
+  posdat <- dat
+  lapply(1:ncol(posdat), function(i) {
+    if(!is.factor(posdat[, i]) && min(posdat[, i], na.rm = TRUE) < 0) {
+      posdat[, i] <<- abs(min(posdat[, i], na.rm = TRUE)) + posdat[, i]
+    }
+    NULL
+  })
+  ## define the delta offset value (delta = 1 by default)
+  ## if ordering is in effect, translate features to have the same maximum value
+  ## this was observed in counter-example of theorem of revised paper 05/04/2018 
+  if (is.null(delta)) {
+    delta <- 1
+  }
+  if (order.by.range) {
+    cont.feature <- sapply(posdat, function(x) {!is.factor(x)})
+    ## acquire the maximum value
+    if (sum(cont.feature) > 1) {
+      maxV <- max(c(0, sapply(which(cont.feature), function(i) {
+        max(posdat[, i], na.rm = TRUE)
+      })), na.rm = TRUE)
+      ## translate the features to have the same max
+      lapply(which(cont.feature), function(i) {
+        posdat[, i] <<- (maxV - max(posdat[, i], na.rm = TRUE)) + posdat[, i]
+        NULL
+      })	
+    }
+  }		
+  ## two level factors are converted to numeric
+  binary.fac <- sapply(posdat, function(x) {is.factor(x) & length(levels(x)) == 2})
+  if (sum(binary.fac) > 0) {
+    lapply(which(binary.fac), function(i) {
+      names(posdat)[i] <<- names(posdat)[i]
+      posdat[, i] <<- as.numeric(posdat[, i])
+      NULL 
+    })
+  }
+  ## the following list makes it possible to map SID back to original variable names 
+  org.names <- list()
+  ## make anova data for remaining factors - i.e. make everything numeric
+  ## updated to make column names more appealing for binary factors (03/14/2018)
+  counter <- 0
+  numdat <- data.frame(lapply(1:ncol(posdat), function(j) {
+    m.j <- model.matrix(~.-1, posdat[,j, drop = FALSE])
+    ##SID main effect names mapped back to original names
+    org.names[(counter + 1):(counter + ncol(m.j))] <<- colnames(posdat)[j]
+    counter <<- counter + ncol(m.j)
+    m.j
+  }))
+  ## stagger the positive data using delta
+  ## use integer values when staggering to minimize creating double precision values
+  ## the latter is accomplished using ceiling
+  numvar <- dim(numdat)[2]
+  staggerdat <- numdat
+  staggerdat[, 1] <- staggerdat[, 1] + delta
+  if (numvar > 1) {##handles pathological case of one column design matrix - maybe add this as a failure check?
+    lapply(2:numvar, function(i) {
+      staggerdat[, i] <<- staggerdat[, i] + ceiling(max(staggerdat[, (i-1)], na.rm = TRUE)) + delta
+    })
+  }
+  ## make interactions
+  ## -- do not create interactions WITHIN levels of the same factor -- noted by Alex M. 04/25/17
+  ##    such instances are caught using unstaggered numerical data and checking x[,i]*x[,j]=constant
+  ## -- interactions BETWEEN distinct factors (two or more levels) must always produce a factor
+  ##    we catch this by checking the number of distinct values of each variable
+  ##    all factors at this point have <= 2 unique values (whether they are dummy anova or numerical)
+  intdat <- staggerdat
+  if (numvar > 1) {##interactions do not apply if only one variable is supplied - maybe add this as a failure check?
+    ##SID interaction names mapped back to original names
+    ##we do this first inside of an lapply and not in next mclapply
+    counter <- numvar
+    lapply(1:(numvar-1), function(i) {
+      for (j in (i + 1):numvar) {
+        if (length(unique(numdat[,i] * numdat[,j])) > 1) {
+          counter <<- counter + 1
+          org.names[[counter]] <<- c(org.names[[i]], org.names[[j]])
+        }
+      }
+      NULL
+    })
+    ## suggested by Alex M. 02/19/2019
+    ## make interaction matrix after creating interactions - faster on big p
+    ints <- mclapply(1:(numvar - 1), function(i) {
+      d <- data.frame(rep(NA, dim(dat)[1]))
+      d <- d[, -1]
+      counter.ints <- 1
+      for (j in (i + 1):numvar) {
+        if (length(unique(numdat[,i] * numdat[,j])) > 1) {
+          if (length(unique(numdat[, i])) <= 2 & length(unique(numdat[, j])) <= 2) {
+            holder <- factor(staggerdat[, i] * staggerdat[, j])
+            ## suggested by Alex M. 11/12/17
+            levels(holder) <- c('FF','FT','TF','TT') #new factor levels, should always come out in same order
+            d <- cbind(d, holder)
+          }
+          else {
+            d <- cbind(d, staggerdat[, i] * staggerdat[, j])
+          }
+          names(d)[counter.ints] <- paste(names(intdat)[i], "_", names(intdat)[j], sep = "")
+          counter.ints <- counter.ints + 1
+        }
+      }
+      d
+    })
+    intdat <- data.frame(intdat, ints)
+  }
+  ## suggested by Alex M. 11/12/17
+  ## final processing of numeric 0/1 variables to convert them to a binary factor with new levels
+  binary.fac2 <- sapply(intdat, function(x){is.numeric(x) & length(unique(x)) == 2})
+  if (sum(binary.fac2) > 0) {
+    lapply(which(binary.fac2), function(i) {
+      intdat[, i] <<- as.factor(intdat[, i])
+      levels(intdat[, i]) <<- c('F','T') #new levels, similarly tested
+      NULL
+    })
+  }
+  ## pull the "x" and "y" features
+  ## y=staggered main effects
+  ## x=staggered interactions
+  y <- intdat[, 1:numvar, drop = FALSE]
+  names(org.names) <- colnames(intdat)
+  y.names <- org.names[1:numvar]
+  if (numvar > 1) {
+    x <- intdat[, -(1:numvar), drop = FALSE]
+    x.names <- org.names[-(1:numvar)]
+  }
+  else {
+    x <- x.names <- NULL
+  }
+  ## return the goodies
+  list(y = y, x = x, y.names = y.names, x.names = x.names, delta = delta)
+}
 ## make stratified inbag bootstrap samples for imbalanced two class problem
 ## allows for arbitrary under-sampling ratio of the majority class
 ## sample size for subsampling
@@ -1304,6 +1606,9 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
   all.names <- all.vars(f, max.names = 1e7)
   yvar.names <- all.vars(formula(paste(as.character(f)[2], "~ .")), max.names = 1e7)
   yvar.names <- yvar.names[-length(yvar.names)]
+  ## Default scenario, no subject information when family is not
+  ## time dependent covariates.  Can be overridden later.
+  subj.names <- NULL
   ## is coerce.factor at play for the y-outcomes?
   coerce.factor.org <- coerce.factor
   coerce.factor <- vector("list", 2)
@@ -1316,12 +1621,23 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
     coerce.factor$xvar.names <- intersect(setdiff(colnames(data), yvar.names), coerce.factor.org)
   }
   ## survival forests
-  if ((fmly == "Surv")) {
-    if (sum(is.element(yvar.names, names(data))) != 2) {
-      stop("Survival formula incorrectly specified.")
-    }
-    family <- "surv"
-    ytry <- 2
+  if (fmly == "Surv") {
+      ## Survival and competing risk will have 2 slots, namely time and censoring.
+      ## Time dependent covariates will have 4 slots, namely id, start, stop, and event.
+      ## If TDC is in effect, we remove the id from the yvars, and tag is an the subject identifier.
+      if ((sum(is.element(yvar.names, names(data))) != 2) &&
+          (sum(is.element(yvar.names, names(data))) != 4)) {
+          stop("Survival formula incorrectly specified.")
+      }
+      else {
+          if (sum(is.element(yvar.names, names(data))) == 4) {
+              ## Time dependent covariates is in effect.
+              subj.names <- yvar.names[1]
+              yvar.names <- yvar.names[-1]
+          }
+      }
+      family <- "surv"
+      ytry <- 0
   }
   ## multivariate forests
     else if ((fmly == "Multivar" || fmly == "cbind")  && length(yvar.names) > 1) {
@@ -1414,7 +1730,7 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
           ytry <- 1
         }
   ## done: return the goodies
-  return (list(all.names=all.names, family=family, yvar.names=yvar.names, ytry=ytry,
+  return (list(all.names=all.names, family=family, subj.names=subj.names, yvar.names=yvar.names, ytry=ytry,
                coerce.factor = coerce.factor))
 }
 is.all.na <- function(x) {all(is.na(x))}

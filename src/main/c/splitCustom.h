@@ -3,7 +3,7 @@
 */
 
 #define LEFT      0x01
-#define RIGHT     0x00
+#define RIGHT     0x02
 
 #define CLAS_FAM     0
 #define REGR_FAM     1

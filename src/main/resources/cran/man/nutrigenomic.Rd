@@ -18,7 +18,7 @@
 \donttest{
 ## ------------------------------------------------------------
 ## multivariate mixed forests
-## lipids used as the multivariate y-responses
+## lipids used as the multivariate y
 ## ------------------------------------------------------------
 
 ## load the data
@@ -43,6 +43,15 @@ svimp <- get.mv.vimp(mv.obj, standardize = TRUE)
 par(mfrow = c(1,2))
 plot(serr, xlab = "Lipids", ylab = "Standardized Performance")
 matplot(svimp, xlab = "Genes/Diet/Genotype", ylab = "Standardized VIMP")
+
+
+## ------------------------------------------------------------
+## plot some trees
+## ------------------------------------------------------------
+
+plot(get.tree(mv.obj, 1))
+plot(get.tree(mv.obj, 2))
+plot(get.tree(mv.obj, 3))
 
 
 }}

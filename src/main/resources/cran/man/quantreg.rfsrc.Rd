@@ -147,13 +147,13 @@
 }
 \references{
   Greenwald M. and Khanna S. (2001).  Space-efficient online computation of
-  quantile summaries. \emph{Proceedings of ACM SIGMOD}, 30(2):58--66.
+  quantile summaries. \emph{Proceedings of ACM SIGMOD}, 30(2):58-66.
   
   Meinshausen N. (2006) Quantile regression forests, \emph{Journal of
-  Machine Learning Research}, 7:983--999.
+  Machine Learning Research}, 7:983-999.
 
   Zhang H., Zimmerman J., Nettleton D. and Nordman D.J. (2019).  Random
-  forest prediction intervals.    
+  forest prediction intervals. \emph{The American Statistician}. 4:1-5.
 }
 \seealso{
   \command{\link{rfsrc}}

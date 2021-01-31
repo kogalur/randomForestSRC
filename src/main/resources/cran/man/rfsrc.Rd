@@ -11,25 +11,43 @@
 \title{Fast Unified Random Forests for Survival, Regression, and Classification (RF-SRC)}
 \description{
 
-  Fast OpenMP parallel computing of Breiman's random forests (Breiman
-  2001) for a variety of data settings including regression and
-  classification and right-censored survival and competing risks
-  (Ishwaran et al. 2008, 2012). Other key applications include
-  multivariate regression/classification, unsupervised forests,
-  quantile regression (see \command{\link{quantreg}}), and new
-  solutions for class imbalanced data (see \command{\link{imbalanced}}).
-  Different splitting rules invoked under deterministic or random
-  splitting are available for all families.  Variable importance (VIMP),
-  see \command{\link{vimp}} and \command{\link{holdout.vimp}}, as well as
-  confidence regions (see \command{\link{subsample}}), can be calculated
-  for single and grouped variables.  Missing data can be imputed on both
-  training and test data (however see \command{\link{impute}}).
+  Fast OpenMP parallel computing of random forests (Breiman 2001) for
+  regression, classification, survival analysis (Ishwaran 2008),
+  competing risks (Ishwaran 2012), multivariate (Segal and Xiao 2011),
+  unsupervised (Mantero and Ishwaran 2020), quantile regression
+  (Meinhausen 2006, Zhang et al. 2019), and class imbalanced
+  q-classification (O'Brien and Ishwaran 2019).  Different splitting
+  rules invoked under deterministic or random splitting (Geurts et
+  al. 2006, Ishwaran 2015) are available for all families.  Variable
+  importance (VIMP), and holdout VIMP, as well as confidence regions
+  (Ishwaran and Lu 2019) can be calculated for single and grouped
+  variables.  Fast interface for missing data imputation using a variety
+  of different random forest methods (Tang and Ishwaran 2017).
 
+  Key items users should be aware of:
+  \enumerate{
+
+    \item Visualize trees on your Safari or Google Chrome browser (works
+    for all families).  See \command{\link{get.tree}}.
+    \item sidClustering (see \command{\link{sidClustering}}) for
+    unsupervised data analysis.
+    \item Fast hold out VIMP (see \command{\link{holdout.vimp}}).
+    Can be conservative but has good false discovery properties
+    unlike Breiman-Cutler VIMP (see \command{\link{vimp}}).
+    \item VIMP confidence intervals using subsampling (see
+    \command{\link{subsample}}).
+    \item q-classifier for class imbalanced data, including G-mean
+    VIMP which is superior to Breiman-Cutler
+    (see \command{\link{imbalanced}}).
+    \item Fast imputation using on the fly imputation,
+    missForest and multivariate missForest (see
+    \command{\link{impute}}).
+    \item Fast random forests using subsampling (see \command{\link{rfsrc.fast}}).
+
+  }
+  
   This is the main entry point to the \pkg{_PROJECT_PACKAGE_NAME_}
-  package.  See \command{\link{rfsrc.fast}} for a fast implementation of
-  \code{rfsrc}.
-
-  For more information about this package and OpenMP parallel
+  package.  For more information about this package and OpenMP parallel
   processing, use the command \code{package?_PROJECT_PACKAGE_NAME_}.
   
 }
@@ -42,7 +60,7 @@ rfsrc(formula, data, ntree = 1000,
   block.size = if (any(is.element(as.character(importance),
                      c("none", "FALSE")))) NULL else 10,
   ensemble = c("all", "oob", "inbag"),
-  bootstrap = c("by.root", "by.node", "none", "by.user"),
+  bootstrap = c("by.root", "none", "by.user"),
   samptype = c("swor", "swr"), samp = NULL, membership = FALSE,
   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
   na.action = c("na.omit", "na.impute"), nimpute = 1,
@@ -117,12 +135,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \item{bootstrap}{Bootstrap protocol.  The default is \code{by.root}
     which bootstraps the data by sampling with or without replacement
     (by default sampling is without replacement; see the option
-    \code{samptype} below).  If \code{by.node} is choosen, the data is
-    bootstrapped with replacement at each node while growing the tree.
-    If \code{none} is chosen, the data is not bootstrapped at all.  If
-    \code{by.user} is choosen, the bootstrap specified by \code{samp} is
-    used.  It is not possible to return OOB ensembles or prediction
-    error if \code{by.node} or \code{none} are in effect.}
+    \code{samptype} below).  If \code{none} is chosen, the data is not
+    bootstrapped at all.  If \code{by.user} is choosen, the bootstrap
+    specified by \code{samp} is used.  It is not possible to return OOB
+    ensembles or prediction error if \code{none} is in effect.}
 
   \item{samptype}{Type of bootstrap when \code{by.root} is in effect.
     Choices are \code{swor} (sampling without replacement) and
@@ -266,9 +282,21 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       \item Competing risk survival forests for competing risk.
     }
     
-    \item \emph{Splitting rules}
-    
-    Splitting rules are specified by option \code{splitrule}.
+    \item \emph{Splitting}
+
+    \enumerate{
+
+      \item Splitting rules are specified by the option \code{splitrule}.
+      
+      \item For all families, pure random splitting can be invoked by setting
+            \code{splitrule}="random".
+
+      \item For all families, computational speed can be increased using
+            randomized splitting invoked by the option \code{nsplit}.
+            See Improving Computational Speed.
+    }
+
+    \item \emph{Available splitting rules}
 
     \itemize{
       
@@ -339,14 +367,16 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 	    classification responses are detected, a multivariate
 	    normalized composite split rule of mean-squared error and Gini
 	    index splitting is invoked.  See Tang and Ishwaran (2017)
-	    for details.
+	    for details on this splitting rule.  This splitting rule is
+	    different than Segal and Xiao (2011) who use Mahalanobis
+	    distance splitting.	    
       
       \item Unsupervised analysis: In settings where there is no
             outcome, unsupervised splitting is invoked.  In this case,
-            the mixed outcome splitting rule (above) is applied.  See
-            Mantero and Ishwaran (2017) for details.
-      
-      
+            the mixed outcome splitting rule (above) is applied.  Also
+            see \command{sidClustering} for a more sophisticated method for
+            unsupervised analysis (Mantero and Ishwaran, 2020).
+            
 
       \item Custom splitting: All families except unsupervised are
             available for user defined custom splitting.  Some basic
@@ -369,10 +399,6 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
             \code{splitrule="custom2"} and so on. The package must be
             recompiled and installed for the custom split rules to
             become available.
-
-      \item Random splitting:  For all families, pure random splitting
-            can be invoked by setting \code{splitrule}="random".  See
-            below for more details regarding randomized splitting rules.
 
     }
     
@@ -398,12 +424,12 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
       Randomized splitting for trees has a long history.  See for
       example, Loh and Shih (1997), Dietterich (2000), and Lin and Jeon
-      (2006).  Guerts et al. (2006) recently introduced extremely
+      (2006).  Geurts et al. (2006) recently introduced extremely
       randomized trees using what they call the extra-trees algorithm.
       We can see that this algorithm essentially corresponds to
       randomized splitting with \code{nsplit}=1.  In our experience
       however this is not always the optimal value for \code{nsplit} and
-      may often be too low.
+      may often be too low. See Ishwaran (2015).
 
       Finally, for completely randomized (pure random) splitting use
       \code{splitrule}="random".  In pure splitting, nodes are split by
@@ -453,11 +479,11 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     value of 0.5 is no better than random guessing. A value of 0 is
     perfect.
     
-    When bootstrapping is \code{by.node} or \code{none}, a coherent OOB
-    subset is not available to assess prediction error.  Thus, all outputs
-    dependent on this are suppressed.  In such cases, prediction error is
-    only available via classical cross-validation (the user will need to
-    use the \command{predict.rfsrc} function).
+    When bootstrapping is by \code{none}, a coherent OOB subset is not
+    available to assess prediction error.  Thus, all outputs dependent
+    on this are suppressed.  In such cases, prediction error is only
+    available via classical cross-validation (the user will need to use
+    the \command{predict.rfsrc} function).
     
     \item \emph{Variable Importance (VIMP)}
     
@@ -496,8 +522,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
     See \command{vimp} for a user interface for extracting VIMP and
     \command{subsampling} for calculating confidence intervals for VIMP.
+
     Also see \command{holdout.vimp} for holdout VIMP, which calculates
-    importance by truly holding out variables. 
+    importance by holding out variables.  This leads to a more
+    conservative procedure but with good false discovery properties.
     
     \item \emph{Multivariate Forests}
     
@@ -513,10 +541,14 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     categorical, or a combination of both (mixed). Note that performance
     measures (when requested) are returned for all outcomes.
     
-    \item \emph{Unsupervised Forests}
-    
-    In the case where no y-outcomes are present, unsupervised forests can
-    be invoked by one of two means:
+    \item \emph{Unsupervised Forests and sidClustering}
+
+    See sidClustering \command{sidClustering} for a more sophisticated
+    method for unsupervised analysis.
+
+    Otherwise a more direct (but naive) way to proceed is to use the
+    unsupervised splitting rule.  The following are equivalent ways to
+    grow an unsupervised forest via unsupervised splitting:
     
     rfsrc(data = my.data)
     
@@ -587,10 +619,11 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     to a positive integer greater than 1.  When iterated, at the
     completion of each iteration, missing data is imputed using OOB
     non-missing terminal node data which is then used as input to grow a
-    new forest.  A side side effect of iteration is that missing values
-    in the returned objects \code{xvar}, \code{yvar} are replaced by
-    imputed values.  Also, performance measures such as error rates and
-    VIMP become optimistically biased.
+    new forest.  A side effect of iteration is that missing values in
+    the returned objects \code{xvar}, \code{yvar} are replaced by
+    imputed values.  In other words the incoming data is overlaid with
+    the missing data.  Also, performance measures such as error rates
+    and VIMP become optimistically biased.
     
     Records in which all outcome and x-variable information are missing
     are removed from the forest analysis.  Variables having all missing
@@ -830,7 +863,11 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   Loh W.-Y and Shih Y.-S (1997).  Split selection methods for
   classification trees, \emph{Statist. Sinica}, 7:815-840.
 
-  Mantero A. and Ishwaran H. (2017). Unsupervised random forests.
+  Mantero A. and Ishwaran H. (2020).  Unsupervised random forests.
+  To appear in \emph{Statistical Analysis and Data Mining}.
+
+  Meinshausen N. (2006) Quantile regression forests, \emph{Journal of
+  Machine Learning Research}, 7:983-999.
 
   Mogensen, U.B, Ishwaran H. and Gerds T.A. (2012). Evaluating random
   forests for survival analysis using prediction error curves,
@@ -843,11 +880,22 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   Segal M.R. (1988).  Regression trees for censored data,
   \emph{Biometrics},  44:35-47.
 
+  Segal M.R. and Xiao Y. Multivariate random
+  forests. (2011). \emph{Wiley Interdisciplinary Reviews: Data Mining
+  and Knowledge Discovery}. 1(1):80-87.
+  
   Tang F. and Ishwaran H. (2017).  Random forest missing data
-  algorithms.  \emph{Statistical Analysis and Data Mining}, 10, 363-377.
+  algorithms.  \emph{Statistical Analysis and Data Mining}, 10:363-377.
+
+  Zhang H., Zimmerman J., Nettleton D. and Nordman D.J. (2019).  Random
+  forest prediction intervals. \emph{The American Statistician}. 4:1-5.
+  
+
 }
 \seealso{
   \command{\link{find.interaction.rfsrc}},
+
+  \command{\link{get.tree.rfsrc}},
 
   \command{\link{holdout.vimp.rfsrc}},
 
@@ -868,7 +916,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
   \command{\link{rfsrc.fast}},
   
-   
+  \command{\link{sidClustering.rfsrc}},
 
   \command{\link{stat.split.rfsrc}},
   \command{\link{subsample.rfsrc}},
@@ -890,7 +938,10 @@ data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 v.obj <- rfsrc(Surv(time, status) ~ ., data = veteran, 
                    ntree = 100, block.size = 1)
 
-## print and plot the grow object
+## print tree number 3
+plot(get.tree(v.obj, 3))
+
+## print the grow object and plot various useful details
 print(v.obj)
 plot(v.obj)
 
@@ -914,7 +965,25 @@ data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc)
 print(pbc.obj)
 
+##------------------------------------------------------------
+## trees can be plotted for any family 
+## see get.tree for details and more examples
+##------------------------------------------------------------
 
+## survival where factors have many levels
+data(veteran, package = "_PROJECT_PACKAGE_NAME_")
+vd <- veteran
+vd$celltype=factor(vd$celltype)
+vd$diagtime=factor(vd$diagtime)
+vd.obj <- rfsrc(Surv(time,status)~., vd, ntree = 100, nodesize = 5)
+plot(get.tree(vd.obj, 3))
+
+## classification
+iris.obj <- rfsrc(Species ~., data = iris)
+plot(get.tree(iris.obj, 25, class.type = "bayes"))
+plot(get.tree(iris.obj, 25, target = "setosa"))
+plot(get.tree(iris.obj, 25, target = "versicolor"))
+plot(get.tree(iris.obj, 25, target = "virginica"))
 
 ##------------------------------------------------------------
 ## example of imputation in survival analysis
@@ -1080,12 +1149,78 @@ breast.obj <- rfsrc(status ~ ., data = breast, block.size=1)
 plot(breast.obj)
 
 ## ------------------------------------------------------------
+## imbalanced classification data
+## see the "imbalanced" function for further details
+##
+## a) use balanced random forests with undersampling of the majority class
+## Specifically let n0, n1 be sample sizes for majority, minority
+## cases.  We sample 2 x n1 cases with majority, minority cases chosen
+## with probabilities n1/n, n0/n where n=n0+n1
+##
+## b) balanced random forests using "imbalanced"
+##
+## c) q-classifier (RFQ) using "imbalanced" 
+##
+## ------------------------------------------------------------
+
+## Wisconsin breast cancer example
+data(breast, package = "_PROJECT_PACKAGE_NAME_")
+breast <- na.omit(breast)
+
+## balanced random forests - brute force
+y <- breast$status
+obdirect <- rfsrc(status ~ ., data = breast, nsplit = 10,
+            case.wt = _PROJECT_PACKAGE_NAME_:::make.wt(y),
+            sampsize = _PROJECT_PACKAGE_NAME_:::make.size(y))
+print(obdirect)
+
+## balanced random forests - using "imbalanced" 
+ob <- imbalanced(status ~ ., data = breast, method = "brf")
+print(ob)
+
+## q-classifier (RFQ) - using "imbalanced" 
+oq <- imbalanced(status ~ ., data = breast)
+print(oq)
+
+## q-classifier (RFQ) - with auc splitting
+oqauc <- imbalanced(status ~ ., data = breast, splitrule = "auc")
+print(oqauc)
+
+## ------------------------------------------------------------
+## holdout out vimp: compare to Breiman-Cutler on iris
+## ------------------------------------------------------------
+
+print(rfsrc(Species~.,iris,importance=TRUE)$importance)
+print(holdout.vimp(Species~.,iris)$importance)
+
+## ------------------------------------------------------------
+## confidence interval for vimp using subsampling
+## compare with holdout vimp
+## ------------------------------------------------------------
+
+## new York air quality measurements
+o <- rfsrc(Ozone ~ ., data = airquality)
+so <- subsample(o)
+plot(so)
+
+## compare with holdout vimp
+print(holdout.vimp(Ozone ~ ., data = airquality)$importance)
+
+## ------------------------------------------------------------
 ## unsupervised analysis
 ## ------------------------------------------------------------
 
-# two equivalent ways to implement unsupervised forests
+## two equivalent ways to implement unsupervised forests
 mtcars.unspv <- rfsrc(Unsupervised() ~., data = mtcars)
 mtcars2.unspv <- rfsrc(data = mtcars)
+
+
+## illustration of sidClustering for the mtcars data
+## see sidClustering for more details
+mtcars.sid <- sidClustering(mtcars, k = 1:10)
+print(split(mtcars, mtcars.sid$cl[, 3]))
+print(split(mtcars, mtcars.sid$cl[, 10]))
+
 
 ## ------------------------------------------------------------
 ## multivariate regression analysis
@@ -1105,19 +1240,39 @@ vmp.std <- get.mv.vimp(mtcars.mreg, standardize = TRUE)
 
 
 ## ------------------------------------------------------------
-## mixed outcomes analysis
+## multivariate mixed forests (nutrigenomic study)
+## study effects of diet, lipids and gene expression for mice
+## diet, genotype and lipids used as the multivariate y
+## genes used for the x features
 ## ------------------------------------------------------------
 
-mtcars.new <- mtcars
-mtcars.new$cyl <- factor(mtcars.new$cyl)
-mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
-mtcars.mix <- rfsrc(cbind(carb, mpg, cyl) ~., data = mtcars.new, block.size=1)
-print(mtcars.mix, outcome.target = "mpg")
-print(mtcars.mix, outcome.target = "cyl")
-plot(mtcars.mix, outcome.target = "mpg")
-plot(mtcars.mix, outcome.target = "cyl")
+## load the data (data is a list)
+data(nutrigenomic, package = "_PROJECT_PACKAGE_NAME_")
 
+## assemble the multivariate y data
+ydta <- data.frame(diet = nutrigenomic$diet,
+                   genotype = nutrigenomic$genotype,
+                   nutrigenomic$lipids)
 
+## multivariate mixed forest call
+## uses "get.mv.formula" for conveniently setting formula
+mv.obj <- rfsrc(get.mv.formula(colnames(ydta)),
+             data.frame(do.call(cbind, nutrigenomic)),
+             importance=TRUE, nsplit = 10)
+
+## print results for diet and genotype y values	    
+print(mv.obj, outcome.target = "diet")
+print(mv.obj, outcome.target = "genotype")
+
+## extract standardized VIMP
+svimp <- get.mv.vimp(mv.obj, standardize = TRUE)
+
+## plot standardized VIMP for diet, genotype and lipid for each gene
+boxplot(t(svimp), col = "bisque", cex.axis = .7, las = 2,
+        outline = FALSE,
+        ylab = "standardized VIMP",
+        main = "diet/genotype/lipid VIMP for each gene")
+	
 ## ------------------------------------------------------------
 ## custom splitting using the pre-coded examples
 ## ------------------------------------------------------------

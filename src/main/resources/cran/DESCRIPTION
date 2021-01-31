@@ -6,8 +6,8 @@ Author: Hemant Ishwaran <hemant.ishwaran@gmail.com>, Udaya B. Kogalur <ubk@kogal
 Maintainer: Udaya B. Kogalur <ubk@kogalur.com>
 BugReports: https://github.com/kogalur/randomForestSRC/issues/new
 Depends: R (>= 3.5.0),
-Imports: parallel
-Suggests: survival, pec, prodlim, mlbench, akima, caret, imbalance  
-Description: Fast OpenMP parallel computing of Breiman's random forests for survival, competing risks, regression and classification based on Ishwaran and Kogalur's popular random survival forests (RSF) package.  Handles missing data and now includes multivariate, unsupervised forests, quantile regression and solutions for class imbalanced data.  New fast interface using subsampling and confidence regions for variable importance.
+Imports: parallel, data.tree, DiagrammeR
+Suggests: survival, pec, prodlim, mlbench, akima, caret, imbalance, cluster
+Description: Fast OpenMP parallel computing of Breiman's random forests for univariate, multivariate, unsupervised, survival, competing risks, class imbalanced classification and quantile regression. Extreme random forests and randomized splitting.  Suite of imputation methods for missing data.  Fast random forests using subsampling. Confidence regions and standard errors for variable importance. New improved holdout variable importance. Visualize trees on your Safari or Google Chrome browser.
 License: GPL (>=3)
-URL: http://web.ccs.miami.edu/~hishwaran  http://www.kogalur.com  https://github.com/kogalur/randomForestSRC
+URL: http://web.ccs.miami.edu/~hishwaran/  https://github.com/kogalur/randomForestSRC/

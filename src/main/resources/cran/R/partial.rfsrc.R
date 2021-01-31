@@ -76,6 +76,8 @@ partial.rfsrc <- function(
   ## Get the y-outcome type and number of levels
   yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names, object$coerce.factor)
   yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, object$yvar, object$coerce.factor)
+  ## recover the individual subject identifiers, if they exist.
+  subj <- object$subj
   ## Get event information for survival families.
   event.info <- get.event.info(object)
   ## CR.bits assignment.
@@ -100,6 +102,9 @@ partial.rfsrc <- function(
   n.xvar <- ncol(xvar)
   n <- nrow(xvar)
   sampsize <- round(object$sampsize(n))
+  ## Recover the case weights and bootstrap sample. 
+  case.wt <- object$case.wt
+  samp <- object$samp
   ## There is no test data.
   outcome = "train"
   ## Process the get.tree vector that specifies which trees we want
@@ -136,7 +141,7 @@ partial.rfsrc <- function(
     ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2.
     chunk = 4
     if (!is.null(object$base.learner)) {
-      if (object$base.learner$trial.depth > 1) {
+      if (object$base.learner$interact.depth > 1) {
         ## Offset with interactions is adjusted.
         ## Adjusted for AUGM_X1, AUGM_X2.
         offset = 9
@@ -162,17 +167,23 @@ partial.rfsrc <- function(
                                   ## >>>> start of maxi forest object >>>>
                                   as.integer(ntree),
                                   as.integer(n),
-                                  as.integer(r.dim),
-                                  as.character(yvar.types),
-                                  as.integer(yvar.nlevels),
-                                  as.double(as.vector(yvar)),
+                                  ##
+                                  list(as.integer(length(yvar.types)),
+                                       if (is.null(yvar.types)) NULL else as.character(yvar.types),
+                                       if (is.null(yvar.types)) NULL else as.integer(yvar.nlevels),
+                                       if (is.null(subj)) NULL else as.integer(subj),
+                                       if (is.null(yvar.types)) NULL else as.double(as.vector(yvar))),
+                                  ##
                                   as.integer(ncol(xvar)),
                                   as.character(xvar.types),
                                   as.integer(xvar.nlevels),
                                   as.double(xvar),
-                                  as.integer(sampsize),
-                                  as.integer(object$samp),
-                                  as.double(object$case.wt),
+                                  ##
+                                  list(as.integer(length(case.wt)),
+                                       if (is.null(case.wt)) NULL else as.double(case.wt),
+                                       as.integer(sampsize),
+                                       if (is.null(samp)) NULL else as.integer(samp)),
+                                  ##
                                   list(if(is.null(event.info$time.interest)) as.integer(0) else as.integer(length(event.info$time.interest)),
                                        if(is.null(event.info$time.interest)) NULL else as.double(event.info$time.interest)),
                                   as.integer(object$totalNodeCount),
@@ -187,11 +198,18 @@ partial.rfsrc <- function(
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeFactorArray)$mwcpPT)),
-                                  ## This slot is hc_zero_aug.  This slot can be NULL.
+                                  ## This slot is hc_one_augm_intr.  This slot can be NULL.
                                   if (!is.null(object$base.learner)) {
-                                      if (object$base.learner$trial.depth > 1) {
-                                          list(as.integer((object$nativeArray)$augmXone),
+                                      if (object$base.learner$interact.depth > 1) {
+                                          list(as.integer((object$nativeArray)$pairCT),
+                                               as.integer((object$nativeArray)$augmXone),
                                                as.integer((object$nativeArray)$augmXtwo))
+                                      } else { NULL }
+                                  } else { NULL },
+                                  ## This slot is hc_one_augm_syth.  This slot can be NULL.
+                                  if (!is.null(object$base.learner)) {
+                                      if (object$base.learner$synthetic.depth > 1) {
+                                          list(as.integer((object$nativeArray)$augmXS))
                                       } else { NULL }
                                   } else { NULL },
                                   ## This slot is hc_one.  This slot can be NULL.                                  
@@ -204,6 +222,8 @@ partial.rfsrc <- function(
                                   ## SEXP objects are populated in the
                                   ## post-forest parsing for an
                                   ## explanation of the offsets below.
+                                  ## These offset are DIFFERENT than the offsets used to
+                                  ## 
                                   if (hdim > 1) {
                                       ## parmIDx
                                       lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 1 + (chunk * x)])})
@@ -226,7 +246,7 @@ partial.rfsrc <- function(
                                   } else { NULL },
                                   if (hdim > 1) {
                                       if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$trial.depth > 1) {
+                                          if (object$base.learner$interact.depth > 1) {
                                               ## augmXonex
                                               lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 5 + (chunk * x)])})
                                           } else { NULL }
@@ -234,9 +254,35 @@ partial.rfsrc <- function(
                                   } else { NULL },
                                   if (hdim > 1) {
                                       if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$trial.depth > 1) {
+                                          if (object$base.learner$interact.depth > 1) {
                                               ## augmXtwox
                                               lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 6 + (chunk * x)])})
+                                          } else { NULL }
+                                      } else { NULL }
+                                  } else { NULL },
+                                  if (hdim > 1) {
+                                      if (!is.null(object$base.learner)) {
+                                          if (object$base.learner$synthetic.depth > 1) {
+                                              ## augmXSx
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + (if(object$base.learner$interact.depth > 1) 7 else 5) + (chunk * x)])})
+                                          } else { NULL }
+                                      } else { NULL }
+                                  } else { NULL },
+                                  ## This slot is the synthetic topology!
+                                  if (hdim > 0) {
+                                      if (!is.null(object$base.learner)) {
+                                          if (object$base.learner$synthetic.depth > 1) {
+                                              if (!is.null(object$nativeArraySyth)) {
+                                                  list(as.integer(object$nodeCountSyth),
+                                                       as.integer((object$nativeArraySyth)$treeID),
+                                                       as.integer((object$nativeArraySyth)$nodeID),
+                                                       as.integer((object$nativeArraySyth)$hcDim),
+                                                       as.integer((object$nativeArraySyth)$parmID),
+                                                       as.double((object$nativeArraySyth)$contPT),
+                                                       as.double((object$nativeArraySyth)$contPTR),
+                                                       as.integer((object$nativeArraySyth)$mwcpSZ),
+                                                       as.integer((object$nativeFactorArray)$mwcpPT))
+                                              } else { NULL }
                                           } else { NULL }
                                       } else { NULL }
                                   } else { NULL },

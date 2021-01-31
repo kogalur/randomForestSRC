@@ -47,7 +47,7 @@ citEntry(entry="Article",
          volume       = "2",
          number       = "3",
          pages        = "841--860",
-         url          = "http://arXiv.org/abs/0811.1645v1",
+         url          = "https://arXiv.org/abs/0811.1645v1",
          pdf          = "http://arxiv.org/pdf/0811.1645",
 
          textVersion =

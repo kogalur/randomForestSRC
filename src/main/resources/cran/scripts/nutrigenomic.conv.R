@@ -1,6 +1,6 @@
 if (TRUE) {
     ## .txt to .rda
-    nut.table <- read.table(file =  "nutrigenomic.txt", sep=" ", header=TRUE)
+    nut.table <- read.table(file =  "nutrigenomic.txt", sep=" ", header=TRUE, stringsAsFactors = TRUE)
 
     ## matrix form is necessary, otherwise the elements are
     ## interpreted as a data frame and list names are prepended to the

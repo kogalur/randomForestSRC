@@ -1,14 +1,12 @@
 holdout.vimp.rfsrc <- function(formula, data,
-                               ntree = function(p, vtry){1000 * p / vtry},
-                               ntree.max = 2000,
-                               ntree.allvars = NULL,
-                               nsplit = 10,
-                               ntime = 50,
-                               mtry = NULL,
-                               vtry = 1,
-                               fast = FALSE,
-                               verbose = TRUE, 
-                               ...)
+                                       ntree = function(p, vtry){1000 * p / vtry},
+                                       nsplit = 10,
+                                       ntime = 50,
+                                       sampsize = function(x){x * .632},
+                                       samptype = "swor",
+                                       block.size = 10,
+                                       vtry = 1,
+                                       ...)
 {
   ## --------------------------------------------------------------
   ##   
@@ -16,24 +14,15 @@ holdout.vimp.rfsrc <- function(formula, data,
   ##
   ## --------------------------------------------------------------
   ## pull unnamed parameters to pass to rfsrc
-  ## some options cannot be used
+  ## lock down options that cannot be used
   dots <- list(...)
-  dots$formula <- dots$data <- dots$ntree <- dots$nsplit <-
-    dots$ntime <- dots$mtry <- dots$importance <- dots$fast <- NULL
-  ## hidden options to speed calculations - missing data not handled for speed
-  #dots$terminal.quants <- dots$terminal.qualts <- TRUE
-  #dots$na.action <- "na.omit"
-  ## add vtry to the list
-  dots$vtry <- vtry
-  ## determine the grow interface - rfsrc or rfsrc.fast?
-  if (!fast) {
-    rfsrc.grow <- "rfsrc"
-  }
-  else {
-    rfsrc.grow <- "rfsrc.fast"
-  }
+  dots$formula <- dots$data <- dots$ntree <- dots$nsplit <- dots$ntime <-
+    dots$samp <- dots$sampsize <- dots$samptype <- dots$block.size <-
+      dots$importance <- NULL
+  dots$terminal.qualts <- FALSE
   ## get dimension p - make a fast single stump call for accurate dimension
-  p <- length(rfsrc(formula, data, nodedepth = 1, ntree = 1, splitrule = "random")$xvar.names)
+  p <- length(rfsrc(formula, data, nodedepth = 1, ntime = 1,
+              ntree = 1, splitrule = "random")$xvar.names)
   ## process ntree - is it a function or number?
   if (!is.function(ntree) && !is.numeric(ntree)) {
     stop("ntree must be a function or number specifying requested number of grow trees")
@@ -41,134 +30,269 @@ holdout.vimp.rfsrc <- function(formula, data,
   if (is.function(ntree)) {
     ntree <- ntree(p, vtry)
   }
-  ## specify the hold out array
-  if (!is.null(ntree.allvars) && ntree.allvars <= 0) {
-    ntree.allvars <- NULL
-  }
-  dots$holdout.array <- make.holdout.array(vtry, p, ntree, ntree.allvars)
-  ntree <- ncol(dots$holdout.array)
-  ## set block.size used for get.tree 
-  block.size <- dots$block.size
-  dots$block.size <- NULL
-  ## TBD TBD TBD currently not in effect TBD TBD TBD
-  block.size <- NULL
+  ## initialize the holdout specs object
+  holdout.specs <- get.holdout.specs(vtry, p, ntree, block.size, mode = "baseline")
   ## --------------------------------------------------------------
   ##   
-  ##   grow call - massive ntree
+  ##   There are two native-code calls to affect holdout vimp:
+  ##
+  ##   The first call grows a baseline forest.  This is called
+  ##   "baseline" mode, and is specificaly recognized by the native
+  ##   code via the incoming holdout specs.  In this mode, an x-var IS
+  ##   NOT HELD OUT during growth, but performance is calculated
+  ##   over the relevant blocks as if the x-vars WAS held out.
+  ##
+  ##   The second call grows a holdout forest.  This is called
+  ##   "holdout" mode, and is specificaly recognized by the native
+  ##   code via the incoming parameters.  In this mode, an x-var IS
+  ##   HELD OUT during growth, and performance is calculated over
+  ##   the relevant blocks.
+  ##
+  ##   Note that the trees over which a particular x-var is held
+  ##   are determined by the holdout array.  Theses trees are
+  ##   divided in blocks of block.size.  Incomplete blocks are
+  ##   ignored in the resulting performance calculation.
+  ##   Blocks are non-contiguous and specific to each x-var.
   ##
   ## --------------------------------------------------------------
-  ## grow step
-  ## set block.size to ntree to reduce computations
-  ## the user specified block.size is only relevant for get.tree in predict
-  o <- do.call(rfsrc.grow, c(list(formula = formula, data = data, ntree = ntree,
-                 importance = "none", block.size = ntree, nsplit = nsplit, mtry = mtry), dots))
-  ##--------------------------------------------------------------
+  ## Note that we use the same seed for both forests, in an attempt
+  ## to reduce variance. This will only result in identical forests
+  ## for both modes if the holdout array is the zero matrix, there
+  ## is no missing data, and we do deterministic splitting.  It's a
+  ## little complicated, and we should probably test the for
+  ## variance without identical seeds.  In fact, in the presence of
+  ## missing data, it might be the choice of identical seeds is
+  ## irrelevant.
+  seed <- dots$seed
+  dots$seed <- NULL
+  ## initialize the seed
+  seed <- get.seed(seed)
+  ## baseline (harness) forest call:
+  base.obj <- do.call(rfsrc, c(list(formula = formula,
+                                    data = data,
+                                    ntree = ntree,
+                                    nsplit = nsplit,
+                                    ntime = ntime,
+                                    sampsize = sampsize,
+                                    samptype = samptype,
+                                    holdout.specs = holdout.specs,
+                                    importance = FALSE,
+                                    forest = FALSE,
+                                    terminal.qualts = FALSE,
+                                    seed = seed),
+                               dots))
+  ## change the specifiction object to holdout mode. 
+  holdout.specs <- switch.holdout.specs(holdout.specs, "holdout")
+  ## holdout forest call:    
+  hold.obj <- do.call(rfsrc, c(list(formula = formula,
+                                    data = data,
+                                    ntree = ntree,
+                                    nsplit = nsplit,
+                                    ntime = ntime,
+                                    sampsize = sampsize,
+                                    samptype = samptype,
+                                    holdout.specs = holdout.specs,
+                                    importance = FALSE,
+                                    forest = FALSE,
+                                    terminal.qualts = FALSE,
+                                    seed = seed),
+                               dots))
+  ## We are now in a position to analyze the resulting blocked vimp.
+  ## The delta between the two call will give you the holdout vimp.
+  ## The objects are multivariate compliant and return the performance in
+  ## the response specific lists in the multivariate case.  They follow
+  ## the simplified list format in the univaratiate case.
+  ## Note: obj$holdout.blk is a vector of length [p] indicating how many blocks
+  ## each x-var contains.  This is variable and might be zero if the x-var is
+  ## never held out.
+  ## --------------------------------------------------------------    
+  ## The outputs are as follows:
+  ## SURV:  obj$holdout.vimp
+  ## To the R code:
+  ##   -> of dim [[p]] x [RF_eventTypeSize] x [holdout.blk[.]]
+  ##              ^^^
+  ##   list element can be null
+  ##   if no blocks for this x-var  
+  ## CLAS:  obj$holdout.vimp
+  ## To the R code:
+  ##   -> of dim [[p]] x [1 + levels.count[.]] x [holdout.blk[.]]
+  ##              ^^^
+  ##   list element can be null
+  ##   if no blocks for this x-var  
+  ## REGR:  obj$holdout.vimp
+  ## To the R code:
+  ##   -> of dim [[p]] x [holdout.blk[.]]
+  ##              ^^^
+  ##   list element can be null
+  ##   if no blocks for this x-var  
   ##
-  ## holdout step - get.tree calls - can be slow 
+  ## --------------------------------------------------------------
+  ##cat("\nBlocks in each x-var:  \n")
+  ##print(base.obj$holdout.blk)
+  mv.flag <- FALSE
+  ##--------------------------------
   ##
-  ##--------------------------------------------------------------
-  ## extract the holdout array
-  ho <- o$holdout.array
-  ## used when ntree.alvars is not NULL
-  ## determine the columns where all variables were used
-  ## pull the corresponding trees
-  if (!is.null(ntree.allvars)) {
-    v.in <- which(colSums(ho, na.rm = TRUE) == 0)
-    pe.in  <- predict(o, get.tree = v.in, block.size = block.size)
-  }
-  ## pull the yvar names 
-  ynms <- o$yvar.names
-  if (o$family == "surv" || o$family == "surv-CR") {
-    ynms <- ynms[1]
-  }
-  ## verbose setup
-  if (verbose) pb <- txtProgressBar(min = 0, max = length(o$xvar.names), style = 3)
-  ## -------------------------------------------------------
-  ## 
-  ## loop over features
+  ## multivariate object
   ##
-  ## -------------------------------------------------------
-  hvimp <- rbind(sapply(1:length(o$xvar.names), function(j) {  
-    ## progress bar
-    if (verbose && length(o$xvar.names) > 1) {
-      setTxtProgressBar(pb, j)
+  ##--------------------------------
+  if ((class(base.obj)[3] == "regr+") | (class(base.obj)[3] == "class+") | (class(base.obj)[3] == "mix+")) { 
+    ## set the mv flag
+    mv.flag <- TRUE
+    ## create the holdout vimp object
+    hvimp <- list()
+    ## regr outcomes
+    if (length(base.obj$regrOutput) > 0) {
+      hvimp$regrOutput <- lapply(1:length(base.obj$regrOutput), function(i) {
+        hv <- sapply(1:length(base.obj$regrOutput[[i]]$holdout.vimp), function(j) {
+          mean(hold.obj$regrOutput[[i]]$holdout.vimp[[j]] - base.obj$regrOutput[[i]]$holdout.vimp[[j]], na.rm = TRUE)
+        })
+        names(hv) <- names(base.obj$regrOutput[[i]]$holdout.vimp)
+        hv
+      })
+      names(hvimp$regrOutput) <- names(base.obj$regrOutput)
     }
-    if (verbose && j == length(o$xvar.names)) {
-      cat("\n")
+    ## class outcomes
+    if (length(base.obj$classOutput) > 0) {
+      hvimp$classOutput <- lapply(1:length(base.obj$classOutput), function(i) {
+        yval.i <- colnames(base.obj$classOutput[[i]]$predicted)
+        hv <- do.call(rbind, lapply(1:length(base.obj$classOutput[[i]]$holdout.vimp), function(j) {
+          if (!is.null(dim(base.obj$classOutput[[i]]$holdout.vimp[[j]]))) {
+            rowMeans(hold.obj$classOutput[[i]]$holdout.vimp[[j]] - base.obj$classOutput[[i]]$holdout.vimp[[j]], na.rm = TRUE)
+          }
+          else {
+            rep(NA, length(yval.i) + 1)
+          }
+        }))
+        colnames(hv) <- c("all", yval.i)
+        rownames(hv) <- names(base.obj$classOutput[[i]]$holdout.vimp)
+        hv
+      })
+      names(hvimp$classOutput) <- names(base.obj$classOutput)
     }
-    ## determine hold out trees for v - this may fail in extreme cases
-    pt.out <- ho[j, ] == 1
-    ## calculate PE for v held out and compare to all variables
-    if (sum(pt.out) > 0 && (!is.null(ntree.allvars) || sum(!pt.out) > 0)) {
-      ## define the out trees - restrict size of v.out using ntree.max
-      ## extract the ensembles for hold out trees
-      v.out <- which(pt.out)
-      v.out <- sample(v.out)[1:min(ntree.max, length(v.out))]
-      pe.out <- predict(o, get.tree = v.out, block.size = block.size)
-      ## same as above for the "in" trees
-      if (is.null(ntree.allvars)) {
-        v.in <- which(!pt.out)
-        v.in <- sample(v.in)[1:min(ntree.max, length(v.in))]
-        pe.in <- predict(o, get.tree = v.in, block.size = block.size)
+  }
+  ##--------------------------------
+  ##
+  ## regression object
+  ##
+  ##--------------------------------
+  else if (class(base.obj)[3] == "regr") {  
+    hvimp <- sapply(1:length(base.obj$holdout.vimp), function(j) {
+      if (!is.null(base.obj$holdout.vimp[[j]])) {
+        mean(hold.obj$holdout.vimp[[j]] - base.obj$holdout.vimp[[j]], na.rm = TRUE)
       }
-      ## loop over outcomes - in case this is a multivariate object
-      do.call(cbind, lapply(ynms, function(nn) {
-        ## pull the hold out error rate
-        o.out <- coerce.multivariate(pe.out, nn)
-        err.out <- get.holdout.err(o.out, length(v.out))
-        ## pull the error rate when v "is in"
-        o.in <- coerce.multivariate(pe.in, nn)
-        err.in <- get.holdout.err(o.in, length(v.in))
-        ## here's the vimp
-        vmp <- err.out - err.in
-        dm <- length(get.holdout.err(coerce.multivariate(pe.out, nn), 1))
-        if (length(vmp) == 0) {
-          rep(NA, dm)
-        }
-        else {
-          cbind(vmp)
-        }
-      }))
+      else {
+        NA
+      }
+    })
+    names(hvimp) <- names(base.obj$holdout.vimp)
+  }
+  ##--------------------------------
+  ##
+  ## classification object
+  ##
+  ##--------------------------------
+  else if (class(base.obj)[3] == "class") {  
+    yval <- levels(base.obj$yvar)
+    hvimp <- do.call(rbind, lapply(1:length(base.obj$holdout.vimp), function(j) {
+      if (!is.null(dim(base.obj$holdout.vimp[[j]]))) {
+        rowMeans(hold.obj$holdout.vimp[[j]] - base.obj$holdout.vimp[[j]], na.rm = TRUE)
+      }
+      else {
+        rep(NA, length(yval) + 1)
+      }
+    }))
+    colnames(hvimp) <- c("all", yval)
+    rownames(hvimp) <- names(base.obj$holdout.vimp)
+  }
+  ##--------------------------------
+  ##
+  ## survival, CR objects
+  ##
+  ##--------------------------------
+  else if (class(base.obj)[3] == "surv") {
+    hvimp <- sapply(1:length(base.obj$holdout.vimp), function(j) {
+      if (!is.null(base.obj$holdout.vimp[[j]])) {
+        mean(hold.obj$holdout.vimp[[j]] - base.obj$holdout.vimp[[j]], na.rm = TRUE)
+      }
+      else {
+        rep(NA)
+      }
+    })
+    names(hvimp) <- names(base.obj$holdout.vimp)
+  }
+  else if (class(base.obj)[3] == "surv-CR") {
+    hvimp <- do.call(rbind, lapply(1:length(base.obj$holdout.vimp), function(j) {
+      if (!is.null(dim(base.obj$holdout.vimp[[j]]))) {
+        rowMeans(hold.obj$holdout.vimp[[j]] - base.obj$holdout.vimp[[j]], na.rm = TRUE)
+      }
+      else {
+        rep(NA, length(base.obj$holdout.vimp))
+      }
+    }))
+    colnames(hvimp) <- paste("event.", 1:length(get.event.info(base.obj)$event.type), sep = "")
+    rownames(hvimp) <- names(base.obj$holdout.vimp)
+  }
+  ## return the promised holdout vimp
+  ## processing is different for multivariate families
+  rO <- list()
+  if (mv.flag) {
+    rO$baseline <- rO$holdout <- rO$importance <- list()
+    if (length(base.obj$regrOutput) > 0) {
+      rO$baseline$regrOutput <- lapply(base.obj$regrOutput, function(o) {o$holdout.vimp})
+      rO$holdout$regrOutput <- lapply(hold.obj$regrOutput, function(o) {o$holdout.vimp})
+      rO$importance$regrOutput <- hvimp$regrOutput
     }
-    else {## no holdout v or hold in v - return NA
-      do.call(cbind, lapply(ynms, function(nn) {
-        dm <- length(get.holdout.err(coerce.multivariate(o, nn), 1))
-        rep(NA, dm)
-      }))
+    if (length(base.obj$classOutput) > 0) {
+      rO$baseline$classOutput <- lapply(base.obj$classOutput, function(o) {o$holdout.vimp})
+      rO$holdout$classOutput <- lapply(hold.obj$classOutput, function(o) {o$holdout.vimp})
+      rO$importance$classOutput <- hvimp$classOutput
     }
-  }))
-  ## pretty up for return
-  if (nrow(hvimp) == 1) {
-    hvimp <- c(hvimp)
-    names(hvimp) <- o$xvar.names
   }
   else {
-    if (o$family == "surv-CR") {
-      rownames(hvimp) <- colnames(o$err.rate)
-    }
-    else {
-      rownames(hvimp) <- ynms
-    }
-    colnames(hvimp) <- o$xvar.names
+    rO$baseline <- base.obj$holdout.vimp
+    rO$holdout <- hold.obj$holdout.vimp
+    rO$importance <- hvimp
   }
-  ## return the goodies
-  hvimp
+  return(invisible(rO))
 }
 holdout.vimp <- holdout.vimp.rfsrc
 ## --------------------------------------------------------------
 ##
-## function to extract holdout error rate
+## function to create holdout native code parameters
 ##
 ## --------------------------------------------------------------
-get.holdout.err <- function(obj, j) {
-  err <- obj$err.rate
-  if (obj$family == "class") {
-    mean(cbind(err)[1:j, 1], na.rm = TRUE)
-  }
-  else if (obj$family == "surv-CR") {
-    colMeans(err[1:j,, drop = FALSE], na.rm = TRUE) 
+get.holdout.specs <- function(vtry, p, ntree, block.size, mode) {
+  if (vtry > 0) {
+    holdout <- make.holdout.array(vtry, p, ntree, NULL)
+    ## No checks on block.size ...
+    obj <- list(as.integer(vtry), as.integer(holdout), as.integer(block.size), as.integer(0))
+    names(obj) = c("vtry", "holdout", "block.size", "mode")
+    obj <- switch.holdout.specs(obj, mode)
   }
   else {
-    mean(err[1:j], na.rm = TRUE)
+    obj <- NULL
   }
+  return (obj)
+}
+## --------------------------------------------------------------
+##
+## function to switch holdout mode for native code parameters
+## mode changes between "baseline" <-> "holdout"
+##
+## --------------------------------------------------------------
+switch.holdout.specs<- function(obj, mode) {
+  if (mode == "baseline") {
+    new.mode = 1
+  }
+  else if (mode == "holdout") {
+    new.mode = 2
+  }
+  else if (mode == "natural") {
+    new.mode = 3
+  }
+  else {
+    stop("vtry mode invalid")
+  }
+  obj$mode = as.integer(new.mode)
+  return(obj)
 }

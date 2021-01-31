@@ -5,7 +5,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                   importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
                   block.size = if (any(is.element(as.character(importance), c("none", "FALSE")))) NULL else 10,
                   ensemble = c("all", "oob", "inbag"),
-                  bootstrap = c("by.root", "by.node", "none", "by.user"),
+                  bootstrap = c("by.root", "none", "by.user"),
                   samptype = c("swor", "swr"),  samp = NULL, membership = FALSE,
                   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
                   na.action = c("na.omit", "na.impute"), nimpute = 1,
@@ -40,10 +40,11 @@ rfsrc <- function(formula, data, ntree = 1000,
     holdout.array <- is.hidden.holdout.array(user.option)
     holdout.specs <- is.hidden.holdout.specs(user.option)
     empirical.risk <- is.hidden.empirical.risk(user.option)
+    tdc.rule <- is.hidden.tdc.rule(user.option)
     ## verify key options
     ensemble <- match.arg(ensemble, c("all", "oob", "inbag"))  
-    bootstrap <- match.arg(bootstrap, c("by.root", "by.node", "none", "by.user"))
-    if (bootstrap == "by.node" || bootstrap == "none") {
+    bootstrap <- match.arg(bootstrap, c("by.root", "none", "by.user"))
+    if (bootstrap == "none") {
         ensemble <- "inbag"
     }
     importance <- match.arg(as.character(importance), c(FALSE, TRUE, "none", "permute", "random", "anti"))
@@ -56,6 +57,8 @@ rfsrc <- function(formula, data, ntree = 1000,
     if (split.depth == "FALSE") split.depth <- FALSE
     ## data cannot be missing
     if (missing(data)) stop("data is missing")
+    ## data cannot have Inf or -Inf values
+    if (any(is.infinite(unlist(data)))) stop("data contains Inf or -Inf values")
     ## conduct preliminary formula validation
     if (missing(formula) | (!missing(formula) && is.null(formula))) {
         if (is.null(ytry)) {
@@ -94,6 +97,7 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## save the names for convenient access
     xvar.names <- formulaDetail$xvar.names
     yvar.names <- formulaDetail$yvar.names
+    subj.names <- formulaDetail$subj.names
     ## reality check on x and y
     ## are there any x-variables?  (can happen when for multivariate formula)
     if (length(xvar.names) == 0) {
@@ -123,10 +127,10 @@ rfsrc <- function(formula, data, ntree = 1000,
     xvar.types <- get.xvar.type(xfactor$generic.types, xvar.names)
     xvar.nlevels <- get.xvar.nlevels(xfactor$nlevels, xvar.names, data)
     ## Convert the data to numeric mode, apply the na.action protocol.
-    data <- finalizeData(c(yvar.names, xvar.names), data, na.action, miss.flag)
+    data <- finalizeData(c(subj.names, yvar.names, xvar.names), data, na.action, miss.flag)
     ## Save the row and column names for later overlay
+    ## data.col.names <- colnames(data)
     data.row.names <- rownames(data)
-    data.col.names <- colnames(data)
     ## Finalize the xvar matrix.
     xvar <- as.matrix(data[, xvar.names, drop = FALSE])
     rownames(xvar) <- colnames(xvar) <- NULL
@@ -136,32 +140,44 @@ rfsrc <- function(formula, data, ntree = 1000,
     n.xvar <- ncol(xvar)
     mtry <- get.grow.mtry(mtry, n.xvar, family)
     samptype <- match.arg(samptype, c("swor", "swr"))
+    ## Get the indvidual subject identifiers if they exist - do this *after* na.protocol
+    ## The default is that we do not support time dependent x-variables.
+    subj.unique.count <- n
+    subj <- NULL
+    xvar.time <- NULL
+    subj.time <- NULL
+     
     ## bootstrap case
     if (bootstrap == "by.root") {
-        if (!is.function(sampsize) && !is.numeric(sampsize)) {
-            stop("sampsize must be a function or number specifying size of subsampled data")
-        }
-        if (is.function(sampsize)) {
-            sampsize.function <- sampsize
-        }
-        else {
-            ## convert user passed sample size to a function
-            sampsize.function <- make.samplesize.function(sampsize / nrow(xvar))
-        }
-        sampsize <- round(sampsize.function(nrow(xvar)))
-        if (sampsize < 1) {
-            stop("sampsize must be greater than zero")
-        }
-        ## for swor size is limited by the number of cases
-        if (samptype == "swor" && (sampsize > nrow(xvar))) {
-            sampsize.function <- function(x){x}
-            sampsize <- nrow(xvar)
-        }
-        samp <- NULL
+      ## now applies to Time Dependent Covariates (TDC)
+      ## Nominal bootstrap options.
+      if (!is.function(sampsize) && !is.numeric(sampsize)) {
+        stop("sampsize must be a function or number specifying size of subsampled data")
+      }
+      if (is.function(sampsize)) {
+        sampsize.function <- sampsize
+      }
+      else {
+        ## convert user passed sample size to a function
+        sampsize.function <- make.samplesize.function(sampsize / subj.unique.count)
+      }
+      sampsize <- round(sampsize.function(subj.unique.count))
+      if (sampsize < 1) {
+        stop("sampsize must be greater than zero")
+      }
+      ## for swor size is limited by the number of cases
+      if (samptype == "swor" && (sampsize > subj.unique.count)) {
+        sampsize.function <- function(x){x}
+        sampsize <- subj.unique.count
+      }
+      samp <- NULL
+      case.wt  <- get.weight(case.wt, subj.unique.count)
     }
     ## user specified bootstrap
     else if (bootstrap == "by.user") {    
-        ## check for coherent sample: it will of be dim [n] x [ntree]
+        ## check for coherent sample: it will of be dim [.] x [ntree]
+        ## where [.] is the number of rows in the data set or unique subjects in
+        ## the case of time dependent covariates.
         if (is.null(samp)) {
             stop("samp must not be NULL when bootstrapping by user")
         }
@@ -173,19 +189,18 @@ rfsrc <- function(formula, data, ntree = 1000,
         }
         ## set the sample size and function
         sampsize <- sampsize[1]
-        sampsize.function <- make.samplesize.function(sampsize[1] / nrow(xvar))
+        sampsize.function <- make.samplesize.function(sampsize[1] / subj.unique.count)
+        ## set the case weights
+        case.wt  <- get.weight(NULL, subj.unique.count)
     }
-    ## none of the above
+    ## This is "none".
     else {
-        ## override sample size when not bootstrapping by root or user
-        sampsize <- nrow(xvar)    
-        ## override sample type when not bootstrapping by root or user
-        samptype <- "swr"
-        sampsize.function <- function(x){x}
+      sampsize <- subj.unique.count
+      sampsize.function <- function(x){x}
+      case.wt  <- get.weight(case.wt, sampsize)
     }
-    ## Set the weight matrix for xvar, split
-    ## Set the flag for forest weight  
-    case.wt  <- get.weight(case.wt, n)
+    ## Set the weight matrix for xvar, split.
+    ## Set the flag for forest weight.
     split.wt <- get.weight(split.wt, n.xvar)
     forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))
     ## Note that yvar.types is based on the formula:
@@ -196,10 +211,17 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## coherency, though it is ignored in the native-code.
     ## Note that ytry is set by the formula:
     ## If the family is unsupervised, ytry assumes the value specified
-    ## via the formula.  If the family is regression, classification, or
-    ## multivariate/mixed, it defaults to length(yvar.types).  In the case
-    ## of survival and competing risk, it assumes the value of two (2) for
-    ## coherency, though it is ignored in the native-code.
+    ## via the formula.  If the family is regression, classification,
+    ## or multivariate/mixed, it defaults to length(yvar.types).  In
+    ## the case of survival, competing risk, and time dependent
+    ## covariates, it is zero (0) and ignored in the native-code.
+    ## With time dependent covariates, the weight y-vector is
+    ## implicitly of length 3, one for "start", "stop", and "event".
+    ## But "start" and "event" are ignored.  Send in a weight in the
+    ## correct slot for "stop" (slot 2 based on the formula), and it
+    ## will be appended, in the native code, to xvar.wt.  For example,
+    ## sending in something like ywar.wt=c(0,2,0), and xvar.wt =
+    ## rep(1, 17) will favour time over indigenous x-vars 2 to 1.
     if (family == "unspv") {
         ## Override any incoming weights.
         yvar.wt <- NULL
@@ -208,7 +230,7 @@ rfsrc <- function(formula, data, ntree = 1000,
         yvar.wt <- get.weight(yvar.wt, length(yvar.types))
     }
     xvar.wt  <- get.weight(xvar.wt, n.xvar)
-    ## Get the y-outcome
+    ## Get the y-outcomes
     yvar <- as.matrix(data[, yvar.names, drop = FALSE])
     if(dim(yvar)[2] == 0) {
         ## Override yvar if it is not present.
@@ -236,7 +258,7 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## Get event information and dimensioning for families
     event.info <- get.grow.event.info(yvar, family, ntime = ntime)
     ## Initialize nsplit, noting that it may be been overridden.
-    splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, hdim, nsplit, event.info$event.type)
+    splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, hdim, nsplit, event.info)
     ## Set the cause weights for the split statistic calculation.
     if (family == "surv" || family == "surv-CR") {
         if (length(event.info$event.type) > 1) {
@@ -274,7 +296,7 @@ rfsrc <- function(formula, data, ntree = 1000,
             cause.wt = 1
         }
         ## Set the coerced family.
-        family <- get.coerced.survival.fmly(family, event.info$event.type, splitinfo$name)
+        family <- get.coerced.survival.fmly(family, subj, event.info$event.type, splitinfo$name)
     }
     else {
         ## We pass in NULL for the cause weight for all other families
@@ -354,6 +376,7 @@ rfsrc <- function(formula, data, ntree = 1000,
     rfq.bits  <- get.rfq.bits(rfq, family)
     gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
     empirical.risk.bits <- get.empirical.risk.bits(empirical.risk)
+    tdc.rule.bits <- get.tdc.rule.bits(tdc.rule)
     ## Assign high bits for the native code
     samptype.bits <- get.samptype(samptype)
     forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
@@ -386,12 +409,13 @@ rfsrc <- function(formula, data, ntree = 1000,
                                                split.cust.bits +
                                                membership.bits +
                                                terminal.qualts.bits +
-                                               terminal.quants.bits),
+                                               terminal.quants.bits +
+                                               tdc.rule.bits),
                                     as.integer(splitinfo$index),
                                     as.integer(splitinfo$nsplit),
                                     as.integer(mtry),
                                     lot, ## object containing lot settings
-                                    ## Object containing base learner settings, this is never NULL.
+                                    ## Object containing base learner settings.  This is never NULL.
                                     base.learner, 
                                     as.integer(vtry),
                                     as.integer(holdout.array),
@@ -403,16 +427,29 @@ rfsrc <- function(formula, data, ntree = 1000,
                                     as.double(cause.wt),
                                     as.integer(ntree),
                                     as.integer(n),
-                                    as.integer(length(yvar.types)),
-                                    as.character(yvar.types),
-                                    as.integer(yvar.nlevels),
-                                    as.double(as.vector(yvar)),
-                                    as.integer(n.xvar),
-                                    as.character(xvar.types),
-                                    as.integer(xvar.nlevels),
-                                    as.integer(sampsize),
-                                    as.integer(samp),
-                                    as.double(case.wt),
+                                    ##
+                                    list(as.integer(length(yvar.types)),
+                                         if (is.null(yvar.types)) NULL else as.character(yvar.types),
+                                         if (is.null(yvar.types)) NULL else as.integer(yvar.nlevels),
+                                         if (is.null(subj)) NULL else as.integer(subj),
+                                         if (is.null(yvar)) NULL else as.double(as.vector(yvar))),
+                                    ##
+                                    ##
+                                    list(as.integer(n.xvar),
+                                         as.character(xvar.types),
+                                         as.integer(xvar.nlevels),
+                                         if (is.null(xvar.time)) NULL else as.integer(xvar.time),
+                                         if (is.null(subj.time)) NULL else as.integer(subj.time)),
+##                                  as.integer(n.xvar),
+##                                  as.character(xvar.types),
+##                                  as.integer(xvar.nlevels),
+                                    ##
+                                    ##
+                                    list(as.integer(length(case.wt)),
+                                         if (is.null(case.wt)) NULL else as.double(case.wt),
+                                         as.integer(sampsize),
+                                         if (is.null(samp)) NULL else as.integer(samp)),
+                                    ##
                                     as.double(split.wt),
                                     as.double(yvar.wt),
                                     as.double(xvar.wt),
@@ -526,12 +563,9 @@ rfsrc <- function(formula, data, ntree = 1000,
     }
     ## Define the forest.
     if (forest) {
-        ## We allocate, in the native code, the native array to its
-        ## theoretical maximum.  This is trimmed below to the actual
-        ## size.
         nativeArraySize = 0
         if (hdim == 0) {
-            mwcpCountSummary = rep (0, 1)
+            mwcpCountSummary <- rep (0, 1)
             nativeFactorArray <- vector("list", 1)
         }
         else {
@@ -547,15 +581,32 @@ rfsrc <- function(formula, data, ntree = 1000,
         ## stackForestOutputObjects().
         pivot <- which(names(nativeOutput) == "treeID")
         if (hdim == 0) {
+            ## The offset is irrelevant, no calculations are conducted, so we just safe it.
             offset = 0
-        } else {
-            ## Default offset in the absence of interactions.
+        }
+        else {
+            ## Default offset in the absence of interactions and synthetics.
             offset = 7
             if (!is.null(base.learner)) {
-                if (base.learner$trial.depth > 1) {
-                    ## Adjust for AUGM_X1, AUGM_X2.
-                    offset = 9
+                if (base.learner$interact.depth > 1) {
+                    offset = offset + 3
                 }
+            }
+            if (!is.null(base.learner)) {
+                if (base.learner$synthetic.depth > 1) {
+                    offset = offset + 2
+                }
+            }
+        }
+        if (!is.null(base.learner)) {
+            if (base.learner$synthetic.depth > 1) {
+                ## Generalized MWCP counts, for when we support hdim > 1.
+                mwcpCountSummarySyth <- rep (0, 1)
+                nullO <- lapply(1:ntree, function(b) {
+                    ## Add the tree-specific number of mwcp's to the total. 
+                    mwcpCountSummarySyth[1] <<- mwcpCountSummarySyth[1] + nativeOutput$mwcpCTsyth[b]                    
+                    NULL
+                })
             }
         }
         nullO <- lapply(1:ntree, function(b) {
@@ -565,13 +616,11 @@ rfsrc <- function(formula, data, ntree = 1000,
                 nativeArraySize <<- nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
                 mwcpCountSummary[1] <<- mwcpCountSummary[1] + nativeOutput$mwcpCT[b]
                 if (hdim > 1) {
-                    ## Adjust for the HC_DIM, and CONT_PTR
-                    offset = offset + 2
-                    for (i in 0:(hdim-2)) {
-                        mwcpCountSummary[i+2] <<- mwcpCountSummary[i+2] + nativeOutput[[pivot + offset + (5 * (hdim-1)) + i]][b]
+                    ## The multiplier of 5 is due to each set of (parmID, contPT, contPTR, mwrpSZ, mwcpPT).
+                    ## We also adjust the offset for the single occurrence of HC_DIM, and CONT_PTR
+                    for (i in 2:hdim) {
+                        mwcpCountSummary[i] <<- mwcpCountSummary[i] + nativeOutput[[pivot + (offset + 2) + (5 * (hdim - 1)) + (i-2)]][b]
                     }
-                    ## Reset for the HC_DIM, and CONT_PTR
-                    offset = offset - 2
                 }
             }
             else {
@@ -596,63 +645,117 @@ rfsrc <- function(formula, data, ntree = 1000,
             nativeFactorArray[[1]] <- nativeOutput$mwcpPT[1:mwcpCountSummary[1]]
         }
         nativeFactorArrayHeader <- "mwcpPT"
-        if (!is.null(base.learner)) {
-            if (base.learner$trial.depth > 1) {
-                nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput$augmXone[1:nativeArraySize],
-                                                   nativeOutput$augmXtwo[1:nativeArraySize]))
-                nativeArrayHeader <- c(nativeArrayHeader, "augmXone", "augmXtwo") 
-            }
-        }
         if (hdim > 0) {
+            ## Augmentation is only supported in LOT.
+            if (!is.null(base.learner)) {
+                if (base.learner$interact.depth > 1) {
+                    nativeArray <- as.data.frame(cbind(nativeArray,
+                                                       nativeOutput$pairCT[1:nativeArraySize]))
+                    nativeArrayHeader <- c(nativeArrayHeader, "pairCT")
+                }
+                if (base.learner$synthetic.depth > 1) {
+                    nativeArray <- as.data.frame(cbind(nativeArray,
+                                                       nativeOutput$sythSZ[1:nativeArraySize]))
+                    nativeArrayHeader <- c(nativeArrayHeader, "sythSZ")
+                }
+                if (base.learner$interact.depth > 1) {
+                    nativeArray <- as.data.frame(cbind(nativeArray,                    
+                                                       nativeOutput$augmXone[1:nativeArraySize],
+                                                       nativeOutput$augmXtwo[1:nativeArraySize]))
+                    nativeArrayHeader <- c(nativeArrayHeader, "augmXone", "augmXtwo") 
+                }
+                if (base.learner$synthetic.depth > 1) {
+                    nativeArray <- as.data.frame(cbind(nativeArray,
+                                                       nativeOutput$augmXS[1:nativeArraySize]))
+                    nativeArrayHeader <- c(nativeArrayHeader, "augmXS") 
+                }
+            }
+            ## Single occurrence for hcDim.
             nativeArray <- as.data.frame(cbind(nativeArray,
                                                nativeOutput[[pivot + offset]][1:nativeArraySize]))
             nativeArrayHeader <- c(nativeArrayHeader, "hcDim")
+            ## Single occurrence for contPTR
             nativeArray <- as.data.frame(cbind(nativeArray,
                                                nativeOutput[[pivot + offset + 1]][1:nativeArraySize]))
             nativeArrayHeader <- c(nativeArrayHeader, "contPTR")
+            ## We've read HC_DIM, and CONT_PTR. So increase the offset.
+            offset = offset + 2
         }
         if (hdim > 1) {
-            ## Adjust for the HC_DIM, and CONT_PTR
-            offset = offset + 2
-            for (i in 0:(hdim-2)) {
+            for (i in 2:hdim) {
                 nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput[[pivot + offset + (0 * (hdim-1)) + i]][1:nativeArraySize]))
-                nativeArrayHeader <- c(nativeArrayHeader, paste("parmID", i+2, sep=""))
+                                                   nativeOutput[[pivot + offset + (0 * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                nativeArrayHeader <- c(nativeArrayHeader, paste("parmID", i, sep=""))
                 nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput[[pivot + offset + (1 * (hdim-1)) + i]][1:nativeArraySize]))
-                nativeArrayHeader <- c(nativeArrayHeader, paste("contPT", i+2, sep=""))
+                                                   nativeOutput[[pivot + offset + (1 * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                nativeArrayHeader <- c(nativeArrayHeader, paste("contPT", i, sep=""))
                 nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput[[pivot + offset + (2 * (hdim-1)) + i]][1:nativeArraySize]))
-                nativeArrayHeader <- c(nativeArrayHeader, paste("contPTR", i+2, sep=""))
+                                                   nativeOutput[[pivot + offset + (2 * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                nativeArrayHeader <- c(nativeArrayHeader, paste("contPTR", i, sep=""))
                 nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput[[pivot + offset + (3 * (hdim-1)) + i]][1:nativeArraySize]))
-                nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpSZ", i+2, sep=""))
-                if (mwcpCountSummary[i+2] > 0) {
+                                                   nativeOutput[[pivot + offset + (3 * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpSZ", i, sep=""))
+                if (mwcpCountSummary[i] > 0) {
                     ## This can be NULL if there are no factor splits along this dimension.
-                    nativeFactorArray[[i+2]] <- nativeOutput[[pivot + offset + (4 * (hdim-1)) + i]][1:mwcpCountSummary[i+2]]
+                    nativeFactorArray[[i]] <- nativeOutput[[pivot + offset + (4 * (hdim-1)) + i - 2]][1:mwcpCountSummary[i]]
                 }
-                nativeFactorArrayHeader <- c(nativeFactorArrayHeader, paste("mwcpPT", i+2, sep=""))
+                nativeFactorArrayHeader <- c(nativeFactorArrayHeader, paste("mwcpPT", i, sep=""))
                 if (!is.null(base.learner)) {
-                    if (base.learner$trial.depth > 1) {
+                    ## See stackForestObjectsOutput() for an explanation of the offset.
+                    hdim.multiplier <- 6
+                    if (base.learner$interact.depth > 1) {
                         nativeArray <- as.data.frame(cbind(nativeArray,
-                                                           nativeOutput[[pivot + offset + (6 * (hdim-1)) + i]][1:nativeArraySize]))
-                        nativeArrayHeader <- c(nativeArrayHeader, paste("augmXone", i+2, sep=""))
+                                                           nativeOutput[[pivot + offset + (hdim.multiplier * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                        nativeArrayHeader <- c(nativeArrayHeader, paste("augmXone", i, sep=""))
+                        hdim.multiplier <- hdim.multiplier + 1
                         nativeArray <- as.data.frame(cbind(nativeArray,
-                                                           nativeOutput[[pivot + offset + (7 * (hdim-1)) + i]][1:nativeArraySize]))
-                        nativeArrayHeader <- c(nativeArrayHeader, paste("augmXtwo", i+2, sep=""))
+                                                           nativeOutput[[pivot + offset + (hdim.multiplier * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                        nativeArrayHeader <- c(nativeArrayHeader, paste("augmXtwo", i, sep=""))
+                        hdim.multiplier <- hdim.multiplier + 1
+                    }
+                    if (base.learner$synthetic.depth > 1) {
+                        nativeArray <- as.data.frame(cbind(nativeArray,
+                                                           nativeOutput[[pivot + offset + (hdim.multiplier * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                        nativeArrayHeader <- c(nativeArrayHeader, paste("augmXS", i, sep=""))
                     }
                 }
             }
         }
-        ## An example of the final form of the forest$nativeArray is as follows:
-        ## col 01      02      03      04      05       06       07     08       09       10       11        12       13         14         15
-        ## treeID  nodeID  parmID  contPT  mwcpSZ augmXone augmXtwo  hcDim  contPTR  parmID2  contPT2  contPTR2  mwcpSZ2  augmXone2  augmXtwo2 
-        ##                                        -----------------  --------------  ----------->
-        ##                                           augmentation       hdim > 0       hdim > 1  
-        ##                                            offset + 2       offset + 2
-        ##                                                                                16       17        18       19         20         21
-        ##                                                                           parmID3  contPT3  contPTR3  mwcpSZ3  augmXone3  augmXtwr3
+        ## Finally, we parse the synthetic topologies.
+        nativeArraySyth <- nativeFactorArraySyth <- NULL
+        nodeCountSyth <- NULL
+        totalNodeCountSyth = 0
+        if (!is.null(base.learner)) {
+            if (base.learner$synthetic.depth > 1) {
+                if (!is.null(nativeOutput$treeIDsyth)) {
+                    nativeArraySyth <- as.data.frame(cbind(nativeOutput$treeIDsyth,
+                                                           nativeOutput$nodeIDsyth,
+                                                           nativeOutput$hcDimsyth,
+                                                           nativeOutput$parmIDsyth,
+                                                           nativeOutput$contPTsyth,
+                                                           nativeOutput$contPTRsyth,
+                                                           nativeOutput$mwcpSZsyth))
+                    nativeArrayHeaderSyth <- c("treeID", "nodeID", "hcDim", "parmID", "contPT", "contPTR", "mwcpSZ")
+                    names(nativeArraySyth) = nativeArrayHeaderSyth
+                    totalNodeCountSyth <- length(nativeOutput$treeIDsyth)
+                    nodeCountSyth <- nativeOutput$nodeCountSyth
+                    if (mwcpCountSummarySyth[1] > 0) {
+                        ## This can be NULL if there are no factor splits along this dimension.
+                        nativeFactorArraySyth <- nativeOutput$mwcpPTsyth[1:mwcpCountSummarySyth[1]]
+                        nativeFactorArrayHeaderSyth <- "mwcpPT"
+                        names(nativeFactorArraySyth) = nativeFactorArrayHeaderSyth
+                    }
+                }
+            }
+        }
+        ## An example of the FINAL form of the forest$nativeArray is as follows:
+        ## col 01      02      03      04      05      06       07        08       09         10       11      12           13       14        15       16        17       18        19
+        ## treeID  nodeID  parmID  contPT  mwcpSZ   hcDim  contPTR    pairCT   sythSZ   augmXone augmXtwo  augmXS      parmID2  contPT2  contPTR2  mwcpSZ2 augmXone2 augmXtwo2  augmXS2 
+        ##                                         ---------------- ------------------- -------------------------      ----------->
+        ##                                         single  (hdim1)          single            augm (hdim1)              hdim > 1 
+        ##                                          occur                   occur
+        ##                                                                                                                  20       21        22       23        24        25       26
+        ##                                                                                                             parmID3   contPT3 contPTR3  mwcpSZ3 augmXone3 augmXtwo3  augmXS3
         ## The final form of the forestNativeFactorArray is as follows, will NULL entries for some columns depending on hdim:
         ## col 01 -- hdim = 0 or 1
         ##     02 -- hdim = 2
@@ -662,51 +765,14 @@ rfsrc <- function(formula, data, ntree = 1000,
         names(nativeArray) <- nativeArrayHeader
         names(nativeFactorArray) <- nativeFactorArrayHeader
         if (terminal.qualts | terminal.quants) {
-            ## The terminal node qualitative and quantitative outputs
-            ## are allocated to their theoretical maximum.
-            ## Each tree-specific segment has an initialized and uninitialized
-            ## partition. It will have [1:leafCount] validly populated, and
-            ## [leafCount+1 : treeTheoreticalMaximum] uninitialized.  We parse the
-            ## valid segments here and concatenate them.
-            temp <- 2 * (nodesize - 1)
-            if (sampsize  > temp) { 
-                treeTheoreticalMaximum <- sampsize - temp;
-            }
-            else {
-                treeTheoreticalMaximum <- 1;
-            }
-            forestTheoreticalMaximum <- treeTheoreticalMaximum * ntree
-            offset <- 0
-            valid.mcnt.indices <- unlist(lapply(1:ntree, function(b) {
-                if (b > 1) {
-                    offset <<- offset + treeTheoreticalMaximum
-                }
-                (offset + 1):(offset + nativeOutput$leafCount[b])
-            }))
+            totalLeafCount <- sum(nativeOutput$leafCount)
+            valid.mcnt.indices <- 1:totalLeafCount
             if (terminal.quants) {
                 ## family specific additions to the grow object
                 if (grepl("surv", family)) {
-                    offset <- 0
-                    valid.2D.surv.indices <- unlist(lapply(1:ntree, function(b) {
-                        if (b > 1) {
-                            offset <<- offset + (treeTheoreticalMaximum * length(event.info$event.type) * length(event.info$time.interest))
-                        }
-                        (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$event.type) * length(event.info$time.interest))
-                    }))
-                    offset <- 0
-                    valid.1D.surv.indices <- unlist(lapply(1:ntree, function(b) {
-                        if (b > 1) {
-                            offset <<- offset + (treeTheoreticalMaximum * length(event.info$time.interest))
-                        }
-                        (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$time.interest))
-                    }))
-                    offset <- 0
-                    valid.mort.indices <- unlist(lapply(1:ntree, function(b) {
-                        if (b > 1) {
-                            offset <<- offset + (treeTheoreticalMaximum * length(event.info$event.type))
-                        }
-                        (offset + 1):(offset + nativeOutput$leafCount[b] * length(event.info$event.type))
-                    }))
+                    valid.2D.surv.indices <- 1:(totalLeafCount * length(event.info$event.type) * length(event.info$time.interest))
+                    valid.1D.surv.indices <- 1:(totalLeafCount * length(event.info$time.interest))
+                    valid.mort.indices <- 1:(totalLeafCount * length(event.info$event.type))
                 }
                 else {
                     ## This will pick up all "C" and "I".
@@ -724,22 +790,10 @@ rfsrc <- function(formula, data, ntree = 1000,
                             ## The sequential iteratior is [counter]
                             levels.count[counter] <- yvar.nlevels[i]
                         }
-                        offset <- 0
-                        valid.clas.indices <- unlist(lapply(1:ntree, function(b) {
-                            if (b > 1) {
-                                offset <<- offset + (treeTheoreticalMaximum * sum(levels.count))
-                            }
-                            (offset + 1):(offset + nativeOutput$leafCount[b] * sum(levels.count))
-                        }))
+                        valid.clas.indices <- 1:(totalLeafCount * sum(levels.count))
                     }
                     if (regr.count > 0) {
-                        offset <- 0
-                        valid.regr.indices <- unlist(lapply(1:ntree, function(b) {
-                            if (b > 1) {
-                                offset <<- offset + (treeTheoreticalMaximum * regr.count)
-                            }
-                            (offset + 1):(offset + nativeOutput$leafCount[b] * regr.count)
-                        }))
+                        valid.regr.indices <- 1: (totalLeafCount * regr.count)
                     }
                 }
             }
@@ -759,12 +813,26 @@ rfsrc <- function(formula, data, ntree = 1000,
         else {
             nativeArrayTNDS <- NULL
         }
+        ## Node statistics are processed here.  They are not part of the forest object proper, but their close
+        ## processing relationship to the forest topology makes it convenient to place that code here.  Actual
+        ## inclusing in the returned model object occurs later, and not immediately below.
+        if (statistics) {
+            node.stats <- as.data.frame(cbind(nativeOutput$spltST[1:nativeArraySize],
+                                              nativeOutput$dpthST[1:nativeArraySize]))
+            names(node.stats) <- c("spltST", "dpthST")
+        }
+        else {
+            node.stats      <- NULL
+        }
       forest.out <- list(forest = TRUE,
                          hdim = hdim,
                          base.learner = base.learner,
                          nativeArray = nativeArray,
                          nativeFactorArray = nativeFactorArray,
                          totalNodeCount = dim(nativeArray)[1],
+                         nativeArraySyth = nativeArraySyth,
+                         nativeFactorArraySyth = nativeFactorArraySyth,
+                         nodeCountSyth = nodeCountSyth,
                          nodesize = nodesize,
                          nodedepth = nodedepth,
                          ntree = ntree,
@@ -774,6 +842,8 @@ rfsrc <- function(formula, data, ntree = 1000,
                          yvar.names = yvar.names,
                          xvar = xvar,
                          xvar.names = xvar.names,
+                         subj = subj,
+                         subj.names = subj.names,
                          seed = nativeOutput$seed,
                          bootstrap = bootstrap,
                          sampsize = sampsize.function,
@@ -805,6 +875,7 @@ rfsrc <- function(formula, data, ntree = 1000,
   ## the forest is NULL (the user has requested not to save the forest)
   ## add basic information needed for downstream niceties like printing
     else {
+      node.stats      <- NULL
       forest.out <- list(forest = FALSE,
                          hdim = hdim,
                          base.learner = base.learner,
@@ -817,6 +888,8 @@ rfsrc <- function(formula, data, ntree = 1000,
                          yvar.names = yvar.names,
                          xvar = xvar,
                          xvar.names = xvar.names,
+                         subj = subj,
+                         subj.names = subj.names,
                          seed = nativeOutput$seed,
                          bootstrap = bootstrap,
                          sampsize = sampsize.function,
@@ -875,10 +948,35 @@ rfsrc <- function(formula, data, ntree = 1000,
         inbag.out <- matrix(nativeOutput$bootMembership, c(n, ntree))
         nativeOutput$nodeMembership <- NULL
         nativeOutput$bootMembership <- NULL
+        ## The result of this calculation is a list of dimension
+        ## [[ntree]][[n]] in which each element [[b]]][[i]] is a
+        ## vector containing the (multiple) terminal node identifiers
+        ## for case [[i]] in tree [[b]].  These vectors are of varying
+        ## lengths because each case [[i]] in each tree [[b]] can live
+        ## in more than one node when splits on time occur.
+        if(!is.null(subj)) {
+            tdc.membership.cnt <- matrix(nativeOutput$nodeMembershipTDC[[1]], c(n, ntree))
+            tdc.membership.out  <- vector("list", ntree)            
+            begin.indx  <- 0
+            end.indx  <- 0
+            for (i in 1:ntree) {
+                temp  <- vector("list", n)
+                for (j in 1:n) {
+                    begin.indx  <- end.indx + 1
+                    end.indx  <- end.indx + tdc.membership.cnt[j,i]
+                    temp[[j]]  <- nativeOutput$nodeMembershipTDC[[2]][begin.indx:end.indx] 
+                }
+                tdc.membership.out[[i]]  <- temp
+            }
+        }
+        else {
+            tdc.membership.out  <- NULL
+        }
     }
     else {
         membership.out <- NULL
         inbag.out <- NULL
+        tdc.membership.out  <- NULL        
     }
     ## variables used
     if (var.used != FALSE) {
@@ -907,30 +1005,6 @@ rfsrc <- function(formula, data, ntree = 1000,
     }
     else {
         split.depth.out <-  NULL
-    }
-    ## node statistics
-    if (statistics) {
-        node.stats <- as.data.frame(cbind(nativeOutput$spltST[1:nativeArraySize]))
-        colnames(node.stats) <- "spltST"
-        node.mtry.stats <- t(array(nativeOutput$mtryST[1:nativeArraySize], c(mtry, forest.out$totalNodeCount)))
-        node.mtry.index <- t(array(nativeOutput$mtryID[1:nativeArraySize], c(mtry, forest.out$totalNodeCount)))
-        ## In the case of unsupervised splitting, output additional
-        ## statistics.
-        ## (TBD TBD) We need to output ytry related statistics in
-        ## the supervised case as well, following the introduction of ytry in
-        ## supervised settings.
-        if (family == "unsupv") {
-            node.ytry.index <- t(array(nativeOutput$uspvST[1:nativeArraySize], c(formulaDetail$ytry, forest.out$totalNodeCount)))
-        }
-        else {
-            node.ytry.index <- NULL
-        }
-    }
-    else {
-        node.stats      <- NULL
-        node.mtry.stats <- NULL
-        node.mtry.index <- NULL
-        node.ytry.index <- NULL
     }
     empr.risk <- NULL
     oob.empr.risk <- NULL
@@ -966,6 +1040,8 @@ rfsrc <- function(formula, data, ntree = 1000,
         yvar.names = yvar.names,
         xvar = xvar,
         xvar.names = xvar.names,
+        subj = subj,
+        subj.names = subj.names,
         xvar.wt = xvar.wt,
         split.wt = split.wt,
         cause.wt = cause.wt,
@@ -975,6 +1051,7 @@ rfsrc <- function(formula, data, ntree = 1000,
         forest.wt = forest.wt.out,    
         distance = distance.out,
         membership = membership.out,
+        tdc.membership = tdc.membership.out,
         splitrule = splitinfo$name,
         inbag = inbag.out,
         var.used = var.used.out,
@@ -982,9 +1059,6 @@ rfsrc <- function(formula, data, ntree = 1000,
         imputed.data = (if (n.miss > 0) imputed.data else NULL),
         split.depth  = split.depth.out,
         node.stats      = node.stats,
-        node.mtry.stats = node.mtry.stats,
-        node.mtry.index = node.mtry.index,
-        node.ytry.index = node.ytry.index,
         ensemble = ensemble,
         holdout.array = holdout.array,
         block.size = block.size,
@@ -1033,13 +1107,17 @@ rfsrc <- function(formula, data, ntree = 1000,
                 err.names <- list(NULL, NULL)
                 vimp.names <- list(NULL, xvar.names)
             }
-            else {
+            else if (family == "surv-CR") {
                 ## Competing Risk names.
                 ens.names <- list(NULL, NULL, c(paste("condCHF.", 1:length(event.info$event.type), sep = "")))
                 mortality.names <- list(NULL, paste("event.", 1:length(event.info$event.type), sep = ""))
                 cif.names <- list(NULL, NULL, c(paste("CIF.", 1:length(event.info$event.type), sep = "")))
                 err.names <- list(c(paste("event.", 1:length(event.info$event.type), sep = "")), NULL)
                 vimp.names <- list(paste("event.", 1:length(event.info$event.type), sep = ""), xvar.names)
+            }
+            else {
+                ## Time dependent covariates.
+                ens.names <- list(NULL, NULL)
             }
             ## From the native code:
             ##   "allEnsbCHF"
@@ -1080,6 +1158,24 @@ rfsrc <- function(formula, data, ntree = 1000,
             nativeOutput$oobEnsbMRT <- NULL
             survOutput <- c(survOutput, predicted.oob = list(predicted.oob))
             remove(predicted.oob)
+            ## From the native code:
+            ##   "allEnsbKHZ"
+            ##   "oobEnsbKHZ"
+            ## -> of dim [RF_sortedTimeInterestSize] x [subject count]
+            ## To the R code:
+            ## -> of dim [n] x [RF_sortedTimeInterestSize]
+            hazard <-  (if (!is.null(nativeOutput$allEnsbKHZ))
+                              matrix(nativeOutput$allEnsbKHZ,
+                                     c(subj.unique.count, length(event.info$time.interest))) else NULL)
+            nativeOutput$allEnsbKHZ <- NULL
+            survOutput <- c(survOutput, hazard = list(hazard))
+            remove(hazard)
+            hazard.oob <-  (if (!is.null(nativeOutput$oobEnsbKHZ))
+                                  matrix(nativeOutput$oobEnsbKHZ,
+                                         c(subj.unique.count, length(event.info$time.interest))) else NULL)
+            nativeOutput$oobEnsbKHZ <- NULL
+            survOutput <- c(survOutput, hazard.oob = list(hazard.oob))
+            remove(hazard.oob)
             ## From the native code:
             ##   "allEnsbSRV"
             ##   "oobEnsbSRV"

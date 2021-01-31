@@ -62,6 +62,7 @@ generic.predict.rfsrc <-
   ## pull the x-variable and y-outcome names from the grow object
   xvar.names <- object$xvar.names
   yvar.names <- object$yvar.names
+  subj.names <- object$subj.names
   importance.xvar <- get.importance.xvar(importance.xvar, importance, object)
   importance.xvar.idx <- match(importance.xvar, xvar.names)
   ## verify key options
@@ -218,6 +219,8 @@ generic.predict.rfsrc <-
   ## get the y-outcome type and number of levels
   yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names)
   yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, object$yvar)
+  ## recover the individual subject identifiers, if they exist.
+  subj <- object$subj
   ## get event information for survival families
   event.info <- get.event.info(object)
   ## CR.bits assignment
@@ -500,22 +503,25 @@ generic.predict.rfsrc <-
   ## foreign function call is 64.  Ensure that this limit is not
   ## exceeded.  Otherwise, the program will error on the call.
   if (hdim == 0) {
-    offset = 0
-    chunk = 0
+      offset = 0
+      chunk = 0
   } else {
-    ## Offset starts at parmID2. We adjust for the presence of interactions.
-    offset = 7
-    ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2.
-    chunk = 4
-    if (!is.null(object$base.learner)) {
-      if (object$base.learner$trial.depth > 1) {
-        ## Offset with interactions is adjusted.
-        ## Adjusted for AUGM_X1, AUGM_X2.
-        offset = 9
-        ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2, augmXone2, augmXtwo2.
-        chunk = 6
+      ## The default offset points to the record PRIOR to parmID2. We adjust for the presence of interactions, and synthetics.
+      offset = 7
+      ## The default chunk is parmID2, contPT2, contPTR2, mwcpSZ2.
+      chunk = 4
+      if (!is.null(object$base.learner)) {
+          if (object$base.learner$interact.depth > 1) {
+              ## Adjusted for pairCT, augmXone2, augmXtwo2.
+              offset = offset + 3
+              chunk = chunk + 2
+          }
+          if (object$base.learner$synthetic.depth > 1) {
+              ## Adjusted for sythSZ, augmXS2.
+              offset = offset + 2
+              chunk = chunk + 1
+          }
       }
-    }
   }
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
@@ -542,23 +548,29 @@ generic.predict.rfsrc <-
                                   ## >>>> start of maxi forest object >>>>
                                   as.integer(ntree),
                                   as.integer(n),
-                                  as.integer(r.dim),
-                                  as.character(yvar.types),
-                                  as.integer(yvar.nlevels),
-                                  as.double(as.vector(yvar)),
+                                  ##
+                                  list(as.integer(length(yvar.types)),
+                                       if (is.null(yvar.types)) NULL else as.character(yvar.types),
+                                       if (is.null(yvar.types)) NULL else as.integer(yvar.nlevels),
+                                       if (is.null(subj)) NULL else as.integer(subj),
+                                       if (is.null(yvar.types)) NULL else as.double(as.vector(yvar))),
+                                  ##
                                   as.integer(ncol(xvar)),
                                   as.character(xvar.types),
                                   as.integer(xvar.nlevels),
                                   as.double(xvar),
-                                  as.integer(sampsize),
-                                  as.integer(samp),
-                                  as.double(case.wt),
+                                  ##
+                                  list(as.integer(length(case.wt)),
+                                       if (is.null(case.wt)) NULL else as.double(case.wt),
+                                       as.integer(sampsize),
+                                       if (is.null(samp)) NULL else as.integer(samp)),
+                                  ##
                                   list(if(is.null(event.info$time.interest)) as.integer(0) else as.integer(length(event.info$time.interest)),
                                        if(is.null(event.info$time.interest)) NULL else as.double(event.info$time.interest)),
                                   as.integer(object$totalNodeCount),
                                   as.integer(object$seed),
                                   as.integer(hdim),
-                                  ## Object containing base learner settings, this is never NULL.
+                                  ## Object containing base learner settings.  This is never NULL.
                                   object$base.learner, 
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
@@ -567,11 +579,19 @@ generic.predict.rfsrc <-
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeFactorArray)$mwcpPT)),
-                                  ## This slot is hc_zero_aug.  This slot can be NULL.
+                                  ## This slot is hc_one_augm_intr.  This slot can be NULL.
                                   if (!is.null(object$base.learner)) {
-                                      if (object$base.learner$trial.depth > 1) {
-                                          list(as.integer((object$nativeArray)$augmXone),
+                                      if (object$base.learner$interact.depth > 1) {
+                                          list(as.integer((object$nativeArray)$pairCT),
+                                               as.integer((object$nativeArray)$augmXone),
                                                as.integer((object$nativeArray)$augmXtwo))
+                                      } else { NULL }
+                                  } else { NULL },
+                                  ## This slot is hc_one_augm_syth.  This slot can be NULL.
+                                  if (!is.null(object$base.learner)) {
+                                      if (object$base.learner$synthetic.depth > 1) {
+                                          list(as.integer((object$nativeArray)$sythSZ),
+                                               as.integer((object$nativeArray)$augmXS))
                                       } else { NULL }
                                   } else { NULL },
                                   ## This slot is hc_one.  This slot can be NULL.                                  
@@ -584,6 +604,8 @@ generic.predict.rfsrc <-
                                   ## SEXP objects are populated in the
                                   ## post-forest parsing for an
                                   ## explanation of the offsets below.
+                                  ## These offset are DIFFERENT than the offsets used to
+                                  ## 
                                   if (hdim > 1) {
                                       ## parmIDx
                                       lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 1 + (chunk * x)])})
@@ -606,7 +628,7 @@ generic.predict.rfsrc <-
                                   } else { NULL },
                                   if (hdim > 1) {
                                       if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$trial.depth > 1) {
+                                          if (object$base.learner$interact.depth > 1) {
                                               ## augmXonex
                                               lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 5 + (chunk * x)])})
                                           } else { NULL }
@@ -614,9 +636,35 @@ generic.predict.rfsrc <-
                                   } else { NULL },
                                   if (hdim > 1) {
                                       if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$trial.depth > 1) {
+                                          if (object$base.learner$interact.depth > 1) {
                                               ## augmXtwox
                                               lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 6 + (chunk * x)])})
+                                          } else { NULL }
+                                      } else { NULL }
+                                  } else { NULL },
+                                  if (hdim > 1) {
+                                      if (!is.null(object$base.learner)) {
+                                          if (object$base.learner$synthetic.depth > 1) {
+                                              ## augmXSx
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + (if(object$base.learner$interact.depth > 1) 7 else 5) + (chunk * x)])})
+                                          } else { NULL }
+                                      } else { NULL }
+                                  } else { NULL },
+                                  ## This slot is the synthetic topology!
+                                  if (hdim > 0) {
+                                      if (!is.null(object$base.learner)) {
+                                          if (object$base.learner$synthetic.depth > 1) {
+                                              if (!is.null(object$nativeArraySyth)) {
+                                                  list(as.integer(object$nodeCountSyth),
+                                                       as.integer((object$nativeArraySyth)$treeID),
+                                                       as.integer((object$nativeArraySyth)$nodeID),
+                                                       as.integer((object$nativeArraySyth)$hcDim),
+                                                       as.integer((object$nativeArraySyth)$parmID),
+                                                       as.double((object$nativeArraySyth)$contPT),
+                                                       as.double((object$nativeArraySyth)$contPTR),
+                                                       as.integer((object$nativeArraySyth)$mwcpSZ),
+                                                       as.integer((object$nativeFactorArray)$mwcpPT))
+                                              } else { NULL }
                                           } else { NULL }
                                       } else { NULL }
                                   } else { NULL },

@@ -3,19 +3,18 @@
 \alias{holdout.vimp}
 \title{Hold out variable importance (VIMP)}
 \description{
-  Hold out VIMP is calculated from the error rate for trees 
-  grown with and without a variable.  Applies to all families.
+  Hold out VIMP is calculated from the error rate of mini ensembles of
+  trees (blocks of trees) grown with and without a variable.  Applies to
+  all families.
 }
 \usage{\method{holdout.vimp}{rfsrc}(formula, data,
   ntree = function(p, vtry){1000 * p / vtry},
-  ntree.max = 2000,
-  ntree.allvars = NULL,
   nsplit = 10,
   ntime = 50,
-  mtry = NULL,
+  sampsize = function(x){x * .632},
+  samptype = "swor",
+  block.size = 10,
   vtry = 1,
-  fast = FALSE,
-  verbose = TRUE, 
   ...)
 }
 \arguments{
@@ -24,71 +23,76 @@
   \item{ntree}{Function specifying requested number of trees used for
     growing the forest.  Inputs are dimension and number of holdout
     variables. The requested number of trees can also be a number.}
-  \item{ntree.max}{Maximum number of trees used when calculating prediction
-    error for determing hold out VIMP.}
-  \item{ntree.allvars}{Grow this many additional trees and use them for
-    calculating the baseline error rate.  Ignored if \code{NULL}.}
   \item{nsplit}{Non-negative integer value specifying number of 
     random split points used to split a node (deterministic splitting
     corresponds to the value zero and is much slower).}
   \item{ntime}{Integer value used for survival to
     constrain ensemble calculations to a grid of \code{ntime} time points.}
-  \item{mtry}{Number of variables randomly selected as candidates for
-    splitting a node.}
+  \item{sampsize}{Function specifying size of subsampled data. Can also
+    be a number.}
+  \item{samptype}{Type of bootstrap used.}
   \item{vtry}{Number of variables randomly selected to be held out when
     growning a tree.}
-  \item{fast}{Use fast random forests, \code{rfsrc.fast}, in place of
-    \code{rfsrc}?  Improves speed but is less accurate.}
-  \item{verbose}{Provide verbose output?}
+  \item{block.size}{Specifies number of trees in a block when calculating
+    holdout variable importance.}
   \item{...}{Further arguments to be passed to \code{\link{rfsrc}}.}
 }
 \details{
 
-  Prior to growing a tree, a random set of \code{vtry} features are held
-  out.  Tree growing proceeds as usual with the remaining features.
-  Once the forest is grown, hold out VIMP for a given variable v is
-  calculated as follows.  Gather all trees where v was held out and
-  calculate OOB prediction error.  Next gather all trees were v was not
-  held out and calculate OOB prediction error. Hold out VIMP for v is
-  the difference between these two values.  Thus hold out VIMP measures
-  the importance of a variable when that variable is truly removed from
-  tree growing.
+  Holdout variable importance (holdout VIMP) is based on comparing the
+  results of two mini forests of trees (blocks of trees), the first in
+  which a random set of \code{vtry} features are held out (the holdout
+  forest), and the second in which no features are held out (the
+  baseline forest).  The mini forests are constructed from blocks of
+  trees, where if the block size is one, then this is similar to the
+  idea of Breiman-Cutler which calculates permuation VIMP using one tree
+  at a time.  
 
-  If \code{ntree.allvars} is set to an integer value, then a total of
-  this many trees are grown using all variables.  The above procedure is
-  then implemented with the following change.  Determine the error rate
-  for these additional trees.  Hold out VIMP for v is the difference
-  between this value and the error rate for trees where v was held out.
-  Unlike the above procedure, this makes sure that the baseline used for
-  calculating holdout VIMP is the same for all v.  This feature is
-  probably most useful in low-dimensional settings. 
+  If a feature is held out in a block of trees, we refer to this as the
+  (feature, block) pair.  The bootstrap for the trees in a (feature,
+  block) pair are identical in both forests. That is, the holdout block
+  is grow by holding out the feature, and the baseline block is grown
+  over the same trees, with the same bootstrap, but without holding out
+  any features.  \code{vtry} controls how many features are held out in
+  every tree. If set to one (default), only one variable is held out in
+  every tree.  Once a (feature, block) of trees has been grown, holdout
+  VIMP for a given variable v is calculated as follows.  Gather the
+  block of trees where the feature was held out (from the holdout
+  forest) and calculate OOB prediction error.  Next gather the
+  corresponding block of trees where v was not held out (from the
+  baseline forest) and calculate OOB prediction error.  Holdout VIMP for
+  the (feature, block) pair is the difference between these two values.
+  The final holdout VIMP estimate for a feature v is obtained by averaging
+  holdout VIMP for (feature=v, block) over all blocks.
   
-  Note that accuracy of hold out VIMP depends heavily on the size of the
-  forest.  If the number of trees is too small, then number of times a
-  variable is held out will be small and OOB error may suffer from high
-  variance.  Thus, \code{ntree} should be set fairly high - we recommend
-  using 1000 times the number of features.  Increasing \code{vtry} is
-  another way to increase number of hold out trees.  In particular,
-  number of trees needed should decrease linearly with \code{vtry}.  For
-  this reason the default \code{ntree} equals 1000 trees for each
-  feature divided by \code{vtry}.  Keep in mind that intrepretation of
-  holdout VIMP is altered when \code{vtry} is different than 1.
+  To summarize, holdout VIMP measures the importance of a variable when
+  that variable is truly removed from growing the tree.
 
-   
-  
+  Accuracy of hold out VIMP depends critically on total number of trees.
+  If total number of trees is too small, then number of times a variable
+  is held out will be small and OOB error can suffer from high variance.
+  Therefore, \code{ntree} should be set fairly high - we recommend using
+  1000 times the number of features.  Increasing \code{vtry} is another
+  way to increase number of times a variable is held out and therefore
+  reduces the burden of growing a large number of trees.  In particular,
+  total number of trees needed decreases linearly with \code{vtry}.  The
+  default \code{ntree} equals 1000 trees for each feature divided by
+  \code{vtry}.  Keep in mind intrepretation of holdout VIMP is altered
+  when \code{vtry} is different than one.  Thus this option should be
+  used with caution.
+
 }
 \value{
-  Hold out VIMP for each variable.  For multivariate forests, hold out
-  VIMP is calculated for each of the target outcomes.
+  Invisibly a list with the following components (which themselves can be lists):
+  \item{importance}{Holdout VIMP.}
+  \item{baseline}{Prediction error for the baseline forest.}
+  \item{holdout}{Prediction error for the holdout forest.}
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }
 \references{
 
-  Ishwaran H. (2019).  Holdout variable importance for random forest
-  models.
-    
   Lu M. and Ishwaran H. (2018). Expert Opinion: A prediction-based
   alternative to p-values in regression models. \emph{J. Thoracic and
     Cardiovascular Surgery}, 155(3), 1130--1136.
@@ -101,69 +105,115 @@
 }
 \examples{
 \donttest{
+
+
 ## ------------------------------------------------------------
-## boston housing example
+## regression analysis
 ## ------------------------------------------------------------
 
-if (library("mlbench", logical.return = TRUE)) {
+## new York air quality measurements
+airq.obj <- holdout.vimp(Ozone ~ ., data = airquality, na.action = "na.impute")
+print(airq.obj$importance)
 
-  data(BostonHousing)
-  hv <- holdout.vimp(medv ~ ., BostonHousing)
-  print(hv)
+## ------------------------------------------------------------
+## classification analysis
+## ------------------------------------------------------------
+
+## iris data
+iris.obj <- holdout.vimp(Species ~., data = iris)
+print(iris.obj$importance)
+
+## ------------------------------------------------------------
+## imbalanced classification (using RFQ)
+## ------------------------------------------------------------
+
+if (library("caret", logical.return = TRUE)) {
+
+  ## experimental settings
+  n <- 400
+  q <- 20
+  ir <- 6
+  f <- as.formula(Class ~ .)
+ 
+  ## simulate the data, create minority class data
+  d <- twoClassSim(n, linearVars = 15, noiseVars = q)
+  d$Class <- factor(as.numeric(d$Class) - 1)
+  idx.0 <- which(d$Class == 0)
+  idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
+  d <- d[c(idx.0,idx.1),, drop = FALSE]
+
+  ## VIMP for RFQ with and without blocking
+  vmp1 <- imbalanced(f, d, importance = TRUE, block.size = 1)$importance[, 1]
+  vmp10 <- imbalanced(f, d, importance = TRUE, block.size = 10)$importance[, 1]
+
+  ## holdout VIMP for RFQ with and without blocking
+  hvmp1 <- holdout.vimp(f, d, rfq =  TRUE,
+               perf.type = "g.mean", block.size = 1)$importance[, 1]
+  hvmp10 <- holdout.vimp(f, d, rfq =  TRUE,
+               perf.type = "g.mean", block.size = 10)$importance[, 1]
+  
+  ## compare VIMP values
+  imp <- 100 * cbind(vmp1, vmp10, hvmp1, hvmp10)
+  legn <- c("vimp-1", "vimp-10","hvimp-1", "hvimp-10")
+  colr <- rep(4,20+q)
+  colr[1:20] <- 2
+  ylim <- range(c(imp))
+  nms <- 1:(20+q)
+  par(mfrow=c(2,2))
+  barplot(imp[,1],col=colr,las=2,main=legn[1],ylim=ylim,names.arg=nms)
+  barplot(imp[,2],col=colr,las=2,main=legn[2],ylim=ylim,names.arg=nms)
+  barplot(imp[,3],col=colr,las=2,main=legn[3],ylim=ylim,names.arg=nms)
+  barplot(imp[,4],col=colr,las=2,main=legn[4],ylim=ylim,names.arg=nms)
 
 }
 
 ## ------------------------------------------------------------
-## iris example illustrating vtry
+## multivariate regression analysis
 ## ------------------------------------------------------------
-
-print(100 * holdout.vimp(Species ~ ., iris))
-print(100 * holdout.vimp(Species ~ ., iris, vtry=2))
-
-## ------------------------------------------------------------
-## example involving class imbalanced data
-## illustrates the new RFQ classifier
-## see the function "imbalanced" for more information about RFQ
-## ------------------------------------------------------------
-
-data(breast, package = "_PROJECT_PACKAGE_NAME_")
-breast <- na.omit(breast)
-f <- as.formula(status ~ .)
-hv <- holdout.vimp(f, breast, rfq=TRUE, perf.type="g.mean")
-print(10 * hv)
-
+mtcars.mreg <- holdout.vimp(Multivar(mpg, cyl) ~., data = mtcars,
+                                    vtry = 3,
+                                    block.size = 1,
+                                    samptype = "swr",
+                                    sampsize = dim(mtcars)[1])
+print(mtcars.mreg$importance)
 
 ## ------------------------------------------------------------
-## multivariate regression analysis example
+## mixed outcomes analysis
 ## ------------------------------------------------------------
 
-print(holdout.vimp(cbind(mpg, cyl) ~., mtcars))
+mtcars.new <- mtcars
+mtcars.new$cyl <- factor(mtcars.new$cyl)
+mtcars.new$carb <- factor(mtcars.new$carb, ordered = TRUE)
+mtcars.mix <- holdout.vimp(cbind(carb, mpg, cyl) ~., data = mtcars.new,
+                                   ntree = 100,
+                                   block.size = 2,
+                                   vtry = 1)
+print(mtcars.mix$importance)
 
-## ------------------------------------------------------------
-## white wine classification example
-## ------------------------------------------------------------
+##------------------------------------------------------------
+## survival analysis
+##------------------------------------------------------------
 
-data(wine, package = "_PROJECT_PACKAGE_NAME_")
-wine$quality <- factor(wine$quality)
-hv <- holdout.vimp(quality ~ ., wine, vtry = 5)
-print(100 * hv)
-
-
-## ------------------------------------------------------------
-## pbc survival example
-## ------------------------------------------------------------
-
+## Primary biliary cirrhosis (PBC) of the liver
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-hv <- holdout.vimp(Surv(days, status) ~ ., pbc, splitrule = "random")
-print(100 * hv)
+pbc.obj <- holdout.vimp(Surv(days, status) ~ ., pbc,
+                                nsplit = 10,
+                                ntree = 1000,
+                                na.action = "na.impute")
+print(pbc.obj$importance)
 
-## ------------------------------------------------------------
-## WIHS competing risk example
-## ------------------------------------------------------------
+##------------------------------------------------------------
+## competing risks
+##------------------------------------------------------------
+
+## WIHS analysis
+## cumulative incidence function (CIF) for HAART and AIDS stratified by IDU
 
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
-hv <- holdout.vimp(Surv(time, status) ~ ., wihs, ntree = 1000)
-print(100 * hv)
+wihs.obj <- holdout.vimp(Surv(time, status) ~ ., wihs,
+                                 nsplit = 3,
+                                 ntree = 100)
+print(wihs.obj$importance)
 
 }}
 

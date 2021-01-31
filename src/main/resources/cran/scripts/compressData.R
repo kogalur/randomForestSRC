@@ -18,7 +18,7 @@ filePrefix.csv <- sapply(fileName.csv, function(x) strsplit(x, ".csv"))
 print(fileName.csv)
 
 ## first we do txt files
-dataList.txt <- lapply(fileName.txt, function(x) read.table(x, header = TRUE))
+dataList.txt <- lapply(fileName.txt, function(x) read.table(x, header = TRUE, stringsAsFactors = TRUE))
  
 for (i in 1:length(dataList.txt)) {
   assign(as.character(filePrefix.txt[i]), dataList.txt[[i]])
@@ -26,7 +26,7 @@ for (i in 1:length(dataList.txt)) {
 }
 
 ### now we do csv files
-dataList.csv <- lapply(fileName.csv, function(x) read.csv(x, header = TRUE))
+dataList.csv <- lapply(fileName.csv, function(x) read.csv(x, header = TRUE, stringsAsFactors = TRUE))
  
 for (i in 1:length(dataList.csv)) {
   assign(as.character(filePrefix.csv[i]), dataList.csv[[i]])

@@ -10,6 +10,20 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+New additions to the package include sidClustering of unsupervised
+data using staggered interaction data (SID) (Mantero and Ishwaran,
+2020).  Implements the artificial two-class approach of Breiman
+(2003).  Improved hold out VIMP calculated from the error rate of mini
+ensembles of trees (blocks of trees) grown with and without a
+variable. Applies to all families. Finally, visualize trees on your
+Safari or Google Chrome browser using the new get.tree function for
+extracting trees from a forest. Many thanks to @dbarg1 on GitHub for
+the initial prototype of this last function.
+  
+
+---------------------------------------------------------------------------------
+RELEASE 2.9.3
+---------------------------------------------------------------------------------
 Bug fixes: Serious impute() issue introduced in the last build (Bug 59
 on GitHub).  Fix to compile time error on systems that do not support
 OpenMP.  Here, the OpenMP code that was inadvertently exposed is now

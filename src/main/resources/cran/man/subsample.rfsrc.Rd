@@ -34,10 +34,11 @@
   \item{verbose}{Provide verbose output?}
 }
 \details{
-  Given a forest object, subsamples the forest to obtain standard errors
-  and confidence intervals for VIMP (Ishwaran and Lu, 2019).  If
-  bootstrapping is requested, then the double bootstrap is applied in
-  place of subsampling.
+
+  Given a forest object, subsamples the data and constructs subsampled
+  forests to estimate standard errors and confidence intervals for VIMP
+  (Ishwaran and Lu, 2019).  If bootstrapping is requested, a double
+  bootstrap is applied in place of subsampling.
 
   If VIMP is not present in the original forest object, the algorithm
   will first need to calculate VIMP.  Therefore, if the user plans to
@@ -49,16 +50,16 @@
   this will fail: for example there are certain settings where the user
   has specified non-standard sampling in the grow forest.
   
-  Delete-d jackknife estimators (Shao and Wu, 1989) are returned along
-  with subsampling estimators (Politis and Romano, 1994).  While these
-  two methods are closely related, standard errors for delete-d
-  estimators are generally larger than the subsampled estimates, which
-  is a form of bias correction, which occurs primarily for variables
-  with true signal.  Confidence interval coverage is generally better
-  under delete-d estimators.  Note that undercoverage for strong
-  variables and overcoverage for noise variables exhibited by both
-  estimators may be beneficial if the goal is variable selection
-  (Ishwaran and Lu, 2019).
+  Delete-d jackknife estimators of the variance (Shao and Wu, 1989) are
+  returned alongside subsampled variance estimators (Politis and Romano,
+  1994).  While these two methods are closely related, estimated
+  standard error for VIMP from delete-d estimators are generally larger
+  than from subsampled estimators, which is a form of bias correction,
+  which occurs primarily for variables with true signal.  Confidence
+  interval coverage is generally better under delete-d estimators, but
+  undercoverage for strong variables and overcoverage for noise
+  variables is exhibited by both estimators.  This however may be
+  beneficial if the goal is variable selection (Ishwaran and Lu, 2019).
 
   By default, stratified subsampling is used for classification,
   survival, and competing risk families.  For classification,
@@ -73,16 +74,21 @@
   users should especially exercise caution when selecting subsampling
   rates here.
 
-  The function \command{extract.subsample} conveniently extracts summary
-  information from the subsampled object. It parses objects \code{rf},
-  \code{vmp} and \code{vmpS} returned by the function (see below for
-  what these are).
-
-  When printing and or plotting results, the default setting is to
-  standardize VIMP, where for regression families, VIMP is standardized
-  by dividing by the variance and multiplying by 100.  For all other
-  families, VIMP is scaled by 100.  This can be turned off using the
-  option \code{standardize} in those wrappers.
+  The function \command{extract.subsample} conveniently extracts
+  information from the subsampled object.  It returns summary
+  information (used for plotting confidence intervals) as well as VIMP
+  from the original forest and VIMP from the subsampled forests.  Keep in
+  mind this subsampled VIMP is "raw" in the sense it equals VIMP
+  from a forest constructed with a much smaller sample size. No
+  processing of the subsampled VIMP to the original sample size is done.
+  Also, all returned VIMP is "standardized" (this means for regression
+  families, VIMP is standardized by dividing by the variance of Y and
+  multiplying by 100.  For all other families, VIMP is scaled by 100).
+  Use \code{standardize=FALSE} if you want unstandardized VIMP.
+  
+  When printing or plotting results, the default is to standardize
+  VIMP. This can be turned off using the option \code{standardize} in
+  those wrappers.
   
 }
 \value{
@@ -126,7 +132,7 @@
 reg.o <- rfsrc(mpg ~ ., mtcars)
 
 ## very small sample size so need largish subratio
-reg.smp.o <- subsample(reg.o, B = 100, subratio = .5)
+reg.smp.o <- subsample(reg.o, B = 25, subratio = .5)
 
 ## plot confidence regions
 plot.subsample(reg.smp.o)
@@ -134,8 +140,14 @@ plot.subsample(reg.smp.o)
 ## summary of results
 print(reg.smp.o)
 
+## extract subsampled VIMP
+print(extract.subsample(reg.smp.o)$vmpS)
+
+## extract unstandardized subsampled VIMP
+print(extract.subsample(reg.smp.o, standardize=FALSE)$vmpS)
+
 ## now try the double bootstrap (slow!!)
-reg.dbs.o <- subsample(reg.o, B = 100, bootstrap = TRUE)
+reg.dbs.o <- subsample(reg.o, B = 25, bootstrap = TRUE)
 print(reg.dbs.o)
 plot.subsample(reg.dbs.o)
 
@@ -150,12 +162,42 @@ if (library("caret", logical.return = TRUE)) {
   ## VIMP based on (default) misclassification error
   cls.o <- rfsrc(Class ~ ., d)
   cls.smp.o <- subsample(cls.o, B = 100)
-  plot.subsample(cls.smp.o, cex = .7)
+  plot.subsample(cls.smp.o, cex.axis = .7)
 
   ## same as above, but with VIMP defined using normalized Brier score
   cls.o2 <- rfsrc(Class ~ ., d, perf.type = "brier")
   cls.smp.o2 <- subsample(cls.o2, B = 100)
-  plot.subsample(cls.smp.o2, cex = .7)
+  plot.subsample(cls.smp.o2, cex.axis = .7)
+}
+
+## ------------------------------------------------------------
+## class-imbalanced example
+## uses q-classifier with G-mean VIMP
+## ------------------------------------------------------------
+
+if (library("caret", logical.return = TRUE)) {
+
+  ## experimental settings
+  n <- 1000
+  q <- 20
+  ir <- 6
+  f <- as.formula(Class ~ .)
+ 
+  ## simulate the data, create minority class data
+  d <- twoClassSim(n, linearVars = 15, noiseVars = q)
+  d$Class <- factor(as.numeric(d$Class) - 1)
+  idx.0 <- which(d$Class == 0)
+  idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
+  d <- d[c(idx.0,idx.1),, drop = FALSE]
+
+  ## q-classifier
+  oq <- imbalanced(Class ~ ., d, splitrule = "auc",
+              importance = TRUE, block.size = 10)
+
+  ## subsample the q-classifier
+  smp.oq <- subsample(oq, B = 100)
+  plot(smp.oq, cex.axis = .7)
+
 }
 
 ## ------------------------------------------------------------
@@ -165,7 +207,7 @@ if (library("caret", logical.return = TRUE)) {
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 srv.o <- rfsrc(Surv(days, status) ~ ., pbc)
 srv.smp.o <- subsample(srv.o, B = 100)
-plot.subsample(srv.smp.o)
+plot(srv.smp.o)
 
 ## ------------------------------------------------------------
 ## competing risk example
@@ -208,7 +250,7 @@ if (library("caret", logical.return = TRUE)) {
   o <- rfsrc.fast(Class ~ ., d, ntree = 100,
            forest = TRUE, perf.type = "brier")
   so <- subsample(o, B = 100)
-  plot.subsample(so, cex = .7)
+  plot.subsample(so, cex.axis = .7)
 }
 
 

@@ -1,5 +1,9 @@
 useDynLib(_PROJECT_PACKAGE_NAME_, .registration = TRUE)
 
+importFrom("data.tree", "FromDataFrameNetwork", "SetGraphStyle",
+           "SetEdgeStyle", "SetNodeStyle", "Do", "GetDefaultTooltip")
+importFrom("DiagrammeR", "render_graph", "create_graph",
+           "create_node_df", "create_edge_df", "add_global_graph_attrs")
 importFrom("parallel", mclapply)
 importFrom("graphics", "abline", "axis", "box", "boxplot", "bxp",
            "legend", "lines", "matlines", "matplot", "mtext", "par", "plot",
@@ -33,6 +37,8 @@ export(extract.bootsample,
        get.quantile.crps,
        get.quantile.stat,
         
+       get.tree,
+       get.tree.rfsrc,
        holdout.vimp,
        holdout.vimp.rfsrc,
        imbalanced,
@@ -64,6 +70,9 @@ export(extract.bootsample,
        rfsrc.news,
        synthetic.rfsrc,
        synthetic,
+       sid.perf.metric,
+       sidClustering,
+       sidClustering.rfsrc,
         
        subsample,
        subsample.rfsrc,

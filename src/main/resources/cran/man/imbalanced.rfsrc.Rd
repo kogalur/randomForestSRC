@@ -239,7 +239,7 @@ if (library("caret", logical.return = TRUE) &
 }
 
 ##----------------------------------------------------------------
-## simulation example using the caret R-package simar to above
+## simulation example using the caret R-package similar to above
 ##
 ## illustrates effectiveness of blocked VIMP
 ##
@@ -282,6 +282,37 @@ if (library("caret", logical.return = TRUE)) {
   barplot(imp[,2],col=colr,las=2,main=legn[2],ylim=ylim,names.arg=nms)
   barplot(imp[,3],col=colr,las=2,main=legn[3],ylim=ylim,names.arg=nms)
   barplot(imp[,4],col=colr,las=2,main=legn[4],ylim=ylim,names.arg=nms)
+
+}
+
+##----------------------------------------------------------------
+##
+## confidence intervals for G-mean VIMP using subsampling
+##
+##----------------------------------------------------------------
+
+if (library("caret", logical.return = TRUE)) {
+
+  ## experimental settings
+  n <- 1000
+  q <- 20
+  ir <- 6
+  f <- as.formula(Class ~ .)
+ 
+  ## simulate the data, create minority class data
+  d <- twoClassSim(n, linearVars = 15, noiseVars = q)
+  d$Class <- factor(as.numeric(d$Class) - 1)
+  idx.0 <- which(d$Class == 0)
+  idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
+  d <- d[c(idx.0,idx.1),, drop = FALSE]
+
+  ## q-classifier
+  oq <- imbalanced(Class ~ ., d, splitrule = "auc",
+              importance = TRUE, block.size = 10)
+
+  ## subsample the q-classifier
+  smp.oq <- subsample(oq, B = 100)
+  plot(smp.oq, cex.axis = .7)
 
 }
 

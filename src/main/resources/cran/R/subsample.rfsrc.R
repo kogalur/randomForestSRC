@@ -60,7 +60,8 @@ subsample.rfsrc <- function(obj,
                    "sampsize",
                    "samptype",
                    "case.wt",
-                   "perf.type")
+                   "perf.type",
+                   "rfq")
   ## pull the parameters (grow first, then forest object)
   rf.prms <- c(obj[grow.prms], obj$forest[forest.prms])
   ## rename parameters to their correct random forest names
@@ -322,6 +323,7 @@ extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, sta
        ci.Z = ci.Z,
        ci.jk.Z = ci.jk.Z,
        vmp = theta.hat,
+       vmpS = theta.star,
        se.Z = se.Z,
        se.jk.Z = se.jk.Z,
        var.sel = var.sel,
@@ -593,7 +595,8 @@ extract.bootsample <- function(obj, alpha = .05, target = 0, m.target = NULL, st
   rownames(var.sel.boot.Z) <- names(vmp.boot)
   list(ci = ci.boot,
        ci.Z = ci.boot.Z,
-       vmp = vmp.boot,
+       vmp <- vmp.boot,
+       vmpS = theta.boot,
        se = se.boot,
        var.sel = var.sel.boot,
        var.sel.Z = var.sel.boot.Z)

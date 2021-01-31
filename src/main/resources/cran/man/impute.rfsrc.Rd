@@ -35,7 +35,9 @@
     decreases.  By default, no action is taken if left unspecified.}
   \item{mf.q}{Use this to turn on missForest (which is off by default).
     Specifies fraction of variables (between 0 and 1) used as responses
-    in multivariate missForest imputation.  Can also be an integer, in
+    in multivariate missForest imputation.  When set to 1 this
+    corresponds to missForest, otherwise multivariate missForest is
+    used. Can also be an integer, in
     which case this equals the number of multivariate responses.}
   \item{max.iter}{Maximum number of iterations used when implementing
     multivariate missForest imputation.}
@@ -75,8 +77,9 @@
     on the variable leading to the best split (Tang and Ishwaran, 2017).
     
     \item If \code{mf.q} is specified, a multivariate version of
-    missForest imputation (Stekhoven and Buhlmann, 2012) is applied.  A
-    fraction \code{mf.q} of variables are used as multivariate responses
+    missForest imputation (Stekhoven and Buhlmann, 2012) is applied.
+    When \code{mf.q} is set to 1 this is similar to missForest.  Otherwise
+    a fraction \code{mf.q} of variables are used as multivariate responses
     and split by the remaining variables using multivariate composite
     splitting (Tang and Ishwaran, 2017).  Missing data for responses are
     imputed by prediction.  The process is repeated using a new set of
@@ -113,7 +116,7 @@
 }
 \value{
   Invisibly, the data frame containing the orginal data with imputed
-  data overlayed.
+  data overlaid.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -128,7 +131,8 @@
   \emph{Bioinformatics}, 28(1):112-118.
   
   Tang F. and Ishwaran H. (2017).  Random forest missing data
-  algorithms.  \emph{Statistical Analysis and Data Mining}, 10, 363-377.
+  algorithms.  \emph{Statistical Analysis and Data Mining}, 10:363-377.
+  
 }
 \seealso{
   \command{\link{rfsrc}},
