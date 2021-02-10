@@ -49,6 +49,11 @@ generic.predict.rfsrc <-
       stop("Forest information for prediction is missing.  Re-run rfsrc (grow call) with forest=TRUE")
     }
   }
+  ## UBK UBK HERE'S WHERE I STARTED ANONYMOUS PROCESSING YOU WILL NEED TO FIX AS NEED UBK UBK
+  ## check if this is an anonymous object
+  if (inherits(object, "anonymous")) {
+    anonymize.bits <- 2^26
+  }
   ## verify the importance option
   importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
                                                          "none", "permute", "random", "anti",
@@ -683,11 +688,20 @@ generic.predict.rfsrc <-
                                   list(if (is.null(m.target.idx)) as.integer(0) else as.integer(length(m.target.idx)),
                                        if (is.null(m.target.idx)) NULL else as.integer(m.target.idx)),
                                   as.integer(ptn.count),
+                                  
+                                  NULL,
+                                  
                                     
                                   list(if (is.null(importance.xvar.idx)) as.integer(0) else as.integer(length(importance.xvar.idx)),
                                        if (is.null(importance.xvar.idx)) NULL else as.integer(importance.xvar.idx)),
                                   ## Partial variables disabled.
-                                  list(as.integer(0), as.integer(0), as.integer(0), NULL, as.integer(0), NULL, NULL),
+                                  list(as.integer(0),
+                                       as.integer(0),
+                                       as.integer(0),
+                                       NULL,
+                                       as.integer(0),
+                                       NULL,
+                                       NULL),
                                   as.integer(length(subset)),
                                   as.integer(subset),
                                   as.integer(n.newdata),

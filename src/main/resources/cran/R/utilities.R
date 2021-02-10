@@ -880,7 +880,7 @@ is.hidden.tdc.rule <-  function (user.option) {
   }
   is.hidden.terminal.qualts <-  function (user.option) {
     if (is.null(user.option$terminal.qualts)) {
-      !FALSE
+      TRUE
     }
       else {
         as.logical(as.character(user.option$terminal.qualts))

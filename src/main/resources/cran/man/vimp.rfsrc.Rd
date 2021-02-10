@@ -69,8 +69,11 @@
 
 iris.obj <- rfsrc(Species ~ ., data = iris)
 
-# Permutation vimp
+# Permutation vimp (default)
 print(vimp(iris.obj)$importance)
+
+# VIMP using brier prediction error
+print(vimp(iris.obj, perf.type = "brier")$importance)
 
 # Random daughter vimp
 print(vimp(iris.obj, importance = "random")$importance)

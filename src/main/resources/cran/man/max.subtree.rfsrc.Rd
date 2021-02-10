@@ -11,7 +11,7 @@
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)} or \code{(rfsrc,
-	    forest)}}. 
+	    forest).}} 
   \item{max.order}{Non-negative integer specifying the target number
     of order depths.  Default is to return the first and second order
     depths.  Used to identify predictive variables.  Setting

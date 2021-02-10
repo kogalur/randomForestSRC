@@ -209,7 +209,8 @@ partial.rfsrc <- function(
                                   ## This slot is hc_one_augm_syth.  This slot can be NULL.
                                   if (!is.null(object$base.learner)) {
                                       if (object$base.learner$synthetic.depth > 1) {
-                                          list(as.integer((object$nativeArray)$augmXS))
+                                          list(as.integer((object$nativeArray)$sythSZ),
+                                               as.integer((object$nativeArray)$augmXS))
                                       } else { NULL }
                                   } else { NULL },
                                   ## This slot is hc_one.  This slot can be NULL.                                  
@@ -301,6 +302,9 @@ partial.rfsrc <- function(
                                   list(if (is.null(m.target.idx)) as.integer(0) else as.integer(length(m.target.idx)),
                                        if (is.null(m.target.idx)) NULL else as.integer(m.target.idx)),
                                   as.integer(0),  ## Pruning disabled
+                                  
+                                  NULL,
+                                  
                                     
                                   list(as.integer(0), NULL), ## Importance disabled.
                                   ## Partial variables enabled.  Note the as.integer is needed.
@@ -318,7 +322,9 @@ partial.rfsrc <- function(
                                   as.double(NULL),  ## New data disabled.
                                   as.double(NULL),  ## New data disabled.
                                   as.integer(ntree), ## block.size is hard-coded.
-                                  list(as.integer(0), NULL, as.double(0)), ## Quantiles disabled.
+                                  list(as.integer(0),
+                                       NULL,
+                                       as.double(0)), ## Quantiles disabled.
                                   as.integer(get.tree),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)

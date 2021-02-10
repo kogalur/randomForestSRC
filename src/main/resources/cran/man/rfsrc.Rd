@@ -97,8 +97,8 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     selected pseudo-responses (see below for more details). 
     The default is \code{ytry}=1, which selects one pseudo-response.}
 
-  \item{nodesize}{Forest average number of unique cases (data points) in
-    a terminal node.  The defaults are: survival (15), competing risk
+  \item{nodesize}{Minumum size of terminal node.
+    The defaults are: survival (15), competing risk
     (15), regression (5), classification (1), mixed outcomes (3),
     unsupervised (3).  It is recommended to experiment with different
     \code{nodesize} values.}
@@ -471,6 +471,9 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     misclassification error for classification.  A normalized Brier
     score (relative to a coin-toss) and the AUC (area under the ROC
     curve) is also provided upon printing a classification forest.
+    Performance for Brier score can be specified using
+    \code{perf.type="brier"}.  G-mean performance is also available, see
+    the function \command{imbalanced} for more details.
     
     For survival, prediction error is measured by 1-C, where C is
     Harrell's (Harrell et al., 1982) concordance index.  Prediction error
@@ -985,6 +988,40 @@ plot(get.tree(iris.obj, 25, target = "setosa"))
 plot(get.tree(iris.obj, 25, target = "versicolor"))
 plot(get.tree(iris.obj, 25, target = "virginica"))
 
+## ------------------------------------------------------------
+## simple example of VIMP using iris classification
+## ------------------------------------------------------------
+
+## directly from grow call 
+print(rfsrc(Species~.,iris,importance=TRUE)$importance)
+
+## note by default VIMP (and performance) uses misclassification error,
+## but brier prediction error can be specified
+print(rfsrc(Species~.,iris,importance=TRUE,perf.type="brier")$importance)
+
+## using vimp function (see vimp help file for details)
+iris.obj <- rfsrc(Species ~., data = iris)
+print(vimp(iris.obj)$importance)
+print(vimp(iris.obj,perf.type="brier")$importance)
+
+## hold out vimp (see holdout.vimp help file for details)
+print(holdout.vimp(Species~.,iris)$importance)
+print(holdout.vimp(Species~.,iris,perf.type="brier")$importance)
+
+## ------------------------------------------------------------
+## confidence interval for vimp using subsampling
+## compare with holdout vimp
+## ------------------------------------------------------------
+
+## new York air quality measurements
+o <- rfsrc(Ozone ~ ., data = airquality)
+so <- subsample(o)
+plot(so)
+
+## compare with holdout vimp
+print(holdout.vimp(Ozone ~ ., data = airquality)$importance)
+
+
 ##------------------------------------------------------------
 ## example of imputation in survival analysis
 ##------------------------------------------------------------
@@ -1185,26 +1222,6 @@ print(oq)
 ## q-classifier (RFQ) - with auc splitting
 oqauc <- imbalanced(status ~ ., data = breast, splitrule = "auc")
 print(oqauc)
-
-## ------------------------------------------------------------
-## holdout out vimp: compare to Breiman-Cutler on iris
-## ------------------------------------------------------------
-
-print(rfsrc(Species~.,iris,importance=TRUE)$importance)
-print(holdout.vimp(Species~.,iris)$importance)
-
-## ------------------------------------------------------------
-## confidence interval for vimp using subsampling
-## compare with holdout vimp
-## ------------------------------------------------------------
-
-## new York air quality measurements
-o <- rfsrc(Ozone ~ ., data = airquality)
-so <- subsample(o)
-plot(so)
-
-## compare with holdout vimp
-print(holdout.vimp(Ozone ~ ., data = airquality)$importance)
 
 ## ------------------------------------------------------------
 ## unsupervised analysis

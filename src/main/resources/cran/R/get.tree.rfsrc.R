@@ -274,7 +274,6 @@ get.tree.rfsrc <- function(object,
         side <- "<="
         contPT.pretty <- round(as.numeric(converted.tree$contPT[converted.tree$var_conc == from_node]), 3)
         split_ineq_pretty <- paste0(side, contPT.pretty)
-        #split_ineq_pretty <- paste0(side, converted.tree$contPT[converted.tree$var_conc == from_node])
       }
       else {#right split
         side <- ">"
@@ -285,7 +284,7 @@ get.tree.rfsrc <- function(object,
       ## update the network
       to_node <- rowi$var_conc
       new_node <- list(from = from_node, to = to_node, split = split_ineq, split.pretty = split_ineq_pretty)
-      network <<- data.frame(rbind(network, new_node))
+      network <<- data.frame(rbind(network, new_node, stringsAsFactors = FALSE))
       num_children[[from_node]] <<- num_children[[from_node]] + 1
       if(rowi$var != "<leaf>")
         from_node <<- to_node

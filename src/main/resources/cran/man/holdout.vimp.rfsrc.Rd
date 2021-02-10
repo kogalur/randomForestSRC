@@ -123,6 +123,11 @@ print(airq.obj$importance)
 iris.obj <- holdout.vimp(Species ~., data = iris)
 print(iris.obj$importance)
 
+## iris data using brier prediction error
+iris.obj <- holdout.vimp(Species ~., data = iris, perf.type = "brier")
+print(iris.obj$importance)
+
+
 ## ------------------------------------------------------------
 ## imbalanced classification (using RFQ)
 ## ------------------------------------------------------------
