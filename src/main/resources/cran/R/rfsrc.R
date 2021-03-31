@@ -26,6 +26,8 @@ rfsrc <- function(formula, data, ntree = 1000,
     impute.only <- is.hidden.impute.only(user.option)
     terminal.qualts <- is.hidden.terminal.qualts(user.option)
     terminal.quants <- is.hidden.terminal.quants(user.option)
+    cse  <- is.hidden.cse(user.option)
+    csv  <- is.hidden.csv(user.option)
     ## TBD TBD make perf.type visible TBD TBD
     perf.type <- is.hidden.perf.type(user.option)
     rfq <- is.hidden.rfq(user.option)
@@ -75,11 +77,11 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## conduct preliminary processing of missing data
     ## record whether there's no missing data: efficiency step
     if (any(is.na(data))) {
-        data <- parseMissingData(formulaPrelim, data)
-        miss.flag <- TRUE
+      data <- parseMissingData(formulaPrelim, data)
+      miss.flag <- TRUE
     }
     else {
-        miss.flag <- FALSE
+      miss.flag <- FALSE
     }
     ## finalize the formula based on the pre-processed data
     formulaDetail <- finalizeFormula(formulaPrelim, data)
@@ -117,15 +119,14 @@ rfsrc <- function(formula, data, ntree = 1000,
     data <- rm.na.levels(data, xvar.names)
     data <- rm.na.levels(data, yvar.names)
     ## Determine the immutable yvar factor map.
+    ## get y-outcome type and nlevels and append to y-immutable map (saved in forest later)
     yfactor <- extract.factor(data, yvar.names)
+    yfactor$types <- yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names)
+    yfactor$nlevels <- yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, data)
     ## Determine the immutable xvar factor map.
     xfactor <- extract.factor(data, xvar.names)
-    ## get the y-outcome type and nlevels
-    yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names)
-    yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, data)
-    ## get the x-variable type and nlevels
-    xvar.types <- get.xvar.type(xfactor$generic.types, xvar.names)
-    xvar.nlevels <- get.xvar.nlevels(xfactor$nlevels, xvar.names, data)
+    xfactor$types <- xvar.types <- xfactor$generic.types
+    xvar.nlevels <- xfactor$nlevels
     ## Convert the data to numeric mode, apply the na.action protocol.
     data <- finalizeData(c(subj.names, yvar.names, xvar.names), data, na.action, miss.flag)
     ## Save the row and column names for later overlay
@@ -134,10 +135,12 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## Finalize the xvar matrix.
     xvar <- as.matrix(data[, xvar.names, drop = FALSE])
     rownames(xvar) <- colnames(xvar) <- NULL
+    ## get numeric levels for x-variables and append to x-immutable map (saved in forest)
+    xfactor$numeric.levels <- xvar.numeric.levels <- get.numeric.levels(family, xfactor$nlevels, xvar)
     ## Initialize sample size
     ## Set mtry
     n <- nrow(xvar)
-    n.xvar <- ncol(xvar)
+    n.xvar <- length(xvar.names)
     mtry <- get.grow.mtry(mtry, n.xvar, family)
     samptype <- match.arg(samptype, c("swor", "swr"))
     ## Get the indvidual subject identifiers if they exist - do this *after* na.protocol
@@ -234,7 +237,11 @@ rfsrc <- function(formula, data, ntree = 1000,
     yvar <- as.matrix(data[, yvar.names, drop = FALSE])
     if(dim(yvar)[2] == 0) {
         ## Override yvar if it is not present.
-        yvar <- NULL
+        yvar <- 
+          yvar.nlevels  <-  yvar.numeric.levels <- yfactor <- NULL
+    }
+    else {
+        yfactor$numeric.levels <- yvar.numeric.levels <- get.numeric.levels(family, yfactor$nlevels, yvar)
     }
     ## Determine the number of missing values
     if (miss.flag) {
@@ -327,6 +334,8 @@ rfsrc <- function(formula, data, ntree = 1000,
         importance   <- "none"
         terminal.qualts <- FALSE
         terminal.quants <- FALSE
+        cse  <- FALSE
+        csv  <- FALSE
         ## We have deleted the following line because it was incorrectly
         ## overriding the user specified option na.action in 
         ## impute.rfsrc( generic.impute.rfsrc( rfsrc() ) ).  Now, the user specified option
@@ -384,6 +393,8 @@ rfsrc <- function(formula, data, ntree = 1000,
     block.size <- get.block.size(block.size, ntree)
     terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, FALSE)
     terminal.quants.bits <- get.terminal.quants(terminal.quants, FALSE)
+    cse.bits = get.cse(cse)
+    csv.bits = get.csv(csv)
     ## Set the trace
     do.trace <- get.trace(do.trace)
     nativeOutput <- tryCatch({.Call("rfsrcGrow",
@@ -410,13 +421,14 @@ rfsrc <- function(formula, data, ntree = 1000,
                                                membership.bits +
                                                terminal.qualts.bits +
                                                terminal.quants.bits +
-                                               tdc.rule.bits),
+                                               tdc.rule.bits +
+                                               cse.bits +
+                                               csv.bits),
                                     as.integer(splitinfo$index),
                                     as.integer(splitinfo$nsplit),
                                     as.integer(mtry),
                                     lot, ## object containing lot settings
-                                    ## Object containing base learner settings.  This is never NULL.
-                                    base.learner, 
+                                    base.learner, ## Object containing base learner settings.  This is never NULL.
                                     as.integer(vtry),
                                     as.integer(holdout.array),
                                     holdout.specs, ## object containing experimental holdout settings
@@ -427,33 +439,42 @@ rfsrc <- function(formula, data, ntree = 1000,
                                     as.double(cause.wt),
                                     as.integer(ntree),
                                     as.integer(n),
-                                    ##
                                     list(as.integer(length(yvar.types)),
                                          if (is.null(yvar.types)) NULL else as.character(yvar.types),
                                          if (is.null(yvar.types)) NULL else as.integer(yvar.nlevels),
+                                         if (is.null(yvar.numeric.levels)) NULL else sapply(1:length(yvar.numeric.levels), function(nn) {as.integer(length(yvar.numeric.levels[[nn]]))}),
                                          if (is.null(subj)) NULL else as.integer(subj),
+                                         if (is.null(event.info)) NULL else as.integer(length(event.info$event.type)),
+                                         if (is.null(event.info)) NULL else as.integer(event.info$event.type),
                                          if (is.null(yvar)) NULL else as.double(as.vector(yvar))),
-                                    ##
-                                    ##
+                                    if (is.null(yvar.numeric.levels)) {
+                                        NULL
+                                    }
+                                    else {
+                                        lapply(1:length(yvar.numeric.levels),
+                                               function(nn) {as.integer(yvar.numeric.levels[[nn]])})
+                                    },
                                     list(as.integer(n.xvar),
                                          as.character(xvar.types),
-                                         as.integer(xvar.nlevels),
+                                         if (is.null(xvar.types)) NULL else as.integer(xvar.nlevels),
+                                         if (is.null(xvar.numeric.levels)) NULL else sapply(1:length(xvar.numeric.levels), function(nn) {as.integer(length(xvar.numeric.levels[[nn]]))}),
                                          if (is.null(xvar.time)) NULL else as.integer(xvar.time),
-                                         if (is.null(subj.time)) NULL else as.integer(subj.time)),
-##                                  as.integer(n.xvar),
-##                                  as.character(xvar.types),
-##                                  as.integer(xvar.nlevels),
-                                    ##
-                                    ##
+                                         if (is.null(subj.time)) NULL else as.integer(subj.time),
+                                         as.double(as.vector(xvar))),
+                                    if (is.null(xvar.numeric.levels)) {
+                                        NULL
+                                    }
+                                    else {
+                                        lapply(1:length(xvar.numeric.levels),
+                                               function(nn) {as.integer(xvar.numeric.levels[[nn]])})
+                                    },
                                     list(as.integer(length(case.wt)),
                                          if (is.null(case.wt)) NULL else as.double(case.wt),
                                          as.integer(sampsize),
                                          if (is.null(samp)) NULL else as.integer(samp)),
-                                    ##
                                     as.double(split.wt),
                                     as.double(yvar.wt),
                                     as.double(xvar.wt),
-                                    as.double(xvar),
                                     as.integer(length(event.info$time.interest)),
                                     as.double(event.info$time.interest),
                                     as.integer(nimpute),
@@ -461,7 +482,6 @@ rfsrc <- function(formula, data, ntree = 1000,
                                     as.integer(length(prob)),
                                     as.double(prob),
                                     as.double(prob.epsilon),
-                                    as.double(NULL),
                                     as.integer(get.rf.cores()))}, error = function(e) {
                                         print(e)
                                         NULL})
@@ -837,11 +857,22 @@ rfsrc <- function(formula, data, ntree = 1000,
                          nodedepth = nodedepth,
                          ntree = ntree,
                          family = family,
+                         n = n,
                          splitrule = splitinfo$name,
                          yvar = yvar,
                          yvar.names = yvar.names,
+                         yvar.factor = yfactor,
+                         #yvar.types = yvar.types,
+                         #yvar.nlevels = yvar.nlevels,
+                         #yvar.numeric.levels = if (is.null(yvar)) NULL else yvar.numeric.levels,
+                         #event.type = if (is.null(event.info)) NULL else event.info$event.type,
+                         #xvar.types = xvar.types,
+                         #xvar.nlevels = xvar.nlevels,
+                         #xvar.numeric.levels = xvar.numeric.levels,
                          xvar = xvar,
                          xvar.names = xvar.names,
+                         xvar.factor = xfactor,
+                         event.info = event.info,
                          subj = subj,
                          subj.names = subj.names,
                          seed = nativeOutput$seed,
@@ -883,6 +914,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                          nodedepth = nodedepth,
                          ntree = ntree,
                          family = family,
+                         n = n,
                          splitrule = splitinfo$name,
                          yvar = yvar,
                          yvar.names = yvar.names,
@@ -1040,6 +1072,7 @@ rfsrc <- function(formula, data, ntree = 1000,
         yvar.names = yvar.names,
         xvar = xvar,
         xvar.names = xvar.names,
+        event.info = event.info,
         subj = subj,
         subj.names = subj.names,
         xvar.wt = xvar.wt,
@@ -1423,6 +1456,26 @@ rfsrc <- function(formula, data, ntree = 1000,
                 ## Note that this is a ragged array.
                 ## To the R code:
                 ## -> of dim [[resp.clas.count]] x [1 + levels.count[]] x [n.xvar] 
+                ## From the native code:
+                ##   "cseNum"
+                ## -> of dim [resp.regr.count] x [n]
+                ## To the R code:
+                ## -> of dim [[resp.regr.count]] x [n]
+                ## From the native code:
+                ##   "cseDen"
+                ## -> of dim [n]
+                ## To the R code:
+                ## -> of dim [n]
+                ## From the native code:
+                ##   "csvNum"
+                ## -> of dim [n.xvar] x [resp.regr.count] x [n]
+                ## To the R code:
+                ## -> of dim [[resp.regr.count]] x [n] x [n.xvar]
+                ## From the native code:
+                ##   "csvDen"
+                ## -> of dim [n.xvar] x [n] 
+                ## To the R code:
+                ## -> of dim  x [n]  x [n.xvar]
                 ## Preparing for holdout classification vimp.  See the details and examples further below for
                 ## parsing the output.
                 if (!is.null(nativeOutput$holdoutClas)) {
@@ -1455,6 +1508,15 @@ rfsrc <- function(formula, data, ntree = 1000,
                     classOutput[[i]] <- c(classOutput[[i]], class.oob = list(response.oob))
                     remove(predicted.oob)
                     remove(response.oob)
+                    ## New case specific arrays, numerator:
+                    cse.num <- (if (!is.null(nativeOutput$cseClas))
+                                    array(nativeOutput$cseClas[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
+                    classOutput[[i]] <- c(classOutput[[i]], cse.num = list(cse.num))
+                    remove(cse.num)
+                    ## New case specific arrays, denominator:
+                    cse.den <- (if (!is.null(nativeOutput$cseDen))
+                                    array(nativeOutput$cseDen[1:n], n) else NULL)
+                    classOutput[[i]] <- c(classOutput[[i]], cse.den = list(cse.den))
                     if (!is.null(nativeOutput$perfClas)) {
                         err.rate <- array(0, c(1 + levels.count[i], ntree))
                         for (j in 1: (1 + levels.count[i])) {
@@ -1475,6 +1537,35 @@ rfsrc <- function(formula, data, ntree = 1000,
                         classOutput[[i]] <- c(classOutput[[i]], err.block.rate = list(t(err.block.rate)))
                         remove(err.block.rate)
                     }
+                    ## Incoming csv rates:  V=xvar R=response n=case
+                    ## In elemental form:
+                    ## V1R1n1 V1R1n2 V1R1n3, ..., V1R2n1 V1R2n2 V1R2n3, ..., V2R1n1, V2R1n2, V2R1n3, ..., V2R2n1, V2R2n2, V2R2n3, ...
+                    ## Equivalent in blocks on (n):
+                    ##       V1R1(n)  V1R2(n)  V1R3(n)  V2R1(n)  V2R2(n)  V2R3(n)  V3R1(n)  V3R2(n)  V3R3(n)
+                    ## To parse we use:
+                    ## R1:    iter11                    iter12                     iter13
+                    ## R2:             iter21                    iter22                     iter23
+                    ## R3:                      iter31                    iter32                     iter33
+                    ## All zeros initially and of length for this [[i]] slot in the response list.
+                    ## Then we make this into an [n] x [n.xvar] array for position [[i]] in the target response.
+                    csv.idx  <- array(0, n * n.xvar) 
+                    ## Jesus Christ. For an example, try n = n.xvar = 7, resp.clas.cnt = 2
+                    ## For response 1, i = 1:   1  2  3  4  5  6  7  8  9 10   21 22 23 24 25 26 27 28 29 30   41 42 43 44 45 46 47 48 49 50
+                    ## For response 2, i = 2:  11 12 13 14 15 16 17 18 19 20   31 32 33 34 35 36 37 38 39 40   51 52 53 54 55 56 57 58 59 60
+                    ## Then we make this into an [n] x [n.xvar] array for position [[i]] in the target response.
+                    for (j in 1:n.xvar) {
+                        csv.idx[(((j-1) * n) + 1) : (((j-1) * n) + n)]  <- ( ((i-1) * n) + ((j-1) * n * resp.clas.count) + 1 ) : ( ((i-1) * n) + ((j-1) * n * resp.clas.count) + n )
+                    }
+                    ## New case specific arrays, numerator:
+                    csv.num <- (if (!is.null(nativeOutput$csvClas))
+                                    array(nativeOutput$csvClas[csv.idx], c(n, n.xvar)) else NULL)
+                    classOutput[[i]] <- c(classOutput[[i]], csv.num = list(csv.num))
+                    remove(csv.num)
+                    ## New case specific arrays, denominator:
+                    csv.den <- (if (!is.null(nativeOutput$csvDen))
+                                    array(nativeOutput$csvDen, c(n, n.xvar)) else NULL)
+                    classOutput[[i]] <- c(classOutput[[i]], csv.den = list(csv.den))
+                    remove(csv.den)
                     if (!is.null(nativeOutput$vimpClas)) {
                         importance <- array(0, c(1 + levels.count[i], n.xvar), dimnames=vimp.names)
                         for (j in 1: (1 + levels.count[i])) {
@@ -1627,13 +1718,13 @@ rfsrc <- function(formula, data, ntree = 1000,
                     block.offset[2:floor(ntree/block.size)] <- length(regr.index)
                 }
                 block.offset <-  cumsum(block.offset)
-                ## Incoming vimp rates: V=xvar R=response L=level
+                ## Incoming vimp rates: V=xvar R=response
                 ## V1R1 V1R2, V2R1 V2R2, V3R1 V3R2, ... 
-                ## Yields vimp.offset = c(1, 3, 5, ...) 
                 vimp.offset <- array(1, n.xvar)
                 if (n.xvar > 1) {
                     vimp.offset[2:n.xvar] <- length(regr.index)
                 }
+                ## Yields vimp.offset = c(1, 3, 5, ...) 
                 vimp.offset <-  cumsum(vimp.offset)
                 iter.ensb.start <- 0
                 iter.ensb.end   <- 0
@@ -1642,11 +1733,15 @@ rfsrc <- function(formula, data, ntree = 1000,
                 ## From the native code:
                 ##   "allEnsbRGR"
                 ##   "oobEnsbRGR"
-                ## -> of dim [resp.regr.count] x [obsSize]
+                ## -> of dim [resp.regr.count] x [n]
+                ## To the R code:
+                ## -> of dim [[resp.regr.count]] x [n] 
                 ## From the native code:
                 ##   "allEnsbQNT"
                 ##   "oobEnsbQNT"
                 ## -> of dim [resp.regr.count] x [length(prob)] x [n]
+                ## To the R code:
+                ## -> of dim [[resp.regr.count]] x [n] x [length(prob)]
                 ## From the native code:
                 ##   "perfRegr"
                 ## -> of dim [ntree] x [resp.regr.count]
@@ -1659,9 +1754,29 @@ rfsrc <- function(formula, data, ntree = 1000,
                 ## -> of dim [[resp.regr.count]] x [block.cnt]
                 ## From the native code:
                 ##   "vimpRegr"
-                ## -> of dim [n.vxar] x [resp.regr.count]
+                ## -> of dim [n.xvar] x [resp.regr.count]
                 ## To the R code:
                 ## -> of dim  [[resp.regr.count]] x [n.xvar]
+                ## From the native code:
+                ##   "cseNum"
+                ## -> of dim [resp.regr.count] x [n]
+                ## To the R code:
+                ## -> of dim [[resp.regr.count]] x [n]
+                ## From the native code:
+                ##   "cseDen"
+                ## -> of dim [n]
+                ## To the R code:
+                ## -> of dim [n]
+                ## From the native code:
+                ##   "csvNum"
+                ## -> of dim [n.xvar] x [resp.regr.count] x [n]
+                ## To the R code:
+                ## -> of dim [[resp.regr.count]] x [n] x [n.xvar]
+                ## From the native code:
+                ##   "csvDen"
+                ## -> of dim [n.xvar] x [n] 
+                ## To the R code:
+                ## -> of dim  x [n]  x [n.xvar]
                 ## Preparing for holdout regression vimp.  See the details and examples further below for
                 ## parsing the output.
                 if (!is.null(nativeOutput$holdoutRegr)) {
@@ -1686,6 +1801,15 @@ rfsrc <- function(formula, data, ntree = 1000,
                                           array(nativeOutput$oobEnsbRGR[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
                     regrOutput[[i]] <- c(regrOutput[[i]], predicted.oob = list(predicted.oob))
                     remove(predicted.oob)
+                    ## New case specific arrays, numerator:
+                    cse.num <- (if (!is.null(nativeOutput$cseRegr))
+                                    array(nativeOutput$cseRegr[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
+                    regrOutput[[i]] <- c(regrOutput[[i]], cse.num = list(cse.num))
+                    remove(cse.num)
+                    ## New case specific arrays, denominator:
+                    cse.den <- (if (!is.null(nativeOutput$cseDen))
+                                    array(nativeOutput$cseDen[1:n], n) else NULL)
+                    regrOutput[[i]] <- c(regrOutput[[i]], cse.den = list(cse.den))
                     quantile <- (if (!is.null(nativeOutput$allEnsbQNT))
                                      array(nativeOutput$allEnsbQNT[(iter.qntl.start + 1):iter.qntl.end],
                                            c(n, length(prob))) else NULL)
@@ -1715,6 +1839,35 @@ rfsrc <- function(formula, data, ntree = 1000,
                         regrOutput[[i]] <- c(regrOutput[[i]], importance = list(importance))
                         remove(importance)
                     }
+                    ## Incoming csv rates:  V=xvar R=response n=case
+                    ## In elemental form:
+                    ## V1R1n1 V1R1n2 V1R1n3, ..., V1R2n1 V1R2n2 V1R2n3, ..., V2R1n1, V2R1n2, V2R1n3, ..., V2R2n1, V2R2n2, V2R2n3, ...
+                    ## Equivalent in blocks on (n):
+                    ##       V1R1(n)  V1R2(n)  V1R3(n)  V2R1(n)  V2R2(n)  V2R3(n)  V3R1(n)  V3R2(n)  V3R3(n)
+                    ## To parse we use:
+                    ## R1:    iter11                    iter12                     iter13
+                    ## R2:             iter21                    iter22                     iter23
+                    ## R3:                      iter31                    iter32                     iter33
+                    ## All zeros initially and of length for this [[i]] slot in the response list.
+                    ## Then we make this into an [n] x [n.xvar] array for position [[i]] in the target response.
+                    csv.idx  <- array(0, n * n.xvar) 
+                    ## Jesus Christ. For an example, try n = n.xvar = 7, resp.regr.cnt = 2
+                    ## For response 1, i = 1:   1  2  3  4  5  6  7  8  9 10   21 22 23 24 25 26 27 28 29 30   41 42 43 44 45 46 47 48 49 50
+                    ## For response 2, i = 2:  11 12 13 14 15 16 17 18 19 20   31 32 33 34 35 36 37 38 39 40   51 52 53 54 55 56 57 58 59 60
+                    ## Then we make this into an [n] x [n.xvar] array for position [[i]] in the target response.
+                    for (j in 1:n.xvar) {
+                        csv.idx[(((j-1) * n) + 1) : (((j-1) * n) + n)]  <- ( ((i-1) * n) + ((j-1) * n * resp.regr.count) + 1 ) : ( ((i-1) * n) + ((j-1) * n * resp.regr.count) + n )
+                    }
+                    ## New case specific arrays, numerator:
+                    csv.num <- (if (!is.null(nativeOutput$csvRegr))
+                                    array(nativeOutput$csvRegr[csv.idx], c(n, n.xvar)) else NULL)
+                    regrOutput[[i]] <- c(regrOutput[[i]], csv.num = list(csv.num))
+                    remove(csv.num)
+                    ## New case specific arrays, denominator:
+                    csv.den <- (if (!is.null(nativeOutput$csvDen))
+                                    array(nativeOutput$csvDen, c(n, n.xvar)) else NULL)
+                    regrOutput[[i]] <- c(regrOutput[[i]], csv.den = list(csv.den))
+                    remove(csv.den)
                     ## From the native code:
                     ##   "holdoutRegr"
                     ##   -> of dim [p] x [holdout.blk[.]] x [resp.regr.count]

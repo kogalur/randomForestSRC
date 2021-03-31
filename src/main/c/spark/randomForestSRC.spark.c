@@ -196,8 +196,6 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   RF_rTarget              = (uint *) copy1DObject(yTargetIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
   RF_intrPredictorSize    = (uint) xImportanceSize;
   RF_intrPredictor        = (uint *) copy1DObject(xImportanceIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
-  RF_sobservationSize     = (uint) subsetSize;
-  RF_sobservationIndv     = (uint *) copy1DObject(subsetIndex, NATIVE_TYPE_INTEGER, &RF_jni1DInfoListSize, FALSE);
    
   populatePartialObject(partial);
   RF_fobservationSize     = (uint) fnSize;

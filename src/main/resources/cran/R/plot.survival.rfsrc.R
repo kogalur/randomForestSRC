@@ -35,7 +35,7 @@ plot.survival.rfsrc <- function (x,
     x$yvar[x$imputed.indv, ]=x$imputed.data[, 1:2]
   }
   ## get the event data
-  event.info <- get.event.info(x)
+  event.info <- x$event.info
   ## Process the subsetted index
   ## Assumes the entire data set is to be used if not specified
   if (missing(subset)) {

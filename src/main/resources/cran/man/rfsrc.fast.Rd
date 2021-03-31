@@ -15,7 +15,6 @@
   samp = NULL,
   ntime = 50,
   forest = FALSE,
-  terminal.qualts = FALSE,
   ...)
 }
 \arguments{
@@ -36,14 +35,6 @@
     constrain ensemble calculations to a grid of \code{ntime} time points.}
   \item{forest}{Should the forest object be returned?  Turn this on if
     you want prediction on test data but for big data this can be large.}
-  \item{terminal.qualts}{Should terminal node membership information be
-    returned?  Ensure this is off in the presence of big data as memory
-    warnings can occur otherwise.  In either case, this parameter does not effect
-    the ability to restore the model.  When this is \code{FALSE}, the
-    training data must be sent down the tree when restoring the model.
-    When this is \code{TRUE}, terminal node membership is assigned based
-    on the contents of this output during model restoration, resulting
-    in a faster CPU times.}
   \item{...}{Further arguments to be passed to \code{\link{rfsrc}}.}
 }
 \details{

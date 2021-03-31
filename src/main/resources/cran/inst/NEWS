@@ -10,6 +10,13 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Implementation of rfsrc.anonymous() allowing one to save a model without
+the presence of training data, and subsequently predicting without it, as well.
+Case specific error and VIMP for classification and regression.
+  
+---------------------------------------------------------------------------------
+RELEASE 2.10.0
+---------------------------------------------------------------------------------
 New additions to the package include sidClustering of unsupervised
 data using staggered interaction data (SID) (Mantero and Ishwaran,
 2020).  Implements the artificial two-class approach of Breiman
@@ -19,7 +26,6 @@ variable. Applies to all families. Finally, visualize trees on your
 Safari or Google Chrome browser using the new get.tree function for
 extracting trees from a forest. Many thanks to @dbarg1 on GitHub for
 the initial prototype of this last function.
-  
 
 ---------------------------------------------------------------------------------
 RELEASE 2.9.3

@@ -9,11 +9,14 @@ subsample.rfsrc <- function(obj,
 {
   ##--------------------------------------------------------------
   ##
-  ## confirm object is of the right type
+  ## coherence checks
   ##
   ##--------------------------------------------------------------
   if (sum(inherits(obj, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2) {
     stop("This function only works for objects of class `(rfsrc, grow)'")
+  }
+  if (inherits(obj, "anonymous")) {
+    stop("this function does work with anonymous forests")
   }
   ##--------------------------------------------------------------
   ##

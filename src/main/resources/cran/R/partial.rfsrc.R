@@ -22,11 +22,16 @@ partial.rfsrc <- function(
   if (missing(object)) {
     stop("object is missing!")
   }
+  ## coherence checks
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2    &
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2) {
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
   }
-  ## acquire the forest
+  ## anonymous not allowed
+  if (inherits(object, "anonymous")) {
+    stop("this function does work with anonymous forests")
+  }
+  ## acquire the forest --> hereafter the object is the forest
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.forest.missing(object)) {
       stop("The forest is empty.  Re-run rfsrc (grow call) with forest=TRUE")
@@ -68,25 +73,29 @@ partial.rfsrc <- function(
   ## are equivalent from a native code perspective.
   ## Determine the immutable yvar factor map which is needed for
   ## classification sexp dimensioning.  But, first convert object$yvar
-  ## to a data frame which is required for factor processing.
-  object$yvar <- as.data.frame(object$yvar)
-  colnames(object$yvar) <- yvar.names
-  yfactor <- extract.factor(object$yvar)
+  ## to a data frame which is required for factor processing
+  #object$yvar <- as.data.frame(object$yvar)
+  #colnames(object$yvar) <- yvar.names
+  yfactor <- object$yvar.factor
+  ## multivariate family details
   m.target.idx <- get.outcome.target(family, yvar.names, m.target)
-  ## Get the y-outcome type and number of levels
-  yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names, object$coerce.factor)
-  yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, object$yvar, object$coerce.factor)
+  ## short cut to get the y-outcome type and number of levels
+  yvar.types <- yfactor$types
+  yvar.nlevels  <- yfactor$nlevels
+  yvar.numeric.levels  <- yfactor$numeric.levels
   ## recover the individual subject identifiers, if they exist.
   subj <- object$subj
   ## Get event information for survival families.
-  event.info <- get.event.info(object)
+  event.info <- object$event.info
+  event.type  <- event.info$event.type
   ## CR.bits assignment.
   cr.bits <- get.cr.bits(family)
   ## Determine the immutable xvar factor map.
-  xfactor <- extract.factor(object$xvar)
-  ## Get the x-variable type and number of levels.
-  xvar.types <- get.xvar.type(xfactor$generic.types, xvar.names, object$coerce.factor)
-  xvar.nlevels <- get.xvar.nlevels(xfactor$nlevels, xvar.names, object$xvar, object$coerce.factor)
+  xfactor <- object$xvar.factor
+  ## short cut to get the x-variable type and number of levels
+  xvar.types <- xfactor$types
+  xvar.nlevels <- xfactor$nlevels
+  xvar.numeric.levels <- xfactor$numeric.levels
   ## Initialize the number of trees in the forest.
   ntree <- object$ntree
   ## Use the training data na.action protocol.
@@ -167,23 +176,37 @@ partial.rfsrc <- function(
                                   ## >>>> start of maxi forest object >>>>
                                   as.integer(ntree),
                                   as.integer(n),
-                                  ##
                                   list(as.integer(length(yvar.types)),
                                        if (is.null(yvar.types)) NULL else as.character(yvar.types),
                                        if (is.null(yvar.types)) NULL else as.integer(yvar.nlevels),
+                                       if (is.null(yvar.numeric.levels)) NULL else sapply(1:length(yvar.numeric.levels), function(nn) {as.integer(length(yvar.numeric.levels[[nn]]))}),
                                        if (is.null(subj)) NULL else as.integer(subj),
+                                       if (is.null(event.type)) NULL else as.integer(length(event.type)),
+                                       if (is.null(event.type)) NULL else as.integer(event.type),
                                        if (is.null(yvar.types)) NULL else as.double(as.vector(yvar))),
-                                  ##
-                                  as.integer(ncol(xvar)),
-                                  as.character(xvar.types),
-                                  as.integer(xvar.nlevels),
-                                  as.double(xvar),
-                                  ##
+                                  if (is.null(yvar.numeric.levels)) {
+                                      NULL
+                                  }
+                                  else {
+                                      lapply(1:length(yvar.numeric.levels),
+                                             function(nn) {as.integer(yvar.numeric.levels[[nn]])})
+                                  },
+                                  list(as.integer(n.xvar),
+                                       as.character(xvar.types),
+                                       if (is.null(xvar.types)) NULL else as.integer(xvar.nlevels),
+                                       if (is.null(xvar.numeric.levels)) NULL else sapply(1:length(xvar.numeric.levels), function(nn) {as.integer(length(xvar.numeric.levels[[nn]]))}),
+                                       as.double(as.vector(xvar))),
+                                  if (is.null(xvar.numeric.levels)) {
+                                      NULL
+                                  }
+                                  else {
+                                      lapply(1:length(xvar.numeric.levels),
+                                             function(nn) {as.integer(xvar.numeric.levels[[nn]])})
+                                  },
                                   list(as.integer(length(case.wt)),
                                        if (is.null(case.wt)) NULL else as.double(case.wt),
                                        as.integer(sampsize),
                                        if (is.null(samp)) NULL else as.integer(samp)),
-                                  ##
                                   list(if(is.null(event.info$time.interest)) as.integer(0) else as.integer(length(event.info$time.interest)),
                                        if(is.null(event.info$time.interest)) NULL else as.double(event.info$time.interest)),
                                   as.integer(object$totalNodeCount),
@@ -315,8 +338,6 @@ partial.rfsrc <- function(
                                        as.integer(length(partial.xvar2)),
                                        if (length(partial.xvar2) == 0) NULL else as.integer(match(partial.xvar2, xvar.names)),
                                        as.double(partial.values2)),
-                                  as.integer(0),     ## Subsetting disabled.
-                                  as.integer(NULL),  ## Subsetting disabled.
                                   as.integer(0),    ## New data disabled.
                                   as.integer(0),    ## New data disabled.
                                   as.double(NULL),  ## New data disabled.

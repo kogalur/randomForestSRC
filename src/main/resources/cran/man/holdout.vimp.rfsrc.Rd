@@ -32,7 +32,8 @@
     be a number.}
   \item{samptype}{Type of bootstrap used.}
   \item{vtry}{Number of variables randomly selected to be held out when
-    growning a tree.}
+    growing a tree.  This can also be set to a list for a targeted hold
+    out VIMP analysis.  See details below for more information.}
   \item{block.size}{Specifies number of trees in a block when calculating
     holdout variable importance.}
   \item{...}{Further arguments to be passed to \code{\link{rfsrc}}.}
@@ -81,6 +82,38 @@
   when \code{vtry} is different than one.  Thus this option should be
   used with caution.
 
+  Accuracy also depends on the value of \code{blocksize}.  Smaller
+  values generally produce better results but are more computationally
+  demanding.  The value of \code{blocksize} should not exceed
+  \code{ntree} divided by number of features, otherwise there may not be
+  enough trees to satisify the target block size for a feature and
+  missing values will result.
+
+  Finally, we note that a targeted hold out VIMP analysis can be
+  requested by setting \code{vtry} to a list with two entries.  The
+  first entry is a vector of integer values specifying the variables of
+  interest.  The second entry is a boolean logical flag indicating
+  whether individual or joint VIMP should be calculated.  For example,
+  suppose variables 1, 4 and 5 are our variables of interest.  To
+  calculate holdout VIMP for these variables, and these variables only,
+  \code{vtry} would be specified by
+
+   vtry = list(xvar = c(1, 4, 5), joint = FALSE)
+
+   On the other hand, if we are interested in the joint effect when we
+   remove the three variables simultaneously, then
+
+   vtry = list(xvar = c(1, 4, 5), joint = TRUE)
+
+   The benefits of a targeted analysis is that the user may have a
+   pre-conceived idea of which variables are interesting.  Only VIMP for
+   these variables will be calculated which greatly reduces
+   computational time.  Another benefit is that when joint VIMP is
+   requested, this provides the user with a way to assess importance of
+   specific groups of variables.  See the iris example below for
+   illustration.
+     
+
 }
 \value{
   Invisibly a list with the following components (which themselves can be lists):
@@ -126,6 +159,22 @@ print(iris.obj$importance)
 ## iris data using brier prediction error
 iris.obj <- holdout.vimp(Species ~., data = iris, perf.type = "brier")
 print(iris.obj$importance)
+
+## ------------------------------------------------------------
+## illustration of targeted holdout vimp analysis
+## ------------------------------------------------------------
+
+## iris data - only interested in variables 3 and 4
+vtry <- list(xvar = c(3, 4), joint = FALSE)
+print(holdout.vimp(Species ~., data = iris, vtry = vtry)$impor)
+
+## iris data - joint importance of variables 3 and 4
+vtry <- list(xvar = c(3, 4), joint = TRUE)
+print(holdout.vimp(Species ~., data = iris, vtry = vtry)$impor)
+
+## iris data - joint importance of variables 1 and 2
+vtry <- list(xvar = c(1, 2), joint = TRUE)
+print(holdout.vimp(Species ~., data = iris, vtry = vtry)$impor)
 
 
 ## ------------------------------------------------------------

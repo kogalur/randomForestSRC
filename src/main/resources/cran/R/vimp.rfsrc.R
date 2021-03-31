@@ -4,7 +4,6 @@ vimp.rfsrc <- function(object,
                        importance = c("permute", "random", "anti"),
                        block.size = 10,
                        joint = FALSE,
-                       subset,
                        seed = NULL,
                        do.trace = FALSE,
                        ...)
@@ -52,21 +51,6 @@ vimp.rfsrc <- function(object,
   if (bootstrap == "none" || bootstrap == "by.node") {
     stop("grow objects under non-standard bootstrapping are devoid of performance values")
   }
-  ## process the subsetted index 
-  ## assumes the entire data set is to be used if not specified
-  if (missing(subset)) {
-    subset <- NULL
-  }
-  else {
-    ## convert the user specified subset into a usable form
-    if (is.logical(subset)) {
-        subset <- which(subset)
-      }
-    subset <- unique(subset[subset >= 1 & subset <= nrow(object$xvar)])
-    if (length(subset) == 0) {
-        stop("'subset' not set properly")
-    }
-  }
   ## make the call to generic predict
   result <- generic.predict.rfsrc(object,
                                   m.target = m.target,
@@ -76,7 +60,6 @@ vimp.rfsrc <- function(object,
                                   seed = seed,
                                   do.trace = do.trace,
                                   membership = FALSE,
-                                  subset = subset,
                                   ...)
   return(result)
 }

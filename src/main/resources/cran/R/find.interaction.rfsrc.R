@@ -8,7 +8,6 @@ find.interaction.rfsrc <- function(
   sorted = TRUE,
   nvar = NULL, 
   nrep  = 1,
-  subset,
   na.action = c("na.omit", "na.impute"),
   seed = NULL,
   do.trace = FALSE,
@@ -107,11 +106,11 @@ find.interaction.rfsrc <- function(
             imp.indv.m <- c(cbind(coerce.multivariate(vimp(object, xvar.names[c(k,l)],
                                                            m.target = m.target,
                                                            importance = importance, joint = FALSE, 
-                                                           na.action = na.action, subset = subset, seed = seed, 
+                                                           na.action = na.action, seed = seed, 
                                                            do.trace = do.trace), m.target)$importance)[, target.dim])
             imp.joint.m <- coerce.multivariate(vimp(object, xvar.names[c(k,l)], m.target = m.target,
                                                     importance = importance, joint = TRUE,
-                                                    na.action = na.action, subset = subset, seed = seed,
+                                                    na.action = na.action, seed = seed,
                                                     do.trace = do.trace), m.target)$importance[target.dim]
             imp[1] <- imp[1] + imp.indv.m[1]
             imp[l-k+1] <- imp[l-k+1] + imp.indv.m[2]

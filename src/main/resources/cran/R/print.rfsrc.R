@@ -16,7 +16,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     print.default(x)
     return()
   }
-  ## deal with synthetic forests        
+  ## processing for synthetic forests        
   sf.flag <- FALSE
   if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
     if (sum(inherits(x, c("rfsrc", "synthetic", "oob"), TRUE) == c(1, 2, 3)) != 3) {
@@ -25,12 +25,12 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     }
     x <- x$rfSyn
   }
-  ## is this a subsampled object?
+  ## processing for subsampled object
   if (sum(inherits(x, c("rfsrc", "subsample"), TRUE) == c(1, 4)) == 2) {
     print.subsample(x, ...)
     return()
   }
-  ## is this a subsampled-bootstrap object?
+  ## processing for subsampled-bootstrap object?
   if (sum(inherits(x, c("rfsrc", "bootsample"), TRUE) == c(1, 4)) == 2) {
     print.bootsample(x, ...)
     return()
@@ -63,7 +63,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   x <- coerce.multivariate(x, outcome.target)
   ## survival: event frequencies
   if (grepl("surv", x$family)) {
-    event <- get.event.info(x)$event
+    event <- x$event.info$event
     n.event <- 1
     if (!is.null(event)) {
       n.event <- length(unique(event))

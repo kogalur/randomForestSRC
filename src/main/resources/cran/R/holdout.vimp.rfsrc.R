@@ -1,12 +1,12 @@
 holdout.vimp.rfsrc <- function(formula, data,
-                                       ntree = function(p, vtry){1000 * p / vtry},
-                                       nsplit = 10,
-                                       ntime = 50,
-                                       sampsize = function(x){x * .632},
-                                       samptype = "swor",
-                                       block.size = 10,
-                                       vtry = 1,
-                                       ...)
+                               ntree = function(p, vtry){1000 * p / vtry},
+                               nsplit = 10,
+                               ntime = 50,
+                               sampsize = function(x){x * .632},
+                               samptype = "swor",
+                               block.size = 10,
+                               vtry = 1,
+                               ...)
 {
   ## --------------------------------------------------------------
   ##   
@@ -24,11 +24,34 @@ holdout.vimp.rfsrc <- function(formula, data,
   p <- length(rfsrc(formula, data, nodedepth = 1, ntime = 1,
               ntree = 1, splitrule = "random")$xvar.names)
   ## process ntree - is it a function or number?
+  ## targeted hold out vimp must be handled carefully - checks are put in place
   if (!is.function(ntree) && !is.numeric(ntree)) {
     stop("ntree must be a function or number specifying requested number of grow trees")
   }
   if (is.function(ntree)) {
-    ntree <- ntree(p, vtry)
+    if (!is.list(vtry)) {
+      ntree <- ntree(p, vtry)
+    }
+    ## special case when vtry is a list and user wants targeted hold out vimp
+    else {
+      xvar <- unlist(vtry[1])
+      if (any(xvar < 1) | any(xvar > p)) {
+        stop("x-variables specified in vtry should be integer values between 1 and p=number of features")
+      }      
+      joint <- unlist(vtry[2])
+      if (!is.logical(joint)) {
+        stop("joint vimp in vtry must be specified as being either TRUE or FALSE")
+      }
+      if (!joint) {
+        ntree <- ntree(length(xvar), 1)
+      }
+      else {
+        if (length(xvar) == p) {
+          stop("number of hold out variables for joint analysis must be less than number of features")
+        }
+        ntree <- ntree(1, 1)
+      }
+    }
   }
   ## initialize the holdout specs object
   holdout.specs <- get.holdout.specs(vtry, p, ntree, block.size, mode = "baseline")
@@ -259,20 +282,48 @@ holdout.vimp <- holdout.vimp.rfsrc
 ## --------------------------------------------------------------
 ##
 ## function to create holdout native code parameters
+## - no checks on block.size are made
 ##
 ## --------------------------------------------------------------
 get.holdout.specs <- function(vtry, p, ntree, block.size, mode) {
-  if (vtry > 0) {
-    holdout <- make.holdout.array(vtry, p, ntree, NULL)
-    ## No checks on block.size ...
-    obj <- list(as.integer(vtry), as.integer(holdout), as.integer(block.size), as.integer(0))
-    names(obj) = c("vtry", "holdout", "block.size", "mode")
-    obj <- switch.holdout.specs(obj, mode)
+  ## make holdout array
+  ## check that vtry is not a list --> default case and default processing
+  if (!is.list(vtry)) {
+    if (vtry > 0) {
+      holdout <- make.holdout.array(vtry, p, ntree, NULL)
+    }
+    else {
+      stop("vtry must be positive")
+    }
   }
+  ## vtry is a list --> user wants targeted hold out vimp
   else {
-    obj <- NULL
+    ## parse vtry
+    xvar <- unlist(vtry[1])
+    joint <- unlist(vtry[2])
+    ## set vtry to integer value
+    if (!joint) {
+      vtry <- 1
+    }
+    else {
+      vtry <- length(xvar)
+    }
+    if (!joint) {
+      holdout <- do.call(cbind, lapply(1:ntree, function(b) {
+        ho <- rep(0, p)
+        ho[resample(xvar, size = 1, replace = FALSE)] <- 1
+        ho
+      }))
+    }
+    else {
+      holdout <- matrix(0, p, ntree)
+      holdout[xvar, ] <- 1
+    }
   }
-  return (obj)
+  ## assemble the return object and return it
+  obj <- list(as.integer(vtry), as.integer(holdout), as.integer(block.size), as.integer(0))
+  names(obj) = c("vtry", "holdout", "block.size", "mode")
+  return(switch.holdout.specs(obj, mode))
 }
 ## --------------------------------------------------------------
 ##

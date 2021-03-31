@@ -8,7 +8,7 @@
 \usage{\method{find.interaction}{rfsrc}(object, xvar.names, cause, m.target,
   importance = c("permute", "random", "anti",
                  "permute.ensemble", "random.ensemble", "anti.ensemble"),
-  method = c("maxsubtree", "vimp"), sorted = TRUE, nvar, nrep = 1, subset, 
+  method = c("maxsubtree", "vimp"), sorted = TRUE, nvar, nrep = 1, 
   na.action = c("na.omit", "na.impute"),
   seed = NULL, do.trace = FALSE, verbose = TRUE, ...)
 }
@@ -32,8 +32,6 @@
     competing risks.}
   \item{nvar}{Number of variables to be used.}
   \item{nrep}{Number of Monte Carlo replicates when \option{method="vimp"}.}
-  \item{subset}{Vector indicating which rows of the x-variable matrix
-    from the \code{object} are to be used. Uses all rows if not specified.}
   \item{na.action}{Action to be taken if the data contains \code{NA}
     values.  Applies only when \option{method="vimp"}.}
   \item{seed}{Seed for random number generator.  Must be a negative

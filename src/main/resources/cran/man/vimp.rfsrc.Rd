@@ -8,7 +8,7 @@
 }
 \usage{\method{vimp}{rfsrc}(object, xvar.names, m.target = NULL, 
   importance = c("permute", "random", "anti"), block.size = 10,
-  joint = FALSE, subset, seed = NULL, do.trace = FALSE, ...)
+  joint = FALSE, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)} or
@@ -23,12 +23,6 @@
   \item{block.size}{Specifies number of trees in a block when calculating
     VIMP.}
   \item{joint}{Individual or joint VIMP?}
-  \item{subset}{Vector indicating which rows of the grow data to
-    restrict VIMP calculations to; i.e. this option yields VIMP which is
-    restricted to a specific subset of the data.  Note that the vector
-    should correspond to the rows of \code{object$xvar} and not the
-    original data passed in the grow call.  All rows used if not
-    specified.}
   \item{seed}{Negative integer specifying seed for the random number
     generator.} 
   \item{do.trace}{Number of seconds between updates to the user on
@@ -44,6 +38,9 @@
   
   Joint VIMP is requested using \option{joint} and equals importance for
   a group of variables when the group is perturbed simultaneously.
+
+  Use option \code{csv=TRUE} to request case specific VIMP.  Applies to
+  all families except survival families.  See example below.  
 }
 \value{
   An object of class \code{(rfsrc, predict)} containing importance
@@ -94,7 +91,6 @@ print(vimp(iris.obj, c("Sepal.Length", "Petal.Width"), joint = TRUE)$importance)
 airq.obj <- rfsrc(Ozone ~ ., airquality)
 print(vimp(airq.obj))
 
-
 ## ------------------------------------------------------------
 ## regression example where vimp is calculated on test data
 ## ------------------------------------------------------------
@@ -111,26 +107,35 @@ print(vimp(airq.obj)$importance)
 print(vimp(airq.obj, newdata = airquality[-train, ])$importance)
 
 ## ------------------------------------------------------------
-## survival example
-## study how vimp depends on tree imputation
-## makes use of the subset option
+## case-specific vimp
+## returns VIMP for each case
 ## ------------------------------------------------------------
 
-data(pbc, package = "_PROJECT_PACKAGE_NAME_")
+o <- rfsrc(mpg~., mtcars)
+v <- vimp(o, csv = TRUE)
+csvimp <- get.mv.csvimp(v, standardize=TRUE)
+print(csvimp)
 
-# determine which records have missing values
-which.na <- apply(pbc, 1, function(x){any(is.na(x))})
+## ------------------------------------------------------------
+## case-specific joint vimp
+## returns joint VIMP for each case
+## ------------------------------------------------------------
 
-# impute the data using na.action = "na.impute"
-pbc.obj <- rfsrc(Surv(days,status) ~ ., pbc, nsplit = 3,
-        na.action = "na.impute", nimpute = 1)
+o <- rfsrc(mpg~., mtcars)
+v <- vimp(o, joint = TRUE, csv = TRUE)
+csvimp <- get.mv.csvimp(v, standardize=TRUE)
+print(csvimp)
 
-# compare vimp based on records with no missing values
-# to those that have missing values
-# note the option na.action="na.impute" in the vimp() call
-vimp.not.na <- vimp(pbc.obj, subset = !which.na, na.action = "na.impute")$importance
-vimp.na <- vimp(pbc.obj, subset = which.na, na.action = "na.impute")$importance
-print(data.frame(vimp.not.na, vimp.na))
+## ------------------------------------------------------------
+## case-specific joint vimp for multivariate regression
+## returns joint VIMP for each case, for each outcome
+## ------------------------------------------------------------
+
+o <- rfsrc(Multivar(mpg, cyl) ~., data = mtcars)
+v <- vimp(o, joint = TRUE, csv = TRUE)
+csvimp <- get.mv.csvimp(v, standardize=TRUE)
+print(csvimp)
+
 }
 }
 \keyword{variable selection}

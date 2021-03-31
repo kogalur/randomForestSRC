@@ -172,12 +172,13 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP ntree,
                SEXP observationSize,
                SEXP yInfo,
+               SEXP yLevels,
                SEXP xInfo,
+               SEXP xLevels,
                SEXP sampleInfo,
                SEXP xWeightStat,
                SEXP yWeight,
                SEXP xWeight,
-               SEXP xData,
                SEXP timeInterestSize,
                SEXP timeInterest,
                SEXP nImpute,
@@ -185,7 +186,6 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP quantileSize,
                SEXP quantile,
                SEXP qEpsilon,
-               SEXP wibsTau,
                SEXP numThreads) {
   setUserTraceFlag(INTEGER(traceFlag)[0]);
   setNativeGlobalEnv();
@@ -245,38 +245,92 @@ SEXP rfsrcGrow(SEXP traceFlag,
   else {
     RF_rType = NULL;
   }
-  if(VECTOR_ELT(yInfo, 1) != R_NilValue) {
-    RF_rLevels              = (uint *) INTEGER(VECTOR_ELT(yInfo, 2)); RF_rLevels--;
+  if(VECTOR_ELT(yInfo, 2) != R_NilValue) {
+    RF_rLevelsMax         = (uint *) INTEGER(VECTOR_ELT(yInfo, 2)); RF_rLevelsMax--;
   }
   else {
-    RF_rLevels = NULL;
+    RF_rLevelsMax         = NULL;
   }
   if(VECTOR_ELT(yInfo, 3) != R_NilValue) {
-    RF_subjIn             =  (uint *) INTEGER(VECTOR_ELT(yInfo, 3));  RF_subjIn --;
+    RF_rLevelsCnt         = (uint *) INTEGER(VECTOR_ELT(yInfo, 3)); RF_rLevelsCnt--;
+  }
+  else {
+    RF_rLevelsCnt         = NULL;
+  }
+  if(VECTOR_ELT(yInfo, 4) != R_NilValue) {
+    RF_subjIn             =  (uint *) INTEGER(VECTOR_ELT(yInfo, 4));  RF_subjIn --;
   }
   else {
     RF_subjIn             = NULL;
   }
-  if(VECTOR_ELT(yInfo, 4) != R_NilValue) {  
-    RF_responseIn           = (double **) copy2DObject(VECTOR_ELT(yInfo, 4), NATIVE_TYPE_NUMERIC, TRUE, RF_ySize, RF_observationSize);
+  if(VECTOR_ELT(yInfo, 5) != R_NilValue) {
+    RF_eventTypeSize      =  INTEGER(VECTOR_ELT(yInfo, 5))[0];
+  }
+  else {
+    RF_eventTypeSize      = 0;
+  }
+  if(VECTOR_ELT(yInfo, 6) != R_NilValue) {
+    if (RF_eventTypeSize > 0) {
+      RF_eventType        =  (uint *) INTEGER(VECTOR_ELT(yInfo, 6));  RF_eventType --;
+    }
+    else {
+      RF_eventType        = NULL;
+    }
+  }
+  else {
+    RF_eventType          = NULL;
+  }
+  if(VECTOR_ELT(yInfo, 7) != R_NilValue) {
+    RF_responseIn         = (double **) copy2DObject(VECTOR_ELT(yInfo, 7), NATIVE_TYPE_NUMERIC, TRUE, RF_ySize, RF_observationSize);
   }
   else {
     RF_responseIn = NULL;
   }
+  if(yLevels != R_NilValue) {
+    RF_rLevelsSEXP = yLevels;
+  }
+  else {
+    RF_rLevelsSEXP = R_NilValue;    
+    RF_rLevels = NULL;
+  }
   RF_xSize                = INTEGER(VECTOR_ELT(xInfo, 0))[0];
-  RF_xType                = (char *) copy1DObject(VECTOR_ELT(xInfo, 1), NATIVE_TYPE_CHARACTER, RF_xSize, TRUE);
-  RF_xLevels              = (uint *) INTEGER(VECTOR_ELT(xInfo, 2)); RF_xLevels --;
+  if(VECTOR_ELT(xInfo, 1) != R_NilValue) {  
+    RF_xType                = (char *) copy1DObject(VECTOR_ELT(xInfo, 1), NATIVE_TYPE_CHARACTER, RF_xSize, TRUE);
+  }
+  else {
+    RF_xType = NULL;
+  }
+  if(VECTOR_ELT(xInfo, 2) != R_NilValue) {  
+    RF_xLevelsMax           = (uint *) INTEGER(VECTOR_ELT(xInfo, 2)); RF_xLevelsMax --;
+  }
+  else {
+    RF_xLevelsMax = NULL;
+  }
   if(VECTOR_ELT(xInfo, 3) != R_NilValue) {
-    RF_xtType             = (uint *) INTEGER(VECTOR_ELT(xInfo, 3)); RF_xtType --;
+    RF_xLevelsCnt         = (uint *) INTEGER(VECTOR_ELT(xInfo, 3)); RF_xLevelsCnt --;
+  }
+  else {
+    RF_xLevelsCnt         = NULL;
+  }
+  if(VECTOR_ELT(xInfo, 4) != R_NilValue) {
+    RF_xtType             = (uint *) INTEGER(VECTOR_ELT(xInfo, 4)); RF_xtType --;
   }
   else {
     RF_xtType             = NULL;
   }
-  if(VECTOR_ELT(xInfo, 4) != R_NilValue) {
-    RF_stType             = (uint *) INTEGER(VECTOR_ELT(xInfo, 4)); RF_stType --;
+  if(VECTOR_ELT(xInfo, 5) != R_NilValue) {
+    RF_stType             = (uint *) INTEGER(VECTOR_ELT(xInfo, 5)); RF_stType --;
   }
   else {
     RF_stType             = NULL;
+  }
+  RF_observationIn        = (double **) copy2DObject(VECTOR_ELT(xInfo, 6), NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
+  if(xLevels != R_NilValue) {
+    RF_xLevelsSEXP = xLevels;
+  }
+  else {
+    RF_xLevelsSEXP = R_NilValue;    
+    RF_xLevels = NULL;
   }
   RF_subjSize             = RF_observationSize;
   RF_subjWeight           = NULL;
@@ -304,7 +358,6 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_xWeightStat          = REAL(xWeightStat);  RF_xWeightStat--;
   RF_yWeight              = REAL(yWeight);  RF_yWeight--;
   RF_xWeight              = REAL(xWeight);  RF_xWeight--;
-  RF_observationIn        = (double **) copy2DObject(xData, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
   RF_timeInterestSize     = INTEGER(timeInterestSize)[0];
   RF_timeInterest         = REAL(timeInterest);  RF_timeInterest--;
   RF_nImpute              = INTEGER(nImpute)[0];
@@ -354,10 +407,9 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP ntree,
                   SEXP observationSize,
                   SEXP yInfo,
-                  SEXP xSize,
-                  SEXP xType,
+                  SEXP yLevels,
+                  SEXP xInfo,
                   SEXP xLevels,
-                  SEXP xData,
                   SEXP sampleInfo,
                   SEXP timeInterestObj,
                   SEXP totalNodeCount,
@@ -395,8 +447,6 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP xMarginalObj,
                   SEXP intrPredictorObj,
                   SEXP partial,
-                  SEXP sobservationSize,
-                  SEXP sobservationIndv,
                   SEXP fobservationSize,
                   SEXP frSize,
                   SEXP frData,
@@ -421,28 +471,86 @@ SEXP rfsrcPredict(SEXP traceFlag,
   else {
     RF_rType = NULL;
   }
-  if(VECTOR_ELT(yInfo, 1) != R_NilValue) {
-    RF_rLevels              = (uint *) INTEGER(VECTOR_ELT(yInfo, 2)); RF_rLevels--;
+  if(VECTOR_ELT(yInfo, 2) != R_NilValue) {
+    RF_rLevelsMax         = (uint *) INTEGER(VECTOR_ELT(yInfo, 2)); RF_rLevelsMax--;
   }
   else {
-    RF_rLevels = NULL;
+    RF_rLevelsMax         = NULL;
   }
   if(VECTOR_ELT(yInfo, 3) != R_NilValue) {
-    RF_subjIn             =  (uint *) INTEGER(VECTOR_ELT(yInfo, 3));  RF_subjIn --;
+    RF_rLevelsCnt         = (uint *) INTEGER(VECTOR_ELT(yInfo, 3)); RF_rLevelsCnt--;
+  }
+  else {
+    RF_rLevelsCnt = NULL;
+  }
+  if(VECTOR_ELT(yInfo, 4) != R_NilValue) {
+    RF_subjIn             =  (uint *) INTEGER(VECTOR_ELT(yInfo, 4));  RF_subjIn --;
   }
   else {
     RF_subjIn             = NULL;
   }
-  if(VECTOR_ELT(yInfo, 1) != R_NilValue) {  
-    RF_responseIn           = (double **) copy2DObject(VECTOR_ELT(yInfo, 4), NATIVE_TYPE_NUMERIC, TRUE, RF_ySize, RF_observationSize);
+  if(VECTOR_ELT(yInfo, 5) != R_NilValue) {
+    RF_eventTypeSize      =  INTEGER(VECTOR_ELT(yInfo, 5))[0];
+  }
+  else {
+    RF_eventTypeSize      = 0;
+  }
+  if(VECTOR_ELT(yInfo, 6) != R_NilValue) {
+    if (RF_eventTypeSize > 0) {
+      RF_eventType        =  (uint *) INTEGER(VECTOR_ELT(yInfo, 6));  RF_eventType --;
+    }
+    else {
+      RF_eventType        = NULL;
+    }
+  }
+  else {
+    RF_eventType          = NULL;
+  }
+  if(VECTOR_ELT(yInfo, 7) != R_NilValue) {  
+    RF_responseIn           = (double **) copy2DObject(VECTOR_ELT(yInfo, 7), NATIVE_TYPE_NUMERIC, TRUE, RF_ySize, RF_observationSize);
   }
   else {
     RF_responseIn = NULL;
   }
-  RF_xSize                = INTEGER(xSize)[0];
-  RF_xType                = (char *) copy1DObject(xType, NATIVE_TYPE_CHARACTER, RF_xSize, TRUE);
-  RF_xLevels              = (uint *) INTEGER(xLevels); RF_xLevels--;
-  RF_observationIn        = (double **) copy2DObject(xData, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
+  if(yLevels != R_NilValue) {
+    RF_rLevelsSEXP = yLevels;
+  }
+  else {
+    RF_rLevelsSEXP = R_NilValue;
+    RF_rLevels = NULL;
+  }
+  RF_xSize                = INTEGER(VECTOR_ELT(xInfo, 0))[0];
+  if(VECTOR_ELT(xInfo, 1) != R_NilValue) {
+    RF_xType                = (char *) copy1DObject(VECTOR_ELT(xInfo, 1), NATIVE_TYPE_CHARACTER, RF_xSize, TRUE);
+  }
+  else {
+    RF_xType = NULL;
+  }
+  if(VECTOR_ELT(xInfo, 2) != R_NilValue) {  
+    RF_xLevelsMax           = (uint *) INTEGER(VECTOR_ELT(xInfo, 2)); RF_xLevelsMax--;
+  }
+  else {
+    RF_xLevelsMax = NULL;
+  }
+  if(VECTOR_ELT(xInfo, 3) != R_NilValue) {
+    RF_xLevelsCnt           = (uint *) INTEGER(VECTOR_ELT(xInfo, 3)); RF_xLevelsCnt --;
+  }
+  else {
+    RF_xLevelsCnt = NULL;
+  }
+  if(VECTOR_ELT(xInfo, 4) != R_NilValue) {
+    RF_observationIn        = (double **) copy2DObject(VECTOR_ELT(xInfo, 4), NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
+  }
+  else {
+    RF_observationIn = NULL;
+  }
+  if(xLevels != R_NilValue) {
+    RF_xLevelsSEXP = xLevels;
+  }
+  else {
+    RF_xLevelsSEXP = R_NilValue;    
+    RF_xLevels = NULL;
+  }
   RF_subjSize             = 0;
   RF_subjWeight           = NULL;
   RF_bootstrapSize        = 0;
@@ -525,8 +633,6 @@ SEXP rfsrcPredict(SEXP traceFlag,
   else {
     RF_intrPredictor = NULL;
   }
-  RF_sobservationSize     = INTEGER(sobservationSize)[0];
-  RF_sobservationIndv     = (uint *) INTEGER(sobservationIndv);  RF_sobservationIndv --;
    
   RF_partialType          = INTEGER(VECTOR_ELT(partial, 0))[0];
   RF_partialXvar          = INTEGER(VECTOR_ELT(partial, 1))[0];
@@ -557,10 +663,10 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_getTree = (uint *) INTEGER(getTree);  RF_getTree --;
   RF_TN_SURV_ = REAL(tnSURV);
   RF_TN_MORT_ = REAL(tnMORT);
-  RF_TN_NLSN_ = REAL(tnNLSN) ;
+  RF_TN_NLSN_ = REAL(tnNLSN);
   RF_TN_CSHZ_ = REAL(tnCSHZ);
   RF_TN_CIFN_ = REAL(tnCIFN);
-  RF_TN_REGR_ = REAL(tnREGR);
+  RF_TN_REGR_ = REAL(tnREGR);  
   RF_TN_CLAS_ = (uint *) INTEGER(tnCLAS);
   processDefaultPredict();
   mode = (RF_fobservationSize > 0)? RF_PRED : RF_REST;  
@@ -641,8 +747,8 @@ SEXP rfsrcPredict(SEXP traceFlag,
   unstackForestObjectsAuxOnly(mode);
   free_1DObject(RF_rType, NATIVE_TYPE_CHARACTER, RF_ySize);
   free_1DObject(RF_xType, NATIVE_TYPE_CHARACTER, RF_xSize);
-  free_2DObject(RF_responseIn, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
-  free_2DObject(RF_observationIn, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
+  if (RF_responseIn != NULL) free_2DObject(RF_responseIn, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
+  if (RF_observationIn != NULL) free_2DObject(RF_observationIn, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
   free_2DObject(RF_bootstrapIn, NATIVE_TYPE_INTEGER, (RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2), RF_ntree, RF_subjSize);
   free_2DObject(RF_fresponseIn, NATIVE_TYPE_NUMERIC, RF_frSize > 0, RF_frSize, RF_fobservationSize);
   free_2DObject(RF_fobservationIn, NATIVE_TYPE_NUMERIC, RF_fobservationSize > 0 , RF_xSize, RF_fobservationSize);

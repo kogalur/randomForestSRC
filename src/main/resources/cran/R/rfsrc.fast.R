@@ -8,7 +8,6 @@ rfsrc.fast <- function(formula, data,
                        samp = NULL,
                        ntime = 50,
                        forest = FALSE,
-                       terminal.qualts = FALSE,
                        ...)
 {
   ## --------------------------------------------------------------
@@ -32,7 +31,7 @@ rfsrc.fast <- function(formula, data,
   ## list of forest parameters
   rfnames <- names(formals(rfsrc))
   ## add key hidden parameters
-  rfnames <- c(rfnames, "rfq", "perf.type", "gk.quantile", "prob", "prob.epsilon", "vtry")
+  rfnames <- c(rfnames, "rfq", "perf.type", "gk.quantile", "prob", "prob.epsilon", "vtry", "holdout.array")
    
   ## restrict to allowed values
   rfnames <- rfnames[rfnames != "ntree"              &
@@ -42,8 +41,7 @@ rfsrc.fast <- function(formula, data,
                      rfnames != "sampsize"           &
                      rfnames != "samptype"           &
                      rfnames != "ntime"              &
-                     rfnames != "forest"             &
-                     rfnames != "terminal.qualts"    ]
+                     rfnames != "forest"             ]
   ## get the permissible hidden options
   ## add formula if present
   dots <- list(...)
@@ -55,6 +53,11 @@ rfsrc.fast <- function(formula, data,
   ## ntree and sampsize are handled in rfsrc
   if (!is.null(samp)) {
     bootstrap <- "by.user"
+  }
+  ## manually set key hidden options if forest is not requested
+  if (!forest) {
+    dots$terminal.qualts <- FALSE
+    dots$terminal.quants <- FALSE
   }
   ##--------------------------------------------------------------
   ##
@@ -71,6 +74,5 @@ rfsrc.fast <- function(formula, data,
                  samptype = samptype,
                  samp = samp,
                  ntime = ntime,
-                 terminal.qualts = terminal.qualts,
                  forest = forest), dots)))
 }

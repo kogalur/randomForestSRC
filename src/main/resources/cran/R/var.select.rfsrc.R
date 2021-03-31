@@ -161,6 +161,9 @@ var.select.rfsrc <-
     if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2) {
       stop("This function only works for objects of class `(rfsrc, grow)'")
     }
+    if (inherits(object, "anonymous")) {
+      stop("this function does work with anonymous forests")
+    }
     if (is.null(object$forest)) {
       stop("Forest is empty!  Re-run grow call with forest set to 'TRUE'")
     }

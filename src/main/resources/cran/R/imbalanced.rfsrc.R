@@ -40,7 +40,7 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
   ## brf method
   ##----------------------------------------
   if (method == "brf") {
-    ## TBD TBD currently cannot handle missing values TBD TBD TBD
+    ## TBD TBD currently cannot handle missing values
     data <- na.omit(data)
     yvar <- data[, formulaPrelim$yvar.names]
     ## for legacy reasons we maintain swr here
@@ -73,7 +73,7 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
     ## undersampling of the majority class if requested
     ##-------------------------------------------------
     if (!is.null(ratio)) {
-      ## TBD TBD currently cannot handle missing values TBD TBD TBD
+      ## TBD TBD currently cannot handle missing values
       data <- na.omit(data)
       yvar <- data[, formulaPrelim$yvar.names]
       samp <- make.imbalanced.sample(ntree = ntree, ratio = ratio, y = yvar)

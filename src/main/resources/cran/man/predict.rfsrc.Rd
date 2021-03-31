@@ -44,10 +44,11 @@
   
   \item{get.tree}{Vector of integer(s) identifying trees over which the
     ensembles are calculated over.  By default, uses all trees in the
-    forest.  As an example, the user can extract the ensemble, the
-    variable importance, or proximity from a single tree (or several
-    trees).  Note that \code{block.size} will be over-ridden
-    so that it is no larger than the requested number of trees.}
+    forest.  As an example, the user can extract the ensemble, the VIMP
+    , or proximity from a single tree (or several trees).  Note that
+    \code{block.size} will be over-ridden so that it is no larger than
+    the requested number of trees.  See example below illustrating how
+    to extract VIMP for each tree.}
   
   \item{block.size}{Should the error rate be calculated on every tree?
     When \code{NULL}, it will only be calculated on the last tree.  To
@@ -147,6 +148,11 @@
   to ensure unbiased estimates.  See the examples below for
   illustration.
 
+  Use option \code{csv=TRUE} to request case specific VIMP
+  \code{csv=TRUE} to request case specific error rates.  Applies to all
+  families except survival families.  See examples below.  These options
+  can also be applied at the grow stage.
+  
 }    
 \value{
   An object of class \code{(rfsrc, predict)}, which is a list with the
@@ -278,20 +284,9 @@ print(veteran.pred)
 
 \donttest{
 ## ------------------------------------------------------------
-## predicted probability and predicted class labels are returned
-## in the predict object for classification analyses
-## ------------------------------------------------------------
-
-data(breast, package = "_PROJECT_PACKAGE_NAME_")
-breast.obj <- rfsrc(status ~ ., data = breast[(1:100), ])
-breast.pred <- predict(breast.obj, breast[-(1:100), ])
-print(head(breast.pred$predicted))
-print(breast.pred$class)
-
-## ------------------------------------------------------------
 ## example illustrating restore mode
-## if predict is called without specifying the test data
-## the original training data is used and the forest is restored
+## - if predict is called without specifying the test data
+##   the original training data is used and the forest is restored
 ## ------------------------------------------------------------
 
 ## first we make the grow call
@@ -313,6 +308,68 @@ print(prox[1:10,1:10])
 ## the grow forest
 var.used <- predict(airq.obj, var.used = "by.tree")$var.used
 print(head(var.used))
+
+## ------------------------------------------------------------
+## vimp for each tree
+## illustrates get.tree and how to extract information
+## from trees, even if that information was not requested
+## in the original call
+## ------------------------------------------------------------
+
+## regression analysis but no VIMP
+o <- rfsrc(mpg~., mtcars)
+
+## now extract VIMP for each tree using get.tree
+vimp.tree <- do.call(rbind, lapply(1:o$ntree, function(b) {
+     predict(o, get.tree = b, importance = TRUE)$importance
+}))
+
+## boxplot of tree VIMP
+boxplot(vimp.tree, outline = FALSE, col = "cyan")
+abline(h = 0, lty = 2, col = "red")
+
+## summary information of tree VIMP
+print(summary(vimp.tree))
+
+## extract tree-averaged VIMP using importance=TRUE
+## remember to set block.size to 1
+print(predict(o, importance = TRUE, block.size = 1)$importance)
+
+## use direct call to vimp() for tree-averaged VIMP
+print(vimp(o, block.size = 1)$importance)
+
+## ------------------------------------------------------------
+## case-specific vimp
+## returns VIMP for each case
+## ------------------------------------------------------------
+
+o <- rfsrc(mpg~., mtcars)
+op <- predict(o, importance = TRUE, csv = TRUE)
+csvimp <- get.mv.csvimp(op, standardize=TRUE)
+print(csvimp)
+
+## ------------------------------------------------------------
+## case-specific error rate
+## returns tree-averaged error rate for each case
+## ------------------------------------------------------------
+
+o <- rfsrc(mpg~., mtcars)
+op <- predict(o, importance = TRUE, cse = TRUE)
+cserror <- get.mv.cserror(op, standardize=TRUE)
+print(cserror)
+
+
+## ------------------------------------------------------------
+## predicted probability and predicted class labels are returned
+## in the predict object for classification analyses
+## ------------------------------------------------------------
+
+data(breast, package = "_PROJECT_PACKAGE_NAME_")
+breast.obj <- rfsrc(status ~ ., data = breast[(1:100), ])
+breast.pred <- predict(breast.obj, breast[-(1:100), ])
+print(head(breast.pred$predicted))
+print(breast.pred$class)
+
 
 ## ------------------------------------------------------------
 ## unique feature of _PROJECT_PACKAGE_NAME_

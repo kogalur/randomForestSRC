@@ -61,27 +61,21 @@ get.tree.rfsrc <- function(object,
   }
   ##----------------------------------------------------------------
   ##
-  ## confirm object is coherent
+  ## coherence checks
   ##
   ##----------------------------------------------------------------
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2) {
     stop("This function only works for objects of class `(rfsrc, grow)'")
   }
-  ##----------------------------------------------------------------
-  ##
-  ## extract x data
-  ## convert the data to numeric mode, apply the na.action protocol
-  ## missing data not allowed
-  ##
-  ##----------------------------------------------------------------
-  xvar.names <- object$forest$xvar.names
-  x.org.data <- x.data <- object$forest$xvar
-  if (any(is.na(x.data))) {
-    stop("missing data not allowed")
+  if (is.forest.missing(object)) {
+    stop("forest is missing.  Re-run rfsrc (grow call) with forest=TRUE")
   }
-  x.data <- finalizeData(xvar.names, x.data, miss.flag = FALSE)
-  n <- nrow(x.data)
-  subset <- 1:n
+  if (inherits(object, "anonymous")) {
+    anonymous <- TRUE
+  }
+  else {
+    anonymous <- FALSE
+  }
   ##----------------------------------------------------------------
   ##
   ## coherencey checks and flags
@@ -98,6 +92,24 @@ get.tree.rfsrc <- function(object,
   m.target <- get.univariate.target(object, m.target)
   ##----------------------------------------------------------------
   ##
+  ## extract x data
+  ## convert the data to numeric mode, apply the na.action protocol
+  ## missing data not allowed
+  ##
+  ##----------------------------------------------------------------
+  xvar.names <- object$forest$xvar.names
+  xvar.factor <- object$forest$xvar.factor
+  if (!anonymous) {
+    x.data <- object$forest$xvar
+    if (any(is.na(x.data))) {
+      stop("missing data not allowed")
+    }
+    x.data <- finalizeData(xvar.names, x.data, miss.flag = FALSE)
+  }
+  n <- object$n
+  subset <- 1:n
+  ##----------------------------------------------------------------
+  ##
   ## prediction details for filling out the terminal nodes
   ## family specific
   ##
@@ -106,7 +118,7 @@ get.tree.rfsrc <- function(object,
     ## survival and competing risk families.
     if (grepl("surv", family)) {
       ## extract event information
-      event.info <- get.event.info(object, subset)
+      event.info <- object$event.info
       cens <- event.info$cens
       event.type <- event.info$event.type
       ## assign time if missing
@@ -313,7 +325,8 @@ get.tree.rfsrc <- function(object,
     ## otherwise we would have huge sets full of levels that aren't used
     fs <- gsub(paste0(special,".*"),"",from.names[pt.f])
     fs.levels <- sapply(fs, function(fsn) {
-      length(levels(x.org.data[, fsn]))
+      #length(levels(x.org.data[, fsn]))
+      xvar.factor$nlevels[which(fsn == xvar.names)]
     })
     ## clean the splits up and encode as complementary pair sets
     split.str <- lapply(1:length(pt.f), function(j) {
@@ -398,15 +411,15 @@ get.tree.rfsrc <- function(object,
     call <- paste(call, collapse = " & ")
     ## evaluate the boolean operator
     ## this yields the id's for the cases in the node
-    pt <- which(eval(parse(text=call)))
-    ## extract the x-data (cases)
-    cases <- x.data[pt,, drop = FALSE]
-    n.cases <- length(pt)
+    if (!anonymous) {
+      pt <- which(eval(parse(text=call)))
+      n.cases <- length(pt)
+    }
     ## set the edgelabel
     edge.label <- node$split.pretty
     ## set the node label
     ## extract the predicted value in the node
-    if (predict.flag) {
+    if (predict.flag && !anonymous) {
       if (!is.factor(yhat)) {
         yhat <- round(mean(yhat[pt], na.rm = TRUE), 2)
         node.label <- paste0("n=", n.cases, "\n", yhat)
@@ -418,8 +431,12 @@ get.tree.rfsrc <- function(object,
       }
     }
     ## unsupervised family --> no predicted value
-    else {
+    else if (!predict.flag && !anonymous) {
       node.label <- paste0("n=", n.cases)
+    }
+    ## anonymous
+    else {
+      node.label <- NULL
     }
     ## set styles
     data.tree::SetGraphStyle(node, rankdir = "TB")

@@ -18,6 +18,11 @@ plot.variable.rfsrc <- function(
   subset,
   ...)
 {
+  ## --------------------------------------------------------------
+  ##   
+  ##   coherence checks
+  ##
+  ## --------------------------------------------------------------
   ## is this a synthetic forest?
   if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
     x <- x$rfSyn
@@ -33,10 +38,18 @@ plot.variable.rfsrc <- function(
   if (object$family == "unsupv") {
     stop("this function does not apply to unsupervised forests")
   }
+  if (inherits(object, "anonymous")) {
+      stop("this function does work with anonymous forests")
+  }    
   ## terminate if a partial plot is requested but no forest is found
   if (partial && (is.null(object$forest) || !object$forest$forest)) {
     stop("forest is empty:  re-run rfsrc (grow call) with forest=TRUE")
   }
+  ## --------------------------------------------------------------
+  ##   
+  ##   preliminary processing
+  ##
+  ## --------------------------------------------------------------
   ## if missing data was imputed then overlay the missing data for x
   ## bug reported by John Ehrlinger
   xvar <- object$xvar
@@ -303,7 +316,7 @@ plot.variable.rfsrc <- function(
     class(plot.variable.obj) <- c("rfsrc", "plot.variable", family)
   }
   ## ---------------------------------------------------------------------------------
-  ## (TBD TBD) Currently, the plot.variable family is not implemented!
+  ## TBD TBD Currently, the plot.variable family is not implemented!
   ## Just pull the precomputed variables ...
     else {
       plot.variable.obj <- object
@@ -596,7 +609,7 @@ extract.partial.pred <- function(obj, type, subset, m.target, target) {
             ## Grab the first outcome!  It will exist, as this is the univariate case.
             m.target <- names(obj$classOutput)[1]
           }
-          regrClassTarget <- which (names(obj$classOutput) == m.target)
+          regrClassTarget <- which(names(obj$classOutput) == m.target)
           ## Classification.
           if (length(regrClassTarget) > 0) {
             if (length(regrClassTarget) > 1) {

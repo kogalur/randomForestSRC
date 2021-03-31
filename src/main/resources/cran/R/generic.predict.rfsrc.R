@@ -7,7 +7,6 @@ generic.predict.rfsrc <-
            get.tree = NULL,
            block.size = NULL,
            importance.xvar,
-           subset = NULL,
            na.action = c("na.omit", "na.impute"),
            outcome = c("train", "test"),
            proximity = FALSE,
@@ -28,6 +27,9 @@ generic.predict.rfsrc <-
   user.option <- list(...)
   terminal.qualts <- is.hidden.terminal.qualts(user.option)
   terminal.quants <- is.hidden.terminal.quants(user.option)
+  cse  <- is.hidden.cse(user.option)
+  csv  <- is.hidden.csv(user.option)
+  ## TBD TBD make perf.type visible TBD TBD    
   perf.type <- is.hidden.perf.type(user.option)
   rfq <- is.hidden.rfq(user.option)
   gk.quantile <- is.hidden.gk.quantile(user.option)
@@ -49,10 +51,13 @@ generic.predict.rfsrc <-
       stop("Forest information for prediction is missing.  Re-run rfsrc (grow call) with forest=TRUE")
     }
   }
-  ## UBK UBK HERE'S WHERE I STARTED ANONYMOUS PROCESSING YOU WILL NEED TO FIX AS NEED UBK UBK
-  ## check if this is an anonymous object
+  ## check if this is an anonymous object - coerce values as necessary
   if (inherits(object, "anonymous")) {
     anonymize.bits <- 2^26
+    outcome <- "train"
+  }
+  else {
+      anonymize.bits <- 0
   }
   ## verify the importance option
   importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
@@ -212,30 +217,37 @@ generic.predict.rfsrc <-
   gk.quantile <- get.gk.quantile(gk.quantile)
   prob.assign <- global.prob.assign(if (is.null(prob)) object$prob else prob,
                                     if (is.null(prob.epsilon)) object$prob.epsilon else prob.epsilon,
-                                    gk.quantile, object$quantile.regr, splitrule, nrow(object$xvar))
+                                    gk.quantile, object$quantile.regr, splitrule, object$n)
   ## Determine the immutable yvar factor map which is needed for
   ## classification sexp dimensioning.  But, first convert object$yvar
   ## to a data frame which is required for factor processing
-  object$yvar <- as.data.frame(object$yvar)
-  colnames(object$yvar) <- yvar.names
-  yfactor <- extract.factor(object$yvar)
+  #object$yvar <- as.data.frame(object$yvar)
+  #colnames(object$yvar) <- yvar.names
+  yfactor <- object$yvar.factor
   ## multivariate family details
   m.target.idx <- get.outcome.target(family, yvar.names, m.target)
-  ## get the y-outcome type and number of levels
-  yvar.types <- get.yvar.type(family, yfactor$generic.types, yvar.names)
-  yvar.nlevels <- get.yvar.nlevels(family, yfactor$nlevels, yvar.names, object$yvar)
+  ## short cut to get the y-outcome type and number of levels
+  yvar.types <- yfactor$types
+  yvar.nlevels  <- yfactor$nlevels
+  yvar.numeric.levels  <- yfactor$numeric.levels
   ## recover the individual subject identifiers, if they exist.
   subj <- object$subj
   ## get event information for survival families
-  event.info <- get.event.info(object)
+  event.info <- object$event.info
+  event.type <- event.info$event.type
   ## CR.bits assignment
   cr.bits <- get.cr.bits(family)
   ## determine the immutable xvar factor map
-  xfactor <- extract.factor(object$xvar)
+  xfactor <- object$xvar.factor
   any.xvar.factor <-  (length(xfactor$factor) + length(xfactor$order)) > 0
-  ## get the x-variable type and number of levels
-  xvar.types <- get.xvar.type(xfactor$generic.types, xvar.names)
-  xvar.nlevels <- get.xvar.nlevels(xfactor$nlevels, xvar.names, object$xvar)
+  ## short cut to get the x-variable type and number of levels
+  xvar.types <- xfactor$types
+  xvar.nlevels <- xfactor$nlevels
+  xvar.numeric.levels <- xfactor$numeric.levels
+  ## set dimensions
+  n.xvar <- length(xvar.names)
+  n <- object$n
+  r.dim <- event.info$rdim
   ## set flags appropriately for unsupervised forests
   ## there are layers of checks appearing later, so some of these are redundant
   if (family == "unsupv") {
@@ -308,12 +320,12 @@ generic.predict.rfsrc <-
     ## Force test factor levels to equal grow factor levels
     ## this is crucial to ensuring an immutable map
     if (any.xvar.factor) {
-      newdata <- check.factor(object$xvar, newdata, xfactor)
+      newdata <- check.factor(newdata, xfactor)
     }
     ## If the outcomes contain factors we need to check factor coherence.
     if (any.outcome.factor) {
       if (yvar.present) {
-        newdata <- check.factor(object$yvar, newdata, yfactor)
+        newdata <- check.factor(newdata, yfactor)
       }
     }
     ## Extract test yvar names (if any) and xvar names.
@@ -397,15 +409,22 @@ generic.predict.rfsrc <-
   ## depends on "outcome"
   ## outcome=train
   if (outcome == "train") {
-    ## data conversion for training data
-    xvar <- as.matrix(data.matrix(object$xvar))
-    yvar <- as.matrix(data.matrix(object$yvar))
-    ## Respect the training options related to bootstrapping:
-    sampsize <- round(object$sampsize(nrow(xvar)))
+    ## data conversion for y-training data
+    yvar <- as.matrix(data.matrix(data.frame(object$yvar)))
+    ## respect the training options related to bootstrapping:
+    sampsize <- round(object$sampsize(n))
     case.wt <- object$case.wt
     samp <- object$samp
+    ## data conversion for x-training data
+    if (!anonymize.bits) {
+      xvar <- as.matrix(data.matrix(object$xvar))
+      rownames(xvar) <- colnames(xvar) <- NULL
+    }
+    else {
+      xvar <- NULL
+    }
   }
-  else {
+  if (outcome == "test") {
     ## outcome=test
     ## From the native code perspective we are in pseudo-restore mode
     ## From the R side, it is convenient to now pretend we are
@@ -414,24 +433,21 @@ generic.predict.rfsrc <-
     ## swap the data
     xvar <- xvar.newdata
     yvar <- yvar.newdata
+    rownames(xvar) <- colnames(xvar) <- NULL
     restore.mode <- TRUE
+    ## set the dimensions
+    n <- nrow(xvar)
+    r.dim <- r.dim.newdata
     ## pretend there is no test data, but do *not* get rid of it
     ## we need (and use) this data *after* the native code call
     n.newdata <- 0
     r.dim.newdata <- 0
     ## set the sample size
     ## "swor" now handled because we now make sampsize a function of n
-    sampsize <- round(object$sampsize(nrow(xvar)))
-    case.wt <- get.weight(NULL, nrow(xvar))
+    sampsize <- round(object$sampsize(n))
+    case.wt <- get.weight(NULL, n)
     samp <- NULL
   }
-  ## Set the y dimension
-  r.dim <- ncol(cbind(yvar))
-  ## remove row and column names for proper processing by the native library
-  ## set the dimensions
-  rownames(xvar) <- colnames(xvar) <- NULL
-  n.xvar <- ncol(xvar)
-  n <- nrow(xvar)
   ## initialize the number of trees in the forest
   ntree <- object$ntree
   ## process the get.tree vector that specifies which trees we want
@@ -461,6 +477,8 @@ generic.predict.rfsrc <-
   membership.bits <-  get.membership(membership)
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
+  cse.bits = get.cse(cse)
+  csv.bits = get.csv(csv)
   ## We over-ride block-size in the case that get.tree is user specified
   block.size <- min(get.block.size(block.size, ntree), sum(get.tree))
   ## Turn off partial option.
@@ -475,20 +493,6 @@ generic.predict.rfsrc <-
       na.action = object$na.action
     }
   na.action.bits <- get.na.action(na.action)
-  ## Process the subsetted index
-  if (missing(subset) | is.null(subset)) {
-    subset <- NULL
-  }
-    else {
-      ## Convert the user specified subset into a usable form
-      if (is.logical(subset)) {
-        subset <- which(subset)
-      }
-      subset <- unique(subset[subset >= 1 & subset <= n])
-      if (length(subset) == 0) {
-        stop("'subset' not set properly")
-      }
-    }
   ## Check that hdim is initialized.  If not, set it zero.
   ## This is necessary for backwards compatibility with 2.3.0
   if (is.null(object$hdim)) {
@@ -542,34 +546,51 @@ generic.predict.rfsrc <-
                                              rfq.bits +
                                              cr.bits +
                                              gk.quantile.bits +
-                                             statistics.bits),
+                                             statistics.bits +
+                                             anonymize.bits),
                                   as.integer(forest.wt.bits +
                                              distance.bits +
                                              samptype.bits +
                                              na.action.bits +
                                              membership.bits +
                                              terminal.qualts.bits +
-                                             terminal.quants.bits),
+                                             terminal.quants.bits +
+                                             cse.bits +
+                                             csv.bits),
                                   ## >>>> start of maxi forest object >>>>
                                   as.integer(ntree),
                                   as.integer(n),
-                                  ##
                                   list(as.integer(length(yvar.types)),
                                        if (is.null(yvar.types)) NULL else as.character(yvar.types),
                                        if (is.null(yvar.types)) NULL else as.integer(yvar.nlevels),
+                                       if (is.null(yvar.numeric.levels)) NULL else sapply(1:length(yvar.numeric.levels), function(nn) {as.integer(length(yvar.numeric.levels[[nn]]))}),
                                        if (is.null(subj)) NULL else as.integer(subj),
+                                       if (is.null(event.type)) NULL else as.integer(length(event.type)),
+                                       if (is.null(event.type)) NULL else as.integer(event.type),
                                        if (is.null(yvar.types)) NULL else as.double(as.vector(yvar))),
-                                  ##
-                                  as.integer(ncol(xvar)),
-                                  as.character(xvar.types),
-                                  as.integer(xvar.nlevels),
-                                  as.double(xvar),
-                                  ##
+                                  if (is.null(yvar.numeric.levels)) {
+                                      NULL
+                                  }
+                                  else {
+                                      lapply(1:length(yvar.numeric.levels),
+                                             function(nn) {as.integer(yvar.numeric.levels[[nn]])})
+                                  },
+                                  list(as.integer(n.xvar),
+                                       as.character(xvar.types),
+                                       if (is.null(xvar.types)) NULL else as.integer(xvar.nlevels),                                       
+                                       if (is.null(xvar.numeric.levels)) NULL else sapply(1:length(xvar.numeric.levels), function(nn) {as.integer(length(xvar.numeric.levels[[nn]]))}),
+                                       as.double(as.vector(xvar))),
+                                  if (is.null(xvar.numeric.levels)) {
+                                      NULL
+                                  }
+                                  else {
+                                      lapply(1:length(xvar.numeric.levels),
+                                             function(nn) {as.integer(xvar.numeric.levels[[nn]])})
+                                  },
                                   list(as.integer(length(case.wt)),
                                        if (is.null(case.wt)) NULL else as.double(case.wt),
                                        as.integer(sampsize),
                                        if (is.null(samp)) NULL else as.integer(samp)),
-                                  ##
                                   list(if(is.null(event.info$time.interest)) as.integer(0) else as.integer(length(event.info$time.interest)),
                                        if(is.null(event.info$time.interest)) NULL else as.double(event.info$time.interest)),
                                   as.integer(object$totalNodeCount),
@@ -702,8 +723,6 @@ generic.predict.rfsrc <-
                                        as.integer(0),
                                        NULL,
                                        NULL),
-                                  as.integer(length(subset)),
-                                  as.integer(subset),
                                   as.integer(n.newdata),
                                   as.integer(r.dim.newdata),
                                   as.double(if (outcome != "test") yvar.newdata else NULL),
@@ -721,12 +740,18 @@ generic.predict.rfsrc <-
     stop("An error has occurred in prediction.  Please turn trace on for further analysis.")
   }
   ## determine missingness according to mode (REST vs. PRED)
-  if (restore.mode) {
-    n.miss <- get.nmiss(xvar, yvar)
-  }
+  if (!anonymize.bits) {
+    if (restore.mode) {
+      n.miss <- get.nmiss(xvar, yvar)
+    }
     else {
       n.miss <- get.nmiss(xvar.newdata, yvar.newdata)
     }
+  }
+  else {
+    ## missing values not allowed in anonymous 
+    n.miss <- 0
+  }
   ## extract the imputed data if there was missingness
   if (n.miss > 0) {
     imputed.data <- matrix(nativeOutput$imputation, nrow = n.miss)
@@ -1216,6 +1241,26 @@ generic.predict.rfsrc <-
         ## Note that this is a ragged array.
         ## To the R code:
         ## -> of dim [[class.count]] x [1 + levels.count] x [n.xvar]
+        ## From the native code:
+        ##   "cseNum"
+        ## -> of dim [resp.class.count] x [n]
+        ## To the R code:
+        ## -> of dim [[resp.class.count]] x [n]
+        ## From the native code:
+        ##   "cseDen"
+        ## -> of dim [n]
+        ## To the R code:
+        ## -> of dim [n]
+        ## From the native code:
+        ##   "csvNum"
+        ## -> of dim [n.xvar] x [resp.class.count] x [n]
+        ## To the R code:
+        ## -> of dim [[resp.class.count]] x [n] x [n.xvar]
+        ## From the native code:
+        ##   "csvDen"
+        ## -> of dim [n.xvar] x [n] 
+        ## To the R code:
+        ## -> of dim  x [n]  x [n.xvar]
         for (i in 1:length(m.target.idx)) {
           target.idx <- which (class.index == m.target.idx[i])
           if (length(target.idx) > 0) {
@@ -1240,6 +1285,16 @@ generic.predict.rfsrc <-
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], class.oob = list(response.oob))
             remove(predicted.oob)
             remove(response.oob)
+            ## New case specific arrays, numerator:
+            cse.num <- (if (!is.null(nativeOutput$cseClas))
+                            array(nativeOutput$cseClas[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
+            classOutput[[target.idx]] <- c(classOutput[[target.idx]], cse.num = list(cse.num))
+            remove(cse.num)
+            ## New case specific arrays, denominator:
+            cse.den <- (if (!is.null(nativeOutput$cseDen))
+                            array(nativeOutput$cseDen[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
+            classOutput[[target.idx]] <- c(classOutput[[target.idx]], cse.den = list(cse.den))
+            remove(cse.den)
             if (!is.null(nativeOutput$perfClas)) {
               err.rate <- array(0, c(1 + levels.count[target.idx], ntree))
               for (j in 1: (1 + levels.count[target.idx])) {
@@ -1269,6 +1324,21 @@ generic.predict.rfsrc <-
               classOutput[[target.idx]] <- c(classOutput[[target.idx]], importance = list(t(importance)))
               remove(importance)
             }
+              ## See GROW call for explanation of arrays:
+              csv.idx  <- array(0, n * n.xvar) 
+              for (j in 1:n.xvar) {
+                  csv.idx[(((j-1) * n) + 1) : (((j-1) * n) + n)]  <- ( ((target.idx-1) * n) + ((j-1) * n * class.count) + 1 ) : ( ((target.idx-1) * n) + ((j-1) * n * class.count) + n )
+              }
+              ## New case specific arrays, numerator:
+              csv.num <- (if (!is.null(nativeOutput$csvClas))
+                              array(nativeOutput$csvClas[csv.idx], c(n, n.xvar)) else NULL)
+              classOutput[[target.idx]] <- c(classOutput[[target.idx]], csv.num = list(csv.num))
+              remove(csv.num)
+              ## New case specific arrays, denominator:
+              csv.den <- (if (!is.null(nativeOutput$csvDen))
+                              array(nativeOutput$csvDen, c(n, n.xvar)) else NULL)
+              classOutput[[target.idx]] <- c(classOutput[[target.idx]], csv.den = list(csv.den))
+              remove(csv.den)
           }
         }
         nativeOutput$allEnsbCLS <- NULL
@@ -1341,6 +1411,26 @@ generic.predict.rfsrc <-
         ## -> of dim [n.vxar] x [regr.count]
         ## To the R code:
         ## -> of dim  [[regr.count]] x [n.xvar]
+        ## From the native code:
+        ##   "cseNum"
+        ## -> of dim [regr.count] x [n]
+        ## To the R code:
+        ## -> of dim [[regr.count]] x [n]
+        ## From the native code:
+        ##   "cseDen"
+        ## -> of dim [n]
+        ## To the R code:
+        ## -> of dim [n]
+        ## From the native code:
+        ##   "csvNum"
+        ## -> of dim [n.xvar] x [regr.count] x [n]
+        ## To the R code:
+        ## -> of dim [[regr.count]] x [n] x [n.xvar]
+        ## From the native code:
+        ##   "csvDen"
+        ## -> of dim [n.xvar] x [n] 
+        ## To the R code:
+        ## -> of dim  x [n]  x [n.xvar]
         for (i in 1:length(m.target.idx)) {
           target.idx <- which (regr.index == m.target.idx[i])
           if (length(target.idx) > 0) {
@@ -1357,6 +1447,16 @@ generic.predict.rfsrc <-
                                 array(nativeOutput$oobEnsbRGR[(iter.ensb.start + 1):iter.ensb.end], n.observed) else NULL)
             regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], predicted.oob = list(predicted.oob))
             remove(predicted.oob)
+            ## New case specific arrays, numerator:
+            cse.num <- (if (!is.null(nativeOutput$cseRegr))
+                            array(nativeOutput$cseRegr[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
+            regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], cse.num = list(cse.num))
+            remove(cse.num)
+            ## New case specific arrays, denominator:
+            cse.den <- (if (!is.null(nativeOutput$cseDen))
+                            array(nativeOutput$cseDen[(iter.ensb.start + 1):iter.ensb.end], n) else NULL)
+            regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], cse.den = list(cse.den))
+            remove(cse.den)
             quantile <- (if (!is.null(nativeOutput$allEnsbQNT))
                              array(nativeOutput$allEnsbQNT[(iter.qntl.start + 1):iter.qntl.end],
                                    c(n.observed, length(prob))) else NULL)
@@ -1386,6 +1486,21 @@ generic.predict.rfsrc <-
               regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], importance = list(importance))
               remove(importance)
             }
+              ## See GROW call for explanation of arrays:
+              csv.idx  <- array(0, n * n.xvar) 
+              for (j in 1:n.xvar) {
+                  csv.idx[(((j-1) * n) + 1) : (((j-1) * n) + n)]  <- ( ((target.idx-1) * n) + ((j-1) * n * regr.count) + 1 ) : ( ((target.idx-1) * n) + ((j-1) * n * regr.count) + n )
+              }
+              ## New case specific arrays, numerator:
+              csv.num <- (if (!is.null(nativeOutput$csvRegr))
+                              array(nativeOutput$csvRegr[csv.idx], c(n, n.xvar)) else NULL)
+              regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], csv.num = list(csv.num))
+              remove(csv.num)
+              ## New case specific arrays, denominator:
+              csv.den <- (if (!is.null(nativeOutput$csvDen))
+                              array(nativeOutput$csvDen, c(n, n.xvar)) else NULL)
+              regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], csv.den = list(csv.den))
+              remove(csv.den)
           }
         }
         nativeOutput$allEnsbRGR <- NULL

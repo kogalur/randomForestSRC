@@ -88,7 +88,7 @@ impute.rfsrc <- function(formula, data,
         ytry <- min(p - 1, max(25, ceiling(sqrt(p))))
       }
       dots$formula <- as.formula(paste("Unsupervised(", ytry, ") ~ ."))
-      ##splitrule not permissible with unsupervised forests? TBD TBD
+      ## TBD TBD splitrule not permissible with unsupervised forests?
       dots$splitrule <- NULL
     }
     else {
@@ -167,7 +167,8 @@ impute.rfsrc <- function(formula, data,
     ## quick and *rough* impute
     ## uncomment the following line for a better initial estimate
     dots.rough <- dots
-    dots.rough$mtry <- dots.rough$splitrule <- NULL##splitrule not permissible with unsupervised forests? TBD TBD
+    dots.rough$mtry <- dots.rough$splitrule <- NULL
+    ## TBD TBD splitrule not permissible with unsupervised forests?
     data <- do.call("generic.impute.rfsrc",
                       c(list(data = data,
                              ntree = 250,

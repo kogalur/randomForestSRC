@@ -1,35 +1,3 @@
-coerce.multivariate <- function(x, outcome.target) {
-  ## Warning:  This functon assumes that get.univariate.target has been called first, to
-  ## verify the coherency of the target.  This means that the target exists in the forest object, and that
-  ## it contains outcome statistics.
-  ## If this is a multivarate family, we coerce the object, based on outcome.target
-  ## into a univaritate regression or classification object.
-  x$univariate <- TRUE
-  if (x$family == "regr+" | x$family == "class+" | x$family == "mix+") {
-    ## coerce the mulitvariate object into a univariate object
-    x.coerced <- unlist(list(x$classOutput, x$regrOutput), recursive = FALSE)[[outcome.target]]
-    x$univariate <- FALSE
-    x$yvar <- x$yvar[, outcome.target]
-    ## test for factors - ordered factors are treated as factors!
-    if (is.factor(x$yvar) || is.ordered(x$yvar)) {
-      x$family <- "class"
-    }
-    else {
-      x$family <- "regr"
-    }
-    ## make various assignments to the coerced object.
-    x$predicted <- x.coerced$predicted
-    x$predicted.oob <- x.coerced$predicted.oob
-    x$class <- x.coerced$class
-    x$class.oob <- x.coerced$class.oob
-    x$err.rate <- x.coerced$err.rate
-    x$err.block.rate <- x.coerced$err.block.rate
-    x$importance <- x.coerced$importance
-    x$yvar.names <- outcome.target
-  }
-  x$outcome.target <- outcome.target
-  x
-}
 ## convert bootstrap option into native code parameter.
 get.bootstrap <- function (bootstrap) {
   if (bootstrap == "by.root") {
@@ -229,22 +197,22 @@ get.impute.only <-  function (impute.only, nMiss) {
       return (0)
     }
 }
-  get.membership <- function (membership) {
-    ## Convert option into native code parameter.
-    bits <- 0
-    if (!is.null(membership)) {
-      if (membership == TRUE) {
-        bits <- 2^6
-      }
-        else if (membership != FALSE) {
-          stop("Invalid choice for 'membership' option:  ", membership)
-        }
+get.membership <- function (membership) {
+  ## Convert option into native code parameter.
+  bits <- 0
+  if (!is.null(membership)) {
+    if (membership == TRUE) {
+      bits <- 2^6
     }
-      else {
-        stop("Invalid choice for 'membership' option:  ", membership)
-      }
-    return (bits)
+    else if (membership != FALSE) {
+      stop("Invalid choice for 'membership' option:  ", membership)
+    }
   }
+  else {
+    stop("Invalid choice for 'membership' option:  ", membership)
+  }
+  return (bits)
+}
 get.na.action <- function (na.action) {
   if (na.action == "na.omit") {
     ## This is the high byte!
@@ -921,3 +889,55 @@ is.hidden.ytry <-  function (user.option) {
       as.integer(user.option$ytry)
     }
   }
+is.hidden.cse <-  function (user.option) {
+    if (is.null(user.option$cse)) {
+      FALSE
+    }
+    else {
+        as.logical(as.character(user.option$cse))
+    }
+}
+get.cse <- function (cse) {
+    ## Convert cse option into native code parameter.
+    if (!is.null(cse)) {
+        if (cse == TRUE) {
+            cse <- 2^28
+        }
+        else if (cse == FALSE) {
+            cse <- 0
+        }
+        else {
+            stop("Invalid choice for 'cse' option:  ", cse)
+        }
+    }
+    else {
+        stop("Invalid choice for 'cse' option:  ", cse)
+    }
+    return (cse)
+}
+is.hidden.csv <-  function (user.option) {
+    if (is.null(user.option$csv)) {
+      FALSE
+    }
+    else {
+        as.logical(as.character(user.option$csv))
+    }
+}
+get.csv <- function (csv) {
+    ## Convert csv option into native code parameter.
+    if (!is.null(csv)) {
+        if (csv == TRUE) {
+            csv <- 2^29
+        }
+        else if (csv == FALSE) {
+            csv <- 0
+        }
+        else {
+            stop("Invalid choice for 'csv' option:  ", csv)
+        }
+    }
+    else {
+        stop("Invalid choice for 'csv' option:  ", csv)
+    }
+    return (csv)
+}

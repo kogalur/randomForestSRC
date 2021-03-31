@@ -2,6 +2,8 @@
 \alias{rfsrc}
 \alias{rfsrc.cart}
 \alias{get.cindex}
+\alias{get.mv.cserror}
+\alias{get.mv.csvimp}
 \alias{get.mv.error}
 \alias{get.mv.error.block}
 \alias{get.mv.formula}
@@ -114,7 +116,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
    deterministic splitting where all possible splits considered.}
 
  \item{importance}{Method for computing variable importance (VIMP); see
-    below.  Default action is code{importance="none"} but VIMP can
+    below.  Default action is \code{importance="none"} but VIMP can
     always be recovered later using \command{vimp} or
     \command{predict}.}
 
@@ -130,7 +132,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
   \item{ensemble}{Specifies the type of ensemble.  By default both
     out-of-bag (OOB) and inbag ensembles are returned.  Always use OOB
-    values for interfence on the training data.}
+    values for inference on the training data.}
 
   \item{bootstrap}{Bootstrap protocol.  The default is \code{by.root}
     which bootstraps the data by sampling with or without replacement
@@ -256,11 +258,15 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   
   \item{seed}{Negative integer specifying seed for the random number
     generator.}
+
   \item{do.trace}{Number of seconds between updates to the user on
     approximate time to completion.}
+
   \item{statistics}{Should split statistics be returned?  Values can be
     parsed using \command{stat.split}.}
+
   \item{...}{Further arguments passed to or from other methods.}
+  
 }
 \details{
   \enumerate{
@@ -349,19 +355,28 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 	
       }
       
-      \item Competing risk analysis:
+      \item Competing risk analysis (for details see Ishwaran et al., 2014):
       \enumerate{
         
         \item \code{logrankCR}: default splitrule implements a modified
 	      weighted log-rank splitting rule modeled after Gray's test
-	      (Gray, 1988).
+	      (Gray, 1988).  Use this to find *all* variables 
+	      that are informative and when the goal is long term
+	      prediction. 
+	      
         
         \item \code{logrank}: weighted log-rank splitting where each
 	      event type is treated as the event of interest and all
 	      other events are treated as censored.  The split rule is
 	      the weighted value of each of log-rank statistics,
-	      standardized by the variance.  For more details see
-	      Ishwaran et al. (2014).  }
+	      standardized by the variance.  Use this to find variables
+	      that affect a *specific* cause of interest and when
+	      the goal is a targeted analysis of a specific cause.
+	      However in order for this to be effective, remember to set
+	      the \code{cause} option to the targeted cause of interest.
+	      See examples below.
+	      
+	    }
       
       \item Multivariate analysis: When one or both regression and
 	    classification responses are detected, a multivariate
@@ -529,6 +544,13 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     Also see \command{holdout.vimp} for holdout VIMP, which calculates
     importance by holding out variables.  This leads to a more
     conservative procedure but with good false discovery properties.
+
+
+    Note that for classification, VIMP is returned as a matrix with with
+    J+1 columns where J is the number of classes.  The first column
+    "all" is the unconditional VIMP, while the remaining columns are
+    VIMP conditioned on cases corresponding to that class label.
+      
     
     \item \emph{Multivariate Forests}
     
@@ -707,7 +729,17 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     the forest, or by tree [k].}
   \item{node.stats}{Split statistics returned when
     \code{statistics=TRUE} which can be parsed using \command{stat.split}.}
+
   \item{err.rate}{Tree cumulative OOB error rate.}
+  \item{err.block.rate}{When \code{importance=TRUE}, vector of the
+  cumulative error rate for each ensemble block comprised of
+  \code{block.size} trees.  So with \code{block.size = 10}, entries are
+  the cumulative error rate for the first 10 trees, the first 20 trees,
+  30 trees, and so on.  As another exmple, if \code{block.size = 1},
+  entries are the error rate for each tree.}
+
+  
+    
   \item{importance}{Variable importance (VIMP) for each x-variable.}
   \item{predicted}{In-bag predicted value.}
   \item{predicted.oob}{OOB predicted value.}\cr
@@ -758,8 +790,8 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       estimated class probability for each class.  Performance values
       and VIMP for classification are reported as a matrix with J+1
       columns where J is the number of classes.  The first column "all"
-      is the unconditional value for performance or VIMP, while the
-      remaining columns are performance and VIMP conditioned on cases
+      is the unconditional value for performance (VIMP), while the
+      remaining columns are performance (VIMP) conditioned on cases
       corresponding to that class label.
       
       \item For survival, a vector of mortality values (Ishwaran et al.,
@@ -1130,13 +1162,14 @@ if (library("survival", logical.return = TRUE)) {
   pbc$id <- NULL
 
   ## modified Gray's weighted log-rank splitting
+  ## (equivalent to cause=c(1,1) and splitrule="logrankCR")
   pbc.cr <- rfsrc(Surv(time, status) ~ ., pbc)
-
-  ## log-rank event-one specific splitting
+ 
+  ## log-rank cause-1 specific splitting and targeted VIMP for cause 1
   pbc.log1 <- rfsrc(Surv(time, status) ~ ., pbc, 
               splitrule = "logrank", cause = c(1,0), importance = TRUE)
 
-  ## log-rank event-two specific splitting
+  ## log-rank cause-2 specific splitting and targeted VIMP for cause 2
   pbc.log2 <- rfsrc(Surv(time, status) ~ ., pbc, 
               splitrule = "logrank", cause = c(0,1), importance = TRUE)
 
@@ -1145,7 +1178,7 @@ if (library("survival", logical.return = TRUE)) {
   var.perf <- data.frame(md = max.subtree(pbc.cr)$order[, 1],
                          vimp1 = 100 * pbc.log1$importance[ ,1],
                          vimp2 = 100 * pbc.log2$importance[ ,2])
-  print(var.perf[order(var.perf$md), ])
+  print(var.perf[order(var.perf$md), ], digits = 2)
 
 }
 
