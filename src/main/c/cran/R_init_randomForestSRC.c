@@ -29,13 +29,13 @@ extern SEXP  rfsrcPredict(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, 
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
-                          SEXP, SEXP, SEXP, SEXP, SEXP);
+                          SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 
 static const R_CallMethodDef CallEntries[] = {
     {"rfsrcCIndex",   (DL_FUNC) &rfsrcCIndex,    6},
     {"rfsrcDistance", (DL_FUNC) &rfsrcDistance,  9},
     {"rfsrcGrow",     (DL_FUNC) &rfsrcGrow,     35},
-    {"rfsrcPredict",  (DL_FUNC) &rfsrcPredict,  55},
+    {"rfsrcPredict",  (DL_FUNC) &rfsrcPredict,  58},
     {NULL, NULL, 0}
 };
 

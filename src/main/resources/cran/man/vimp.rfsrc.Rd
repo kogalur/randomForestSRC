@@ -83,6 +83,21 @@ print(vimp(iris.obj, c("Petal.Length", "Petal.Width"), joint = TRUE)$importance)
 print(vimp(iris.obj, c("Sepal.Length", "Petal.Width"), joint = TRUE)$importance)
 
 
+## ------------------------------------------------------------
+## imbalanced classification example
+## see the imbalanced function for more details
+## ------------------------------------------------------------
+
+data(breast, package = "_PROJECT_PACKAGE_NAME_")
+breast <- na.omit(breast)
+f <- as.formula(status ~ .)
+o <- rfsrc(f, breast, ntree = 2000)
+
+## Breiman importance
+print(100 * vimp(o)$importance)
+
+## G-mean importance
+print(100 * vimp(o, perf.type = "g.mean")$importance[, 1])
 
 ## ------------------------------------------------------------
 ## regression example

@@ -1,6 +1,7 @@
 \name{imbalanced.rfsrc}
 \alias{imbalanced.rfsrc}
 \alias{imbalanced}
+\alias{get.imbalanced.performance}
 \title{Imbalanced Two Class Problems}
 \description{
   Implements various solutions to the two-class imbalanced problem,
@@ -127,13 +128,20 @@ o.rfq <- imbalanced(f, breast)
 print(o.rfq)
 
 ## equivalent to:
-## rfsrc(f, breast, rfq =  TRUE, perf.type = "g.mean") 
+## rfsrc(f, breast, rfq =  TRUE, ntree = 3000, perf.type = "g.mean") 
+
+##----------------------------------------------------------------
+## detailed output using customized performance function
+##----------------------------------------------------------------
+
+print(get.imbalanced.performance(o.rfq))
 
 ##----------------------------------------------------------------
 ## RFQ with AUC splitting
 ##----------------------------------------------------------------
 
-print(imbalanced(f, breast, splitrule = "auc"))
+print(o.rfq <- imbalanced(f, breast, splitrule = "auc"))
+print(get.imbalanced.performance(o.rfq))
 
 ##----------------------------------------------------------------
 ## RFQ call with fast rfsrc
@@ -143,7 +151,7 @@ o.rfq <- imbalanced(f, breast, fast = TRUE)
 print(o.rfq)
 
 ## equivalent to:
-## rfsrc.fast(f, breast, rfq =  TRUE, perf.type = "g.mean") 
+## rfsrc.fast(f, breast, ntree = 3000, rfq =  TRUE, perf.type = "g.mean") 
 
 ##-----------------------------------------------------------------
 ## standard RF (uses misclassification)
@@ -158,7 +166,7 @@ o.std <- imbalanced(f, breast, method = "stand")
 o.std <- imbalanced(f, breast, method = "stand", perf.type = "g.mean")
 
 ## equivalent to:
-## rfsrc(f, breast, perf.type = "g.mean")
+## rfsrc(f, breast, ntree = 3000, perf.type = "g.mean")
 
 ##----------------------------------------------------------------
 ## default BRF call 

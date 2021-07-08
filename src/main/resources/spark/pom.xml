@@ -9,24 +9,15 @@
      
     <groupId>com.kogalur.randomforest</groupId>
     <artifactId>@PROJECT_PACKAGE_NAME@</artifactId>
- 
     <version>@PROJECT_VERSION@</version>
-
     <name>RF-SRC Spark Target</name>
-
+    <packaging>jar</packaging>
+    
     <properties>
       <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <dependencies>
-
-      <dependency>
-        <groupId>junit</groupId>
-        <artifactId>junit</artifactId>
-        <version>3.8.1</version>
-        <scope>test</scope>
-      </dependency>
-
       <dependency> 
         <groupId>org.apache.spark</groupId>
         <artifactId>spark-sql_2.11</artifactId> 
@@ -44,22 +35,24 @@
 	      <artifactId>log4j</artifactId>
 	      <version>1.2.17</version>
       </dependency>
-
+      
       <dependency>
 	      <groupId>org.apache.maven.plugins</groupId>
 	      <artifactId>maven-javadoc-plugin</artifactId>
 	      <version>3.0.0-M1</version>
       </dependency>
-      
-
-      <!--dependency>
-        <groupId>org.codehaus.janino</groupId>
-        <artifactId>commons-compiler</artifactId>
-        <version>3.0.7</version>
-        <scope>runtime</scope>
-      </dependency-->
 
 
+      <!--      
+      <dependency>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <classifier>tests</classifier>
+        <type>test-jar</type>
+        <version>@PROJECT_VERSION@</version>
+        <scope>test</scope>
+      </dependency>
+      -->
       
     </dependencies>
  
@@ -103,14 +96,9 @@
     </profiles>
  
     <build>
-      
       <plugins>
 
-
-
-
-
-        <plugin>
+        <!--plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-enforcer-plugin</artifactId>
           <version>3.0.0-M1</version>
@@ -126,10 +114,10 @@
           <configuration>
                 <rules>
                   <requireMavenVersion>
-                    <version>3.5.0</version>
+                    <version>3.8.1</version>
                   </requireMavenVersion>
                   <requireJavaVersion>
-                    <version>1.8</version>
+                    <version>16.0.1</version>
                   </requireJavaVersion>
                   <requirePluginVersions>
                     <message>Best Practice is to always define plugin versions!</message>
@@ -144,104 +132,69 @@
                   </requirePluginVersions>
                 </rules>
               </configuration>
-        </plugin>
-
-
-
-
-
-
-        
-
-
-
-
-        
+        </plugin-->
 
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-clean-plugin</artifactId>
-          <version>3.0.0</version>
+          <version>3.1.0</version>
         </plugin>
 
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-site-plugin</artifactId>
-          <version>3.6</version>
+          <version>3.9.1</version>
         </plugin>
 
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-deploy-plugin</artifactId>
-          <version>2.8.2</version>
+          <version>3.0.0_M1</version>
         </plugin>
 
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-install-plugin</artifactId>
-          <version>2.5.2</version>
+          <version>3.0.0_M1</version>
         </plugin>
 
         <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-surefire-plugin</artifactId>
-          <version>2.20</version>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>3.8.1</version>
+          <configuration>
+            <release>11</release>
+            <source>11</source>
+            <target>11</target>            
+            <compilerArgs>
+              <arg>-Xlint:removal</arg>
+              <arg>-h</arg>
+              <argument>${project.build.directory}/javah</argument>
+            </compilerArgs>
+          </configuration>
         </plugin>
 
-        <plugin>
-          <groupId>org.apache.maven.plugins</groupId>
-          <artifactId>maven-resources-plugin</artifactId>
-          <version>3.0.2</version>
-        </plugin>
-
+        <!--
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
-          <version>2.4</version>
-
+          <version>3.2.0</version>
           <executions>
             <execution>
-              <phase>package</phase>
               <goals>
                 <goal>test-jar</goal>
               </goals>
             </execution>
           </executions>
         </plugin>
-
- 
-        <plugin>
-          <artifactId>maven-compiler-plugin</artifactId>
-          <version>3.6.1</version>
-          <configuration>
-            <source>1.8</source>
-            <target>1.8</target>
-            <encoding>UTF-8</encoding>
-          </configuration>
-        </plugin>
-
+        -->
+        
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
           <artifactId>native-maven-plugin</artifactId>
-          <version>1.0-alpha-8</version>
+          <version>1.0-alpha-9</version>
           <extensions>true</extensions>
           <configuration>
-            
-            <!--
-                <javahOS>linux</javahOS>
-                <javahOS>win32</javahOS>
-            -->
-            
-            <javahOS>${os_name}</javahOS>
-            
-            <!--
-                <This is dealt in generate-header script>
-                <javahOutputDirectory>${project.basedir}/native/include</javahOutputDirectory>
-                <javahClassNames>
-                <javahClassName>com.example.NativeApplication</javahClassName>
-                </javahClassNames>
-            -->
-            
+
             <sources>
               <source>
                 <directory>src/main/c</directory>
@@ -250,10 +203,8 @@
                   <fileName>splitCustom.c</fileName>
                 </fileNames>
               </source>
-              <source>
-                <directory>${project.build.directory}/javah</directory>
-              </source>
             </sources>
+
             <compilerProvider>generic-classic</compilerProvider>
             <compilerExecutable>gcc</compilerExecutable>
             <linkerExecutable>gcc</linkerExecutable> 
@@ -283,35 +234,22 @@
           
           <executions>
             <execution>
-              <id>javah</id>
-              <phase>compile</phase>
-              
-              <configuration>
-                <javahOS>${os_name}</javahOS>
-                <javahProvider>default</javahProvider>
-                <javahOutputDirectory>${project.build.directory}/javah</javahOutputDirectory>
-                <workingDirectory>${basedir}</workingDirectory>
-                <javahOutputFileName>com_kogalur_randomforest_Native.h</javahOutputFileName>
-                <javahClassNames>
-                  <javahClassName>com.kogalur.randomforest.Native</javahClassName>
-                </javahClassNames>
-              </configuration>
 
+              <phase>compile</phase>
               <goals>
                 <goal>initialize</goal>
-                <goal>javah</goal>
                 <goal>compile</goal>
                 <goal>link</goal>
               </goals>
             </execution>
           </executions>
-
+          
         </plugin>
 
-        <plugin>
+        <!--plugin>
 			    <groupId>org.apache.maven.plugins</groupId>
 			    <artifactId>maven-javadoc-plugin</artifactId>
-          <version>3.0.0-M1</version>
+          <version>3.3.0</version>
           <configuration>
             <additionalparam>-Xdoclint:none</additionalparam>
             <stylesheetfile>src/main/resources/apistyles.css</stylesheetfile>            
@@ -324,7 +262,7 @@
 					    </goals>
 				    </execution>
 			    </executions>
-        </plugin>
+        </plugin-->
 
       </plugins>
      </build>

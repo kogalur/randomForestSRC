@@ -1,6 +1,7 @@
 package com.kogalur.randomforest;
 
 import com.kogalur.randomforest.RFLogger;
+
 import java.util.logging.Level;
 
 import org.apache.spark.sql.Dataset;
@@ -38,38 +39,25 @@ import java.util.Vector;
  * @author Udaya Kogalur
  * 
  */
-public class ModelArg {
+public class ModelArg extends GenericModelArg {
 
     // *****************************************************************
     // Ensemble Requests.
     // *****************************************************************
     private EnsembleArg ensembleArg;
     
-    // *****************************************************************
-    // Auxiliary Variables.
-    // *****************************************************************
-    private Random generator;
 
-    // *****************************************************************
-    // Model Inputs passed directly to the native code.
-    // *****************************************************************
-    private int        trace;
-    private int        seed;
-
-    private int        nImpute;
-    
+    private String splitRule;
     private int        nSplit;
 
     private int        mtry;
+    private Lot        lot;
 
-    private int        hdim;
-    private int        lotSize;
-    private int        lotLag;
-    private int        lotStrikeout;
+    private BaseLearn  baseLearn;
 
     private int        vtry;
     private int[][]    vtryArray;
-    
+
     private int        ytry;
 
     private int        nodeSize;
@@ -78,55 +66,44 @@ public class ModelArg {
     private int        crWeightSize;
     private double[]   crWeight;
 
-    private int        ntree;
     private int        nSize;
 
     private int        ySize;
     private char[]     yType;
-    private int[]      yLevel;
     private double[][] yData;
     
+    private YInfo      yInfo;
+    private int[][]    yLevels;
+    private int[]      yLevelsMax;
+    private int[]      yLevelsCnt;
+
     private int        xSize;
     private char[]     xType;
-    private int[]      xLevel;
-    
-    private int        sampleSize;
-    private int[][]    sample;
-    private double[]   caseWeight;
+    private double[][] xData;
 
-    private double[]   xStatisticalWeight;
+    private XInfo      xInfo;
+    private int[][]    xLevels;    
+    private int[]      xLevelsMax;
+    private int[]      xLevelsCnt;
+    
+    private SampleInfo sampleInfo;
+    
+    private double[]   xWeightStat;
     private double[]   yWeight;
 
     private double[]   xWeight;
-    private double[][] xData;
 
     private int        timeInterestSize;
     private double[]   timeInterest;
-    private double[]   ntime;
 
-    private int        blockSize;
-
-    private int        quantileSize;
-    private double[]   quantile;
-    private double     qEpsilon;
-
-    private double     wibsTau;
-
-    private int        rfCores;
-
+    private int        nImpute;
     
-    // *****************************************************************
-    // Model Inputs passed via option bits to the native code.
-    // *****************************************************************
-    private String sampleType;
+    
+    private int        xPreSort;
+
+
     private int    customSplitIndex;
-
-    // *****************************************************************
-    // Model Inputs pre-processed and passed to the native code.
-    // *****************************************************************
-    private String splitRule;
-    private String bootstrap;
-
+    
 
     // *****************************************************************
     // Model Inputs not passed, but help inform the native code.
@@ -167,6 +144,7 @@ public class ModelArg {
         splitRuleID.put("sg.regr",              17);
         splitRuleID.put("sg.class",             18);
         splitRuleID.put("sg.surv",              19);
+        splitRuleID.put("tdc.gradient",         20);
     }
     
     // HashMap containing types for x-vars and y-vars.
@@ -199,8 +177,11 @@ public class ModelArg {
     private String[] columnName;
 
     // Vector of unique event types in survival families.
-    private TreeSet <Integer> eventType;
-
+    private TreeSet <Integer> eventTypeSet;
+    private int[] eventType;
+    
+    // Vector of subject ID's in TDC.
+    private int[] subjID;
 
     
     /**
@@ -212,7 +193,8 @@ public class ModelArg {
      *
      * <p>Examples of formulae for various families follow:</p>
      *
-     * <p><table class= "myColumnPadding">
+     * <table class= "myColumnPadding">
+     *  <caption> </caption>
      *  <tr>
      *    <th>Description</th>
      *    <th>Example Formula</th>
@@ -248,7 +230,7 @@ public class ModelArg {
      *    <td>Unsupervised() ~.</td>
      *    <td><a href="https://raw.githubusercontent.com/vincentarelbundock/Rdatasets/master/csv/MASS/VA.csv" target="_blank">Veteran's Administration Lung Cancer Trial</a></td>
      *  </tr>
-     * </table></p>
+     * </table>
      *        
      * <p>An example found in the test classes follows:</p>
      *
@@ -278,6 +260,8 @@ public class ModelArg {
                       Dataset dataset) {
 
 
+        mode = new String("grow");        
+
         this.dataset = dataset;
         this.formula = formula;
 
@@ -286,7 +270,7 @@ public class ModelArg {
 
         setDefaultModelArg();
 
-        ensembleArg = new EnsembleArg("grow", family);
+        ensembleArg = new EnsembleArg(mode, family);
     }
 
     
@@ -478,7 +462,7 @@ public class ModelArg {
             if (family.compareTo("RF-S") == 0) {
                 structField = incomingSchema.apply(incomingSchema.fieldIndex(formulaY[0]));
                 // Note tha structField.name() == formulaY[i].
-                tempType = new Character(initializeType(structField.dataType()));
+                tempType = Character.valueOf(initializeType(structField.dataType()));
                 if ((tempType.compareTo('R') == 0) || (tempType.compareTo('I') == 0)) {
                     // The time will be overridden to type 'T' but
                     // remain as 'R' in the HashMap to allow proper
@@ -494,7 +478,7 @@ public class ModelArg {
                 
                 structField = incomingSchema.apply(incomingSchema.fieldIndex(formulaY[1]));
                 // Note tha structField.name() == formulaY[i].
-                tempType = new Character(initializeType(structField.dataType()));
+                tempType = Character.valueOf(initializeType(structField.dataType()));
                 if (tempType.compareTo('I') == 0) {
                     // The status will be overriden to type 'S' but remain as 'I' in the HashMap to allow
                     // proper extraction.
@@ -511,7 +495,7 @@ public class ModelArg {
                 for (int i = 0; i < formulaY.length; i++) {
                     structField = incomingSchema.apply(incomingSchema.fieldIndex(formulaY[i]));          
                     // Note tha structField.name() == formulaY[i].
-                    tempType = new Character(initializeType(structField.dataType()));
+                    tempType = Character.valueOf(initializeType(structField.dataType()));
                     yTypeHash.put(structField.name(), tempType);
                     if (tempType.compareTo('C') == 0) {
                         yFactorCount++;
@@ -546,7 +530,7 @@ public class ModelArg {
         for (int i = 0; i < formulaX.length; i++) {
             structField = incomingSchema.apply(incomingSchema.fieldIndex(formulaX[i]));
             // Note tha structField.name() == formulaX[i].
-            tempType = new Character(initializeType(structField.dataType()));
+            tempType = Character.valueOf(initializeType(structField.dataType()));
             xTypeHash.put(structField.name(), tempType);
             if (tempType.compareTo('C') == 0) {
                 xFactorCount++;
@@ -1090,18 +1074,26 @@ public class ModelArg {
         // Get the x-matrix.  
         xData = initializeData(false, xSize, formulaX, xTypeHash);
         // Determine the maximum levels encountered in the x-var factor variables.
-        xLevel = initializeLevel(false, formulaX, xTypeHash);
+        xLevelsMax = initializeLevel(false, formulaX, xTypeHash);
 
+        // TBD TBD TBD We do not handle TDC information in Java yet.
+        // TBD TBD TBD We do not handle numeric levels yet, so we fake them and assume they are consecutive.
+        xInfo = initializeXInfo(xType, xLevelsMax);
+
+        
         if (formulaY != null) {
             // Get the y-matrix.
             yData = initializeData(true, ySize, formulaY, yTypeHash);
-
             // Determine the maximum levels encountered in the y-var factor variables.
-            yLevel = initializeLevel(true, formulaY, yTypeHash);
+            yLevelsMax = initializeLevel(true, formulaY, yTypeHash);
+
+            // TBD TBD TBD We do not handle numeric levels yet, so we fake them and assume they are consecutive.
+            yInfo = initializeYInfo(yType, yLevelsMax, eventTypeSet);
+
         }
         else {
             yData = null;
-            yLevel = null;
+            yLevelsMax = null;
         }
 
         // Default value of nImpute.
@@ -1113,14 +1105,14 @@ public class ModelArg {
         // Default value of the lot object.
         set_lot();
 
-        // Default bootstrap.
-        set_bootstrap();
+        // Default sample info.
+        set_sampleInfo();
 
         // Default value of blockSize, called after ntree has been initialized above.
         set_blockSize();
 
         // Default value of quantile vector is to make it absent.
-        set_prob(null);
+        set_quantile();
 
         // Default value of vtry is zero, no holdouts.
         set_vtry(0);
@@ -1131,12 +1123,12 @@ public class ModelArg {
 
         set_yWeight();
 
-        set_xStatisticalWeight();
+        set_xWeightStat();
 
             
         // Set the event type vector and the time interest vector.
         if(family.equals("RF-S")) {
-            eventType = initializeEventType();
+            eventTypeSet = initializeEventType();
 
             // Private method.
             set_timeInterest();
@@ -1145,7 +1137,7 @@ public class ModelArg {
 
         }
         else {
-            eventType = null;
+            eventTypeSet = null;
 
             timeInterest = null;
             timeInterestSize = 0;
@@ -1178,7 +1170,8 @@ public class ModelArg {
     
     /**
      * Returns the family of analysis intentioned by the {@link ModelArg} instance.  It is of the following form:
-     * <pre> <code> <table class= "myColumnPadding">
+     * <table class= "myColumnPadding">
+     *  <caption> </caption>
      *  <tr>
      *    <th>Family</th>
      *    <th>Description</th>
@@ -1212,7 +1205,6 @@ public class ModelArg {
      *    <td>unsupervised</td>
      *  </tr>
      * </table>
-     * </code> </pre>
      * @return The family of analysis.
      */
     public String get_family() {
@@ -1250,8 +1242,8 @@ public class ModelArg {
     /**
      * Returns a vector of length ySize ({@link #get_ySize}) containing the y-variables types.  The vector will be null in the family is unsupervised.
      * The types are as follows:
-     * <pre> <code> 
      * <table class= "myColumnPadding">
+     *  <caption> </caption>
      *  <tr>
      *    <th>Description</th>
      *    <th>Value</th>
@@ -1285,7 +1277,6 @@ public class ModelArg {
      *    <td>I</td>
      *  </tr>
      * </table>
-     * </code> </pre>
      *
      * @return The y-variable types.
      */
@@ -1302,8 +1293,8 @@ public class ModelArg {
     /**
      * Returns a vector of length xSize ({@link #get_xSize}) containing the x-variable types.
      * The types are as follows:
-     * <pre> <code>
      * <table class= "myColumnPadding">
+     *  <caption> </caption>
      *  <tr>
      *    <th>Description</th>
      *    <th>Value</th>
@@ -1329,7 +1320,6 @@ public class ModelArg {
      *    <td>I</td>
      *  </tr>
      * </table>
-     * </code> </pre> 
      *
      * @return The x-variable types.
      */
@@ -1350,15 +1340,15 @@ public class ModelArg {
      * variables.  All others elements assume the value of zero (0).  
      * @return The number of levels found in each y-variable
      */
-    public int[] get_yLevel() {
+    public int[] get_yLevelsMax() {
 
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {        
         @RF_TRACE_OFF@    for (int i = 0; i < yType.length; i++) {
-        @RF_TRACE_OFF@      RFLogger.log(Level.INFO, "yLevel[" + i + "] = " + yLevel[i]);            
+        @RF_TRACE_OFF@      RFLogger.log(Level.INFO, "yLevelsMax[" + i + "] = " + yLevelsMax[i]);            
         @RF_TRACE_OFF@    }
         @RF_TRACE_OFF@  }
 
-        return yLevel;
+        return yLevelsMax;
     }
 
     /**
@@ -1367,15 +1357,15 @@ public class ModelArg {
      * variables.  All others elements assume the value of zero (0).
      * @return The number of levels found in each x-variable.
      */
-    public int[] get_xLevel() {
+    public int[] get_xLevelsMax() {
 
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {        
         @RF_TRACE_OFF@    for (int i = 0; i < xType.length; i++) {
-        @RF_TRACE_OFF@      RFLogger.log(Level.INFO, "xLevel[" + i + "] = " + xLevel[i]);            
+        @RF_TRACE_OFF@      RFLogger.log(Level.INFO, "xLevelsMax[" + i + "] = " + xLevelsMax[i]);            
         @RF_TRACE_OFF@    }
         @RF_TRACE_OFF@  }
 
-        return xLevel;
+        return xLevelsMax;
     }
 
     /**
@@ -1400,8 +1390,22 @@ public class ModelArg {
         return xData;
     }
     
+    public XInfo get_xInfo() {
+        return xInfo;
+    }
+    
+    public YInfo get_yInfo() {
+        return yInfo;
+    }
 
-    /**
+    public int[][] get_xLevels() {
+        return xLevels;
+    }
+    
+    public int[][] get_yLevels() {
+        return yLevels;
+    }
+        /**
      * Sets the bootstrap related parameters in the model.
      *
      * <p> Note that the parameters are interdependent on one another.
@@ -1416,8 +1420,8 @@ public class ModelArg {
      * a value of zero (0) implies that case j is out-of-bag in tree
      * i. Ensure that the sample over the forest is coherent:  the sum of the
      * each column should equal sampleSize. </p>
-     * <pre> <code> 
      * <table class= "myColumnPadding">
+     *  <caption> </caption>     
      *  <tr>
      *    <th>Parameter</th>
      *    <th>Default Value</th>
@@ -1448,7 +1452,9 @@ public class ModelArg {
      *    <td>null</td>
      *    <td>null, 2-D matrix of dimension [ntree] x [nSize]</td>
      *  </tr>
-     * </table></p>
+     * </table>
+     * <pre>
+     *
      *
      *                                                                                       >0
      *                                                                swr                  /------ sampleSize, 
@@ -1472,7 +1478,7 @@ public class ModelArg {
      *                                                               \------ ERROR 
      *                                                                 null                                              
      *
-     * </code> </pre>
+     * </pre>
      * Finally, note that when bootstrap = auto is in force, it is also
      * possible to use case weights in conjuntion with sampleType.  
      *
@@ -1490,28 +1496,25 @@ public class ModelArg {
      * slightly different sampling algorithms deployed in the two
      * scenarios can result in dramatically different execution times.
      */
-    public void set_bootstrap(int ntree,
-                              String bootstrap,
-                              String sampleType,
-                              int sampleSize,
-                              int[][] sample,
+    public void set_sampleInfo(int     ntree,
+                              String   bootstrap,
+                              String   sampleType,
+                              int      sampleSize,
+                              int[][]  sample,
                               double[] caseWeight) {
 
+        int sampleSizeAdj = sampleSize;
+        
         if (ntree <= 0) {
             RFLogger.log(Level.WARNING, "Invalid value for bootstrap parameter ntree:  " + ntree);
             RFLogger.log(Level.WARNING, "Overriding all bootstrap parameters with default values.");
-            set_bootstrap();
+            set_sampleInfo();
         }
         else if (bootstrap.equals("auto")) {
 
             this.ntree = ntree;
-            this.bootstrap = "auto";
 
-            // Set the case weight vector appropriately.  It may or may not be null.
-            this.caseWeight = setWeight(caseWeight, nSize);
-            
             if (sampleType.equals("swr")) {
-                this.sampleType = sampleType;
                 
                 if (sampleSize > 0) {
                     // Do nothing.  The sample size is valid.
@@ -1520,38 +1523,35 @@ public class ModelArg {
                     // Ignore value and use the default sample size.
                     // RFLogger.log(Level.WARNING, "Invalid value for bootstrap parameter sampleSize:  " + sampleSize);
                     // RFLogger.log(Level.WARNING, "Overriding sampleSize with default value:  " + nSize);
-                    this.sampleSize = nSize;
+                    sampleSizeAdj = nSize;
                 }
 
             }
             else if (sampleType.equals("swor")) {
-                this.sampleType = sampleType;
+
                 if ((sampleSize > 0) && (sampleSize <= nSize)) {
                     // Do nothing.  The sample size is valid.
-                    this.sampleSize = sampleSize;
                 }
                 else {
                     // Ignore value and use the default sample size.
                     // RFLogger.log(Level.WARNING, "Invalid value for bootstrap parameter sampleSize:  " + sampleSize);
                     // RFLogger.log(Level.WARNING, "Overriding sampleSize with default value:  [n * (e-1)/e]");
-                    this.sampleSize = (int) Math.round(nSize * (1 - Math.exp(-1)));
+                    sampleSizeAdj = (int) Math.round(nSize * (1 - Math.exp(-1)));
                 }
             }
             else {
                 RFLogger.log(Level.WARNING, "Invalid value for bootstrap parameter sampleType:  " + sampleType);                
                 RFLogger.log(Level.WARNING, "Overriding all bootstrap parameters with default values.");
-                set_bootstrap();
+                set_sampleInfo();
             }
 
-            this.sample = null;
+            // The case weight vector may or may not be null.
+            sampleInfo = new SampleInfo(bootstrap, sampleType, sampleSizeAdj, null, setWeight(caseWeight, this.nSize));
         }
         else if (bootstrap.equals("user")) {
 
             this.ntree = ntree;
-            this.bootstrap = "user";
-            this.sampleType = "swr";
-            this.caseWeight = setWeight(null, nSize);
-            
+
             // Check for coherent sample.  It will of be dim [ntree] x [nSize].
             if (sample == null) {
                 RFLogger.log(Level.SEVERE, "sample must not be null when bootstrapping by user.");
@@ -1590,14 +1590,14 @@ public class ModelArg {
                         throw new IllegalArgumentException();
                     }
                 }
-                this.sampleSize = sSize[0];
-                this.sample = sample;
+
+                sampleInfo = new SampleInfo(bootstrap, sampleType, sampleSize, sample, setWeight(null, this.nSize));
             }
         }
         else {
             RFLogger.log(Level.WARNING, "Invalid value for bootstrap parameter bootstrap:  " + bootstrap);
             RFLogger.log(Level.WARNING, "Overriding all bootstrap parameters with default values.");
-            set_bootstrap();
+            set_sampleInfo();
         }
     }
 
@@ -1605,13 +1605,9 @@ public class ModelArg {
      * @param ntree Number of trees in the random forest.
      * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
-    public void set_bootstrap(int ntree) {
+    public void set_sampleInfo(int ntree) {
         this.ntree = 1000;
-        bootstrap = "auto";
-        sampleType = "swr";
-        sampleSize = nSize;
-        sample = null;
-        caseWeight = setWeight(null, nSize);
+        set_sampleInfo(ntree, "auto", "swr", this.nSize, null, setWeight(null, nSize));
     }
     
     /** Sets the bootstrap related parameters in the model.  Use default values for all unspecified parameters.
@@ -1619,21 +1615,18 @@ public class ModelArg {
      * @param sample 2-D matrix explicitly specifying the bootstrap sample.
      * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
-    public void set_bootstrap(int ntree, int[][] sample) {
-        set_bootstrap(ntree, "user", "swr", 0, sample, null); 
+    public void set_sampleInfo(int ntree, int[][] sample) {
+        this.ntree = 1000;
+        set_sampleInfo(ntree, "user", "swr", sample[0].length, sample, null); 
     }
 
 
     /** Sets the bootstrap related parameters in the model.  Use default values for all parameters.
      * @see #set_bootstrap(int, String, String, int, int[][], double[]) 
      */
-    public void set_bootstrap() {
-        ntree = 1000;
-        bootstrap = "auto";
-        sampleType = "swr";
-        sampleSize = nSize;
-        sample = null;
-        caseWeight = setWeight(null, nSize);
+    public void set_sampleInfo() {
+        this.ntree = 1000;
+        set_sampleInfo(ntree, "auto", "swr", this.nSize, null, setWeight(null, this.nSize));
     }
 
     /** 
@@ -1641,81 +1634,8 @@ public class ModelArg {
      * @return The type of bootstrap used in the model.
      * @see #set_bootstrap(int, String, String, int, int[][], double[])
      */
-    public String get_bootstrap() {
-        return bootstrap;
-    }
-
-    /**
-     * Returns the type of sampling used in generating the bootstrap.
-     * @return The type of sampling used in generating the bootstrap.
-     * @see #set_bootstrap(int, String, String, int, int[][], double[])
-     */
-    public String get_sampleType() {
-        return sampleType;
-    }
-
-    /**
-     * Returns the size of sample used in generating the bootstrap.
-     * @return The size of sample used in generating the bootstrap.
-     * @see #set_bootstrap(int, String, String, int, int[][], double[])
-     */
-    public int get_sampleSize() {
-        return sampleSize;
-    }
-
-    /**
-     * Returns the 2-D matrix explicitly specifying the bootstrap sample.
-     * @return The 2-D matrix explicitly specifying the bootstrap sample.
-     * @see #set_bootstrap(int, String, String, int, int[][], double[])
-     */
-    public int[][] get_sample() {
-        return sample;
-    }
-
-    /**
-     * Returns the number of trees in the forest.
-     * @return The number of trees in the forest.
-     * @see #set_bootstrap(int, String, String, int, int[][], double[])
-     */
-    public int get_ntree() {
-        return ntree;
-    }
-
-
-    /**
-     * Returns the value for the block size associated with the
-     * reporting of the error rate.
-     * @return The value for the block size associated with the
-     * reporting of the error rate.
-     * @see #set_blockSize(int)
-     */
-    public int get_blockSize() {
-        return blockSize;
-    }
-
-    /**
-     * Sets the default value for the block size associated with the
-     * reporting of the error rate.  This value defaults to ntree.
-     * @see #set_blockSize(int)
-     */
-    public void set_blockSize() {
-        blockSize = get_ntree();
-    }
-
-    /**
-     * Sets the specified value for the block size associated with the
-     * reporting of the error rate.  If the value is out of range, the default value will be applied.
-     * @see #set_blockSize()
-     */
-    public void set_blockSize(int blockSize) {
-        if ((blockSize < 1) || (blockSize > get_ntree())) {
-            RFLogger.log(Level.WARNING, "Invalid value for parameter blockSize:  " + blockSize);
-            RFLogger.log(Level.WARNING, "Overriding blockSize with default value of ntree:  " + get_ntree());
-            set_blockSize();
-        }
-        else {
-            this.blockSize = blockSize;
-        }
+        public SampleInfo get_sampleInfo() {
+        return sampleInfo;
     }
 
 
@@ -1730,63 +1650,8 @@ public class ModelArg {
 
 
 
-    /**
-     * Sets the target quantile probabilities in scenarios that require them.
-     * @param prob The target quantile probability vector.  This must be a vector 
-     * of probabilities between zero and one. When null is sent in, the vector is ingored.
-     */
-    public void set_prob(double[] prob) {
-        this.quantile = prob;
 
-        if (prob == null) {
-            quantileSize = 0;
-        }
-        else {
-            quantileSize = prob.length;
-        }
-    }
-
-    /**
-     * Returns the vector of target quantile probabilities.
-     * @return The vector of target quantile probabilities.
-     * @see #set_prob(double[])
-     */
-    public double[] get_prob() {
-        return quantile;
-    }
-
-    int get_probSize() {
-        return quantileSize;
-    }
-            
         
-    /**
-     * Sets the Greenwald-Khanna allowable error for the target quantiles.
-     * @param probEpsilon The Greenwald-Khanna allowable error for the target quantiles.
-     */
-    public void set_probEpsilon(double probEpsilon) {
-        qEpsilon = probEpsilon;
-    }
-
-    /**
-     * Sets the default value for the Greenwald-Khanna allowable error for the target quantiles.
-     */
-    public void set_probEpsilon() {
-        qEpsilon = 0.005;
-    }
-
-    /**
-     * Returns the value for the Greenwald-Khanna allowable error for the target quantiles.
-     * @return The value for the Greenwald-Khanna allowable error for the target quantiles.
-     * @see #set_probEpsilon(double)
-     */
-    public double get_probEpsilon() {
-        return qEpsilon;
-    }
-
-
-
-    
     /** Sets the number of variables to be randomly held out while growing a tree.
      * @param vtry Number of variables to be randomly held out while growing a tree.
      */
@@ -1831,8 +1696,61 @@ public class ModelArg {
 
 
 
+    private XInfo initializeXInfo(char[] xType, int[] xLevelsMax) {
+        int iter;
+        
+        xLevelsCnt = new int[xFactorCount];
+        xLevels    = new int[xFactorCount][];
+        
+        // Compress the xLevelsMax into xLevelsCnt, and xLevels.
+        // TBD TBD TBD This is a hack.  We should not assume the count is the max levels. But we are lazy.
+
+        iter = 0;
+        for (int i = 0; i < xSize; i++) {
+
+            if (xLevelsMax[i] > 0) {
+                xLevelsCnt[iter] = xLevelsMax[i];
+                xLevels[iter] = new int[xLevelsMax[i]];
+                for (int j = 0; j < xLevelsMax[i]; j++) {
+                    xLevels[iter][j] = j + 1;
+                }
+                iter ++;
+            }
+        }
+        
+        // We do not support TDC yet.
+        return new XInfo(xSize, xType, xLevelsMax, xLevelsCnt, null, null);
+    }
 
 
+    private YInfo initializeYInfo(char[] yType, int[] yLevelsMax, TreeSet <Integer> eventTypeSet) {
+        int iter;
+        
+        yLevelsCnt = new int[yFactorCount];
+        yLevels    = new int[yFactorCount][];
+        
+        // Compress the xLevelsMax into xLevelsCnt, and xLevels.
+        // TBD TBD TBD This is a hack.  We should not assume the count is the max levels. But we are lazy.
+
+        iter = 0;
+        for (int i = 0; i < xSize; i++) {
+
+            if (yLevelsMax[i] > 0) {
+                yLevelsCnt[iter] = yLevelsMax[i];
+                yLevels[iter] = new int[yLevelsMax[i]];
+                for (int j = 0; j < yLevelsMax[i]; j++) {
+                    yLevels[iter][j] = j + 1;
+                }
+                iter ++;
+            }
+        }
+        
+
+        return new YInfo(ySize, yType, yLevelsMax, yLevelsCnt, eventTypeSet, null);
+
+    }    
+
+    
 
 
 
@@ -1859,7 +1777,7 @@ public class ModelArg {
      * @param mtry The number of x-variables to be randomly selected as candidates for splitting a node. 
      * This number must be such that 1 &le; mtry &le; xSize.
      * If the value is out of range, the default value will be applied:
-     * <pre> <code> 
+     * <pre> 
      * <table class= "myColumnPadding">
      *  <tr>
      *    <th>Family</th>
@@ -1873,7 +1791,8 @@ public class ModelArg {
      *    <td>all others</td>     
      *    <td>sqrt(xSize) </td>
      *  </tr>
-     * </table></p>
+     * </table>
+     *</pre>
      * The default is to use uniform weights for selection, though this can be changed with {@link #set_xWeight(double[])}.
      */
     public void set_mtry(int mtry) {
@@ -1909,26 +1828,146 @@ public class ModelArg {
 
 
 
-     
+    /**
+     * Sets the Laterally Optimized Tree related parameters in the model.
+     *
+     * <p> These parameters are used to trigger and configure Greedy Splitting. 
+     * <table class= "myColumnPadding">
+     *  <caption> </caption>     
+     *  <tr>
+     *    <th>Parameter</th>
+     *    <th>Possible Values</th>
+     *    <th>Explaination</th>
+     *  </tr>
+     *  <tr>
+     *    <td>hdim</td>
+     *    <td>&ge; 0</td>
+     *    <td>maximum hypercube dimension, with zero (0) implying non-greedy splitting</td>
+     *  </tr>
+     *  <tr>
+     *    <td>lotSize</td>     
+     *    <td>&gt 0</td>
+     *    <td>maximum number of terminal nodes requested in each greedy tree</td>
+     *  </tr>
+     *  <tr>
+     *    <td>lotLag</td>     
+     *    <td>&gt 0</td>
+     *    <td>moving average of empirical risk, used to terminate forest growth</td>
+     *  </tr>
+     *  <tr>
+     *    <td>lotStrikeout</td>     
+     *    <td>&gt 0</td>
+     *    <td>count of upward trend reversal in moving average, used to terminate forest growth</td>
+     *  </tr>
+     * </table>
+     *
+     * @param hdim Maximum hypercube dimension to be used in greedy
+     * splitting. A value of zero implies non-greedy splitting. A
+     * value of one will reflect CART splitting, but with Laterally
+     * Optimized Growth in effect.
+     * @param lotSize Maximum tree size (count of terminal nodes) to
+     * be used in greedy splitting.  Ignored when greedy splitting is
+     * not in effect.
+     * @param lotLag Moving average of empirical risk, used to
+     * terminate forest growth. This means that the forest empirical
+     * risk as caluclated in the last lotLag trees will be averaged
+     * and saved and used in determining the direction of the
+     * empirical risk curve.  When the curve flattens and turns
+     * upward, the upward count is compared with lotStrikeout and the
+     * forest is terminated if the threshold is reached.  Ignored when
+     * greedy splitting is not in effect.
+     * @param lotStrikeout Count of the trend reversal in the moving
+     * average, logLag. When the empirical risk curve stops decreasing
+     * and moves upward, we wait for a reveral of lotStrikeout length
+     * and then signal the forest to terminate.  Ignored when greedy
+     * splitting is not in effect.
+     */
+    public void set_lot(int hdim, int treeSize, int lag, int strikeout) {
 
+        if (hdim == 0) {
+            // Traditional non-greedy splitting.
+            this.lot = new Lot(0, 0, 0, 0);
+        }
+        else {
+            if (hdim > 0) {
 
+                if (treeSize > 0) {
+                    // Verified.
+                }
+                else {
+                    RFLogger.log(Level.SEVERE, "lotSize must be greater than zero.");
+                    throw new IllegalArgumentException();
+                }
+                if (lag >= 0) {
+                    // Verified.
+                }
+                else {
+                    RFLogger.log(Level.SEVERE, "lotSize must be greater than or equal to zero.");
+                    throw new IllegalArgumentException();
+                }
+                if (strikeout > 0) {
+                    // Verified.
+                }
+                else {
+                    RFLogger.log(Level.SEVERE, "lotStrikeout must be greater than zero.");
+                    throw new IllegalArgumentException();
+                }
+                this.lot = new Lot(hdim, treeSize, lag, strikeout);
+            }
+            else {
+                RFLogger.log(Level.SEVERE, "hdim must be greater than or equal to zero.");
+                throw new IllegalArgumentException();
+            }
+        }
+    }
+
+    /** Sets the Laterally Optimized Tree related parameters in the model.  Use default values for all unspecified parameters.
+     * @see #set_lot(int, int, int, int)
+     */
+    public void set_lot(int hdim) {
+
+        if (hdim == 0) {
+            // Traditional non-greedy splitting.
+            this.lot = new Lot(0, 0, 0, 0);
+        }
+        else {
+            if (hdim > 0) {
+
+                this.lot = new Lot(hdim, 50, 8, 3);
+            }
+        }
+    }
     
+    /** Sets the Laterally Optimized Tree related parameters in the model.  Use default values for all unspecified parameters.
+     * @see #set_lot(int, int, int, int)
+     */
     public void set_lot() {
-        // Traditional non-greedy splitting.
-        this.hdim = 0;
-        this.lotSize = 0;
-        this.lotLag = 0;
-        this.lotStrikeout = 0;
+
+        this.lot = new Lot(5, 50, 8, 3);        
+
     }
 
+    public Lot get_lot() {
+        return lot;
+    }
+
+    /** 
+     * Returns the maximum hypercube dimension to be considered in Greedy Splitting.
+     * @return The maximum hypercube dimension to be considered in Greedy Splitting.
+     * @see #set_lot(int, int, int, int)
+     */
     public int get_hdim() {
-        return hdim;
+        return lot.hdim;
     }
     
+    public void set_baseLearn() {
+        this.baseLearn = new BaseLearn(0, 0, 0, 0);
+    }
     
-
-        
-
+    public BaseLearn get_baseLearn() {
+        return baseLearn;
+    }
+    
     /** 
      * Sets the number of iterations for the missing data algorithm.
      * @param nImpute The number of iterations for the missing data algorithm.
@@ -1955,16 +1994,6 @@ public class ModelArg {
         return nImpute;
     }
 
-
-    /**
-     * Returns the case weight vector.
-     * @return The case weight vector.
-     * @see #set_bootstrap(int, String, String, int, int[][], double[])
-     */
-    public double[] get_caseWeight() {
-        return caseWeight;
-    }
-    
 
     /**
      * Sets the number of randomly selected pseudo-responses when
@@ -2087,25 +2116,25 @@ public class ModelArg {
      * x-variable. The default is to use uniform weights so that all
      * x-variables are treated equally.
     */
-    public void set_xStatisticalWeight(double[] weight) {
-        xStatisticalWeight = setWeight(weight, xSize);
+    public void set_xWeightStat(double[] weight) {
+        xWeightStat = setWeight(weight, xSize);
     }
 
     /** 
      * Set the x-variable statistical weight vector to uniform weights.
-     * @see #set_xStatisticalWeight(double[])
+     * @see #set_xWeightStat(double[])
      */
-    public void set_xStatisticalWeight() {
-        xStatisticalWeight = setWeight(null, xSize);
+    public void set_xWeightStat() {
+        xWeightStat = setWeight(null, xSize);
     }
 
     /**
      * Returns the x-variable statistical weight vector.
      * @return The x-variable statistical weight vector.
-     * @see #set_xStatisticalWeight(double[])
+     * @see #set_xWeightStat(double[])
      */
-    public double[] get_xStatisticalWeight() {
-        return xStatisticalWeight;
+    public double[] get_xWeightStat() {
+        return xWeightStat;
     }
 
     /**
@@ -2128,14 +2157,14 @@ public class ModelArg {
         // nominally the case, and things must be seriously corrupted
         // if this is not the case.
         if (family.equals("RF-S")) {
-            crWeight = setWeight(weight, eventType.size());
+            crWeight = setWeight(weight, eventTypeSet.size());
         }
         else {
             RFLogger.log(Level.SEVERE, "family must be RF-S in order to define this weight vector.");
             throw new IllegalArgumentException();
         }
         
-        crWeightSize = eventType.size();
+        crWeightSize = eventTypeSet.size();
     }
 
     /**
@@ -2150,14 +2179,14 @@ public class ModelArg {
         // nominally the case, and things must be seriously corrupted
         // if this is not the case.
         if (family.equals("RF-S")) {
-            crWeight = setWeight(null, eventType.size());
+            crWeight = setWeight(null, eventTypeSet.size());
         }
         else {
             RFLogger.log(Level.SEVERE, "family must be RF-S in order to define this weight vector.");
             throw new IllegalArgumentException();
         }
 
-        crWeightSize = eventType.size();
+        crWeightSize = eventTypeSet.size();
     }
 
     /**
@@ -2337,8 +2366,8 @@ public class ModelArg {
      * and re-installing the package is necessary after modifying the
      * source code.
      * 
-     * <pre> <code> 
      * <table class= "myColumnPadding">
+     *  <caption> </caption>     
      *  <tr>
      *    <th>Family</th>
      *    <th>Split Rule Description</th>
@@ -2427,8 +2456,7 @@ public class ModelArg {
      *    <td>unsupv</td>
      *  </tr>
      *  
-     *</table>
-     * </code> </pre> 
+     * </table>
      */
     public void set_splitRule(String splitRule) {
 
@@ -2460,7 +2488,7 @@ public class ModelArg {
             }
         }
         else if (family.equals("RF-S")) {
-            if (eventType.size() == 1) {
+            if (eventTypeSet.size() == 1) {
                 if (splitRule.equals("logrank") || splitRule.equals("logrankscore")) {
                     this.splitRule = splitRule;
                     result = true;
@@ -2535,7 +2563,7 @@ public class ModelArg {
         customSplitIndex = 0;
         
         if (family.equals("RF-S")) {
-            if (eventType.size() == 1) {
+            if (eventTypeSet.size() == 1) {
                 splitRule = "logrank";
             }
             else {
@@ -2635,8 +2663,8 @@ public class ModelArg {
      * value for this parameter varies with the family, though it
      * recommended to experiment with different values.
      *
-     * <pre> <code> 
      * <table class= "myColumnPadding">
+     *  <caption> </caption>     
      *  <tr>
      *    <th>Family</th>
      *    <th>Defalut Node Size</th>
@@ -2682,8 +2710,7 @@ public class ModelArg {
      *    <td>3</td>
      *  </tr>
      *  
-     *</table>
-     * </code> </pre> 
+     * </table>
      */
     public void set_nodeSize(int nodeSize) {
         if (nodeSize < 0) {
@@ -2699,7 +2726,7 @@ public class ModelArg {
      */
      public void set_nodeSize() {
         if (family.equals("RF-S")) {
-            if (eventType.size() == 1) {
+            if (eventTypeSet.size() == 1) {
                 nodeSize = 3;
             }
             else {
@@ -2750,209 +2777,7 @@ public class ModelArg {
     }
 
 
-    /** 
-    * Sets the seed for the random number generator used by the
-    * algorithm.  This must be a negative number.  The seed is a very
-    * important parameter if repeatability of the model generated is
-    * required.  Generally speaking, growing a model using the same
-    * data set, the same model paramaters, and the same seed will
-    * result in identical models. When large amounts of missing data
-    * are involved, there can be slight variations due to Monte Carlo
-    * effects. If the parameter is not set by the user, it can always
-    * be recovered with {@link #get_seed}.
-    */
-    public void set_seed(int seed) {
-        this.seed = seed;
-        
-        if (seed >= 0) {
-            if (seed > 0) {
-                RFLogger.log(Level.WARNING, "Invalid value for parameter seed:  " + seed);                
-                RFLogger.log(Level.WARNING, "Overriding seed with negative of the specified value.");
-                this.seed = - seed;
-            }
-            else {
-                RFLogger.log(Level.WARNING, "Invalid value for parameter seed:  " + seed);
-                RFLogger.log(Level.WARNING, "Overriding seed with a negative random integer value.");
-                set_seed();
-            }
-        }
-    }
 
-    private void set_seed() {
-        generator = new Random();
-        seed = - Math.abs(generator.nextInt());
-    }
-
-    /** 
-    * Returns the seed for the random number generator used by the
-    * algorithm.
-    * @return The seed for the random number generator used by the
-    * @see #set_seed(int)
-    */
-    public int get_seed() {
-        return seed;
-    }
-
-
-    /**
-     * Sets the trace parameter indicating the specified update
-     * interval in seconds.  
-     * @param trace The trace parameter indicating the specified update
-     * interval in seconds. During extended execution times,
-     * the approximate time to complete the execution is output to a
-     * trace file in the users HOME directory.  The format and
-     * location of the trace file can be controlled by modifying
-     * <code>src/main/resources/spark/log.properties</code>.  A value
-     * of zero (0) turns off the trace.
-     */
-    public void set_trace(int trace) {
-        this.trace = trace;
-        
-        if (trace < 0) {
-            RFLogger.log(Level.WARNING, "Invalid value for parameter trace:  " + trace);
-            RFLogger.log(Level.WARNING, "Overriding trace with default value:  0");
-            set_trace(0);
-        }
-    }
-        
-    /**
-     * Returns the trace parameter indicating the specified update interval in seconds.
-     * @return The trace parameter indicating the specified update interval in seconds.
-     */
-    public int get_trace() {
-        return trace;
-    }
-
-
-    /**
-    * Sets the number of cores to be used by the algorithm when OpenMP
-    * parallel processing is in force.  
-    * @param rfCores The number of cores to be used by the algorithm when OpenMP
-    * parallel processing is in force. The default behaviour is to
-    * use all cores available.  This is achieved by setting the
-    * parameter to a negative value.  The result is that each core
-    * will be independently tasked with growing a tree.  Significant
-    * savings in elapsed computation times can be achieved.
-    */
-    public void set_rfCores(int rfCores) {
-        int availableCores = Runtime.getRuntime().availableProcessors();
-
-        this.rfCores = rfCores;
-        if (rfCores > availableCores) {
-            RFLogger.log(Level.WARNING, "Invalid value for parameter rfCores:  " + rfCores);
-            RFLogger.log(Level.WARNING, "Overriding rfCores with (" + availableCores + "), the maximum available processors.");
-            this.rfCores = availableCores;
-        }
-        
-    }
-
-    /**
-    * Returns the number of cores to be used by the algorithm when OpenMP
-    * parallel processing is in force.
-    * @return the number of cores to be used by the algorithm when OpenMP parallel processing is in force.
-    * @see #set_rfCores(int)
-    */
-    public int get_rfCores() {
-        return rfCores;
-    }
-
-
-    /**
-     * Sets the ensemble outputs desired from the model.  These
-     * settings are in the form of &lt;key, value&gt; pairs, where the
-     * key is the name of the ensemble, and the value is the specific
-     * option for that ensemble.
-     * <p> The default option for each key is in bold. </p>
-     *
-     * <pre> <code> 
-     * <table class= "myColumnPadding">
-     *  <tr>
-     *    <th>Ensemble Key</th>
-     *    <th>Possible Values</th>
-     *  </tr>
-     *  
-      
-     *  <tr>
-     *    <td>weight</td>
-     *    <td><i>Grow or Restore Only:</i><br><b>no</b>, inbag, oob<br>
-     *        <i>Predict Only:</i><br><b>no</b>, yes</td>
-     *  </tr>
-
-     *  <tr>
-     *    <td>proximity</td>
-     *    <td><i>Grow or Restore Only:</i><br><b>no</b>, inbag, oob<br>
-     *        <i>Predict Only:</i><br><b>no</b>, yes</td>
-     *  </tr>
-     *  
-     *  <tr>
-     *    <td>membership</td>
-     *    <td><b>no</b>, yes</td>
-     *  </tr>
-     *
-     *  <tr>
-     *    <td>importance</td>
-     *    <td><b>no</b>, permute, random, permute.ensemble, random.ensemble</td>
-     *  </tr>
-     *
-     *  <tr>
-     *    <td>varUsed</td>
-     *    <td><b>no</b>, every.tree, sum.tree</td>
-     *  </tr>
-     *
-     *  <tr>
-     *    <td>splitDepth</td>
-     *    <td><b>no</b>, every.tree, sum.tree</td>
-     *  </tr>
-     *
-     *  <tr>
-     *    <td>errorType</td>
-     *    <td><i>For RF-C, RF-C+ Families Only:</i><br><b>misclass</b>, brier, g.mean, no<br>
-     *        <i>For RF-R, RF-R+ Families Only:</i><br><b>mse</b>, no<br>
-     *        <i>For RF-M+ Family Only:</i><br><b>default</b>, no<br>
-     *        <i>For RF-S  Family Only:</i><br><b>c-index</b>, no<br>
-     *        <i>For RF-U  Family Only:</i><br><b>no</b><br></td>
-     *  </tr>
-     *
-     *  <tr>
-     *    <td>predictionType</td>
-     *    <td><i>For RF-C, RF-C+ Families Only:</i><br><b>max.vote</b>, rfq<br>
-     *        <i>For RF-R, RF-R+ Families Only:</i><br><b>mean</b><br>
-     *        <i>For RF-M+ Family Only:</i><br><b>default</b><br>
-     *        <i>For RF-S  Family Only:</i><br><b>default</b><br>
-     *        <i>For RF-U  Family Only:</i><br><b>no</b><br></td>
-     *  </tr>
-     *
-     * </table>
-     * </code> </pre> 
-     * @param key The name of the ensemble output.
-     * @param value The specific value for the ensemble output. 
-     */
-    public void setEnsembleArg(String key, String value) {
-        ensembleArg.set(key, value);
-    }
-
-    /**
-     * Sets default values for the ensemble outputs resulting from the model.
-     * @see #setEnsembleArg(String, String).
-     */
-    public void setEnsembleArg() {
-        ensembleArg.set();
-    }
-
-    /**
-     * Returns the current value for the specified ensemble argument.
-     * @param key The name of the ensemble output.
-     * @see #setEnsembleArg(String, String).
-     */
-    public String getEnsembleArg(String key) {
-        return ensembleArg.get(key);
-    }
-    
-
-    EnsembleArg getEnsembleArg() {
-        return ensembleArg;
-    }
-    
     int getEnsembleArgOptLow() {
 
         return (ensembleArg.getNative("varUsed") + 
@@ -2968,9 +2793,7 @@ public class ModelArg {
 
         return (ensembleArg.getNative("membership") + 
                 ensembleArg.getNative("weight") +                 
-                 
-                 
-                
+                ensembleArg.getNative("distance") + 
                 ensembleArg.getNative("qualitativeTerminalInfo") + 
                 ensembleArg.getNative("quantitativeTerminalInfo"));         
     }
@@ -2984,7 +2807,7 @@ public class ModelArg {
                                   new String[] {"auto", "user"},
                                   new int[] {0, (1 << 19) + (1 << 20)});
 
-        result += nativeOpt.get(bootstrap);
+        result += nativeOpt.get(sampleInfo.bootstrap);
 
         return result;
     }
@@ -3000,7 +2823,7 @@ public class ModelArg {
                                   new String[] {"swr", "swor"},
                                   new int[] {0, (1 << 12)});
 
-        result += nativeOpt.get(sampleType);
+        result += nativeOpt.get(sampleInfo.sampleType);
         
         if (customSplitIndex > 0) {
             // Shift the decremented value by 8 bits.
@@ -3012,9 +2835,6 @@ public class ModelArg {
         return result;
     }
 
-    Lot getLot() {
-        return new Lot(this.hdim, this.lotSize, this.lotLag, this.lotStrikeout);
-    }
 
 
 }

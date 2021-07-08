@@ -87,9 +87,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       conf.matx <- get.confusion(x$yvar,
              if(!is.null(x$class.oob) && !all(is.na(x$class.oob))) x$class.oob else x$class)
       names(dimnames(conf.matx)) <- c("  observed", "predicted")
-      brierS <- get.brier.error(x$yvar,
+      brier.err <- get.brier.error(x$yvar,
              if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
-      aucS <- get.auc(x$yvar,
+      auc.error <- get.auc(x$yvar,
              if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
       ## special processing needed to handle class imbalanced rfq classifier
       if (grow.mode) {
@@ -99,39 +99,39 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         rfqO <- list(rfq = x$forest$rfq, perf.type = x$perf.type)
       }
       if (!is.null(rfqO$perf.type) && (rfqO$perf.type == "g.mean")) {
-        gmeanS <- round(1 - x$err.rate[nrow(x$err.rate), 1], 2)
+        gmean.error <- 1 - x$err.rate[nrow(x$err.rate), 1]
         pi.hat <- table(x$yvar) / length(x$yvar)
-        iratio <- round(max(pi.hat, na.rm  = TRUE) / min(pi.hat, na.rm  = TRUE), 2)
+        iratio <- max(pi.hat, na.rm  = TRUE) / min(pi.hat, na.rm  = TRUE)
       }
       else {
-        gmeanS <- NULL
+        gmean.error <- NULL
       }
     }
     else {
-      conf.matx <- brierS <- aucS <- gmeanS <- NULL
+      conf.matx <- brier.err <- auc.error <- gmean.error <- NULL
     }
   }
   ## error rates 
   if (!is.null(x$err.rate)) {
     err.rate <- cbind(x$err.rate)    
     if (grepl("surv", x$family)) {
-      err.rate <- paste(round(100 * err.rate[nrow(err.rate), ], 2), "%", collapse=", ", sep = "")
+      err.rate <- paste(round(100 * err.rate[nrow(err.rate), ], 8), "%", collapse=", ", sep = "")
     }
     else if (x$family == "class") {
-      brierS <- round(100 * brierS, 2)
-      aucS <- round(100 * aucS, 2)
-      overall.err.rate <- paste(round(100 * err.rate[nrow(err.rate), 1], 2), "%", sep = "")
+      brier.err <- 100 * brier.err
+      auc.error <- 100 * auc.error
+      overall.err.rate <- paste(round(100 * err.rate[nrow(err.rate), 1], 6), "%", sep = "")
       ## rfq related adjustments
-      if (!is.null(gmeanS)) {
-        err.rate <- round(err.rate[nrow(err.rate), 1], 2)          
+      if (!is.null(gmean.error)) {
+        err.rate <- err.rate[nrow(err.rate), 1]
       }
       else {
-        err.rate <- paste(round(err.rate[nrow(err.rate), ], 2), collapse=", ", sep = "")
+        err.rate <- paste(round(err.rate[nrow(err.rate), ], 8), collapse=", ", sep = "")
       }
     }
     else if (x$family == "regr") {
-      per.var <- round(100 * (1 - err.rate[nrow(err.rate), ] / var(x$yvar, na.rm = TRUE)), 2)
-      err.rate <- round(err.rate[nrow(err.rate), ], 2)
+      r.squared <- 1 - err.rate[nrow(err.rate), ] / var(x$yvar, na.rm = TRUE)
+      err.rate <- err.rate[nrow(err.rate), ]
     }
     else {
       err.rate <- NULL
@@ -146,26 +146,26 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   }
   #################################################################################
   ##
-  ## grow mode
   ##
-  ################################################################################# 
+  ## GROW MODE
+  ##
+  ##
+  #################################################################################
   if (grow.mode) {
-    cat("                         Sample size: ", x$n,                 "\n", sep="")
+    cat("                         Sample size: ", x$n, "\n", sep="")
     if (grepl("surv", x$family)) {
       if (n.event > 1) {
-        cat("                    Number of events: ", event.freq,  "\n", sep="")
+        cat("                    Number of events: ", event.freq, "\n", sep="")
       }
         else {
-          cat("                    Number of deaths: ", x$ndead,   "\n", sep="")
+          cat("                    Number of deaths: ", x$ndead, "\n", sep="")
         }
     }
     if (x$family == "class") {
-      cat("           Frequency of class labels: ", event.freq,          "\n", sep="")
+      cat("           Frequency of class labels: ", event.freq, "\n", sep="")
     }
     if (!is.null(x$imputed.indv)) {
-      cat("                    Was data imputed: ", "yes",               "\n", sep="")
-      #cat("                         Missingness: ",
-      #    round(100*length(x$imputed.indv)/x$n,2), "%\n", sep="")      
+      cat("                    Was data imputed: ", "yes", "\n", sep="")
     }
     cat("                     Number of trees: ", x$ntree,                "\n",sep="")
     cat("           Forest terminal node size: ", x$nodesize,             "\n", sep="")
@@ -173,8 +173,8 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     cat("No. of variables tried at each split: ", x$mtry,                 "\n", sep="")
     cat("              Total no. of variables: ", length(x$xvar.names),   "\n", sep="")
     if (!x$univariate) { 
-      cat("              Total no. of responses: ", yvar.dim,   "\n", sep="")
-      cat("         User has requested response: ", outcome.target,         "\n", sep="")
+      cat("              Total no. of responses: ", yvar.dim, "\n", sep="")
+      cat("         User has requested response: ", outcome.target, "\n", sep="")
     }
     cat("       Resampling used to grow trees: ", sampUsed,                     "\n",sep="")
     cat("    Resample size used to grow trees: ", round(x$forest$sampsize(x$n)),"\n",sep="")
@@ -185,23 +185,23 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       cat("       Number of random split points: ", x$nsplit                   ,  "\n", sep="")
     }
       else {
-        cat("                      Splitting rule: ", x$splitrule,          "\n", sep="")
+        cat("                      Splitting rule: ", x$splitrule, "\n", sep="")
       } 
     if (!is.null(err.rate)) {
       if (x$family == "regr") {
-        cat("                % variance explained: ", per.var, "\n", sep="")
+        cat("                     (OOB) R squared: ", r.squared, "\n", sep="")
       }
-      if (x$family == "class" && !is.null(brierS)) {
-        cat("              Normalized brier score:", brierS, "\n")
-      }
-      if (x$family == "class" && !is.null(aucS)) {
-        cat("                                 AUC:", aucS, "\n")
-      }
-      if (x$family == "class" && !is.null(gmeanS)) {
-        cat("                              G-mean: ", gmeanS,            "\n", sep="")
+      if (x$family == "class" && !is.null(gmean.error)) {
         cat("                    Imbalanced ratio: ", iratio, "\n", sep="")
+        cat("                        (OOB) G-mean: ", gmean.error, "\n", sep="")
       }
-      cat("                          Error rate: ", err.rate,            "\n\n", sep="")
+      if (x$family == "class" && !is.null(brier.err)) {
+        cat("        (OOB) Normalized Brier score:", brier.err, "\n")
+      }
+      if (x$family == "class" && !is.null(auc.error)) {
+        cat("                           (OOB) AUC:", auc.error, "\n")
+      }
+      cat("                    (OOB) Error rate: ", err.rate, "\n\n", sep="")
     }
     if (x$family == "class" && !is.null(conf.matx)) {
       if (!is.null(x$predicted.oob) && any(is.na(x$predicted.oob))) {
@@ -211,37 +211,36 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         cat("Confusion matrix:\n\n")
       }
       print(conf.matx)
-      cat("\n\tOverall error rate:", overall.err.rate, "\n")
+      cat("\n\tOverall (OOB) error rate:", overall.err.rate, "\n")
     }
      
   }
   #################################################################################
   ##
-  ## predict mode
   ##
-  ################################################################################# 
+  ## PREDICT MODE
+  ##
+  ##
+  #################################################################################
   else {
-    ## cat("\nCall:\n", deparse(x$call),                   "\n\n")
-    cat("  Sample size of test (predict) data: ", x$n,  "\n", sep="")
+    cat("  Sample size of test (predict) data: ", x$n, "\n", sep="")
     if (grepl(x$family, "surv") && !is.null(event)) {
       if (n.event > 1) {
-        cat("       Number of events in test data: ", event.freq,  "\n", sep="")
+        cat("       Number of events in test data: ", event.freq, "\n", sep="")
       }
       else {
-        cat("       Number of deaths in test data: ", unlist(event.freq),   "\n", sep="")
+        cat("       Number of deaths in test data: ", unlist(event.freq), "\n", sep="")
       }
     }
     if (!is.null(x$imputed.data)) {
-      cat("               Was test data imputed: ", "yes",               "\n", sep="")
-      #cat("                         Missingness: ",
-      #    round(100*length(x$imputed.indv)/x$n,2), "%\n", sep="")      
+      cat("               Was test data imputed: ", "yes", "\n", sep="")
     }
     cat("                Number of grow trees: ", x$ntree,              "\n",sep="")
     cat("  Average no. of grow terminal nodes: ", mean(x$leaf.count),   "\n", sep="")
     cat("         Total no. of grow variables: ", length(x$xvar.names), "\n", sep="")  
     if (!x$univariate) { 
-      cat("         Total no. of grow responses: ", yvar.dim,   "\n", sep="")
-      cat("         User has requested response: ", outcome.target,         "\n", sep="")
+      cat("         Total no. of grow responses: ", yvar.dim, "\n", sep="")
+      cat("         User has requested response: ", outcome.target, "\n", sep="")
     }
     cat("       Resampling used to grow trees: ", sampUsed,                     "\n",sep="")
     cat("    Resample size used to grow trees: ", round(x$forest$sampsize(x$n)),"\n",sep="")
@@ -249,19 +248,19 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     cat("                              Family: ", familyOrg,                    "\n", sep="")
     if (!is.null(err.rate)) {
       if (x$family == "regr") {
-        cat("                % variance explained: ", per.var, "\n", sep="")
+        cat("                           R squared: ", r.squared, "\n", sep="")
       }
-      if (x$family == "class" && !is.null(brierS)) {
-        cat("     Test set Normalized brier score:", brierS, "\n")
-      }
-      if (x$family == "class" && !is.null(aucS)) {
-        cat("                        Test set AUC:", aucS, "\n")
-      }
-      if (x$family == "class" && !is.null(gmeanS)) {
-        cat("                     Test set G-mean: ", gmeanS, "\n", sep="")
+      if (x$family == "class" && !is.null(gmean.error)) {
         cat("                    Imbalanced ratio: ", iratio, "\n", sep="")
+        cat("                              G-mean: ", gmean.error, "\n", sep="")
       }
-      cat("                 Test set error rate: ", err.rate, "\n\n", sep="")
+      if (x$family == "class" && !is.null(brier.err)) {
+        cat("              Normalized Brier score:", brier.err, "\n")
+      }
+      if (x$family == "class" && !is.null(auc.error)) {
+        cat("                                 AUC:", auc.error, "\n")
+      }
+      cat("                          error rate: ", err.rate, "\n\n", sep="")
     }
     if (x$family == "class" && !is.null(conf.matx)) {
       if (!is.null(x$predicted.oob) && any(is.na(x$predicted.oob))) {

@@ -339,6 +339,19 @@ print(predict(o, importance = TRUE, block.size = 1)$importance)
 print(vimp(o, block.size = 1)$importance)
 
 ## ------------------------------------------------------------
+## vimp for just a few trees
+## illustrates how to get vimp if you have a large data set
+## ------------------------------------------------------------
+
+## survival analysis but no VIMP
+data(pbc, package = "_PROJECT_PACKAGE_NAME_")
+o <- rfsrc(Surv(days, status) ~ ., pbc, ntree = 2000)
+
+## get vimp for a small number of trees
+print(predict(o, get.tree=1:250, importance = TRUE)$importance)
+
+
+## ------------------------------------------------------------
 ## case-specific vimp
 ## returns VIMP for each case
 ## ------------------------------------------------------------

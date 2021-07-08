@@ -1,4 +1,4 @@
-rfsrc <- function(formula, data, ntree = 1000,
+rfsrc <- function(formula, data, ntree = 500,
                   mtry = NULL, ytry = NULL,
                   nodesize = NULL, nodedepth = NULL,
                   splitrule = NULL, nsplit = 10,
@@ -9,7 +9,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                   samptype = c("swor", "swr"),  samp = NULL, membership = FALSE,
                   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
                   na.action = c("na.omit", "na.impute"), nimpute = 1,
-                  ntime, cause,
+                  ntime = 250, cause,
                   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
                   xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt = NULL, 
                   forest = TRUE,
@@ -28,6 +28,13 @@ rfsrc <- function(formula, data, ntree = 1000,
     terminal.quants <- is.hidden.terminal.quants(user.option)
     cse  <- is.hidden.cse(user.option)
     csv  <- is.hidden.csv(user.option)
+    insitu.ensemble  <- is.hidden.insitu.ensemble(user.option)
+    presort.xvar  <- is.hidden.presort.xvar(user.option)
+    ## this is true by default now
+    experimental <- is.hidden.experimental(user.option)
+    ## this is always false by default
+    data.pass <- is.hidden.data.pass(user.option)
+    mad.max <- is.hidden.mad.max(user.option)
     ## TBD TBD make perf.type visible TBD TBD
     perf.type <- is.hidden.perf.type(user.option)
     rfq <- is.hidden.rfq(user.option)
@@ -60,7 +67,10 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## data cannot be missing
     if (missing(data)) stop("data is missing")
     ## data cannot have Inf or -Inf values
-    if (any(is.infinite(unlist(data)))) stop("data contains Inf or -Inf values")
+    ## but we are disabling this check for now
+    if (FALSE) {
+        if (any(unlist(mclapply(data, function(x) {any(is.infinite(x))})))) stop("data contains Inf or -Inf values")
+    }
     ## conduct preliminary formula validation
     if (missing(formula) | (!missing(formula) && is.null(formula))) {
         if (is.null(ytry)) {
@@ -76,12 +86,29 @@ rfsrc <- function(formula, data, ntree = 1000,
     my.call$formula <- eval(formula)
     ## conduct preliminary processing of missing data
     ## record whether there's no missing data: efficiency step
-    if (any(is.na(data))) {
-      data <- parseMissingData(formulaPrelim, data)
-      miss.flag <- TRUE
+    if (data.pass == TRUE) {
+        ## Give the data a complete pass and assume no missing data.
+        ## This is a user directive and should be used with extreme caution.
+        ## In general, control of this parameter should be left to the algorithm.
+        miss.flag = FALSE
     }
     else {
-      miss.flag <- FALSE
+        if (any(is.na(data))) {
+            data <- parseMissingData(formulaPrelim, data)
+            ## We detect missingness.
+            miss.flag <- TRUE
+        }
+        else {
+            ## We detect no missingness.
+            miss.flag <- FALSE
+        }
+    }
+    ## Set the C-side protocol for the data pass option. If there is
+    ## no missingness, allow the C-side to skip a lot of missingness
+    ## checks, and hand over control of many split routines to their
+    ## non-missing counterparts.
+    if (miss.flag == FALSE) {
+        data.pass = TRUE
     }
     ## finalize the formula based on the pre-processed data
     formulaDetail <- finalizeFormula(formulaPrelim, data)
@@ -141,7 +168,7 @@ rfsrc <- function(formula, data, ntree = 1000,
     ## Set mtry
     n <- nrow(xvar)
     n.xvar <- length(xvar.names)
-    mtry <- get.grow.mtry(mtry, n.xvar, family)
+    mtry <- get.grow.mtry(mtry, n.xvar, family, splitrule)
     samptype <- match.arg(samptype, c("swor", "swr"))
     ## Get the indvidual subject identifiers if they exist - do this *after* na.protocol
     ## The default is that we do not support time dependent x-variables.
@@ -395,8 +422,15 @@ rfsrc <- function(formula, data, ntree = 1000,
     terminal.quants.bits <- get.terminal.quants(terminal.quants, FALSE)
     cse.bits = get.cse(cse)
     csv.bits = get.csv(csv)
+    insitu.ensemble.bits = get.insitu.ensemble(insitu.ensemble)
+    presort.xvar  <- get.presort.xvar(presort.xvar)
+    data.pass.bits <- get.data.pass(data.pass)
+    experimental.bits <- get.experimental(experimental)
+    mad.max.bits <- get.data.pass(mad.max)
     ## Set the trace
     do.trace <- get.trace(do.trace)
+    ## Start the C external timer.
+    ctime.external.start  <- proc.time()
     nativeOutput <- tryCatch({.Call("rfsrcGrow",
                                     as.integer(do.trace),
                                     as.integer(seed),
@@ -412,7 +446,8 @@ rfsrc <- function(formula, data, ntree = 1000,
                                                rfq.bits +
                                                gk.quantile.bits +
                                                statistics.bits +
-                                               empirical.risk.bits),
+                                               empirical.risk.bits +
+                                               insitu.ensemble.bits),
                                     as.integer(samptype.bits +
                                                forest.wt.bits +
                                                distance.bits + 
@@ -423,7 +458,10 @@ rfsrc <- function(formula, data, ntree = 1000,
                                                terminal.quants.bits +
                                                tdc.rule.bits +
                                                cse.bits +
-                                               csv.bits),
+                                               csv.bits +
+                                               data.pass.bits +
+                                               experimental.bits +
+                                               mad.max.bits),
                                     as.integer(splitinfo$index),
                                     as.integer(splitinfo$nsplit),
                                     as.integer(mtry),
@@ -445,8 +483,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                                          if (is.null(yvar.numeric.levels)) NULL else sapply(1:length(yvar.numeric.levels), function(nn) {as.integer(length(yvar.numeric.levels[[nn]]))}),
                                          if (is.null(subj)) NULL else as.integer(subj),
                                          if (is.null(event.info)) NULL else as.integer(length(event.info$event.type)),
-                                         if (is.null(event.info)) NULL else as.integer(event.info$event.type),
-                                         if (is.null(yvar)) NULL else as.double(as.vector(yvar))),
+                                         if (is.null(event.info)) NULL else as.integer(event.info$event.type)),
                                     if (is.null(yvar.numeric.levels)) {
                                         NULL
                                     }
@@ -454,13 +491,13 @@ rfsrc <- function(formula, data, ntree = 1000,
                                         lapply(1:length(yvar.numeric.levels),
                                                function(nn) {as.integer(yvar.numeric.levels[[nn]])})
                                     },
+                                    if (is.null(yvar)) NULL else as.double(as.vector(yvar)),
                                     list(as.integer(n.xvar),
                                          as.character(xvar.types),
                                          if (is.null(xvar.types)) NULL else as.integer(xvar.nlevels),
                                          if (is.null(xvar.numeric.levels)) NULL else sapply(1:length(xvar.numeric.levels), function(nn) {as.integer(length(xvar.numeric.levels[[nn]]))}),
                                          if (is.null(xvar.time)) NULL else as.integer(xvar.time),
-                                         if (is.null(subj.time)) NULL else as.integer(subj.time),
-                                         as.double(as.vector(xvar))),
+                                         if (is.null(subj.time)) NULL else as.integer(subj.time)),
                                     if (is.null(xvar.numeric.levels)) {
                                         NULL
                                     }
@@ -468,6 +505,7 @@ rfsrc <- function(formula, data, ntree = 1000,
                                         lapply(1:length(xvar.numeric.levels),
                                                function(nn) {as.integer(xvar.numeric.levels[[nn]])})
                                     },
+                                    as.double(as.vector(xvar)),
                                     list(as.integer(length(case.wt)),
                                          if (is.null(case.wt)) NULL else as.double(case.wt),
                                          as.integer(sampsize),
@@ -475,16 +513,19 @@ rfsrc <- function(formula, data, ntree = 1000,
                                     as.double(split.wt),
                                     as.double(yvar.wt),
                                     as.double(xvar.wt),
-                                    as.integer(length(event.info$time.interest)),
-                                    as.double(event.info$time.interest),
+                                    list(if(is.null(event.info$time.interest)) as.integer(0) else as.integer(length(event.info$time.interest)),
+                                         if(is.null(event.info$time.interest)) NULL else as.double(event.info$time.interest)),
                                     as.integer(nimpute),
                                     as.integer(block.size),
-                                    as.integer(length(prob)),
-                                    as.double(prob),
-                                    as.double(prob.epsilon),
+                                    list(if (is.null(prob)) as.integer(0) else as.integer(length(prob)),
+                                         if (is.null(prob)) NULL else as.double(prob),
+                                         if (is.null(prob.epsilon)) as.double(0) else as.double(prob.epsilon)),
+                                    as.integer(presort.xvar),
                                     as.integer(get.rf.cores()))}, error = function(e) {
                                         print(e)
                                         NULL})
+    ## Stop the C external timer.
+    ctime.external.stop <- proc.time()
     ## check for error return condition in the native code
     if (is.null(nativeOutput)) {
         if (impute.only) {
@@ -845,10 +886,9 @@ rfsrc <- function(formula, data, ntree = 1000,
             node.stats      <- NULL
         }
       forest.out <- list(forest = TRUE,
-                         hdim = hdim,
-                         base.learner = base.learner,
                          nativeArray = nativeArray,
                          nativeFactorArray = nativeFactorArray,
+                         leafCount = nativeOutput$leafCount,
                          totalNodeCount = dim(nativeArray)[1],
                          nativeArraySyth = nativeArraySyth,
                          nativeFactorArraySyth = nativeFactorArraySyth,
@@ -859,40 +899,40 @@ rfsrc <- function(formula, data, ntree = 1000,
                          family = family,
                          n = n,
                          splitrule = splitinfo$name,
-                         yvar = yvar,
-                         yvar.names = yvar.names,
-                         yvar.factor = yfactor,
-                         #yvar.types = yvar.types,
-                         #yvar.nlevels = yvar.nlevels,
-                         #yvar.numeric.levels = if (is.null(yvar)) NULL else yvar.numeric.levels,
-                         #event.type = if (is.null(event.info)) NULL else event.info$event.type,
-                         #xvar.types = xvar.types,
-                         #xvar.nlevels = xvar.nlevels,
-                         #xvar.numeric.levels = xvar.numeric.levels,
                          xvar = xvar,
                          xvar.names = xvar.names,
                          xvar.factor = xfactor,
-                         event.info = event.info,
-                         subj = subj,
-                         subj.names = subj.names,
-                         seed = nativeOutput$seed,
+                         yvar = yvar,
+                         yvar.names = yvar.names,
+                         yvar.factor = yfactor,
+                         base.learner = base.learner,
+                         block.size = block.size,
                          bootstrap = bootstrap,
+                         case.wt = case.wt,
+                         ensemble = ensemble,
+                         event.info = event.info,
+                         gk.quantile = gk.quantile,
+                         hdim = hdim,
+                         na.action = na.action,
+                         nativeArrayTNDS = nativeArrayTNDS,
+                         optLoGrow = nativeOutput$optLoGrow,
+                         experimental = experimental,
+                         data.pass = data.pass,
+                         perf.type = perf.type,
+                         prob = prob,
+                         prob.epsilon = prob.epsilon,
+                         quantile.regr = quantile.regr,
+                         rfq = rfq,
                          sampsize = sampsize.function,
                          samptype = samptype,
                          samp = samp,
-                         case.wt = case.wt,
+                         subj = subj,
+                         subj.names = subj.names,
+                         seed = nativeOutput$seed,
+                         seedVimp = if (importance == FALSE) NULL else nativeOutput$seedVimp,
                          terminal.qualts = terminal.qualts,
                          terminal.quants = terminal.quants,
-                         nativeArrayTNDS = nativeArrayTNDS,
-                         version = "@PROJECT_VERSION@",
-                         na.action = na.action,
-                         perf.type = perf.type,
-                         rfq = rfq,
-                         gk.quantile = gk.quantile,
-                         quantile.regr = quantile.regr,
-                         prob = prob,
-                         prob.epsilon = prob.epsilon,
-                         block.size = block.size)
+                         version = "@PROJECT_VERSION@")
       ## family specific additions to the forest object
       if (grepl("surv", family)) {
         forest.out$time.interest <- event.info$time.interest
@@ -922,7 +962,6 @@ rfsrc <- function(formula, data, ntree = 1000,
                          xvar.names = xvar.names,
                          subj = subj,
                          subj.names = subj.names,
-                         seed = nativeOutput$seed,
                          bootstrap = bootstrap,
                          sampsize = sampsize.function,
                          samptype = samptype,
@@ -1091,18 +1130,19 @@ rfsrc <- function(formula, data, ntree = 1000,
         imputed.indv = (if (n.miss > 0) imputed.indv else NULL),
         imputed.data = (if (n.miss > 0) imputed.data else NULL),
         split.depth  = split.depth.out,
-        node.stats      = node.stats,
+        node.stats = node.stats,
         ensemble = ensemble,
         holdout.array = holdout.array,
         block.size = block.size,
         holdout.blk = holdout.blk,
         empr.risk = empr.risk,
-        oob.empr.risk = oob.empr.risk
+        oob.empr.risk = oob.empr.risk,
+        ctime.internal = nativeOutput$cTimeInternal,
+        ctime.external = ctime.external.stop - ctime.external.start
     )
     ## memory management
     remove(yvar)
     remove(xvar)
-    nativeOutput$leafCount <- NULL
     remove(proximity.out)
     remove(forest.out)
     remove(forest.wt.out)

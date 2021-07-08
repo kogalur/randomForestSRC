@@ -941,3 +941,149 @@ get.csv <- function (csv) {
     }
     return (csv)
 }
+is.hidden.insitu.ensemble <-  function (user.option) {
+    if (is.null(user.option$insitu.ensemble)) {
+      FALSE
+    }
+    else {
+        as.logical(as.character(user.option$insitu.ensemble))
+    }
+}
+get.insitu.ensemble <- function (insitu.ensemble) {
+    ## Convert insitu.ensemble option into native code parameter.
+    if (!is.null(insitu.ensemble)) {
+        if (insitu.ensemble == TRUE) {
+            insitu.ensemble <- 2^11
+        }
+        else if (insitu.ensemble == FALSE) {
+            insitu.ensemble <- 0
+        }
+        else {
+            stop("Invalid choice for 'insitu.ensemble' option:  ", insitu.ensemble)
+        }
+    }
+    else {
+        stop("Invalid choice for 'insitu.ensemble' option:  ", insitu.ensemble)
+    }
+    return (insitu.ensemble)
+}
+is.hidden.presort.xvar <-  function (user.option) {
+    if (is.null(user.option$presort.xvar)) {
+      FALSE
+    }
+    else {
+        user.option$presort.xvar
+    }
+}
+get.presort.xvar <- function (presort.xvar) {
+    ## Convert trace into native code parameter.
+    if (!is.logical(presort.xvar)) {
+        if (presort.xvar >= 1) {
+            presort.xvar <- round(presort.xvar)
+        }
+        else {
+            presort.xvar <- 0
+        }
+    }
+    else {
+        presort.xvar <- 1 * presort.xvar
+    }
+    return (presort.xvar)
+}
+is.hidden.data.pass <-  function (user.option, experimental) {
+    if (is.null(user.option$data.pass)) {
+      FALSE
+    }
+    else {
+        as.logical(as.character(user.option$data.pass))
+    }
+}
+get.data.pass <- function (data.pass) {
+    ## Convert data.pass option into native code parameter.
+    if (!is.null(data.pass)) {
+        if (data.pass == TRUE) {
+            data.pass <- 2^15
+        }
+        else if (data.pass == FALSE) {
+            data.pass <- 0
+        }
+        else {
+            stop("Invalid choice for 'data.pass' option:  ", data.pass)
+        }
+    }
+    else {
+        stop("Invalid choice for 'data.pass' option:  ", data.pass)
+    }
+    return (data.pass)
+}
+get.data.pass.predict <- function (data.pass) {
+    ## Convert data.pass option into native code parameter.
+    if (!is.null(data.pass)) {
+        if (data.pass == TRUE) {
+            data.pass <- 2^27
+        }
+        else if (data.pass == FALSE) {
+            data.pass <- 0
+        }
+        else {
+            stop("Invalid choice for 'data.pass' option:  ", data.pass)
+        }
+    }
+    else {
+        stop("Invalid choice for 'data.pass' option:  ", data.pass)
+    }
+    return (data.pass)
+}
+is.hidden.experimental <-  function (user.option) {
+    if (is.null(user.option$experimental)) {
+     ## Caution:  We are setting experimental mode to true as the default here!
+     !FALSE
+    }
+    else {
+        as.logical(as.character(user.option$experimental))
+    }
+}
+get.experimental <- function (experimental) {
+    ## Convert experimental option into native code parameter.
+    if (!is.null(experimental)) {
+        if (experimental == TRUE) {
+            experimental <- 2^7
+        }
+        else if (experimental == FALSE) {
+            experimental <- 0
+        }
+        else {
+            stop("Invalid choice for 'experimental' option:  ", experimental)
+        }
+    }
+    else {
+        stop("Invalid choice for 'experimental' option:  ", experimental)
+    }
+    return (experimental)
+}
+is.hidden.mad.max <-  function (user.option) {
+    if (is.null(user.option$mad.max)) {
+      FALSE
+    }
+    else {
+        as.logical(as.character(user.option$mad.max))
+    }
+}
+get.mad.max <- function (mad.max) {
+    ## Convert mad.max option into native code parameter.
+    if (!is.null(mad.max)) {
+        if (mad.max == TRUE) {
+            mad.max <- 2^23
+        }
+        else if (mad.max == FALSE) {
+            mad.max <- 0
+        }
+        else {
+            stop("Invalid choice for 'mad.max' option:  ", mad.max)
+        }
+    }
+    else {
+        stop("Invalid choice for 'mad.max' option:  ", mad.max)
+    }
+    return (mad.max)
+}

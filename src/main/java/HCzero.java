@@ -2,10 +2,10 @@ package com.kogalur.randomforest;
 
 class HCzero {
 
-    int[] parmID;
+    int[]    parmID;
     double[] contPT;
-    int[] mwcpSZ;
-    int[] mwcpPT;
+    int[]    mwcpSZ;
+    int[]    mwcpPT;
 
     HCzero (int[] parmID, double[] contPT, int[] mwcpSZ, int[]mwcpPT) {
         this.parmID = parmID;

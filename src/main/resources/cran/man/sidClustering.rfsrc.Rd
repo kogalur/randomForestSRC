@@ -60,11 +60,14 @@
     to \code{method="unsupv"}.}
   \item{y.only}{Use only these variables for the multivariate outcomes.  Applies only
     to \code{method="unsupv"}.}
-   \item{dist.sharpen}{By default, distance sharpening is requested.
-    This a useful, but slow step. If computational times are an issue
-    (due to large sample sizes), set this to \code{FALSE} but clustering
-    performance will not be as good.  Applies only when
-    \code{method="sid"} or \code{method="unsupv"}.}
+  \item{dist.sharpen}{By default, distance sharpening is requested,
+    which applies Euclidean distance to the random forest distance
+    matrix to sharpen it.  Because of this, the returned distance matrix
+    will not have values between 0 and 1 (as for random forests distance) when
+    this option is in effect.  Distance sharpening is a useful, but slow
+    step. Set this option to \code{FALSE} to improve computational
+    times, however clustering performance will not be as good.  Applies
+    only when \code{method="sid"} or \code{method="unsupv"}.}
   \item{...}{Further arguments to be passed to the \command{rfsrc}
     function to specify random forest parameters.}
 }

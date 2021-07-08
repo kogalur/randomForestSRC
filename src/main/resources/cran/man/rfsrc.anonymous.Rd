@@ -63,34 +63,48 @@
 \examples{
 \donttest{
 
+## ------------------------------------------------------------
 ## regression
+## ------------------------------------------------------------
 print(rfsrc.anonymous(mpg ~ ., mtcars))
 
+## ------------------------------------------------------------
 ## plot anonymous regression tree (using get.tree)
+## ------------------------------------------------------------
 ## illustrates minimal information saved by the forest
 plot(get.tree(rfsrc.anonymous(mpg ~ ., mtcars), 10))
 
+## ------------------------------------------------------------
 ## classification
+## ------------------------------------------------------------
 print(rfsrc.anonymous(Species ~ ., iris))
 
+## ------------------------------------------------------------
 ## survival
+## ------------------------------------------------------------
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 print(rfsrc.anonymous(Surv(time, status) ~ ., data = veteran))
 
+## ------------------------------------------------------------
 ## competing risk
+## ------------------------------------------------------------
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
 print(rfsrc.anonymous(Surv(time, status) ~ ., wihs, ntree = 100))
 
+## ------------------------------------------------------------
 ## unsupervised forests
+## ------------------------------------------------------------
 print(rfsrc.anonymous(data = iris))
 
+## ------------------------------------------------------------
 ## multivariate regression
+## ------------------------------------------------------------
 print(rfsrc.anonymous(Multivar(mpg, cyl) ~., data = mtcars))
 
-##
+## ------------------------------------------------------------
 ## train/test setting but tricky because factor labels differ over
 ## training and test data
-##
+## ------------------------------------------------------------
 
 # first we convert all x-variables to factors
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
@@ -101,12 +115,12 @@ veteran.factor$status <- veteran$status
 # split the data into train/test data (25/75)
 # the train/test data have the same levels, but different labels
 train <- sample(1:nrow(veteran), round(nrow(veteran) * .5))
-summary(veteran.factor[train,])
-summary(veteran.factor[-train,])
+summary(veteran.factor[train, ])
+summary(veteran.factor[-train, ])
 
 # grow the forest on the training data and predict on the test data
 v.grow <- rfsrc.anonymous(Surv(time, status) ~ ., veteran.factor[train, ]) 
-v.pred <- predict(v.grow, veteran.factor[-train , ])
+v.pred <- predict(v.grow, veteran.factor[-train, ])
 print(v.grow)
 print(v.pred)
 

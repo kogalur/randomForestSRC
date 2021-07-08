@@ -115,9 +115,9 @@
   Partial plots can be slow.  Setting \option{npts} to a smaller number
   can help.
 
-  For greater customization and flexibility in partial plot calls,
+  For greater customization and computational speed for partial plot calls,
   consider using the function \code{partial.rfsrc} which provides a
-  direct interface for calculating partial plot data.
+  direct interface for calculating partial plot data.   
   
 }
 \author{

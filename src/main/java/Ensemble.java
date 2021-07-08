@@ -7,6 +7,7 @@ import java.util.Arrays;
 
 import java.util.logging.Level;
 
+
 class Ensemble {
 
     /* 
@@ -15,24 +16,6 @@ class Ensemble {
        <<< CAUTION
     */
 
-    enum EnsembleType {
-    
-        CHAR   ((byte) 0),
-        INT    ((byte) 1),
-        DOUBLE ((byte) 2);
-    
-        private byte value;
-
-        private EnsembleType(byte value) {
-            this.value = value;
-        }
-
-        byte getValue() {
-            return this.value;
-        }
-    
-    }
-    
     // Name of the ensemble.
     String name;
     
@@ -54,15 +37,15 @@ class Ensemble {
     // Generic object containing the ensemble vector.  This will be of type (double) or (int).
     Object ensembleVector;
 
-    // Constructor called from native-code from entry.c.  There, we
-    // loop over a list and populate each ensemble and it's associated
-    // fields.
+    // Constructor called from native-code.  Before exiting the
+    // C-code, we loop over a list and populate each ensemble and it's
+    // associated fields.
     void Ensemble(String name,
-                  byte nativeType,
-                  int slot,
-                  long size,
-                  int auxDimSize,
-                  int[] auxDim,
+                  byte   nativeType,
+                  int    slot,
+                  long   size,
+                  int    auxDimSize,
+                  int[]  auxDim,
                   Object ensembleVector) {
 
         int actualLength = 0;
@@ -77,6 +60,7 @@ class Ensemble {
         }
         else if (nativeType == EnsembleType.DOUBLE.getValue()) {
             type = EnsembleType.DOUBLE;
+            actualLength = ((double[]) (ensembleVector)).length;
         }                                    
         else {
             RFLogger.log(Level.SEVERE, "Ensemble type (native) not found:  " + nativeType);
@@ -84,14 +68,19 @@ class Ensemble {
         }                            
 
 
-        this.name = name;
-        this.slot = slot;
-        this.size = size;
+        this.name       = name;
+        this.slot       = slot;
+        this.size       = size;
         this.auxDimSize = auxDimSize;
-        this.auxDim = auxDim;
+        this.auxDim     = auxDim;
 
         this.ensembleVector = ensembleVector;
-       
+
+        if (size != actualLength) {
+            RFLogger.log(Level.SEVERE, "Ensemble vector length and object meta info inconsistent:  " + size + " versus " + actualLength);
+            RFLogger.log(Level.SEVERE, "Please Contact Technical Support.");
+            throw new IllegalArgumentException();
+        }
     }
 
     Object getValue(int[] yTargetFactorIndex,
@@ -114,7 +103,7 @@ class Ensemble {
         int offsetLow, offsetHigh;
         int dim1, dim2, dim3, dim4;
         
-        if (type.equals(Ensemble.EnsembleType.INT)) {
+        if (type.equals(EnsembleType.INT)) {
             intVector = (int[]) ensembleVector;
 
             if (auxDimSize == 4) {
@@ -182,7 +171,7 @@ class Ensemble {
                 result = int1Vector;
             }
         }
-        else if (type.equals(Ensemble.EnsembleType.DOUBLE)) {
+        else if (type.equals(EnsembleType.DOUBLE)) {
             doubleVector = (double[]) ensembleVector;
 
             if (auxDimSize == 4) {
@@ -305,13 +294,13 @@ class Ensemble {
         }
         else {
             metaLength = size;
-            if (type.equals(Ensemble.EnsembleType.CHAR)) {
+            if (type.equals(EnsembleType.CHAR)) {
                 actLength = ((char[]) (ensembleVector)).length;
             }
-            else if (type.equals(Ensemble.EnsembleType.INT)) {
+            else if (type.equals(EnsembleType.INT)) {
                 actLength = ((int[]) (ensembleVector)).length;
             }
-            else if (type.equals(Ensemble.EnsembleType.DOUBLE)) {
+            else if (type.equals(EnsembleType.DOUBLE)) {
                 actLength = ((double[]) (ensembleVector)).length;
             }                                    
         }

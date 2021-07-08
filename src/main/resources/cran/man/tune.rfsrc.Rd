@@ -12,15 +12,15 @@
 
 \method{tune}{rfsrc}(formula, data,
   mtryStart = ncol(data) / 2,
-  nodesizeTry = c(1:9, seq(10, 100, by = 5)), ntreeTry = 50,
+  nodesizeTry = c(1:9, seq(10, 100, by = 5)), ntreeTry = 100,
   sampsize = function(x){min(x * .632, max(150, x ^ (3/4)))},
-  nsplit = 10, stepFactor = 1.25, improve = 1e-3, strikeout = 3, maxIter = 25,
-  trace = FALSE, doBest = TRUE, ...)
+  nsplit = 1, stepFactor = 1.25, improve = 1e-3, strikeout = 3, maxIter = 25,
+  trace = FALSE, doBest = FALSE, ...)
 
 \method{tune.nodesize}{rfsrc}(formula, data,
-  nodesizeTry = c(1:9, seq(10, 150, by = 5)),
+  nodesizeTry = c(1:9, seq(10, 150, by = 5)), ntreeTry = 100,
   sampsize = function(x){min(x * .632, max(150, x ^ (4/5)))},
-  nsplit = 1, trace = FALSE, ...)
+  nsplit = 1, trace = TRUE, ...)
 
 }
 \arguments{
@@ -64,7 +64,7 @@
   such a solution can only be considered approximate.  Users may wish to
   tweak various options to improve accuracy.  Increasing the default
   \code{sampsize} will definitely help. Increasing \code{ntreeTry}
-  (which is set to 50 for speed) may also help.  It is also useful to
+  (which is set to 100 for speed) may also help.  It is also useful to
   look at contour plots of the OOB error as a function of \code{mtry}
   and \code{nodesize} (see example below) to identify regions of the
   parameter space where error rate is small.
@@ -90,7 +90,7 @@ data(wine, package = "_PROJECT_PACKAGE_NAME_")
 wine$quality <- factor(wine$quality)
 
 ## default tuning call
-o <- tune(quality ~ ., wine)
+o <- tune(quality ~ ., wine, doBest = TRUE)
 
 ## here is the optimized forest 
 print(o$rf)
@@ -116,7 +116,7 @@ if (library("akima", logical.return = TRUE)) {
                      colorRampPalette(c("yellow", "red")),
                    xlab = "nodesize",
                    ylab = "mtry",
-                   main = "OOB error for nodesize and mtry",
+                   main = "error rate for nodesize and mtry",
                    key.title = title(main = "OOB error", cex.main = 1),
                    plot.axes = {axis(1);axis(2);points(x0,y0,pch="x",cex=1,font=2);
                                 points(x,y,pch=16,cex=.25)})

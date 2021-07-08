@@ -1,9 +1,9 @@
 tune.rfsrc <- function(formula, data,
       mtryStart = ncol(data) / 2,
-      nodesizeTry = c(1:9, seq(10, 100, by = 5)), ntreeTry = 50,
+      nodesizeTry = c(1:9, seq(10, 100, by = 5)), ntreeTry = 100,
       sampsize = function(x){min(x * .632, max(150, x ^ (3/4)))},
-      nsplit = 10, stepFactor = 1.25, improve = 1e-3, strikeout = 3, maxIter = 25,
-      trace = FALSE, doBest = TRUE, ...) 
+      nsplit = 1, stepFactor = 1.25, improve = 1e-3, strikeout = 3, maxIter = 25,
+      trace = FALSE, doBest = FALSE, ...) 
 {
   ## inital checks - all are fatal
   if (improve < 0) {
@@ -87,6 +87,10 @@ tune.rfsrc <- function(formula, data,
     err <- unlist(oobError[as.character(mtry)])
     res[[counter1]] <- cbind(nodesize = nsz, mtry = mtry, err = err)
   }## finished outer loop
+  ## check that results are not NULL
+  if (is.null(res)) {
+    stop("NULL results - something is wrong, check parameter (tuning) settings\n")
+  }
   ## deparse the results and sort along nodesize and mtry
   res <- do.call(rbind, res)
   res <- res[order(res[, 1], res[, 2]), ]

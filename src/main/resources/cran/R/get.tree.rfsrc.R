@@ -4,10 +4,18 @@ get.tree.rfsrc <- function(object,
                            m.target = NULL,
                            time,
                            surv.type = c("mort", "rel.freq", "surv", "years.lost", "cif", "chf"),
-                           class.type = c("prob", "bayes"),
+                           class.type = c("bayes", "rfq", "prob"),
+                           ensemble = FALSE,
                            oob = TRUE,
                            show.plots = TRUE)
 {
+  ##----------------------------------------------------------------
+  ##
+  ## tolerance value for dealing with float issues related to
+  ## splitting left at an exact split value
+  ##
+  ##----------------------------------------------------------------
+  tolerance <- sqrt(.Machine$double.eps)
   ##----------------------------------------------------------------
   ##
   ## The following two utilities were copied from the BMS CRAN
@@ -76,9 +84,20 @@ get.tree.rfsrc <- function(object,
   else {
     anonymous <- FALSE
   }
+  ## only one tree allowed
+  tree.id <- tree.id[1]
+  ## must be integer from 1...ntree
+  if (tree.id < 1 || tree.id > object$ntree) {
+    stop("tree id must be integer from 1 to ntree")
+  }
+  ## ensure coherency of the multivariate target
+  m.target <- get.univariate.target(object, m.target)
   ##----------------------------------------------------------------
   ##
-  ## coherencey checks and flags
+  ##
+  ## take care of some preliminary processing for prediction
+  ## this will be used for labels on terminal nodes
+  ##
   ##
   ##----------------------------------------------------------------
   ## process the object depending on the underlying family
@@ -88,32 +107,6 @@ get.tree.rfsrc <- function(object,
   if (family == "unsupv" || family == "surv-TDC") {
     predict.flag <- FALSE
   }
-  ## ensure the coherency of multivariate target.
-  m.target <- get.univariate.target(object, m.target)
-  ##----------------------------------------------------------------
-  ##
-  ## extract x data
-  ## convert the data to numeric mode, apply the na.action protocol
-  ## missing data not allowed
-  ##
-  ##----------------------------------------------------------------
-  xvar.names <- object$forest$xvar.names
-  xvar.factor <- object$forest$xvar.factor
-  if (!anonymous) {
-    x.data <- object$forest$xvar
-    if (any(is.na(x.data))) {
-      stop("missing data not allowed")
-    }
-    x.data <- finalizeData(xvar.names, x.data, miss.flag = FALSE)
-  }
-  n <- object$n
-  subset <- 1:n
-  ##----------------------------------------------------------------
-  ##
-  ## prediction details for filling out the terminal nodes
-  ## family specific
-  ##
-  ##----------------------------------------------------------------
   if (predict.flag) {
     ## survival and competing risk families.
     if (grepl("surv", family)) {
@@ -158,7 +151,7 @@ get.tree.rfsrc <- function(object,
       ## factor outcome
       if(is.factor(coerce.multivariate(object, m.target)$yvar)) {
         object.yvar.levels <- levels(coerce.multivariate(object, m.target)$yvar)
-        pred.type <- match.arg(class.type, c("prob", "bayes"))
+        pred.type <- match.arg(class.type, c("bayes", "rfq", "prob"))
         if (missing(target)) {
           target <- object.yvar.levels[1]
         }
@@ -180,15 +173,54 @@ get.tree.rfsrc <- function(object,
   }
   ##----------------------------------------------------------------
   ##
-  ## get tree data and select tree
+  ## define the target subset of cases
+  ## if ensemble=TRUE  --> this is the entire data
+  ## if ensemble=FALSE --> this is inbag or oob cases
   ##
   ##----------------------------------------------------------------
-  ## only one tree allowed
-  tree.id <- tree.id[1]
-  ## must be integer from 1...ntree
-  if (tree.id < 1 || tree.id > object$ntree) {
-    stop("tree id must be integer from 1 to ntree")
+  if (ensemble) {
+    subset <- 1:object$n
   }
+  ## restrict the object to the target
+  ## oob not allowed
+  else {
+    object <- predict(object, get.tree = tree.id, membership = TRUE)
+    subset <- which(object$inbag[, tree.id] != 0)
+    oob <- FALSE
+  }
+  ##----------------------------------------------------------------
+  ##
+  ## extract x data for the target subset
+  ## convert the data to numeric mode, apply the na.action protocol
+  ## missing data not allowed
+  ##
+  ##----------------------------------------------------------------
+  xvar.names <- object$forest$xvar.names
+  xvar.factor <- object$forest$xvar.factor
+  if (!anonymous) {
+    x.data <- object$forest$xvar
+    if (any(is.na(x.data))) {
+      stop("missing data not allowed")
+    }
+    x.data <- finalizeData(xvar.names, x.data, miss.flag = FALSE)
+    x.data <- x.data[subset,, drop = FALSE]
+  }
+  ##----------------------------------------------------------------
+  ##
+  ## now acquire the predicted values for the tree labels
+  ##
+  ##----------------------------------------------------------------
+  if (predict.flag) {
+    if (ensemble) {
+      object <- predict.rfsrc(object, m.target = m.target)
+    }
+    yhat <- extract.pred(object, pred.type, subset, time, m.target, target, oob = oob)
+  }
+  ##----------------------------------------------------------------
+  ##
+  ## get tree data
+  ##
+  ##----------------------------------------------------------------
   ## pull the arrays
   native.array <- object$forest$nativeArray
   native.f.array <- object$forest$nativeFactorArray[[1]]
@@ -222,23 +254,6 @@ get.tree.rfsrc <- function(object,
     else {
       factor.flag <- FALSE
     }
-  }
-  ##----------------------------------------------------------------
-  ##
-  ## for labeling of trees --> acquire the predicted values 
-  ##
-  ##----------------------------------------------------------------
-  ## ensure coherency of multivariate target.
-  m.target <- get.univariate.target(object, m.target)
-  ## pull yhat (for all but unsupervised families)
-  if (predict.flag) {
-    yhat <- extract.pred(predict.rfsrc(object, m.target = m.target),
-               pred.type,
-               subset,
-               time,
-               m.target,
-               target,
-               oob = oob)
   }
   ##----------------------------------------------------------------
   ##
@@ -277,6 +292,7 @@ get.tree.rfsrc <- function(object,
   ## loop (using lapply)
   lapply(1:nrow(converted.tree), function(i) {
     rowi <- converted.tree[i, ]
+    xs <- converted.tree$contPT[converted.tree$var_conc == from_node]
     if(i == 1){
       from_node <<- rowi$var_conc
     }
@@ -284,7 +300,7 @@ get.tree.rfsrc <- function(object,
       ## develop the split encoding
       if(num_children[[from_node]] == 0) {#left split
         side <- "<="
-        contPT.pretty <- round(as.numeric(converted.tree$contPT[converted.tree$var_conc == from_node]), 3)
+        contPT.pretty <- round(as.numeric(xs), 3)
         split_ineq_pretty <- paste0(side, contPT.pretty)
       }
       else {#right split
@@ -292,7 +308,11 @@ get.tree.rfsrc <- function(object,
         split_ineq_pretty <- ""
       }
       ## both numeric and factors are encoded as <= > but factors are secretely in hex notation
-      split_ineq <- paste0(side, converted.tree$contPT[converted.tree$var_conc == from_node])
+      ## !!ADD MACHINE TOLERANCE WHEN SPLIT IS ON ACTUAL X-VALUE !!
+      if (is.numeric(xs)) {
+        xs <- xs + tolerance
+      }
+      split_ineq <- paste0(side, xs)
       ## update the network
       to_node <- rowi$var_conc
       new_node <- list(from = from_node, to = to_node, split = split_ineq, split.pretty = split_ineq_pretty)
@@ -374,7 +394,7 @@ get.tree.rfsrc <- function(object,
   ##----------------------------------------------------------------
   data.tree.network <- data.tree::FromDataFrameNetwork(network, "split")
   ## INTERNAL NODES
-  ## label the edges with the splits , and relabel the nodes so that the appended counters are not visible
+  ## label the edges with the splits, and relabel the nodes so that the appended counters are not visible
   data.tree.network$Get(function(node) {
     data.tree::SetEdgeStyle(node, color = "black", label = node$split.pretty, fontcolor = "black")
     data.tree::SetNodeStyle(node, color = "black", fontcolor = "black", penwidth = 3,
@@ -385,7 +405,7 @@ get.tree.rfsrc <- function(object,
   ## to establish a filtering condition to obtain all cases that match the splitting on the way to this leaf.
   ## we filter out cases to correspond to the leaf, and then modify the leaf display to include the number
   ## of cases, followed by the user requested predicted value
-  data.tree::Do(data.tree.network$leaves, function(node){
+  lapply(data.tree.network$leaves, function(node) {
     path_list <- node$path
     var_list <- sapply(path_list, function(x){strsplit(x, special)[[1]][1]})
     var_list[length(var_list)] <- ""

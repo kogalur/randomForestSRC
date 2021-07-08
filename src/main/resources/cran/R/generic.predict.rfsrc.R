@@ -29,6 +29,7 @@ generic.predict.rfsrc <-
   terminal.quants <- is.hidden.terminal.quants(user.option)
   cse  <- is.hidden.cse(user.option)
   csv  <- is.hidden.csv(user.option)
+  insitu.ensemble  <- is.hidden.insitu.ensemble(user.option)
   ## TBD TBD make perf.type visible TBD TBD    
   perf.type <- is.hidden.perf.type(user.option)
   rfq <- is.hidden.rfq(user.option)
@@ -277,18 +278,17 @@ generic.predict.rfsrc <-
   ##--------------------------------------------------------
   if (!restore.mode) {
     ## Filter the test data based on the formula
-    newdata <- newdata[, is.element(names(newdata),
-                                    c(yvar.names, xvar.names)), drop = FALSE]
+    newdata <- newdata[, is.element(names(newdata), c(yvar.names, xvar.names)), drop = FALSE]
     ## Check that test/train factors are the same.  If factor has an
     ## NA in its levels, remove it.  Confirm factor labels overlap.
     newdata <- rm.na.levels(newdata, xvar.names)
-    newdata.xfactor <- extract.factor(newdata, xvar.names)
-    if (!setequal(xfactor$factor, newdata.xfactor$factor)) {
-      stop("x-variable factors from test data do not match original training data")
-    }
-    if (!setequal(xfactor$order, newdata.xfactor$order)) {
-      stop("(ordered) x-variable factors from test data do not match original training data")
-    }
+    #newdata.xfactor <- extract.factor(newdata, xvar.names)
+    #if (!setequal(xfactor$factor, newdata.xfactor$factor)) {
+    #  stop("x-variable factors from test data do not match original training data")
+    #}
+    #if (!setequal(xfactor$order, newdata.xfactor$order)) {
+    #  stop("(ordered) x-variable factors from test data do not match original training data")
+    #}
     any.outcome.factor <- family == "class"
     if (family == "class+" | family ==  "mix+") {
       if (length(intersect("R", yfactor$generic.types[m.target.idx])) == 0) {
@@ -299,20 +299,20 @@ generic.predict.rfsrc <-
     if (any.outcome.factor) {
       if (sum(is.element(names(newdata), yvar.names)) > 0) {
         newdata <- rm.na.levels(newdata, yvar.names)
-        newdata.yfactor <- extract.factor(newdata, yvar.names)
-        if (!setequal(yfactor$factor, newdata.yfactor$factor)) {
-          stop("class outcome from test data does not match original training data")
-        }
-        if (!setequal(yfactor$order, newdata.yfactor$order)) {
-          stop("(ordered) class outcome from test data does not match original training data")
-        }
+        #newdata.yfactor <- extract.factor(newdata, yvar.names)
+        #if (!setequal(yfactor$factor, newdata.yfactor$factor)) {
+        #  stop("class outcome from test data does not match original training data")
+        #}
+        #if (!setequal(yfactor$order, newdata.yfactor$order)) {
+        #  stop("(ordered) class outcome from test data does not match original training data")
+        #}
       }
     }
     ## One final (possibly redundant) check confirming coherence of train/test xvars
-    if (length(xvar.names) != sum(is.element(xvar.names, names(newdata)))) {
-      stop("x-variables in test data do not match original training data")
-    }
-    ## One final check confirming coherence of train/test yvars (assuming test yvars are available)
+    #if (length(xvar.names) != sum(is.element(xvar.names, names(newdata)))) {
+    #  stop("x-variables in test data do not match original training data")
+    #}
+    ## coherence of train/test yvars (assuming test yvars are available)
     yvar.present <- sum(is.element(yvar.names, names(newdata))) > 0
     if (yvar.present && length(yvar.names) != sum(is.element(yvar.names, names(newdata)))) {
       stop("y-variables in test data do not match original training data")
@@ -416,7 +416,7 @@ generic.predict.rfsrc <-
     case.wt <- object$case.wt
     samp <- object$samp
     ## data conversion for x-training data
-    if (!anonymize.bits) {
+    if (anonymize.bits == 0) {
       xvar <- as.matrix(data.matrix(object$xvar))
       rownames(xvar) <- colnames(xvar) <- NULL
     }
@@ -479,10 +479,34 @@ generic.predict.rfsrc <-
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
   cse.bits = get.cse(cse)
   csv.bits = get.csv(csv)
+  insitu.ensemble.bits = get.insitu.ensemble(insitu.ensemble)
+  ## The experimental flag simply inherits the grow mode flag.  We do not
+  ## offer the user any other alternative. Currently this option
+  ## really only affects the splitting related functions. So it's a
+  ## bit redundant, but later we may have other changes that are
+  ## particular to restore or predict mode.
+  experimental.bits <- get.experimental(object$experimental)
+  ## We have two data.pass flags. We have one for the training data, and
+  ## one for the test data. In restore mode, the the training data.pass flag
+  ## inherits the grow data.pass flag.  
+  data.pass.bits <- get.data.pass(object$data.pass)
+  ## For the test data, we look at na.action, and set the data.pass flag accordingly.
+  if (restore.mode == FALSE) {
+    if (na.action == "na.omit") {
+      data.pass.predict.bits  <- get.data.pass.predict(TRUE)
+    }
+    else {
+      data.pass.predict.bits  <- get.data.pass.predict(FALSE)
+    }
+  }
+  else {
+      ## Safe the test data.pass flag as it is irrelevant.  We are in restore mode.
+      data.pass.predict.bits  <- get.data.pass.predict(FALSE)
+  }
   ## We over-ride block-size in the case that get.tree is user specified
   block.size <- min(get.block.size(block.size, ntree), sum(get.tree))
   ## Turn off partial option.
-  partial.bits <- get.partial(0)
+  partial.bits <- get.partial.bits(0)
   ## na.action in the native code is only revelant to the training data.
   ## Unless outcome == "test", we send in the protocol used for the training data.
   if (outcome == "test") {
@@ -532,6 +556,8 @@ generic.predict.rfsrc <-
           }
       }
   }
+  ## Start the C external timer.
+  ctime.external.start  <- proc.time()
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
@@ -547,7 +573,8 @@ generic.predict.rfsrc <-
                                              cr.bits +
                                              gk.quantile.bits +
                                              statistics.bits +
-                                             anonymize.bits),
+                                             anonymize.bits +
+                                             insitu.ensemble.bits),
                                   as.integer(forest.wt.bits +
                                              distance.bits +
                                              samptype.bits +
@@ -556,7 +583,10 @@ generic.predict.rfsrc <-
                                              terminal.qualts.bits +
                                              terminal.quants.bits +
                                              cse.bits +
-                                             csv.bits),
+                                             csv.bits +
+                                             data.pass.bits +
+                                             data.pass.predict.bits +
+                                             experimental.bits),
                                   ## >>>> start of maxi forest object >>>>
                                   as.integer(ntree),
                                   as.integer(n),
@@ -566,8 +596,7 @@ generic.predict.rfsrc <-
                                        if (is.null(yvar.numeric.levels)) NULL else sapply(1:length(yvar.numeric.levels), function(nn) {as.integer(length(yvar.numeric.levels[[nn]]))}),
                                        if (is.null(subj)) NULL else as.integer(subj),
                                        if (is.null(event.type)) NULL else as.integer(length(event.type)),
-                                       if (is.null(event.type)) NULL else as.integer(event.type),
-                                       if (is.null(yvar.types)) NULL else as.double(as.vector(yvar))),
+                                       if (is.null(event.type)) NULL else as.integer(event.type)),
                                   if (is.null(yvar.numeric.levels)) {
                                       NULL
                                   }
@@ -575,11 +604,13 @@ generic.predict.rfsrc <-
                                       lapply(1:length(yvar.numeric.levels),
                                              function(nn) {as.integer(yvar.numeric.levels[[nn]])})
                                   },
+                                  if (is.null(yvar.types)) NULL else as.double(as.vector(yvar)),
                                   list(as.integer(n.xvar),
                                        as.character(xvar.types),
                                        if (is.null(xvar.types)) NULL else as.integer(xvar.nlevels),                                       
                                        if (is.null(xvar.numeric.levels)) NULL else sapply(1:length(xvar.numeric.levels), function(nn) {as.integer(length(xvar.numeric.levels[[nn]]))}),
-                                       as.double(as.vector(xvar))),
+                                       NULL,
+                                       NULL),
                                   if (is.null(xvar.numeric.levels)) {
                                       NULL
                                   }
@@ -587,6 +618,7 @@ generic.predict.rfsrc <-
                                       lapply(1:length(xvar.numeric.levels),
                                              function(nn) {as.integer(xvar.numeric.levels[[nn]])})
                                   },
+                                  as.double(as.vector(xvar)),
                                   list(as.integer(length(case.wt)),
                                        if (is.null(case.wt)) NULL else as.double(case.wt),
                                        as.integer(sampsize),
@@ -594,7 +626,10 @@ generic.predict.rfsrc <-
                                   list(if(is.null(event.info$time.interest)) as.integer(0) else as.integer(length(event.info$time.interest)),
                                        if(is.null(event.info$time.interest)) NULL else as.double(event.info$time.interest)),
                                   as.integer(object$totalNodeCount),
-                                  as.integer(object$seed),
+                                  as.integer(object$leafCount),
+                                  list(as.integer(object$seed),
+                                       if (is.null(object$seedVimp)) NULL else as.integer(object$seedVimp),
+                                       as.integer(object$optLoGrow)),
                                   as.integer(hdim),
                                   ## Object containing base learner settings.  This is never NULL.
                                   object$base.learner, 
@@ -735,6 +770,8 @@ generic.predict.rfsrc <-
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
+  ## Stop the C external timer.
+  ctime.external.stop <- proc.time()
   ## check for error return condition in the native code
   if (is.null(nativeOutput)) {
     stop("An error has occurred in prediction.  Please turn trace on for further analysis.")
@@ -931,7 +968,9 @@ generic.predict.rfsrc <-
     split.depth  = split.depth.out,
     node.stats = node.stats,
     block.size = block.size,
-    perf.type = perf.type
+    perf.type = perf.type,
+    ctime.internal = nativeOutput$cTimeInternal,
+    ctime.external = ctime.external.stop - ctime.external.start
   )
   ## memory management
   nativeOutput$leafCount <- NULL
@@ -1262,7 +1301,7 @@ generic.predict.rfsrc <-
         ## To the R code:
         ## -> of dim  x [n]  x [n.xvar]
         for (i in 1:length(m.target.idx)) {
-          target.idx <- which (class.index == m.target.idx[i])
+          target.idx <- which(class.index == m.target.idx[i])
           if (length(target.idx) > 0) {
             iter.ensb.start <- iter.ensb.end
             iter.ensb.end <- iter.ensb.end + (levels.count[target.idx] * n.observed)
@@ -1324,21 +1363,23 @@ generic.predict.rfsrc <-
               classOutput[[target.idx]] <- c(classOutput[[target.idx]], importance = list(t(importance)))
               remove(importance)
             }
-              ## See GROW call for explanation of arrays:
-              csv.idx  <- array(0, n * n.xvar) 
-              for (j in 1:n.xvar) {
-                  csv.idx[(((j-1) * n) + 1) : (((j-1) * n) + n)]  <- ( ((target.idx-1) * n) + ((j-1) * n * class.count) + 1 ) : ( ((target.idx-1) * n) + ((j-1) * n * class.count) + n )
-              }
-              ## New case specific arrays, numerator:
-              csv.num <- (if (!is.null(nativeOutput$csvClas))
-                              array(nativeOutput$csvClas[csv.idx], c(n, n.xvar)) else NULL)
-              classOutput[[target.idx]] <- c(classOutput[[target.idx]], csv.num = list(csv.num))
-              remove(csv.num)
-              ## New case specific arrays, denominator:
-              csv.den <- (if (!is.null(nativeOutput$csvDen))
-                              array(nativeOutput$csvDen, c(n, n.xvar)) else NULL)
-              classOutput[[target.idx]] <- c(classOutput[[target.idx]], csv.den = list(csv.den))
-              remove(csv.den)
+            ## See GROW call for explanation of arrays:
+            csv.idx  <- array(0, n.observed * n.xvar) 
+            j2seq <- (target.idx - 1) * n.observed
+            for (j in 1:n.xvar) {
+              j1seq <- (j - 1) * n.observed
+              csv.idx[(j1seq + 1) : (j1seq + n.observed)]  <- ( (j2seq + j1seq * class.count + 1) : (j2seq + j1seq * class.count + n.observed) ) 
+            }
+            ## New case specific arrays, numerator:
+            csv.num <- (if (!is.null(nativeOutput$csvClas))
+                          array(nativeOutput$csvClas[csv.idx], c(n.observed, n.xvar)) else NULL)
+            classOutput[[target.idx]] <- c(classOutput[[target.idx]], csv.num = list(csv.num))
+            remove(csv.num)
+            ## New case specific arrays, denominator:
+            csv.den <- (if (!is.null(nativeOutput$csvDen))
+                          array(nativeOutput$csvDen, c(n.observed, n.xvar)) else NULL)
+            classOutput[[target.idx]] <- c(classOutput[[target.idx]], csv.den = list(csv.den))
+            remove(csv.den)
           }
         }
         nativeOutput$allEnsbCLS <- NULL
@@ -1432,7 +1473,7 @@ generic.predict.rfsrc <-
         ## To the R code:
         ## -> of dim  x [n]  x [n.xvar]
         for (i in 1:length(m.target.idx)) {
-          target.idx <- which (regr.index == m.target.idx[i])
+          target.idx <- which(regr.index == m.target.idx[i])
           if (length(target.idx) > 0) {
             iter.ensb.start <- iter.ensb.end
             iter.ensb.end <- iter.ensb.end + n.observed
@@ -1486,21 +1527,23 @@ generic.predict.rfsrc <-
               regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], importance = list(importance))
               remove(importance)
             }
-              ## See GROW call for explanation of arrays:
-              csv.idx  <- array(0, n * n.xvar) 
-              for (j in 1:n.xvar) {
-                  csv.idx[(((j-1) * n) + 1) : (((j-1) * n) + n)]  <- ( ((target.idx-1) * n) + ((j-1) * n * regr.count) + 1 ) : ( ((target.idx-1) * n) + ((j-1) * n * regr.count) + n )
-              }
-              ## New case specific arrays, numerator:
-              csv.num <- (if (!is.null(nativeOutput$csvRegr))
-                              array(nativeOutput$csvRegr[csv.idx], c(n, n.xvar)) else NULL)
-              regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], csv.num = list(csv.num))
-              remove(csv.num)
-              ## New case specific arrays, denominator:
-              csv.den <- (if (!is.null(nativeOutput$csvDen))
-                              array(nativeOutput$csvDen, c(n, n.xvar)) else NULL)
-              regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], csv.den = list(csv.den))
-              remove(csv.den)
+            ## See GROW call for explanation of arrays:
+            csv.idx  <- array(0, n.observed * n.xvar)
+            j2seq <- (target.idx - 1) * n.observed
+            for (j in 1:n.xvar) {
+              j1seq <- (j - 1) * n.observed
+              csv.idx[(j1seq + 1) : (j1seq + n.observed)]  <- ( (j2seq + j1seq * regr.count + 1) : (j2seq + j1seq * regr.count + n.observed) ) 
+            }
+            ## New case specific arrays, numerator:
+            csv.num <- (if (!is.null(nativeOutput$csvRegr))
+                          array(nativeOutput$csvRegr[csv.idx], c(n.observed, n.xvar)) else NULL)
+            regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], csv.num = list(csv.num))
+            remove(csv.num)
+            ## New case specific arrays, denominator:
+            csv.den <- (if (!is.null(nativeOutput$csvDen))
+                          array(nativeOutput$csvDen, c(n.observed, n.xvar)) else NULL)
+            regrOutput[[target.idx]] <- c(regrOutput[[target.idx]], csv.den = list(csv.den))
+            remove(csv.den)
           }
         }
         nativeOutput$allEnsbRGR <- NULL

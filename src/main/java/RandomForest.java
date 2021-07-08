@@ -47,11 +47,14 @@ public class RandomForest {
                                                                  modelArg.get_nSplit(),
                                                                  
                                                                  modelArg.get_mtry(),
-                                                                 modelArg.getLot(),
+                                                                 modelArg.get_lot(),
+                                                                 
+                                                                 modelArg.get_baseLearn(),
                                                                  
                                                                  modelArg.get_vtry(),
                                                                  modelArg.get_vtryArray(),
-
+                                                                 null,
+                                                                 
                                                                  modelArg.get_ytry(),
 
                                                                  modelArg.get_nodeSize(),
@@ -63,36 +66,29 @@ public class RandomForest {
                                                                  modelArg.get_ntree(),
                                                                  modelArg.get_nSize(),
                                                                  
-                                                                 modelArg.get_ySize(),
-                                                                 modelArg.get_yType(),
-                                                                 modelArg.get_yLevel(),
+                                                                 modelArg.get_yInfo(),
+                                                                 modelArg.get_yLevels(),
                                                                  modelArg.get_yData(),
 
-                                                                 modelArg.get_xSize(),
-                                                                 modelArg.get_xType(),
-                                                                 modelArg.get_xLevel(),
-
-                                                                 modelArg.get_sampleSize(),
-                                                                 modelArg.get_sample(),
-                                                                 modelArg.get_caseWeight(),
-
-                                                                 modelArg.get_xStatisticalWeight(),
-                                                                 modelArg.get_yWeight(),
-
-                                                                 modelArg.get_xWeight(),
+                                                                 modelArg.get_xInfo(),
+                                                                 modelArg.get_xLevels(),
                                                                  modelArg.get_xData(),
 
-                                                                 modelArg.get_timeInterestSize(),
+                                                                 modelArg.get_sampleInfo(),
+
+                                                                 modelArg.get_xWeightStat(),
+                                                                 modelArg.get_yWeight(),
+                                                                 modelArg.get_xWeight(),
+
                                                                  modelArg.get_timeInterest(),
+
                                                                  modelArg.get_nImpute(),
                                                                  
                                                                  modelArg.get_blockSize(),
 
-                                                                 modelArg.get_probSize(),
-                                                                 modelArg.get_prob(),
-                                                                 modelArg.get_probEpsilon(),
+                                                                 modelArg.get_quantile(),
 
-                                                                 0, // Hack for modelArg.get_wibsTau(),
+                                                                 0, // Pre Sort Disabled
                                                                  
                                                                  modelArg.get_rfCores());
 
@@ -107,7 +103,6 @@ public class RandomForest {
         @RF_TRACE_OFF@    temporaryModel.printEnsembleList();
         @RF_TRACE_OFF@  }
         
-        // Trim the forest, as it has been allocated to the theoretical maximum. It will always be present in grow mode.
         // We trim, in particular, treeID, nodeID, parmID, contPT, mwcpSZ, and mwcpPT (iff necessary).
 
         Ensemble ensb;
@@ -220,101 +215,91 @@ public class RandomForest {
         // Create the Random Forest Model Object, given the inputs, and resulting outputs.
         RandomForestModel rfModel = new RandomForestModel(modelArg, ensembleList);
 
-
-        // Set the default value for the ensemble calculations to be conducted over all trees.
-        rfModel.set_extractTree();
-        
         return rfModel;
     }
 
-
-    /**
-     * Restores a random forest given the user-defined model arugments.
-     * @param model User-defined model arguments.
-     */
     public static RandomForestModel predict(RandomForestModel model)  {
+        TestModelArg testModelArg = new TestModelArg(model.modelArg);
+
+        return predict(model, testModelArg);
+
+    }
+
+
+
+    public static RandomForestModel predict(RandomForestModel model, TestModelArg testModelArg)  {
 
         HCzero hc_zero;
-        HCmulti hc_multi;
-        Partial partial;
         
         // Only models resulting from a RandomForest.train() call are allowed.
-        if ((model.getModelType() != ModelType.MINI) &&
-            (model.getModelType() != ModelType.MIDI) &&
-            (model.getModelType() != ModelType.MAXI)) {
+        if (model.modelType != ModelType.GROW) {
             RFLogger.log(Level.SEVERE, "Model is not a result of a RandomForest.train() call.");
-            RFLogger.log(Level.SEVERE, "Incorrect ModelType:  " + model.getModelType());            
+            RFLogger.log(Level.SEVERE, "Incorrect ModelType:  " + model.modelType);            
 
             throw new IllegalArgumentException();
         }
-            
-        ModelArg modelArg = model.getModelArg();
+
+        // Shortcut to modelArg object.
+        ModelArg modelArg = model.modelArg;
 
         hc_zero = new HCzero((int[]) (model.getEnsembleObj("parmID")).ensembleVector,
                              (double[]) (model.getEnsembleObj("contPT")).ensembleVector,
                              (int[]) (model.getEnsembleObj("mwcpSZ")).ensembleVector,
                              (int[]) (model.getEnsembleObj("mwcpPT")).ensembleVector);
 
-        if (modelArg.get_hdim() > 0) {
-            hc_multi = new HCmulti((int[]) (model.getEnsembleObj("hcDim")).ensembleVector,
-                                   (double[]) (model.getEnsembleObj("contPTR")).ensembleVector);
-        }
-        else {
-            hc_multi = null;
-        }
-
-        // Partial not yet implemented.  TBD TBD
-        if (true) {
-            partial = null;
-        }
         
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
         @RF_TRACE_OFF@    RFLogger.log(Level.INFO, "Family restore:  " + modelArg.get_family());
         @RF_TRACE_OFF@  }
 
-        LinkedHashMap   ensembleList = Native.getInstance().predict(model.get_trace(),
-                                                                    model.get_seed(),
+        LinkedHashMap   ensembleList = Native.getInstance().predict(modelArg.get_trace(),
+                                                                    testModelArg.get_seed(),
 
-                                                                    model.getEnsembleArgOptLow() + modelArg.getModelArgOptLow(),
-                                                                    model.getEnsembleArgOptHigh() + modelArg.getModelArgOptHigh(),
+                                                                    modelArg.getEnsembleArgOptLow() + modelArg.getModelArgOptLow(),
+                                                                    modelArg.getEnsembleArgOptHigh() + modelArg.getModelArgOptHigh(),
 
                                                                     // >>>> start of maxi forest object >>>>
                                                                     modelArg.get_ntree(),
                                                                     modelArg.get_nSize(),
 
-                                                                    modelArg.get_ySize(),
-                                                                    modelArg.get_yType(),
-                                                                    modelArg.get_yLevel(),
+                                                                    modelArg.get_yInfo(),
+                                                                    modelArg.get_yLevels(),
                                                                     modelArg.get_yData(),
 
-                                                                    modelArg.get_xSize(),
-                                                                    modelArg.get_xType(),
-                                                                    modelArg.get_xLevel(),
+                                                                    modelArg.get_xInfo(),
+                                                                    modelArg.get_xLevels(),
                                                                     modelArg.get_xData(),
                                                               
-                                                                    modelArg.get_sampleSize(),
-                                                                    modelArg.get_sample(),
-                                                                    modelArg.get_caseWeight(),
+                                                                    modelArg.get_sampleInfo(),
 
-                                                                    modelArg.get_timeInterestSize(),
                                                                     modelArg.get_timeInterest(),
-                                                              
-                                                                    ((int[]) (model.getEnsembleObj("treeID")).ensembleVector).length,
-                                                                    (int[]) (model.getEnsembleObj("seed")).ensembleVector,
+
+                                                                    ((int[]) (model.getEnsembleObj("treeID")).ensembleVector).length, // This is the total node count.
+                                                                    (int[]) (model.getEnsembleObj("leafCount")).ensembleVector,  
+
+                                                                    new SeedInfo((int[]) model.getEnsembleObj("seed").ensembleVector, null, 0),
 
                                                                     modelArg.get_hdim(),
 
+                                                                    modelArg.get_baseLearn(),
+                                                                    
                                                                     (int[]) (model.getEnsembleObj("treeID")).ensembleVector,
                                                                     (int[]) (model.getEnsembleObj("nodeID")).ensembleVector,
                                                               
                                                                     hc_zero,
-                                                                    hc_multi,
+                                                                    new HConeAugIntr(null, null, null),
+                                                                    new HConeAugSyth(null, null),
+                                                                    new HCone(null, null),
 
-                                                                    0,
-                                                                    0,
-                                                                    0,
-                                                                    0,
-                                                                    0,
+                                                                    new HCparmID(null),
+                                                                    new HCcontPT(null),
+                                                                    new HCcontPTR(null),
+                                                                    new HCmwcpSZ(null),
+                                                                    new HCmwcpPT(null),
+                                                                    new HCaugmXone(null),
+                                                                    new HCaugmXtwo(null),
+                                                                    new HCaugmXS(null),
+                                                                    new HCaugmSythTop(null, null, null, null, null, null, null, null, null),
 
                                                                     (model.getEnsembleObj("rmbrMembership") != null) ? (int[]) (model.getEnsembleObj("rmbrMembership")).ensembleVector : null,  // TBD TBD rename
                                                                     (model.getEnsembleObj("ambrMembership") != null) ? (int[]) (model.getEnsembleObj("ambrMembership")).ensembleVector : null,  // TBD TBD rename
@@ -330,51 +315,43 @@ public class RandomForest {
                                                                     (model.getEnsembleObj("tnCLAS") != null) ? (int[])    (model.getEnsembleObj("tnCLAS")).ensembleVector : null,
                                                                     // <<<< end of maxi forest object <<<<
 
-                                                                    model.getTargetSize(),
-                                                                    model.getTargetIndex(),
+                                                                    testModelArg.get_yTargetIndex(),  // Default is to send in requests for all responses.
                                                               
-                                                                    model.get_pruningCount(),
+                                                                    0,
 
-                                                                                    
+                                                                    testModelArg.get_xMarginal(),
 
-                                                                    model.getImportanceSize(),
-                                                                    model.getImportanceIndex(),
+                                                                    testModelArg.get_xImportance(),
                                                                     
-                                                                    partial,
+                                                                    testModelArg.get_partial(),
 
-                                                                    0,    // subsetSize     invalid
-                                                                    null, // subsetIndex    invalid
+                                                                    testModelArg.get_fnSize(),
+                                                                    testModelArg.get_fySize(),
+                                                                    testModelArg.get_fyData(),
+                                                                    testModelArg.get_fxData(),
 
-                                                                    0,    // fnSize         invalid
-                                                                    0,    // fySize         invalid
-                                                                    null, // fyData         invalid
-                                                                    null, // fxData         invalid
+                                                                    testModelArg.get_blockSize(),
 
-                                                                    modelArg.get_blockSize(),
+                                                                    testModelArg.get_quantile(),
 
-                                                                    modelArg.get_probSize(),     // Should these be model or modelArg parameters
-                                                                    modelArg.get_prob(),         // Should these be model or modelArg parameters
-                                                                    modelArg.get_probEpsilon(),  // Should these be model or modelArg parameters
+                                                                    testModelArg.get_getTree(),
 
-                                                                    model.get_extractTree(),
-
-                                                                    model.get_rfCores()); 
+                                                                    testModelArg.get_rfCores()); 
 
             
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {        
         @RF_TRACE_OFF@  RFLogger.log(Level.INFO, "Native.predict() nominal exit.");
         @RF_TRACE_OFF@  }
 
+        // Create the Random Forest Model Object, given the inputs, and resulting outputs.
+        RandomForestModel rfModel = new RandomForestModel(testModelArg, ensembleList);
+        
         @RF_TRACE_OFF@  if (Trace.get(Trace.LOW)) {
         @RF_TRACE_OFF@    RFLogger.log(Level.INFO, "Test (restore) Ensemble LinkedHashMap of length " + ensembleList.size());
-        @RF_TRACE_OFF@    RandomForestModel temporaryModel = new RandomForestModel(modelArg, ensembleList);
-        @RF_TRACE_OFF@    temporaryModel.printEnsembleList();
+        @RF_TRACE_OFF@    rfModel.printEnsembleList();
         @RF_TRACE_OFF@  }
        
 
-        // Create the Random Forest Model Object, given the inputs, and resulting outputs.
-        RandomForestModel rfModel = new RandomForestModel(model, ensembleList);
-        
         return rfModel;
     }
 
@@ -387,7 +364,5 @@ public class RandomForest {
         return null;
     }
     
-
-
     
 }

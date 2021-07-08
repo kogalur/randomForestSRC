@@ -5,10 +5,10 @@
 \description{
   Extracts a single tree from a forest which can then be plotted on the users
   browser.  Works for all families.  Missing data not permitted.}
-\usage{\method{get.tree}{rfsrc}(object, tree.id, target,
-  m.target = NULL, time, surv.type = c("mort", "rel.freq",
-  "surv", "years.lost", "cif", "chf"), class.type =
-  c("prob", "bayes"), oob = TRUE, show.plots = TRUE)
+\usage{\method{get.tree}{rfsrc}(object, tree.id, target, m.target = NULL,
+   time, surv.type = c("mort", "rel.freq", "surv", "years.lost", "cif", "chf"),
+   class.type = c("bayes", "rfq", "prob"),
+   ensemble = FALSE, oob = TRUE, show.plots = TRUE)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)}.}
@@ -28,7 +28,10 @@
     See details below.}
   \item{class.type}{For classification, specifies the predicted value.
     See details below.}
-  \item{oob}{OOB (TRUE) or in-bag (FALSE) predicted values.}
+  \item{ensemble}{Use the ensemble (of all trees) for prediction, or use
+    the requested tree for prediction (this is the default).}
+  \item{oob}{OOB (TRUE) or in-bag (FALSE) predicted values.  Only
+    applies when \code{ensemble=TRUE}.}
    \item{show.plots}{Should plots be displayed?}
 }
 \details{
@@ -44,25 +47,31 @@
   node.  The right daughter split is the complement of this set.
 
   Terminal nodes are highlighted by color and display the sample size
-  and predicted value.  Here predicted value equals the forest
-  ensemble value and not the tree predicted value.  This is done as it
-  allows one to visualize the ensemble predictor over a given tree and
-  therefore a given partition of the feature space.  The predicted value
-  displayed is chosen according to the following rules and options:
+  and predicted value.  By default, predicted value equals the tree
+  predicted value and sample size are terminal node inbag sample sizes.
+  If \code{ensemble=TRUE}, then the predicted value equals the forest
+  ensemble value which could be useful as it allows one to visualize the
+  ensemble predictor over a given tree and therefore for a given
+  partition of the feature space.  In this case, sample sizes are for
+  all cases and not the tree specific inbag cases.
+
+  The predicted value displayed is as follows:
 
   
   \enumerate{
-    \item For regression, the predicted response is used.
+    \item For regression, the mean of the response.
     
-    \item For classification, it is the predicted class probability
-    specified by \option{target}, or the class of maximum probability
-    depending on whether \option{class.type} is set to "prob" or
-    "bayes".
+    \item For classification, for the target class specified by
+    \option{target}, either the class with most votes if
+    \code{class.type="bayes"}; or in a two-class problem the classifier
+    using the RFQ quantile threshold if \code{class.type="bayes"}
+    (see \link{imbalanced} for more details); or the relative class
+    frequency when \code{class.type="prob"}.
     
-    
-    \item For multivariate families, it is the predicted value of the
-    outcome specified by \option{m.target} and if that is a
-    classification outcome, by \option{target}.
+    \item For multivariate families, the predicted value of the outcome
+    specified by \option{m.target}.  This being the value for regression
+    or classification described above, depending on whether the outcome
+    is real valued or a factor.
     
     \item For survival, the choices are:
     \itemize{
@@ -123,6 +132,19 @@ plot(get.tree(follic.obj, 2))
 
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)
 plot(get.tree(airq.obj, 10))
+
+## ------------------------------------------------------------
+## two-class imbalanced data (see imbalanced function)
+## ------------------------------------------------------------
+
+data(breast, package = "_PROJECT_PACKAGE_NAME_")
+breast <- na.omit(breast)
+f <- as.formula(status ~ .)
+breast.obj <- imbalanced(f, breast)
+
+## compare RFQ to Bayes Rule
+plot(get.tree(breast.obj, 1, class.type = "rfq", ensemble = TRUE))
+plot(get.tree(breast.obj, 1, class.type = "bayes", ensemble = TRUE))
 
 ## ------------------------------------------------------------
 ## classification

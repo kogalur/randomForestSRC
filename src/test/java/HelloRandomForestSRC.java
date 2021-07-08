@@ -1,4 +1,5 @@
 import com.kogalur.randomforest.ModelArg;
+import com.kogalur.randomforest.TestModelArg;
 import com.kogalur.randomforest.RandomForest;
 import com.kogalur.randomforest.RandomForestModel;
 import com.kogalur.randomforest.Trace;
@@ -141,7 +142,7 @@ public class HelloRandomForestSRC {
         modelArg.set_seed(-1);
 
         // We set ntree here.
-        modelArg.set_bootstrap(4, "auto", "swr", 0, null, null);
+        modelArg.set_sampleInfo(4, "auto", "swr", 0, null, null);
 
         // We set the lot parameters here.
         modelArg.set_lot();
@@ -157,47 +158,49 @@ public class HelloRandomForestSRC {
 
         RandomForestModel growModel = RandomForest.train(modelArg);
 
-        //  int[][] rmbrMembership = (int[][]) growModel.getEnsemble("rmbrMembership");
-        //  growModel.printEnsemble(rmbrMembership);
+        /*
+        int[][] rmbrMembership = (int[][]) growModel.getEnsembleObj("rmbrMembership");
+        growModel.printEnsemble(rmbrMembership);
 
         if (regr) {
 
-            double[][] perfRegr = (double[][]) growModel.getEnsemble("perfRegr");
+            double[][] perfRegr = (double[][]) growModel.getEnsembleObj("perfRegr");
             growModel.printEnsemble(perfRegr);
 
         }
         if (clas) {
-            double[][][] perfClas = (double[][][]) growModel.getEnsemble("perfClas");
+            double[][][] perfClas = (double[][][]) growModel.getEnsembleObj("perfClas");
             growModel.printEnsemble(perfClas);
         }
         
+        */
+        
         RFLogger.log(Level.INFO, "\n\nHelloRandomForestSRC() GROW nominal exit.\n\n");
 
-        // RESTORE with different options.
+        // REST
         if (!false) {
 
-            growModel.set_trace(15 + (1<<4) + (1<<8) + (1<<16));
-
-            if (growModel.getModelArg().get_hdim() == 0) {
-                // growModel.setEnsembleArg("importance", "permute");
-                growModel.setEnsembleArg("importance", "no");
-                growModel.set_xImportance();
-            }
-            else {
-                growModel.setEnsembleArg("importance", "no");
-                growModel.set_xImportance();
-            }
-            
-
-            growModel.setEnsembleArg("proximity", "oob");
-
+            // REST with same options.
             RandomForestModel restModel = RandomForest.predict(growModel);
 
+            TestModelArg testModelArg = new TestModelArg(growModel.modelArg);
+            
+            testModelArg.set_trace(15 + (1<<4) + (1<<8) + (1<<16));
+
+            testModelArg.setEnsembleArg("importance", "permute");
+
+            testModelArg.setEnsembleArg("proximity", "oob");
+
+            // REST with different options.
+
+            restModel = RandomForest.predict(growModel, testModelArg);
+
+            /*
             if (regr) {
-                double[][] perfRegr = (double[][]) restModel.getEnsemble("perfRegr");
+                double[][] perfRegr = (double[][]) restModel.getEnsembleObj("perfRegr");
                 restModel.printEnsemble(perfRegr);
             }
-
+            */
             
             RFLogger.log(Level.INFO, "\n\nHelloRandomForestSRC() REST nominal exit.\n\n");
         }

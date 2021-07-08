@@ -43,7 +43,17 @@ rfsrc.anonymous <- function(formula, data, forest = TRUE, ...)
   ##
   ##--------------------------------------------------------------
   retO$xvar <- retO$forest$xvar <- NULL
-  ## add special class distinction
+  ##--------------------------------------------------------------
+  ##
+  ## add special class distinction --> for both the grow object AND forest
+  ##
+  ##--------------------------------------------------------------
   class(retO) <- c(class(retO), "anonymous")
+  class(retO$forest) <- c(class(retO$forest), "anonymous")
+  ##--------------------------------------------------------------
+  ##
+  ## return the anonymized object
+  ##
+  ##--------------------------------------------------------------
   retO
 }

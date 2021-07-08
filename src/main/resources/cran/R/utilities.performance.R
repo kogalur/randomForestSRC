@@ -113,12 +113,22 @@ get.cindex <- function (time, censoring, predicted, do.trace = FALSE) {
                         as.double(time),
                         as.double(censoring),
                         as.double(predicted),
-                        as.integer(denom))
+                        as.double(denom))
   ## check for error return condition in the native code
   if (is.null(nativeOutput)) {
     stop("An error has occurred in rfsrcCIndex.  Please turn trace on for further analysis.")
   }
   return (nativeOutput$err)
+}
+## gmean rule
+get.gmean.rule <- function(y, prob) {
+  ## determine frequencies: exit if this is not a two-class problem
+  frq <- table(y)  
+  if (length(frq) > 2) {
+    return(NULL)
+  }
+  ## call bayes rule with pi.hat
+  get.bayes.rule(prob, frq / sum(frq, na.rm = TRUE))
 }
 ## gmean for imbalanced classification
 get.gmean <- function(y, prob, rfq = FALSE, robust = FALSE) {

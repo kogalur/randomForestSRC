@@ -323,138 +323,162 @@ get.event.info <- function(obj, subset = NULL) {
   return(list(event = event, event.type = event.type, cens = cens,
               time.interest = time.interest, time = time, r.dim = r.dim))
 }
-get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime) {
+get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime = NULL) {
   if (grepl("surv", fmly)) {
-      ## Survival, Competing Risk, Time Dependent Covariates:
-      if (dim(yvar)[2] == 2) {
-          ## Survival or Competing Risk:
-          r.dim <- 2
-          time <- yvar[, 1]
-          cens <- yvar[, 2]
-          start.time <- NULL
-          ## censoring must be coded coherently
-          if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
-              stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
+    ##-------------------------------------------------------------------------------------
+    ##
+    ##
+    ## survival, competing risks, or time dependent covariates
+    ##
+    ##
+    ##--------------------------------------------------------------------------------------
+    if (dim(yvar)[2] == 2) {
+      ##-------------------------------------------------------------------------------------
+      ##
+      ## survival or competing risks:
+      ##
+      ##--------------------------------------------------------------------------------------
+      r.dim <- 2
+      time <- yvar[, 1]
+      cens <- yvar[, 2]
+      start.time <- NULL
+      ## censoring must be coded coherently
+      if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
+        stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
+      }
+      ## check if deaths are available (if user specified)
+      if (need.deaths && (all(na.omit(cens) == 0))) {
+        stop("no deaths in data!")
+      }
+      ## Check for event time consistency.
+      ## we over-ride this now to allow for negative time (see Stute)
+      ##if (!all(na.omit(time) >= 0)) {
+      ##  stop("time must be  positive")
+      ##}
+      ## Extract the unique event types.
+      event.type <- unique(na.omit(cens))
+      ## Ensure they are all greater than or equal to zero.
+      if (sum(event.type >= 0) != length(event.type)) {
+        stop("censoring variable must be coded as NA, 0, or greater than 0.")
+      }
+      ## Discard the censored state, if it exists.
+      event <- na.omit(cens)[na.omit(cens) > 0]
+      event.type <- unique(event)
+      ## Set grid of time points.
+      nonMissingOutcome <- which(!is.na(cens) & !is.na(time))
+      nonMissingDeathFlag <- (cens[nonMissingOutcome] != 0)
+      time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
+      ## trim the time points if the user has requested it
+      ## we also allow the user to pass requested time points
+      if (!(is.null(ntime) || ntime == 0)) {
+        if (length(ntime) == 1 && length(time.interest) > ntime) {
+          time.interest <- time.interest[
+            unique(round(seq.int(1, length(time.interest), length.out = ntime)))]
+        }
+        if (length(ntime) > 1) {
+          time.interest <- unique(sapply(ntime, function(tt) {
+            time.interest[max(1, sum(tt >= time.interest, na.rm = TRUE))]
+          }))
+        }
+      }
+    }
+    ##-------------------------------------------------------------------------------------
+    ##
+    ## time dependent covariates:
+    ##
+    ##--------------------------------------------------------------------------------------
+    else {
+      r.dim <- 3
+      start.time <- yvar[, 1]
+      time <- yvar[, 2]
+      cens <- yvar[, 3]
+      ## censoring must be coded coherently
+      if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
+        stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
+      }
+      ## check if deaths are available (if user specified)
+      if (need.deaths && (all(na.omit(cens) == 0))) {
+        stop("no deaths in data!")
+      }
+      ## Check for event time consistency.
+      if (!all(na.omit(time) >= 0)) {
+        stop("time must be  positive")
+      }
+      ## Extract the unique event types.
+      event.type <- unique(na.omit(cens))
+      ## Ensure they are all greater than or equal to zero.
+      if (sum(event.type >= 0) != length(event.type)) {
+        stop("censoring variable must be coded as NA, 0, or greater than 0.")
+      }
+      ## Discard the censored state, if it exists.
+      event <- na.omit(cens)[na.omit(cens) > 0]
+      event.type <- unique(event)
+      ## Set grid of time points.
+      nonMissingOutcome <- which(!is.na(cens) & !is.na(time))
+      nonMissingDeathFlag <- (cens[nonMissingOutcome] != 0)
+      time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
+      ## trim the time points if the user has requested it
+      ## we also allow the user to pass requested time points
+      if (!missing(ntime)) {
+        if (length(ntime) == 1 && length(time.interest) > ntime) {
+          ## select evenly spaced values over [0,1] and not event times 
+          time.interest <- seq(0,  min(1, max(time[nonMissingOutcome])), length = ntime)
+          time.interest <- time.interest[time.interest > 0]
+        }
+        if (length(ntime) > 1) {
+          ## over-ride the default setting and allow the user to specify anything they want between [0,1]
+          time.pt <- ntime <= min(1, max(time[nonMissingOutcome])) & ntime > 0
+          if (sum(time.pt) == 0) {
+            stop("the ntime vector supplied must be between [0,1]:", ntime)
           }
-          ## check if deaths are available (if user specified)
-          if (need.deaths && (all(na.omit(cens) == 0))) {
-              stop("no deaths in data!")
-          }
-          ## Check for event time consistency.
-          ## we over-ride this now to allow for negative time (see Stute)
-          ##if (!all(na.omit(time) >= 0)) {
-          ##  stop("time must be  positive")
-          ##}
-          ## Extract the unique event types.
-          event.type <- unique(na.omit(cens))
-          ## Ensure they are all greater than or equal to zero.
-          if (sum(event.type >= 0) != length(event.type)) {
-              stop("censoring variable must be coded as NA, 0, or greater than 0.")
-          }
-          ## Discard the censored state, if it exists.
-          event <- na.omit(cens)[na.omit(cens) > 0]
-          event.type <- unique(event)
-          ## Set grid of time points.
-          nonMissingOutcome <- which(!is.na(cens) & !is.na(time))
-          nonMissingDeathFlag <- (cens[nonMissingOutcome] != 0)
-          time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
-          ## trim the time points if the user has requested it
-          ## we also allow the user to pass requested time points
-          if (!missing(ntime)) {
-              if (length(ntime) == 1 && length(time.interest) > ntime) {
-                  time.interest <- time.interest[
-                      unique(round(seq.int(1, length(time.interest), length.out = ntime)))]
-              }
-              if (length(ntime) > 1) {
-                  time.interest <- unique(sapply(ntime, function(tt) {
-                      time.interest[max(1, sum(tt >= time.interest, na.rm = TRUE))]
-                  }))
-              }
-          }
+          time.interest <- sort(unique(ntime[time.pt]))
+        }
+      }
+    }
+  }
+  ##-------------------------------------------------------------------------------------
+  ##
+  ##
+  ## other families
+  ##
+  ##
+  ##--------------------------------------------------------------------------------------
+  else {
+    if ((fmly == "regr+") | (fmly == "class+") | (fmly == "mix+")) {
+      r.dim <- dim(yvar)[2]
+    }
+    else {
+      if (fmly == "unsupv") {
+        r.dim <- 0
       }
       else {
-          ## Time Dependent Covariates:
-          r.dim <- 3
-          start.time <- yvar[, 1]
-          time <- yvar[, 2]
-          cens <- yvar[, 3]
-          ## censoring must be coded coherently
-          if (!all(floor(cens) == abs(cens), na.rm = TRUE)) {
-              stop("for survival families censoring variable must be coded as a non-negative integer (perhaps the formula is set incorrectly?)")
-          }
-          ## check if deaths are available (if user specified)
-          if (need.deaths && (all(na.omit(cens) == 0))) {
-              stop("no deaths in data!")
-          }
-          ## Check for event time consistency.
-          if (!all(na.omit(time) >= 0)) {
-            stop("time must be  positive")
-          }
-          ## Extract the unique event types.
-          event.type <- unique(na.omit(cens))
-          ## Ensure they are all greater than or equal to zero.
-          if (sum(event.type >= 0) != length(event.type)) {
-              stop("censoring variable must be coded as NA, 0, or greater than 0.")
-          }
-          ## Discard the censored state, if it exists.
-          event <- na.omit(cens)[na.omit(cens) > 0]
-          event.type <- unique(event)
-          ## Set grid of time points.
-          nonMissingOutcome <- which(!is.na(cens) & !is.na(time))
-          nonMissingDeathFlag <- (cens[nonMissingOutcome] != 0)
-          time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
-          ## trim the time points if the user has requested it
-          ## we also allow the user to pass requested time points
-          if (!missing(ntime)) {
-            if (length(ntime) == 1 && length(time.interest) > ntime) {
-              ## select evenly spaced values over [0,1] and not event times 
-              time.interest <- seq(0,  min(1, max(time[nonMissingOutcome])), length = ntime)
-              time.interest <- time.interest[time.interest > 0]
-            }
-            if (length(ntime) > 1) {
-              ## over-ride the default setting and allow the user to specify anything they want between [0,1]
-              time.pt <- ntime <= min(1, max(time[nonMissingOutcome])) & ntime > 0
-              if (sum(time.pt) == 0) {
-                stop("the ntime vector supplied must be between [0,1]:", ntime)
-              }
-              time.interest <- sort(unique(ntime[time.pt]))
-            }
-          }
+        r.dim <- 1
       }
-  }
-  ## handle other families
-    else {
-      if ((fmly == "regr+") | (fmly == "class+") | (fmly == "mix+")) {
-        r.dim <- dim(yvar)[2]
-      }
-        else {
-          if (fmly == "unsupv") {
-            r.dim <- 0
-          }
-            else {
-              r.dim <- 1
-            }
-        }
-      event <- event.type <- cens <- time.interest <- cens <- time <- start.time <- NULL
     }
+    event <- event.type <- cens <- time.interest <- cens <- time <- start.time <- NULL
+  }
   return(list(event = event, event.type = event.type, cens = cens,
               time.interest = time.interest,
               time = time, start.time = start.time, r.dim = r.dim))
 }
-get.grow.mtry <- function (mtry = NULL, n.xvar, fmly) {
+## get grow mtry 
+get.grow.mtry <- function (mtry = NULL, n.xvar, fmly, splitrule = NULL) {
   if (!is.null(mtry)) {
     mtry <- round(mtry)
     if (mtry < 1 | mtry > n.xvar) mtry <- max(1, min(mtry, n.xvar))
   }
-    else {
-      if (grepl("regr", fmly)) {
-        mtry <- max(ceiling(n.xvar/3), 1)
-      }
-        else {
-          mtry <- max(ceiling(sqrt(n.xvar)), 1)
-        }
+  else {
+    if (grepl("regr", fmly)) {
+      mtry <- max(ceiling(n.xvar/3), 1)
     }
-  return (mtry)
+    else {
+      mtry <- max(ceiling(sqrt(n.xvar)), 1)
+    }
+  }
+  if (!is.null(splitrule) && splitrule == "random") {
+    mtry <- 1
+  }
+  mtry
 }
 get.grow.nodesize <- function(fmly, nodesize) {
   ## Default node size for right-censored survival

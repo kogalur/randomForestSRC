@@ -41,9 +41,6 @@ class EnsembleArg {
         // convey these as incoming options to the native code.
         this.growEnsembleArg = growEnsembleArg;
         
-        // Safe the grow-side ensemble argument object as it is irrelevant.
-        growEnsembleArg = null;
-        
         set();
     }
 
@@ -108,8 +105,14 @@ class EnsembleArg {
             
         if (mode.equals("grow") || mode.equals("rest")) {
 
-             
-
+            ensembleArg.put("distance", "no");
+            ensembleList.put("distance",
+                              new NativeOpt("distance",
+                                            new String[] {"no", "inbag", "oob"},
+                                            new int[] {0,
+                                                       (1 << 20) + (1 << 21),
+                                                       (1 << 20) + (1 << 22)}));
+            
             ensembleArg.put("weight", "no");
             ensembleList.put("weight",
                               new NativeOpt("weight",
@@ -148,8 +151,13 @@ class EnsembleArg {
         }
         else {
 
-             
-                
+            ensembleArg.put("distance", "no");
+            ensembleList.put("distance",
+                              new NativeOpt("distance",
+                                            new String[] {"no", "all"},
+                                            new int[] {0,
+                                                       (1 << 20) + (1 << 21) + (1 << 22)}));
+
             ensembleArg.put("weight", "no");
             ensembleList.put("weight",
                               new NativeOpt("weight",

@@ -17,4 +17,13 @@ class Lot {
         this.lotLag = lotLag;
         this.lotStrikeout = lotStrikeout;
     }
+
+    Lot () {
+
+        this.hdim = hdim;
+        this.lotSize = lotSize;
+        this.lotLag = lotLag;
+        this.lotStrikeout = lotStrikeout;
+    }
+
 }

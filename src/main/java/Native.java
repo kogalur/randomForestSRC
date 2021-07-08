@@ -73,8 +73,11 @@ class Native {
                                 int          mtry,
                                 Lot          lot,
 
+                                BaseLearn    baseLearn,
+                                
                                 int          vtry,
                                 int[][]      vtryArray,
+                                Object       vtryExperimental,
                                 
                                 int          ytry,
 
@@ -87,36 +90,29 @@ class Native {
                                 int          ntree,
                                 int          nSize,
 
-                                int          ySize,
-                                char[]       yType,
-                                int[]        yLevel,
+                                YInfo        yInfo,
+                                int[][]      yLevels,
                                 double[][]   yData,
 
-                                int          xSize,
-                                char[]       xType,
-                                int[]        xLevel,
-
-                                int          sampleSize,
-                                int[][]      sample,
-                                double[]     caseWeight,
-
-                                double[]     xStatisticalWeight,
-                                double[]     yWeight,
-
-                                double[]     xWeight,
+                                XInfo        xInfo,
+                                int[][]      xLevels,
                                 double[][]   xData,
 
-                                int          timeInterestSize,
+                                SampleInfo   sampleInfo,
+
+                                double[]     xWeightStat,
+                                double[]     yWeight,
+                                double[]     xWeight,
+
                                 double[]     timeInterest,
+
                                 int          nImpute,
 
                                 int          blockSize,
 
-                                int          quantileSize,
-                                double[]     quantile,
-                                double       qEpsilon,
+                                Quantile     quantile,
                                 
-                                double       wibsTau,
+                                int          xPreSort,
 
                                 int          numThreads);
 
@@ -131,39 +127,44 @@ class Native {
                                    int          ntree,
                                    int          nSize,
 
-                                   int          ySize,
-                                   char[]       yType,
-                                   int[]        yLevel,
+                                   YInfo        yInfo,
+                                   int[][]      yLevels,
                                    double[][]   yData,
 
-                                   int          xSize,
-                                   char[]       xType,
-                                   int[]        xLevel,
+                                   XInfo        xInfo,
+                                   int[][]      xLevels,
                                    double[][]   xData,
                              
-                                   int          sampleSize,
-                                   int[][]      sample,
-                                   double[]     caseWeight,
+                                   SampleInfo   sampleInfo,
 
-                                   int          timeInterestSize,
                                    double[]     timeInterest,
 
                                    int          totalNodeCount,
-                                   int[]        seed,
+                                   int[]        leafCount,
 
+                                   SeedInfo     seedInfo,
+                                   
                                    int          htry,
                              
+                                   BaseLearn    baseLearn,
+
                                    int[]        treeID,
                                    int[]        nodeID,
 
                                    HCzero       hc_zero,
-                                   HCmulti      hc_multi,
-
-                                   int          parmID,
-                                   int          contPT,
-                                   int          contPTR,
-                                   int          mwcpSZ,
-                                   int          mwcpPT,
+                                   HConeAugIntr hc_oneAugIntr,
+                                   HConeAugSyth hc_oneAugSyth,
+                                   HCone        hc_one,
+                                                                       
+                                   HCparmID      hc_parmID,
+                                   HCcontPT      hc_contPT,
+                                   HCcontPTR     hc_contPTR,
+                                   HCmwcpSZ      hc_mwcpSZ,
+                                   HCmwcpPT      hc_mwcpPT,
+                                   HCaugmXone    hc_augmXone,
+                                   HCaugmXtwo    hc_augmXtwo,
+                                   HCaugmXS      hc_augmXS,
+                                   HCaugmSythTop hc_augmSythTop,
 
                                    int[]        tnRMBR,
                                    int[]        tnAMBR,
@@ -179,31 +180,24 @@ class Native {
                                    int[]        tnCLAS,
                                    // <<<< end of maxi forest object <<<<
 
-                                   int          yTargetSize,
                                    int[]        yTargetIndex,
                              
                                    int          ptnCount,
                              
-                                                   
+                                   int[]        xMarginal,
 
-                                   int          xImportanceSize,
-                                   int[]        xImportanceIndex,
+                                   int[]        xImportance,
                              
                                    Partial      partial,
 
-                                   int          subsetSize,
-                                   int[]        subsetIndex,
-
                                    int          fnSize,
                                    int          fySize,
-                                   double[]     fyData,
-                                   double[]     fxData,
+                                   double[][]   fyData,
+                                   double[][]   fxData,
 
                                    int          blockSize,                                   
 
-                                   int          quantileSize,
-                                   double[]     quantile,
-                                   double       qEpsilon,
+                                   Quantile     quantile,
 
                                    int[]        getTree,
                                                                         

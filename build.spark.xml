@@ -17,12 +17,12 @@
   <!-- CAUTION:  These are for the Java-side trace only.     -->
   <!-- CAUTION:  For C-side trace refer to build.xml.        -->
   <!-- CAUTION   "java-trace" means TRACE IS OFF:            -->  
-  <target name="java-trace">
+  <target name="java-trace-x">
     <property name="java.trace.token" value="//"/>
   </target>
 
   <!-- CAUTION   "java-trace" means TRACE IS ON:             -->  
-  <target name="java-trace-x">
+  <target name="java-trace">
     <property name="java.trace.token" value=""/>
   </target>
 
@@ -34,6 +34,7 @@
   <target name="source-spark" depends="init, java-trace">
 
     <!--delete dir="target/spark"/-->
+    <!--delete dir="target/spark-test"/-->
 
     <mkdir dir="target/spark"/>
     <mkdir dir="target/spark/src"/>
@@ -41,10 +42,24 @@
     <mkdir dir="target/spark/src/main/java"/>
     <mkdir dir="target/spark/src/main/c"/>
     <mkdir dir="target/spark/src/main/resources"/>
+
+    <!-- Test Project Copy Start -->    
+
     <mkdir dir="target/spark/src/test"/>
     <mkdir dir="target/spark/src/test/java"/>
     <mkdir dir="target/spark/src/test/resources"/>
     <mkdir dir="target/spark/src/test/resources/data"/>
+
+    <!--
+    <mkdir dir="target/spark-test"/>
+    <mkdir dir="target/spark-test/src"/>
+    <mkdir dir="target/spark-test/src/main"/>
+    <mkdir dir="target/spark-test/src/main/java"/>
+    <mkdir dir="target/spark-test/src/main/resources"/>
+    <mkdir dir="target/spark-test/src/main/resources/data"/>
+    -->
+
+    <!-- Test Project Copy End -->        
 
     <copy todir="target/spark">
       <fileset dir="src/main/resources/spark">
@@ -57,7 +72,6 @@
           <replacestring from="@PROJECT_VERSION@"      to="${project.version}"/>
         </tokenfilter>
       </filterchain>
-
     </copy>
     
     <copy todir="target/spark/src/main/resources">
@@ -133,20 +147,9 @@
     
     <copy todir="target/spark/src/main/java">
       <fileset dir="src/main/java">
-        <include name="Trace.java"/>
-        <include name="Native.java"/>
-        <include name="RFLogger.java"/>
-        <include name="ModelArg.java"/>
-        <include name="RandomForest.java"/>
-        <include name="RandomForestModel.java"/>
-        <include name="EnsembleArg.java"/>
-        <include name="Ensemble.java"/>        
-        <include name="NativeOpt.java"/>
-        <include name="ModelType.java"/>
-        <include name="HCzero.java"/>
-        <include name="HCmulti.java"/>
-        <include name="Partial.java"/>
-        <include name="Lot.java"/>
+        <include name="*.java"/>
+        <exclude name="RFLogger4j.java"/>
+        <exclude name="ModelArgsXML.java"/>
       </fileset>
 
       <filterchain>
@@ -166,6 +169,13 @@
 
     </copy>
 
+
+
+
+
+
+    <!-- Test Project Copy Start -->        
+
     <copy todir="target/spark/src/test/java">
       <fileset dir="src/test/java">
         <include name="HelloRandomForestSRC.java"/>
@@ -179,6 +189,38 @@
       </fileset>
     </copy>
     
+    <!--
+    <copy todir="target/spark-test">
+      <fileset dir="src/main/resources/spark">
+        <include name="pom-test.xml"/>
+      </fileset>
+
+      <filterchain>
+        <tokenfilter>
+          <replacestring from="@PROJECT_PACKAGE_NAME@" to="${project.pkg.name}"/>
+          <replacestring from="@PROJECT_VERSION@"      to="${project.version}"/>
+        </tokenfilter>
+      </filterchain>
+    </copy>
+
+    <move file="target/spark-test/pom-test.xml" tofile="target/spark-test/pom.xml"/>
+
+    <copy todir="target/spark-test/src/main/java">
+      <fileset dir="src/test/java">
+        <include name="HelloRandomForestSRC.java"/>
+        <include name="Simulation.java"/>
+      </fileset>
+    </copy>
+
+    <copy todir="target/spark-test/src/main/resources/data">
+      <fileset dir="src/test/resources/data">
+        <include name="*"/>
+      </fileset>
+    </copy>
+    -->
+
+    <!-- Test Project Copy -->
+    
   </target>
 
 
@@ -191,10 +233,29 @@
 
     <exec dir="target/spark" executable="mvn" vmlauncher="FALSE" failonerror="TRUE">
       <!--arg line="-q"/-->
+      <!--arg line="-X"/-->
       <arg line="-e"/>
       <arg line="package"/>
     </exec>
 
+    <exec dir="target/spark/target/test-classes" executable="jar" vmlauncher="FALSE" failonerror="TRUE">
+      <arg line="cf"/>
+      <arg line="randomForestSRC-tests.jar"/>
+      <arg line="HelloRandomForestSRC.class"/>
+      <arg line="com"/>
+    </exec>
+    
+    <move file="target/spark/target/test-classes/randomForestSRC-tests.jar" tofile="target/spark/target/randomForestSRC-tests.jar"/>
+
+    
+    <!--
+    <exec dir="target/spark-test" executable="mvn" vmlauncher="FALSE" failonerror="TRUE">
+      <arg line="-e"/>
+      <arg line="package"/>
+    </exec>
+    -->
+
+    
     <echo file="target/spark/target/hello${scriptExtension}" append="false">${scriptFileCommentLine}
     spark-submit --class HelloRandomForestSRC --master local[*] --jars ${project.pkg.name}-tests.jar ${project.pkg.name}.jar
     ${scriptFileExitLine}

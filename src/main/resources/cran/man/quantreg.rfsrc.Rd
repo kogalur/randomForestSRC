@@ -2,11 +2,6 @@
 \alias{quantreg.rfsrc}
 \alias{quantreg}
 \alias{extract.quantile}
-\alias{get.auc}
-\alias{get.bayes.rule}
-\alias{get.brier.error}
-\alias{get.confusion}
-\alias{get.misclass.error}
 \alias{get.quantile}
 \alias{get.quantile.crps}
 \alias{get.quantile.stat}

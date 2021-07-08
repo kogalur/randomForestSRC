@@ -10,6 +10,18 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Fixes to variable importance OpenMP threading inefficiencies related
+to GitHub issues 95,96,103.  Variable importance is now repeatable via
+the seed argument, addressing GitHub issues 67,69.  Fix to new
+distance measure not being normalized, addressing GitHub issue
+100. Fixed an issue related to factors in test data where levels were
+not matching traning data.  Improvements to user-interface for
+partial.rfsrc().  Some improvements in speed and internal logic in the
+absence of missing data.
+  
+---------------------------------------------------------------------------------
+RELEASE 2.11.0
+---------------------------------------------------------------------------------
 Implementation of rfsrc.anonymous() allowing one to save a model without
 the presence of training data, and subsequently predicting without it, as well.
 Case specific error and VIMP for classification and regression.

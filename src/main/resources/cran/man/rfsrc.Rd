@@ -1,7 +1,12 @@
 \name{rfsrc}
 \alias{rfsrc}
 \alias{rfsrc.cart}
+\alias{get.auc}
+\alias{get.bayes.rule}
+\alias{get.brier.error}
 \alias{get.cindex}
+\alias{get.confusion}
+\alias{get.misclass.error}
 \alias{get.mv.cserror}
 \alias{get.mv.csvimp}
 \alias{get.mv.error}
@@ -54,7 +59,7 @@
   
 }
 \usage{
-rfsrc(formula, data, ntree = 1000,
+rfsrc(formula, data, ntree = 500,
   mtry = NULL, ytry = NULL,
   nodesize = NULL, nodedepth = NULL,
   splitrule = NULL, nsplit = 10,
@@ -66,7 +71,7 @@ rfsrc(formula, data, ntree = 1000,
   samptype = c("swor", "swr"), samp = NULL, membership = FALSE,
   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
   na.action = c("na.omit", "na.impute"), nimpute = 1,
-  ntime, cause,
+  ntime = 250, cause,
   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
   xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt  = NULL,
   forest = TRUE,
@@ -175,13 +180,13 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     become optimistic if \code{nimpute} is greater than 1.}
   
   \item{ntime}{Integer value used for survival to constrain ensemble
-    calculations to a grid of \code{ntime} time points.  Alternatively
-    if a vector of values of length greater than one is supplied, it is
-    assumed these are the time points to be used to constrain the
-    calculations (note that the constrained time points used will be the
-    observed event times closest to the user supplied time points).  If
-    no value is specified, the default action is to use all observed
-    event times.}
+    calculations to an \code{ntime} grid of time points over the
+    observed event times.  Alternatively if a vector of values of length
+    greater than one is supplied, it is assumed these are the time
+    points to be used to constrain the calculations (note that the
+    constrained time points used will be the observed event times
+    closest to the user supplied time points).  Setting \code{ntime} to
+    zero (or NULL) uses all observed event times.}
 
   \item{cause}{Integer value between 1 and \code{J} indicating the event
     of interest for splitting a node for competing risks, where \code{J}
@@ -461,10 +466,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
       \item \emph{Unique time points}
 
-      For large survival problems, users should consider setting
-      \code{ntime} to a reasonably small value (such as 100 or 250).
-      This constrains ensemble calculations such as survival functions
-      to a restricted grid of time points.
+      Setting \code{ntime} to a reasonably small value such as 100 or
+      250 (the default) constrains survival ensemble calculations to a
+      restricted grid of time points and significantly improves
+      computational times.
       
       \item \emph{Large number of variables}
   
@@ -1219,6 +1224,26 @@ breast.obj <- rfsrc(status ~ ., data = breast, block.size=1)
 plot(breast.obj)
 
 ## ------------------------------------------------------------
+## big data set, reduce number of variables using simple method
+## ------------------------------------------------------------
+
+## use Iowa housing data set
+data(housing, package = "_PROJECT_PACKAGE_NAME_")
+
+## original data contains lots of missing data, use fast imputation
+## however see impute for other methods
+housing2 <- impute(data = housing, fast = TRUE)
+
+## run shallow trees to find variables that split any tree
+xvar.used <- rfsrc(SalePrice ~., housing2, ntree = 250, nodedepth = 4,
+                   var.used="all.trees", mtry = Inf, nsplit = 100)$var.used
+
+## now fit forest using filtered variables
+xvar.keep  <- names(xvar.used)[xvar.used >= 1]
+o <- rfsrc(SalePrice~., housing2[, c("SalePrice", xvar.keep)])
+print(o)
+
+## ------------------------------------------------------------
 ## imbalanced classification data
 ## see the "imbalanced" function for further details
 ##
@@ -1243,18 +1268,22 @@ obdirect <- rfsrc(status ~ ., data = breast, nsplit = 10,
             case.wt = _PROJECT_PACKAGE_NAME_:::make.wt(y),
             sampsize = _PROJECT_PACKAGE_NAME_:::make.size(y))
 print(obdirect)
+print(get.imbalanced.performance(obdirect))
 
 ## balanced random forests - using "imbalanced" 
 ob <- imbalanced(status ~ ., data = breast, method = "brf")
 print(ob)
+print(get.imbalanced.performance(ob))
 
 ## q-classifier (RFQ) - using "imbalanced" 
 oq <- imbalanced(status ~ ., data = breast)
 print(oq)
+print(get.imbalanced.performance(oq))
 
 ## q-classifier (RFQ) - with auc splitting
 oqauc <- imbalanced(status ~ ., data = breast, splitrule = "auc")
 print(oqauc)
+print(get.imbalanced.performance(oqauc))
 
 ## ------------------------------------------------------------
 ## unsupervised analysis
