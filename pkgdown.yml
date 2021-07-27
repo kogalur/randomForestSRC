@@ -1,0 +1,20 @@
+pandoc: 2.7.3
+pkgdown: 1.6.1
+pkgdown_sha: ~
+articles:
+  classification: classification.html
+  getstarted: getstarted.html
+  imbalance: imbalance.html
+  installation: installation.html
+  parallel: parallel.html
+  partial: partial.html
+  regression: regression.html
+  rfsrc-introduction: rfsrc-introduction.html
+  rfsrc-subsample: rfsrc-subsample.html
+  survival: survival.html
+  trees: trees.html
+last_built: 2021-07-27T03:15Z
+urls:
+  reference: https://luminwin.github.io/randomForestSRC/reference
+  article: https://luminwin.github.io/randomForestSRC/articles
+
