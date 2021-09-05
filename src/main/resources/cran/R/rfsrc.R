@@ -520,7 +520,7 @@ rfsrc <- function(formula, data, ntree = 500,
                                     list(if (is.null(prob)) as.integer(0) else as.integer(length(prob)),
                                          if (is.null(prob)) NULL else as.double(prob),
                                          if (is.null(prob.epsilon)) as.double(0) else as.double(prob.epsilon)),
-                                    as.integer(presort.xvar),
+                                    as.double(presort.xvar),
                                     as.integer(get.rf.cores()))}, error = function(e) {
                                         print(e)
                                         NULL})

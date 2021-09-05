@@ -978,12 +978,7 @@ is.hidden.presort.xvar <-  function (user.option) {
 get.presort.xvar <- function (presort.xvar) {
     ## Convert trace into native code parameter.
     if (!is.logical(presort.xvar)) {
-        if (presort.xvar >= 1) {
-            presort.xvar <- round(presort.xvar)
-        }
-        else {
-            presort.xvar <- 0
-        }
+            ## Leave it as is.
     }
     else {
         presort.xvar <- 1 * presort.xvar

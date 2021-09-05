@@ -10,6 +10,14 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Fix to omp.h declaration before R headers per Prof. Ripley, in
+anticipation of clang 13.0.0.
+
+
+---------------------------------------------------------------------------------
+RELEASE 2.12.0
+---------------------------------------------------------------------------------
+
 Fixes to variable importance OpenMP threading inefficiencies related
 to GitHub issues 95,96,103.  Variable importance is now repeatable via
 the seed argument, addressing GitHub issues 67,69.  Fix to new

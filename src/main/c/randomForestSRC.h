@@ -20,6 +20,17 @@ struct augmentationObj {
   unsigned int fobsSize;
   char *permissibilityFlag;
 };
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <limits.h>
+#include <float.h>
+#include <math.h>
+#include <time.h>
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 @RF_CRANX_BEG@
 #include <R_ext/Print.h>
 #include <Rdefines.h>
@@ -37,17 +48,6 @@ struct augmentationObj {
 #define RF_nativeNaN nan("")
 #define RF_nativeIsNaN isnan
 @RF_JAVAX_END@
-#include <stdio.h>
-#include <stdarg.h>
-#include <stdlib.h>
-#include <string.h>
-#include <limits.h>
-#include <float.h>
-#include <math.h>
-#include <time.h>
-#ifdef _OPENMP
-#include <omp.h>
-#endif
 #ifndef NULL
 #define NULL 0
 #endif
@@ -203,7 +203,7 @@ typedef unsigned long ulong;
 #define OPT_MISS_SKIP 0x00000010 
 #define OPT_MEMB_PRUN 0x00000020 
 #define OPT_MEMB_USER 0x00000040 
-#define OPT_EXPIRMENT 0x00000080 
+#define OPT_EXPERMENT 0x00000080 
 #define OPT_SPLT_CUST 0x00000F00 
 #define OPT_BOOT_SWOR 0x00001000 
 #define OPT_TREE_ERR  0x00002000 
@@ -217,7 +217,6 @@ typedef unsigned long ulong;
 #define OPT_DIST_IBG  0x00200000 
 #define OPT_DIST_OOB  0x00400000 
 #define OPT_DIST_FUL  0x00600000 
-#define OPT_MAD_MAX   0x00800000 
 #define OPT_TDC_BIT1  0x01000000 
 #define OPT_TDC_BIT2  0x02000000 
 #define OPT_TDC_BIT3  0x04000000 
@@ -337,6 +336,8 @@ struct node {
   struct node *lotsRoot;
   unsigned int lotsSize;
   double sumParent;
+  uint *minRank;
+  uint *maxRank;
 };
 typedef struct terminal Terminal;
 struct terminal {
@@ -830,7 +831,7 @@ unsigned int ulog2 (unsigned int n);
 void hpsort(double *ra, unsigned int n);
 void hpsortui(unsigned int *ra, unsigned int n);
 void hpsorti(int *ra, unsigned int n);
-void sort(double *arr, unsigned int n);
+void qksort(double *arr, unsigned int n);
 void indexx(unsigned int n, double *arr, unsigned int *indx);
 void nrerror(char error_text[]);
 void *gblock(size_t size);
@@ -982,6 +983,13 @@ void updateTerminalNodeOutcomes(char       mode,
                                 uint       allMembrSize,
                                 uint      *rbmrIterator,
                                 uint      *ambrIterator);
+void getMembrCountOnly (uint       treeID,
+                        Terminal  *parent,
+                        uint      *repMembrIndx,
+                        uint       repMembrSize,
+                        uint      *allMembrIndx,
+                        uint       allMembrSize,
+                        uint      *rmbrIterator);
 void updateEnsembleTree (char      mode,
                          uint      b,
                          char      perfFlag);
@@ -1168,11 +1176,6 @@ char randomSplitGeneric(uint       treeID,
                         SplitInfoMax *splitInfoMax,
                         GreedyObj    *greedyMembr,
                         char       multImpFlag);
-char randomSplitPure(uint       treeID,
-                     Node      *parent,
-                     SplitInfoMax *splitInfoMax,
-                     GreedyObj    *greedyMembr,
-                     char       multImpFlag);
 typedef double (*customFunction) (unsigned int n,
                                   char        *membership,
                                   double      *time,
@@ -1206,6 +1209,21 @@ char classificationEntropySplit (uint       treeID,
                                  SplitInfoMax *splitInfoMax,
                                  GreedyObj    *greedyMembr,
                                  char       multImpFlag);
+char customMultivariateSplit (uint       treeID,
+                              Node      *parent,
+                              SplitInfoMax *splitInfoMax,
+                              GreedyObj    *greedyMembr,
+                              char       multImpFlag);
+char customSurvivalSplit (uint       treeID,
+                          Node      *parent,
+                          SplitInfoMax *splitInfoMax,
+                          GreedyObj    *greedyMembr,
+                          char       multImpFlag);
+char customCompetingRiskSplit (uint       treeID,
+                               Node      *parent,
+                               SplitInfoMax *splitInfoMax,
+                               GreedyObj    *greedyMembr,
+                               char       multImpFlag);
 char getBestSplitLOT(uint         treeID,
                      char         multImpFlag,
                      GreedyObj   *greedyMembr,
@@ -1313,6 +1331,16 @@ char randomSGS (uint       treeID,
 LatOptTreeObj *makeLatOptTreeObj();
 void freeLatOptTreeObj(LatOptTreeObj *lotObj);
 void insertRisk(uint treeID, LatOptTreeObj *obj, double value);
+char unsupervisedSplit(uint       treeID,
+                       Node      *parent,
+                       SplitInfoMax *splitInfoMax,
+                       GreedyObj    *greedyMembr,
+                       char       multImpFlag);
+char multivariateSplit (uint       treeID,
+                        Node      *parent,
+                        SplitInfoMax *splitInfoMax,
+                        GreedyObj    *greedyMembr,
+                        char       multImpFlag);
 char locallyAdaptiveQuantileRegrSplit (uint       treeID,
                                        Node      *parent,
                                        SplitInfoMax *splitInfoMax,
@@ -1324,53 +1352,8 @@ char quantileRegrSplit (uint       treeID,
                         GreedyObj    *greedyMembr,
                         char       multImpFlag);
 double quantile7 (double *r, uint s, double p);
-char regressionXwghtSplitGeneric(uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
-char regressionXwghtSplitNew(uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
-char regressionXwghtSplitGPU (uint       treeID,
-                              Node      *parent,
-                              SplitInfoMax *splitInfoMax,
-                              GreedyObj    *greedyMembr,
-                              char       multImpFlag);
-char selectRandomCovariatesPre(uint     treeID,
-                               Node     *parent,
-                               uint     *covariateIndex,
-                               uint     *uniformSize,
-                               uint     *uniformSelectedSlot,
-                               double   *cdf,
-                               uint     *cdfSize,
-                               uint     *cdfSort,
-                               uint     *density,
-                               uint     *densitySize,
-                               uint    **densitySwap,
-                               uint     *covariate,
-                               uint     *actualCovariateCount,
-                               uint     *candidateCovariateCount);
-char selectRandomCovariatesPost(uint     treeID,
-                                Node     *parent,
-                                uint     *repMembrIndx,
-                                uint      repMembrSize,
-                                uint     candidateCovariate,
-                                double   *splitVector,
-                                uint     *splitVectorSize,
-                                uint    **indxx,
-                                uint      nonMissMembrSizeStatic,
-                                uint     *nonMissMembrIndxStatic,
-                                uint     *nonMissMembrSize,
-                                uint    **nonMissMembrIndx,
-                                char      multImpFlag);
-char updateMaximumSplitSub(uint    treeID,
-                           Node   *parent,
-                           double  delta,
-                           uint    covariate,
-                           uint    index,
-                           char    factorFlag,
-                           uint    mwcpSizeAbsolute,
-                           void   *splitVectorPtr,
-                           SplitInfoMax *splitInfoMaxObj);
-char updateMaximumSplitSuper(uint treeID,
-                             Node *parent,
-                             SplitInfoMax *splitInfoMaxSub,
-                             SplitInfoMax *splitInfoMax);
+char regressionXwghtSplitOld(uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
+char regressionXwghtSplit(uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
 char logRankNCR(uint       treeID,
                 Node      *parent,
                 SplitInfoMax *splitInfoMax,
@@ -1396,38 +1379,6 @@ char tdcGradient(uint       treeID,
                  SplitInfoMax *splitInfoMax,
                  GreedyObj    *greedyMembr,
                  char       multImpFlag);
-void getMembrCountOnly (uint       treeID,
-                        Terminal  *parent,
-                        uint      *repMembrIndx,
-                        uint       repMembrSize,
-                        uint      *allMembrIndx,
-                        uint       allMembrSize,
-                        uint      *rmbrIterator);
-char unsupervisedSplit(uint       treeID,
-                       Node      *parent,
-                       SplitInfoMax *splitInfoMax,
-                       GreedyObj    *greedyMembr,
-                       char       multImpFlag);
-char multivariateSplit (uint       treeID,
-                        Node      *parent,
-                        SplitInfoMax *splitInfoMax,
-                        GreedyObj    *greedyMembr,
-                        char       multImpFlag);
-char customMultivariateSplit (uint       treeID,
-                              Node      *parent,
-                              SplitInfoMax *splitInfoMax,
-                              GreedyObj    *greedyMembr,
-                              char       multImpFlag);
-char customSurvivalSplit (uint       treeID,
-                          Node      *parent,
-                          SplitInfoMax *splitInfoMax,
-                          GreedyObj    *greedyMembr,
-                          char       multImpFlag);
-char customCompetingRiskSplit (uint       treeID,
-                               Node      *parent,
-                               SplitInfoMax *splitInfoMax,
-                               GreedyObj    *greedyMembr,
-                               char       multImpFlag);
 char getPreSplitResultGeneric (uint      treeID,
                                Node     *parent,
                                char      multImpFlag,
@@ -1440,188 +1391,56 @@ void unstackPreSplit (char      preliminaryResult,
                       Node     *parent,
                       char      multImpFlag,
                       char      multVarFlag);
-uint stackAndConstructSplitVectorGeneric(uint     treeID,
-                                         Node    *parent,
-                                         uint    *localMembershipIndx,
-                                         uint     localMembershipSize,
-                                         uint     randomCovariateIndex,
-                                         double  *splitVector,
-                                         uint     splitVectorSize,
-                                         char    *factorFlag,
-                                         char    *deterministicSplitFlag,
-                                         uint    *mwcpSizeAbsolute,
-                                         void   **splitVectorPtr,
-                                         uint   **indxx);
-uint stackAndConstructSplitVectorUniform (uint     treeID,
-                                          Node    *parent,
-                                          uint    *repMembrIndx,
-                                          uint     repMembrSize,
-                                          uint     randomCovariateIndex,
-                                          double  *splitVector,
-                                          uint     splitVectorSize,
-                                          char    *factorFlag,
-                                          char    *deterministicSplitFlag,
-                                          uint    *mwcpSizeAbsolute,
-                                          void   **splitVectorPtr,
-                                          uint   **indxx);
-uint stackAndConstructSplitVectorSingle(uint     treeID,
-                                        Node    *parent,
-                                        uint    *localMemberishpIndx,
-                                        uint     localMembershipSize,
-                                        uint     randomCovariateIndex,
-                                        double  *splitVector,
-                                        uint     splitVectorSize,
-                                        char    *factorFlag,
-                                        char    *deterministicSplitFlag,
-                                        uint    *mwcpSizeAbsolute,
-                                        void   **splitVectorPtr,
-                                        uint   **indxx);
-void unstackSplitVectorGeneric(uint   treeID,
-                               uint   splitVectorSize,
-                               uint   splitLength,
-                               char   factorFlag,
-                               char   deterministicSplitFlag,
-                               uint   mwcpSizeAbsolute,
-                               void  *splitVectorPtr);
-void stackRandomCovariatesGeneric(uint      treeID,
-                                  Node     *parent,
-                                  uint      repMembrSize,
-                                  uint    **covariateIndex,
-                                  uint     *covariateSize,
-                                  double  **cdf,
-                                  uint     *cdfSize,
-                                  uint    **cdfSort,
-                                  uint    **density,
-                                  uint     *densitySize,
-                                  uint   ***densitySwap);
-void stackRandomCovariatesUniform(uint      treeID,
-                                  Node     *parent,
-                                  uint      repMembrSize,
-                                  uint    **covariateIndex,
-                                  uint     *covariateSize,
-                                  double  **cdf,
-                                  uint     *cdfSize,
-                                  uint    **cdfSort,
-                                  uint    **density,
-                                  uint     *densitySize,
-                                  uint   ***densitySwap);
-void unstackRandomCovariatesGeneric(uint     treeID,
-                                    Node     *parent,
-                                    uint    *index,
-                                    double  *cdf,
-                                    uint    *cdfSort,
-                                    uint    *density,
-                                    uint   **densitySwap);
-void unstackRandomCovariatesUniform(uint     treeID,
-                                    Node     *parent,
-                                    uint    *index,
-                                    double  *cdf,
-                                    uint    *cdfSort,
-                                    uint    *density,
-                                    uint   **densitySwap);
-char selectRandomCovariatesGeneric(uint     treeID,
-                                   Node     *parent,
-                                   uint     *repMembrIndx,
-                                   uint      repMembrSize,
-                                   uint     *covariateIndex,
-                                   uint     *uniformSize,
-                                   uint     *uniformSelectedSlot,
-                                   double   *cdf,
-                                   uint     *cdfSize,
-                                   uint     *cdfSort,
-                                   uint     *density,
-                                   uint     *densitySize,
-                                   uint    **densitySwap,
-                                   uint     *covariate,
-                                   uint     *actualCovariateCount,
-                                   uint     *candidateCovariateCount,
-                                   double   *splitVector,
-                                   uint     *splitVectorSize,
-                                   uint    **indxx,
-                                   uint      nonMissMembrSizeStatic,
-                                   uint     *nonMissMembrIndxStatic,
-                                   uint     *nonMissMembrSize,
-                                   uint    **nonMissMembrIndx,
-                                   char      multImpFlag);
-char selectRandomCovariatesUniform(uint     treeID,
-                                   Node     *parent,
-                                   uint     *repMembrIndx,
-                                   uint      repMembrSize,
-                                   uint     *covariateIndex,
-                                   uint     *uniformSize,
-                                   uint     *uniformSelectedSlot,
-                                   double   *cdf,
-                                   uint     *cdfSize,
-                                   uint     *cdfSort,
-                                   uint     *density,
-                                   uint     *densitySize,
-                                   uint    **densitySwap,
-                                   uint     *covariate,
-                                   uint     *actualCovariateCount,
-                                   uint     *candidateCovariateCount,
-                                   double   *splitVector,
-                                   uint     *splitVectorSize,
-                                   uint    **indxx,
-                                   uint      nonMissMembrSizeStatic,
-                                   uint     *nonMissMembrIndxStatic,
-                                   uint     *nonMissMembrSize,
-                                   uint    **nonMissMembrIndx,
-                                   char      multImpFlag);
-void unselectRandomCovariatesGeneric(uint      treeID,
-                                     Node     *parent,
-                                     uint      repMembrSize,
-                                     uint     *indxx,
-                                     uint      nonMissMembrSizeStatic,
-                                     uint     *nonMissMembrIndx,
-                                     char      multImpFlag);
-void unselectRandomCovariatesUniform(uint      treeID,
-                                     Node     *parent,
-                                     uint      repMembrSize,
-                                     uint     *indxx,
-                                     uint      nonMissMembrSizeStatic,
-                                     uint     *nonMissMembrIndx,
-                                     char      multImpFlag);
-char selectRandomCovariatesTDC(uint     treeID,
-                               Node     *parent,
-                               uint     *repMembrIndx,
-                               uint      repMembrSize,
-                               uint     *covariateIndex,
-                               uint     *uniformSize,
-                               uint     *uniformSelectedSlot,
-                               double   *cdf,
-                               uint     *cdfSize,
-                               uint     *cdfSort,
-                               uint     *density,
-                               uint     *densitySize,
-                               uint    **densitySwap,
-                               uint     *covariate,
-                               uint     *actualCovariateCount,
-                               uint     *candidateCovariateCount,
-                               double   *splitVector,
-                               uint     *splitVectorSize,
-                               uint    **indxx,
-                               char      multImpFlag);
-void unselectRandomCovariatesTDC(uint      treeID,
-                                 Node     *parent,
-                                 uint      splitSize,
-                                 uint     *indxx,
-                                 char      multImpFlag);
 void stackSplitPreliminary(uint     nodeSize,
                            char   **localSplitIndicator,
-                           uint     splitSize,
                            double **splitVector);
 void unstackSplitPreliminary(uint    nodeSize,
                              char   *localSplitIndicator,
-                             uint    splitSize,
-                             double *splitvector);
+                             double *splitVector);
+DistributionObj *stackRandomCovariatesGeneric(uint treeID, Node *parent);
+void unstackRandomCovariatesGeneric(uint treeID, DistributionObj *obj);
+char selectRandomCovariatesGeneric(uint     treeID,
+                                   Node     *parent,
+                                   DistributionObj *distributionObj,
+                                   uint     *covariate,
+                                   uint     *covariateCount);
+uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
+                                                Node    *parent,
+                                                uint     covariate,
+                                                double  *splitVector,
+                                                uint   **indxx,
+                                                char     multImpFlag);
+uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
+                                                Node    *parent,
+                                                uint     covariate,
+                                                double  *splitVector,
+                                                uint     vectorSize,
+                                                char    *factorFlag,
+                                                char    *deterministicSplitFlag,
+                                                uint    *mwcpSizeAbsolute,
+                                                void   **splitVectorPtr);
+void unstackSplitVector(uint   treeID,
+                        uint   splitVectorSize,
+                        uint   splitLength,
+                        char   factorFlag,
+                        char   deterministicSplitFlag,
+                        uint   mwcpSizeAbsolute,
+                        void  *splitVectorPtr);
+void unstackSplitVectorNew(uint   treeID,
+                           Node  *parent,
+                           uint   splitLength,
+                           char   factorFlag,
+                           uint   splitVectorSize,
+                           uint   mwcpSizeAbsolute,
+                           char   deterministicSplitFlag,
+                           void  *splitVectorPtr,
+                           char   multImpFlag,
+                           uint  *indxx);
 uint virtuallySplitNodeGeneric(uint  treeID,
+                               Node *parent,
                                char  factorFlag,
                                uint  mwcpSizeAbsolute,
                                double *observation,
-                               uint *repMembrIndx,
-                               uint  repMembrSize,
-                               uint *nonMissMembrIndx,
-                               uint  nonMissMembrSize,
                                uint *indxx,
                                void *splitVectorPtr,
                                uint  offset,
@@ -1629,39 +1448,6 @@ uint virtuallySplitNodeGeneric(uint  treeID,
                                uint *leftSize,
                                uint  priorMembrIter,
                                uint *currentMembrIter);
-uint virtuallySplitNodeNoSortNoMiss(uint  treeID,
-                                    char  factorFlag,
-                                    uint  mwcpSizeAbsolute,
-                                    double *observation,
-                                    uint *repMembrIndx,
-                                    uint  repMembrSize,
-                                    uint *nonMissMembrIndx,
-                                    uint  nonMissMembrSize,
-                                    uint *indxx,
-                                    void *splitVectorPtr,
-                                    uint  offset,
-                                    char *localSplitIndicator,
-                                    uint *leftSize,
-                                    uint  priorMembrIter,
-                                    uint *currentMembrIter);
-uint virtuallySplitNodeTDC(uint  treeID,
-                           Node *parent,
-                           char  factorFlag,
-                           uint  mwcpSizeAbsolute,
-                           double *observation,
-                           double **response,
-                           uint *repMembrIndx,
-                           uint  repMembrSize,
-                           uint *nonMissMembrIndx,
-                           uint  nonMissMembrSize,
-                           uint *indxx,
-                           void *splitVectorPtr,
-                           uint  offset,
-                           char *localSplitIndicator,
-                           uint *leftSize,
-                           uint *rightSize,
-                           uint  priorMembrIter,
-                           uint *currentMembrIter);
 char summarizeSplitResult(SplitInfoMax *splitInfoMax);
 char updateMaximumSplit(uint    treeID,
                         Node   *parent,
@@ -1692,56 +1478,20 @@ void convertRelToAbsBinaryPair(uint    treeID,
                                uint    relativePair,
                                double *absoluteLevel,
                                uint   *pair);
-DistributionObj *stackRandomCovariatesUniformNew(uint treeID, Node *parent);
-void unstackRandomCovariatesUniformNew(uint treeID, DistributionObj *obj);
-DistributionObj *stackRandomCovariatesGenericNew(uint treeID, Node *parent);
-void unstackRandomCovariatesGenericNew(uint treeID, DistributionObj *obj);
-char selectRandomCovariatesUniformNew(uint      treeID,
-                                      Node     *parent,
-                                      DistributionObj *distributionObj,
-                                      uint     *covariate,
-                                      uint     *actualCovariateCount,
-                                      uint     *candidateCovariateCount,
-                                      double   *splitVector,
-                                      uint     *splitVectorSize,
-                                      uint    **indxx,
-                                      char      multImpFlag);
-char selectRandomCovariatesGenericNew(uint     treeID,
-                                      Node     *parent,
-                                      DistributionObj *distributionObj,
-                                      uint     *covariate,
-                                      uint     *actualCovariateCount,
-                                      uint     *candidateCovariateCount,
-                                      double   *splitVector,
-                                      uint     *splitVectorSize,
-                                      uint    **indxx,
-                                      char      multImpFlag);
-uint virtuallySplitNodeGenericNew(uint  treeID,
+DistributionObj *stackRandomCovariatesSimple(uint treeID, Node *parent);
+void unstackRandomCovariatesSimple(uint treeID, DistributionObj *obj);
+char selectRandomCovariatesSimple(uint  treeID,
                                   Node *parent,
-                                  char  factorFlag,
-                                  uint  mwcpSizeAbsolute,
-                                  double *observation,
-                                  uint *indxx,
-                                  void *splitVectorPtr,
-                                  uint  offset,
-                                  char *localSplitIndicator,
-                                  uint *leftSize,
-                                  uint  priorMembrIter,
-                                  uint *currentMembrIter);
-void unselectRandomCovariatesGenericNew(uint      treeID,
-                                        Node     *parent,
-                                        uint     *indxx,
-                                        char      multImpFlag);
-void unselectRandomCovariatesUniformNew(uint      treeID,
-                                        Node     *parent,
-                                        uint     *indxx,
-                                        char      multImpFlag);
+                                  DistributionObj *distributionObj,
+                                  uint *covariate,
+                                  uint *covariateCount);
+uint stackAndConstructSplitVectorPreSortPhase1 (uint     treeID,
+                                                Node    *parent,
+                                                uint     covariate,
+                                                double  *splitVector,
+                                                uint   **indxx);
 void stackAndGetSplitSurv(uint    treeID,
                           Node    *parent,
-                          uint   *repMembrIndx,
-                          uint    repMembrSize,
-                          uint   *nonMissMembrIndx,
-                          uint    nonMissMembrSize,
                           char    eventType,
                           uint  **eventTimeCount,
                           uint  **eventTimeIndex,
@@ -1917,6 +1667,36 @@ void  unstackLocalGamma(uint    treeID,
                            uint      *qeTimeIndex,
                         uint       qeTimeSize,
                         double **gamma_ktm);
+uint stackAndConstructSplitVectorTDCPhase1 (uint     treeID,
+                                            Node    *parent,
+                                            uint     covariate,
+                                            double  *splitVector,
+                                            uint   **indxx);
+void unstackSplitVectorTDC(uint   treeID,
+                           Node  *parent,
+                           uint   covariate,
+                           uint   splitLength,
+                           char   factorFlag,
+                           uint   splitVectorSize,
+                           uint   mwcpSizeAbsolute,
+                           char   deterministicSplitFlag,
+                           void  *splitVectorPtr,
+                           char   multImpFlag,
+                           uint  *indxx);
+uint virtuallySplitNodeTDC(uint  treeID,
+                           Node  *parent,
+                           char  factorFlag,
+                           uint  mwcpSizeAbsolute,
+                           double *observation,
+                           double **response,
+                           uint *indxx,
+                           void *splitVectorPtr,
+                           uint  offset,
+                           char *localSplitIndicator,
+                           uint *leftSize,
+                           uint *rghtSize,
+                           uint  priorMembrIter,
+                           uint *currentMembrIter);
 void stackAndInitializeTimeAndSubjectArrays(char mode);
 void unstackTimeAndSubjectArrays(char mode);
 void stackFactorArrays(char mode);

@@ -378,7 +378,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
     RF_quantile = NULL;
   }
   RF_qEpsilon = REAL(VECTOR_ELT(quantileInfo, 2))[0];
-  RF_xPreSort            = INTEGER(xPreSort)[0];
+  RF_xPreSort            = REAL(xPreSort)[0];
   RF_vtry                = INTEGER(vtry)[0];
   RF_vtryArray           = (uint **) copy2DObject(vtryArray, NATIVE_TYPE_INTEGER, RF_vtry > 0, RF_ntree, RF_xSize);
   RF_vtryMode            = RF_VTRY_NULL;
