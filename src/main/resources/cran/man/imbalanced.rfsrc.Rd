@@ -2,6 +2,7 @@
 \alias{imbalanced.rfsrc}
 \alias{imbalanced}
 \alias{get.imbalanced.performance}
+\alias{get.imbalanced.optimize}
 \title{Imbalanced Two Class Problems}
 \description{
   Implements various solutions to the two-class imbalanced problem,
@@ -13,8 +14,7 @@
 \usage{\method{imbalanced}{rfsrc}(formula, data, ntree = 3000, 
   method = c("rfq", "brf", "standard"),
   block.size = NULL, perf.type = NULL, fast = FALSE,
-  ratio = NULL, optimize = FALSE, ngrid = 1e4,
-  ...)
+  ratio = NULL, ...)
 }
 \arguments{
   \item{formula}{A symbolic description of the model to be fit.}
@@ -44,7 +44,8 @@
     \item{block.size}{Should the cumulative error rate be calculated on
     every tree?  When \code{NULL}, it will only be calculated on the
     last tree. If importance is requested, VIMP is calculated in
-    "blocks" of size equal to \code{block.size}.}
+    "blocks" of size equal to \code{block.size}.  If not specified, uses
+    the default value specified in \code{rfsrc}.}
 
   \item{fast}{Use fast random forests, \code{rfsrc.fast}, in place of
     \code{rfsrc}?  Improves speed but is less accurate.  Only applies to
@@ -54,13 +55,6 @@
     and included only for experimental purposes.  Used to specify the
     ratio (between 0 and 1) for undersampling the majority class.
     Sampling is without replacement.  Option is ignored for BRF.} 
-
-  \item{optimize}{Calculate the G-mean under various threshold values?
-    Returns out-of-bag G-mean values for each tested threshold value.
-    See examples below for illustration.}
-
-  \item{ngrid}{Number of threshold values attempted when \code{optimize}
-    is requested}
 
   \item{...}{Further arguments to be passed to the \command{rfsrc}
     function to specify random forest parameters.}
@@ -184,13 +178,6 @@ o.brf <- imbalanced(f, breast, method = "brf")
 o.brf <- imbalanced(f, breast, method = "brf", perf.type = "misclass")
 
 ##----------------------------------------------------------------
-## RFQ with optimized threshold
-##----------------------------------------------------------------
-
-o.rfq.opt <- imbalanced(f, breast, optimize = TRUE)
-plot(o.rfq.opt$gmean, type = "l")
-
-##----------------------------------------------------------------
 ## train/test example
 ##----------------------------------------------------------------
 
@@ -201,13 +188,61 @@ print(o.trn)
 print(o.tst)
 print(100 * cbind(o.trn$impo[, 1], o.tst$impo[, 1]))
 
+
 ##----------------------------------------------------------------
-## simulation example using the caret R-package
-## creates imbalanced data by randomly sampling the class 1 data
 ##
-## uses SMOTE from "imbalance" package to oversample the minority
-## illustrates RFQ with and without SMOTE
+##  illustrates how to optimize threshold on training data
+##  improves Gmean for RFQ in many situations
 ##
+##----------------------------------------------------------------
+
+if (library("caret", logical.return = TRUE)) {
+
+  ## experimental settings
+  n <- 2 * 5000 
+  q <- 20
+  ir <- 6
+  f <- as.formula(Class ~ .)
+ 
+  ## simulate the data, create minority class data
+  d <- twoClassSim(n, linearVars = 15, noiseVars = q)
+  d$Class <- factor(as.numeric(d$Class) - 1)
+  idx.0 <- which(d$Class == 0)
+  idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
+  d <- d[c(idx.0,idx.1),, drop = FALSE]
+
+  ## split data into train and test
+  trn.pt <- sample(1:n, size = n / 2)
+  trn <- d[trn.pt, ]
+  tst <- d[setdiff(1:n, trn.pt), ]
+
+  ## run rfq on training data
+  o <- imbalanced(f, trn)
+
+  ## (1) default threshold (2) directly optimized gmean threshold
+  th.1 <- get.imbalanced.performance(o)["threshold"]
+  th.2 <- get.imbalanced.optimize(o)["threshold"]
+
+  ## training performance
+  cat("-------- train performance ---------\n")
+  print(get.imbalanced.performance(o, th.1))
+  print(get.imbalanced.performance(o, th.2))
+
+  ## test performance
+  cat("-------- test performance ---------\n")
+  pred.o <- predict(o, tst)
+  print(get.imbalanced.performance(pred.o, th.1))
+  print(get.imbalanced.performance(pred.o, th.2))
+ 
+} 
+
+##----------------------------------------------------------------
+##  illustrates RFQ with and without SMOTE
+## 
+## - simulation example using the caret R-package
+## - creates imbalanced data by randomly sampling the class 1 data
+## - use SMOTE from "imbalance" package to oversample the minority
+## 
 ##----------------------------------------------------------------
 
 if (library("caret", logical.return = TRUE) &
@@ -247,7 +282,6 @@ if (library("caret", logical.return = TRUE) &
 }
 
 ##----------------------------------------------------------------
-## simulation example using the caret R-package similar to above
 ##
 ## illustrates effectiveness of blocked VIMP
 ##

@@ -1,5 +1,5 @@
 impute.rfsrc <- function(formula, data,
-                         ntree = 500, nodesize = 1, nsplit = 10,
+                         ntree = 100, nodesize = 1, nsplit = 10,
                          nimpute = 2, fast = FALSE, blocks,                         
                          mf.q, max.iter = 10, eps = 0.01,
                          ytry = NULL, always.use = NULL, verbose = TRUE, 
@@ -163,19 +163,20 @@ impute.rfsrc <- function(formula, data,
       mf.q <- min(p0 - 1, mf.q) / p0
     }
     ## convert mf.q to K-fold selection
-    K <- max(1 / mf.q, 2)
+    K <- max(1, round(max(1 / mf.q, 2)))
     ## quick and *rough* impute
-    ## uncomment the following line for a better initial estimate
     dots.rough <- dots
-    dots.rough$mtry <- dots.rough$splitrule <- NULL
-    ## TBD TBD splitrule not permissible with unsupervised forests?
+    dots.rough$mtry <- NULL
+    dots.rough$splitrule <- "random"
+    dots.rough$formula <- as.formula(zZ999Zz ~.)
     data <- do.call("generic.impute.rfsrc",
-                      c(list(data = data,
-                             ntree = 250,
-                             nodesize = nodesize,
-                             nsplit = nsplit,
-                             nimpute = 3,
-                             fast = fast), dots.rough))$data
+                    c(list(data = data.frame(zZ999Zz = rnorm(nrow(data)), data),
+                           ntree = 10,
+                           nodesize = nodesize,
+                           nsplit = nsplit,
+                           nimpute = 1,
+                           fast = fast), dots.rough))$data
+    data$zZ999Zz <- NULL
     ###############################################################
     ## main loop: data blocks/groups of variables
     ## we use lapply to avoid for-looping
@@ -183,14 +184,31 @@ impute.rfsrc <- function(formula, data,
     ## set flags
     diff.err <- Inf
     check <- TRUE
+    ## determine the grouping of the multivariate response
+    var.grp <- cv.folds(p0, K)
+    K <- length(var.grp)
+    ## verbose
+    if (verbose) {
+      if (K == p0) {
+        cat("missForest parameters:", paste0("(#iter, #vars)=(", max.iter, ",", p0, ")"), "\n")
+      }
+      else {
+        cat("multivariate missForest parameters:",
+            paste0("(#iter, #vars, #blks)=(", max.iter, ",", p0, ",", K, ")"), "\n")
+      }
+    }
     nullWhile <- lapply(1:max.iter, function(m) {
       ## break
       if (!check) {
         return(NULL)
       }
+      ## determine the grouping of the multivariate response
+      var.grp <- cv.folds(p0, K)
       ## verbose
-      if (verbose && max.iter > 1) {
-        cat("\t iteration", m, "\n")
+      if (verbose) {
+        if (max.iter > 1) {
+          cat("\t", paste0("iteration:", m, "\n"))
+        }
       }
       ## save the current state of data for assessing convergence
       data.old <- data
@@ -198,12 +216,14 @@ impute.rfsrc <- function(formula, data,
       ## loop over data blocks
       ##--------------------------------------------------------
       nullBlocks <- lapply(blocks, function(blk) {
-        ## determine the grouping of the multivariate response
-        var.grp <- cv.folds(p0, K)
         ##--------------------------------------------------------
         ## loop over the multivariate response groupings
         ##--------------------------------------------------------
         nullObj <- lapply(var.grp, function(grp) {
+          ## missforest is slow, so provide verbose output for each regression/iteration
+          if (verbose) {
+            cat(".")
+          }
           ## multivariate formula
           ynames <- unique(c(var.names[grp], all.var.names[always.use]))
           dots$formula <- as.formula(paste("Multivar(", paste(ynames, collapse = ","), paste(") ~ ."), sep = ""))
@@ -259,6 +279,7 @@ impute.rfsrc <- function(formula, data,
           }
       }), na.rm = TRUE)
       if (verbose) {
+        cat("\n")
         err <- paste("err = " , format(diff.new.err, digits = 3), sep = "")
         drp <- paste("drop = ", format(diff.err - diff.new.err, digits = 3), sep = "")
         cat("         >> ", err, ", ", drp, "\n")

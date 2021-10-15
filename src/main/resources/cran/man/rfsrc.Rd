@@ -19,37 +19,42 @@
 \description{
 
   Fast OpenMP parallel computing of random forests (Breiman 2001) for
-  regression, classification, survival analysis (Ishwaran 2008),
-  competing risks (Ishwaran 2012), multivariate (Segal and Xiao 2011),
-  unsupervised (Mantero and Ishwaran 2020), quantile regression
-  (Meinhausen 2006, Zhang et al. 2019), and class imbalanced
-  q-classification (O'Brien and Ishwaran 2019).  Different splitting
-  rules invoked under deterministic or random splitting (Geurts et
-  al. 2006, Ishwaran 2015) are available for all families.  Variable
-  importance (VIMP), and holdout VIMP, as well as confidence regions
-  (Ishwaran and Lu 2019) can be calculated for single and grouped
-  variables.  Fast interface for missing data imputation using a variety
-  of different random forest methods (Tang and Ishwaran 2017).
+  regression, classification, survival analysis (Ishwaran et al. 2008),
+  competing risks (Ishwaran et al. 2012), multivariate (Segal and Xiao
+  2011), unsupervised (Mantero and Ishwaran 2020), quantile regression
+  (Meinhausen 2006, Zhang et al. 2019, Greenwald-Khanna 2001), and class
+  imbalanced q-classification (O'Brien and Ishwaran 2019).  Different
+  splitting rules invoked under deterministic or random splitting
+  (Geurts et al. 2006, Ishwaran 2015) are available for all families.
+  Variable importance (VIMP), and holdout VIMP, as well as confidence
+  regions (Ishwaran and Lu 2019) can be calculated for single and
+  grouped variables.  Minimal depth variable selection (Ishwaran et
+  al. 2010, 2011).  Fast interface for missing data imputation using a
+  variety of different random forest methods (Tang and Ishwaran 2017).
 
-  Key items users should be aware of:
+  New items users should be aware of:
   \enumerate{
+
+    \item Mahalanobis splitting for multivariate regression with
+    correlated y-outcomes  (\code{splitrule="mahalanobis"}). 
 
     \item Visualize trees on your Safari or Google Chrome browser (works
     for all families).  See \command{\link{get.tree}}.
-    \item sidClustering (see \command{\link{sidClustering}}) for
-    unsupervised data analysis.
-    \item Fast hold out VIMP (see \command{\link{holdout.vimp}}).
-    Can be conservative but has good false discovery properties
-    unlike Breiman-Cutler VIMP (see \command{\link{vimp}}).
-    \item VIMP confidence intervals using subsampling (see
-    \command{\link{subsample}}).
-    \item q-classifier for class imbalanced data, including G-mean
-    VIMP which is superior to Breiman-Cutler
-    (see \command{\link{imbalanced}}).
-    \item Fast imputation using on the fly imputation,
-    missForest and multivariate missForest (see
-    \command{\link{impute}}).
-    \item Fast random forests using subsampling (see \command{\link{rfsrc.fast}}).
+
+    %\item Fast hold out VIMP (see \command{\link{holdout.vimp}}).
+    %Can be conservative but has good false discovery properties
+    %unlike Breiman-Cutler VIMP (see \command{\link{vimp}}).
+    %\item VIMP confidence intervals using subsampling (see
+    %\command{\link{subsample}}).
+    %\item q-classifier for class imbalanced data, including G-mean
+    %VIMP which is superior to Breiman-Cutler
+    %(see \command{\link{imbalanced}}).
+    %\item Fast imputation using on the fly imputation,
+    %missForest and multivariate missForest (see
+    %\command{\link{impute}}).
+    %\item Fast random forests using subsampling (see \command{\link{rfsrc.fast}}).
+    %\item sidClustering (see \command{\link{sidClustering}}) for
+    %unsupervised data analysis.
 
   }
   
@@ -71,7 +76,7 @@ rfsrc(formula, data, ntree = 500,
   samptype = c("swor", "swr"), samp = NULL, membership = FALSE,
   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
   na.action = c("na.omit", "na.impute"), nimpute = 1,
-  ntime = 250, cause,
+  ntime = 150, cause,
   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
   xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt  = NULL,
   forest = TRUE,
@@ -101,8 +106,8 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     sqrt(\code{p}).  Values are always rounded up.}
   
   \item{ytry}{For unsupervised forests, sets the number of randomly
-    selected pseudo-responses (see below for more details). 
-    The default is \code{ytry}=1, which selects one pseudo-response.}
+    selected pseudo-outcomes (see below for more details). 
+    The default is \code{ytry}=1, which selects one pseudo-outcome.}
 
   \item{nodesize}{Minumum size of terminal node.
     The defaults are: survival (15), competing risk
@@ -228,7 +233,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   
   \item{yvar.wt}{NOT YET IMPLEMENTED: Vector of non-negative weights
     (does not have to sum to 1) representing the probability of
-    selecting a response as a candidate for the split statistic in
+    selecting a outcome as a candidate for the split statistic in
     unsupervised settings.  Default is to use uniform weights.}
 
   \item{split.wt}{Vector of non-negative weights used for multiplying
@@ -280,15 +285,15 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
     There is no need to set the type of forest as the package
     automagically determines the underlying random forest requested from
-    the type of response and the formula supplied.  There are several
-    possible scenarios:
+    the type of outcome and the formula supplied.  There are
+    several possible scenarios:
     
     \enumerate{
-      \item Regression forests for continuous responses.
-      \item Classification forests for factor responses.
-      \item Multivariate forests for continuous and/or factor responses
-            and for mixed (both type) of responses.	    
-      \item Unsupervised forests when there is no response.
+      \item Regression forests for continuous outcomes.
+      \item Classification forests for factor outcomes.
+      \item Multivariate forests for continuous and/or factor outcomes
+            and for mixed (both type) of outcomes.	    
+      \item Unsupervised forests when there is no outcome.
       \item Survival forests for right-censored survival.
       \item Competing risk survival forests for competing risk.
     }
@@ -300,7 +305,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       \item Splitting rules are specified by the option \code{splitrule}.
       
       \item For all families, pure random splitting can be invoked by setting
-            \code{splitrule}="random".
+            \code{splitrule="random"}.
 
       \item For all families, computational speed can be increased using
             randomized splitting invoked by the option \code{nsplit}.
@@ -314,10 +319,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       \item Regression analysis:
       \enumerate{
 
-        \item \code{mse}: default split rule implements weighted
+        \item \code{splitrule="mse"}: default split rule implements weighted
 	mean-squared error splitting (Breiman et al. 1984, Chapter 8.4).
 	
-        \item \code{quantile.regr}: quantile regression splitting via
+        \item \code{splitrule="quantile.regr"}: quantile regression splitting via
 	the "check-loss" function.  Requires specifying the target
 	quantiles.  See \code{quantreg.rfsrc} for further details.
 
@@ -329,15 +334,15 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
        \item Classification analysis:
       \enumerate{
 
-	\item \code{gini}: default splitrule implements Gini index
-        splitting (Breiman et al. 1984, Chapter 4.3).
+	\item \code{splitrule="gini"}: default splitrule implements Gini
+        index splitting (Breiman et al. 1984, Chapter 4.3).
 	
-        \item \code{auc}: AUC (area under the ROC curve) splitting
+        \item \code{splitrule="auc"}: AUC (area under the ROC curve) splitting
 	for both two-class and multiclass setttings.  AUC splitting is
 	appropriate for imbalanced data.  See \code{imbalanced} for
 	more information.
 
-	\item \code{entropy}: entropy splitting (Breiman et
+	\item \code{splitrule="entropy"}: entropy splitting (Breiman et
 	al. 1984, Chapter 2.5, 4.3).
 	
       }
@@ -345,16 +350,16 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       \item Survival analysis:
       \enumerate{
 	
-        \item \code{logrank}: default splitrule implements
+        \item \code{splitrule="logrank"}: default splitrule implements
 	      log-rank splitting (Segal, 1988; Leblanc and Crowley, 1993).
 
-	\item \code{bs.gradient}: gradient-based (global non-quantile)
+	\item \code{splitrule="bs.gradient"}: gradient-based (global non-quantile)
 	brier score splitting.  The time horizon used for the Brier
 	score is set to the 90th percentile of the observed event times.
 	This can be over-ridden by the option \code{prob}, which must be
 	a value between 0 and 1 (set to .90 by default).
 	      
-        \item \code{logrankscore}:  log-rank score splitting (Hothorn and
+        \item \code{splitrule="logrankscore"}:  log-rank score splitting (Hothorn and
         Lausen, 2003).
 	
 	
@@ -363,34 +368,40 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       \item Competing risk analysis (for details see Ishwaran et al., 2014):
       \enumerate{
         
-        \item \code{logrankCR}: default splitrule implements a modified
-	      weighted log-rank splitting rule modeled after Gray's test
-	      (Gray, 1988).  Use this to find *all* variables 
-	      that are informative and when the goal is long term
-	      prediction. 
+        \item \code{splitrule="logrankCR"}: default splitrule implements a modified
+	weighted log-rank splitting rule modeled after Gray's test
+	(Gray, 1988).  Use this to find *all* variables 
+	that are informative and when the goal is long term
+	prediction. 
 	      
         
-        \item \code{logrank}: weighted log-rank splitting where each
-	      event type is treated as the event of interest and all
-	      other events are treated as censored.  The split rule is
-	      the weighted value of each of log-rank statistics,
-	      standardized by the variance.  Use this to find variables
-	      that affect a *specific* cause of interest and when
-	      the goal is a targeted analysis of a specific cause.
-	      However in order for this to be effective, remember to set
-	      the \code{cause} option to the targeted cause of interest.
-	      See examples below.
+        \item \code{splitrule="logrank"}: weighted log-rank splitting where each
+	event type is treated as the event of interest and all
+	other events are treated as censored.  The split rule is
+	the weighted value of each of log-rank statistics,
+	standardized by the variance.  Use this to find variables
+	that affect a *specific* cause of interest and when
+	the goal is a targeted analysis of a specific cause.
+	However in order for this to be effective, remember to set
+	the \code{cause} option to the targeted cause of interest.
+	See examples below.
 	      
-	    }
-      
-      \item Multivariate analysis: When one or both regression and
-	    classification responses are detected, a multivariate
-	    normalized composite split rule of mean-squared error and Gini
-	    index splitting is invoked.  See Tang and Ishwaran (2017)
-	    for details on this splitting rule.  This splitting rule is
-	    different than Segal and Xiao (2011) who use Mahalanobis
-	    distance splitting.	    
-      
+      }
+	    
+      \item Multivariate analysis:
+      \enumerate{
+
+         \item When one or both regression and classification outcomes
+	 are detected, a multivariate normalized composite split rule of
+	 mean-squared error and Gini index splitting is invoked.  See
+	 Tang and Ishwaran (2017).
+
+	 \item \code{splitrule="mahalanobis"}: Mahalanobis splitting
+	 that adjusts for correlation can be specified in the special
+	 case of multivariate regression (all outcomes must be real).
+
+      }
+       
       \item Unsupervised analysis: In settings where there is no
             outcome, unsupervised splitting is invoked.  In this case,
             the mixed outcome splitting rule (above) is applied.  Also
@@ -452,7 +463,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       may often be too low. See Ishwaran (2015).
 
       Finally, for completely randomized (pure random) splitting use
-      \code{splitrule}="random".  In pure splitting, nodes are split by
+      \code{splitrule="random"}.  In pure splitting, nodes are split by
       randomly selecting a variable and randomly selecting its split
       point (Cutler and Zhao, 2001).
 
@@ -466,8 +477,8 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
       \item \emph{Unique time points}
 
-      Setting \code{ntime} to a reasonably small value such as 100 or
-      250 (the default) constrains survival ensemble calculations to a
+      Setting \code{ntime} to a reasonably small value such as
+      150 (the default) constrains survival ensemble calculations to a
       restricted grid of time points and significantly improves
       computational times.
       
@@ -516,7 +527,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     assignment.  Thus when an OOB case is dropped down a tree, the case
     goes left or right randomly whenever a split is encountered
     for the target variable.  If "anti" is specified, the case is
-    assigned to the opposite split.  By default \code{importance}="FALSE"
+    assigned to the opposite split.  By default \code{importance="FALSE"}
     and VIMP is not requested.
 
     VIMP depends upon \code{block.size}, an integer value between 1 and
@@ -527,7 +538,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     averaged over the forest.  This yields Breiman-Cutler VIMP (Breiman
     2001).
 
-    When \code{block.size}="ntree", VIMP is calculated across the forest
+    When \code{block.size="ntree"}, VIMP is calculated across the forest
     by comparing the perturbed OOB forest ensemble (using all trees) to the
     unperturbed OOB forest ensemble (using all trees).  Unlike
     Breiman-Cutler VIMP, ensemble VIMP does not measure the tree average
@@ -565,11 +576,14 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     
     rfsrc(cbind(y1, y2, ..., yd) ~ . , my.data, ...)
 
-    A multivariate normalized composite splitting rule is used to split
-    nodes.  The nature of the outcomes will inform the code as to the
-    type of multivariate forest to be grown; i.e. whether it is real-valued,
-    categorical, or a combination of both (mixed). Note that performance
-    measures (when requested) are returned for all outcomes.
+    By default, a multivariate normalized composite splitting rule is
+    used to split nodes (for multivariate regression, users have
+    the option to use Mahalanobis splitting).
+
+    The nature of the outcomes informs the code as to what type of
+    multivariate forest is grown; i.e. whether it is real-valued,
+    categorical, or a combination of both (mixed). Performance measures
+    (when requested) are returned for all outcomes.
     
     \item \emph{Unsupervised Forests and sidClustering}
 
@@ -588,7 +602,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     y-outcomes and x-variables for splitting.  Specifically, \code{mtry}
     x-variables are randomly selected for splitting the node.  Then for
     each \code{mtry} feature, \code{ytry} variables are selected
-    from the remaining features to act as the target pseduo-responses.
+    from the remaining features to act as the target pseduo-outcomes.
     Splitting uses the multivariate normalized composite splitting rule.
 
     The default value of \code{ytry} is 1 but can be increased.  As
@@ -606,7 +620,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     
     \enumerate{
       \item Survival settings require a time and censoring variable which
-      should be identifed in the formula as the response using the standard
+      should be identifed in the formula as the outcome using the standard
       \code{Surv} formula specification.  A typical formula call looks like:
       
       Surv(my.time, my.status) ~ .
@@ -727,11 +741,11 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \item{imputed.indv}{Vector of indices for cases with missing
     values.}
   \item{imputed.data}{Data frame of the imputed data. The first
-	  column(s) are reserved for the y-responses, after which the
+	  column(s) are reserved for the y-outcomes, after which the
 	  x-variables are listed.}
-  \item{split.depth}{Matrix [i][j] or array [i][j][k] recording the
-    minimal depth for variable [j] for case [i], either averaged over
-    the forest, or by tree [k].}
+  \item{split.depth}{Matrix (i,j) or array (i,j,k) recording the
+    minimal depth for variable j for case i, either averaged over
+    the forest, or by tree k.}
   \item{node.stats}{Split statistics returned when
     \code{statistics=TRUE} which can be parsed using \command{stat.split}.}
 
@@ -757,10 +771,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \item{++++++++}{for multivariate settings, additionally ++++++++} \cr
   
   \item{regrOutput}{List containing performance values for
-	  multivariate regression responses (applies only in
+	  multivariate regression outcomes (applies only in
 	  multivariate settings).}
 	\item{clasOutput}{List containing performance values for
-	  multivariate categorical (factor) responses (applies only in
+	  multivariate categorical (factor) outcomes (applies only in
 	  multivariate settings).}\cr
   
   \item{++++++++}{for survival settings, additionally ++++++++} \cr
@@ -789,7 +803,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \code{predicted.oob}) are as follows:
     
     \enumerate{
-      \item For regression, a vector of predicted y-responses.
+      \item For regression, a vector of predicted y-outcomes.
       
       \item For classification, a matrix with columns containing the
       estimated class probability for each class.  Performance values
@@ -852,6 +866,9 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   Geurts, P., Ernst, D. and Wehenkel, L., (2006). Extremely randomized
   trees. \emph{Machine learning}, 63(1):3-42.
 
+  Greenwald M. and Khanna S. (2001).  Space-efficient online computation of
+  quantile summaries. \emph{Proceedings of ACM SIGMOD}, 30(2):58-66.
+
   Harrell et al. F.E. (1982).  Evaluating the yield of medical tests,
   \emph{J. Amer. Med. Assoc.}, 247:2543-2546.
   
@@ -903,8 +920,8 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   Loh W.-Y and Shih Y.-S (1997).  Split selection methods for
   classification trees, \emph{Statist. Sinica}, 7:815-840.
 
-  Mantero A. and Ishwaran H. (2020).  Unsupervised random forests.
-  To appear in \emph{Statistical Analysis and Data Mining}.
+  Mantero A. and Ishwaran H. (2021).  Unsupervised random forests.
+  \emph{Statistical Analysis and Data Mining}, 14(2):144-167.
 
   Meinshausen N. (2006) Quantile regression forests, \emph{Journal of
   Machine Learning Research}, 7:983-999.
@@ -954,6 +971,8 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
   \command{\link{quantreg.rfsrc}},
 
+  \command{\link{rfsrc}},
+  \command{\link{rfsrc.cart}},
   \command{\link{rfsrc.fast}},
   
   \command{\link{sidClustering.rfsrc}},
@@ -1302,21 +1321,28 @@ print(split(mtcars, mtcars.sid$cl[, 10]))
 
 
 ## ------------------------------------------------------------
-## multivariate regression analysis
+## multivariate (bivariate) regression using Mahalanobis splitting
 ## ------------------------------------------------------------
 
-mtcars.mreg <- rfsrc(Multivar(mpg, cyl) ~., data = mtcars,
-           block.size=1, importance = TRUE)
+if (library("mlbench", logical.return = TRUE)) {
 
-## extract error rates, vimp, and OOB predicted values for all targets
-err <- get.mv.error(mtcars.mreg)
-vmp <- get.mv.vimp(mtcars.mreg)
-pred <- get.mv.predicted(mtcars.mreg)
+  ## load boston housing data, specify the bivariate regression
+  data(BostonHousing)
+  f <- formula("Multivar(lstat, nox) ~.")
+  
+  ## Mahalanobis splitting  
+  bh.mreg <- rfsrc(f, BostonHousing, importance = TRUE, splitrule = "mahal")
+  
 
-## standardized error and vimp
-err.std <- get.mv.error(mtcars.mreg, standardize = TRUE)
-vmp.std <- get.mv.vimp(mtcars.mreg, standardize = TRUE)
+  ## performance error and vimp
+  vmp <- get.mv.vimp(bh.mreg)
+  pred <- get.mv.predicted(bh.mreg)
 
+  ## standardized error and vimp
+  err.std <- get.mv.error(bh.mreg, standardize = TRUE)
+  vmp.std <- get.mv.vimp(bh.mreg, standardize = TRUE)
+
+}
 
 ## ------------------------------------------------------------
 ## multivariate mixed forests (nutrigenomic study)

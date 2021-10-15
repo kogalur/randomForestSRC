@@ -178,6 +178,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP nodeDepth,
                SEXP crWeightSize,
                SEXP crWeight,
+               SEXP chunkify,
                SEXP ntree,
                SEXP observationSize,
                SEXP yInfo,
@@ -246,6 +247,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_nodeDepth            = INTEGER(nodeDepth)[0];
   RF_crWeightSize         = INTEGER(crWeightSize)[0];
   RF_crWeight             = REAL(crWeight); RF_crWeight--;
+  RF_forestChunkSize      = INTEGER(chunkify)[0];
   RF_ntree                = INTEGER(ntree)[0];
   RF_observationSize      = INTEGER(observationSize)[0];
   RF_ySize                = INTEGER(VECTOR_ELT(yInfo, 0))[0];
@@ -415,6 +417,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP seedPtr,
                   SEXP optLow,
                   SEXP optHigh,
+                  SEXP chunkify,
                   SEXP ntree,
                   SEXP observationSize,
                   SEXP yInfo,
@@ -477,6 +480,7 @@ clock_t cpuTimeStart = clock();
   int seedValue           = INTEGER(seedPtr)[0];
   RF_opt                  = INTEGER(optLow)[0];
   RF_optHigh              = INTEGER(optHigh)[0];
+  RF_forestChunkSize      = INTEGER(chunkify)[0];
   RF_ntree                = INTEGER(ntree)[0];
   RF_observationSize      = INTEGER(observationSize)[0];
   RF_ySize                = INTEGER(VECTOR_ELT(yInfo, 0))[0];

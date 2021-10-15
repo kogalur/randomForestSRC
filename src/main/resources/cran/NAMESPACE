@@ -12,7 +12,7 @@ importFrom("graphics", "abline", "axis", "box", "boxplot", "bxp",
 importFrom("stats", "as.dist", "as.formula", "cutree", "dlnorm", "formula",
            "hclust", "lowess", "median", "model.matrix", "na.omit",
            "optim", "pgamma", "plnorm", "pnorm", "predict", 
-           "quantile", "qnorm", "runif", "sd", "supsmu", "var", "wilcox.test")
+           "quantile", "qnorm", "runif", "sd", "supsmu", "var", "wilcox.test", "rnorm")
 importFrom("utils", "installed.packages", "txtProgressBar", "setTxtProgressBar",
            "write.table", "tail")
 importFrom("grDevices", "gray")
@@ -28,6 +28,7 @@ export(extract.bootsample,
        get.cindex,
        get.confusion,
        get.imbalanced.performance,
+       get.imbalanced.optimize,
        get.misclass.error,
        get.mv.cserror,
        get.mv.csvimp,

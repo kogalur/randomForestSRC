@@ -80,6 +80,7 @@ sidClustering.rfsrc <- function(data,
     sv.f <- as.formula("classes ~ .")
     dots <- list(...)
     dots$importance <- TRUE
+    dots$splitrule <- NULL ##needed to allow Mahalanobis splitting for sidClustering
     rfnames <- names(formals(rfsrc))
     rfnames <- rfnames[rfnames != "distance" & rfnames != "proximity"]
     ## remove any column with less than two unique values

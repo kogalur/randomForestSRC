@@ -531,210 +531,220 @@ get.grow.nodesize <- function(fmly, nodesize) {
   nodesize <- round(nodesize)
 }
 get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.info) {
-    ## CAUTION:  HARD CODED ON NATIVE SIDE
-    splitrule.names <- c("logrank",              ##  1
-                         "logrankscore",         ##  2
-                         "logrankCR",            ##  3
-                         "random",               ##  4
-                         "mse",                  ##  5
-                         "gini",                 ##  6
-                         "unsupv",               ##  7
-                         "mv.mse",               ##  8 --  reg/class/mix
-                         "mv.gini",              ##  9 --  reg/class/mix
-                         "mv.mix",               ## 10 --  reg/class/mix
-                         "custom",               ## 11
-                         "quantile.regr",        ## 12
-                         "la.quantile.regr",     ## 13
-                         "bs.gradient",          ## 14
-                         "auc",                  ## 15
-                         "entropy",              ## 16
-                         "sg.regr",              ## 17
-                         "sg.class",             ## 18
-                         "sg.surv",              ## 19
-                         "tdc.gradient")         ## 20
-    fmly <- formula.detail$family
-    ## Preliminary check for consistency.
-    if (hdim > 0) {
-        if(!is.null(nsplit)) {
-            nsplit <- round(nsplit)    
-            if (nsplit < 0) {
-                stop("Invalid nsplit value.  Set nsplit >= 0.")
-            }
-        }
-        else {
-            nsplit = 1
-        }
+  ## CAUTION:  HARD CODED ON NATIVE SIDE
+  splitrule.names <- c("logrank",              ##  1
+                       "logrankscore",         ##  2
+                       "logrankCR",            ##  3
+                       "random",               ##  4
+                       "mse",                  ##  5
+                       "gini",                 ##  6
+                       "unsupv",               ##  7
+                       "mv.mse",               ##  8 --  reg/class/mix
+                       "mv.gini",              ##  9 --  reg/class/mix
+                       "mv.mix",               ## 10 --  reg/class/mix
+                       "custom",               ## 11
+                       "quantile.regr",        ## 12
+                       "la.quantile.regr",     ## 13
+                       "bs.gradient",          ## 14
+                       "auc",                  ## 15
+                       "entropy",              ## 16
+                       "sg.regr",              ## 17
+                       "sg.class",             ## 18
+                       "sg.surv",              ## 19
+                       "tdc.gradient",         ## 20
+                       "mahalanobis")          ## 21
+  ## set the family
+  fmly <- formula.detail$family
+  ## Preliminary check for consistency.
+  if (hdim > 0) {
+    if(!is.null(nsplit)) {
+      nsplit <- round(nsplit)    
+      if (nsplit < 0) {
+        stop("Invalid nsplit value: set nsplit >= 0")
+      }
     }
     else {
-        if(!is.null(nsplit)) {
-            nsplit <- round(nsplit)    
-            if (nsplit < 0) {
-                stop("Invalid nsplit value.  Set nsplit >= 0.")
-            }
+      nsplit = 1
+    }
+  }
+  else {
+    if(!is.null(nsplit)) {
+      nsplit <- round(nsplit)    
+      if (nsplit < 0) {
+        stop("Invalid nsplit value:  set nsplit >= 0")
+      }
+    }
+    else {
+      nsplit = 0
+    }
+  }
+  cust.idx <- NULL
+  splitpass <- FALSE
+  if (!is.null(splitrule)) {
+    if(grepl("custom", splitrule)) {
+      splitrule.idx <- which(splitrule.names == "custom")
+      cust.idx <- as.integer(sub("custom", "", splitrule))
+      if (is.na(cust.idx)) cust.idx <- 1
+      splitpass <- TRUE
+    }
+    else if (splitrule == "random") {
+      splitrule.idx <- which(splitrule.names == "random")
+      ## Override the nsplit value in the case of pure random
+      ## splitting.  It is set to the defalut value of one (1). In the native code,
+      ## values greater than one are ignored in the case of pure random splitting!
+      nsplit <- 1
+      splitpass <- TRUE
+    }
+  }
+  if (!splitpass) {
+    ## if splitrule is present, confirm it is correctly set
+    if (!is.null(splitrule)) {
+      splitrule <- match.arg(splitrule, splitrule.names)
+    }
+    ## survival
+    if (grepl("surv", fmly)) {
+      if (is.null(splitrule)) {
+        ## No split rule specified, use default.
+        if (event.info$r.dim == 2) {
+          ## Survival or Competing Risk:
+          if (length(event.info$event.type) ==  1) {
+            splitrule.idx <- which(splitrule.names == "logrank")
+          }
+          else {
+            splitrule.idx <- which(splitrule.names == "logrankCR")
+          }
+        }
+        else if (event.info$r.dim == 3) {
+          ## Time Dependent Covariates:                    
+          splitrule.idx <- which(splitrule.names == "tdc.gradient")
         }
         else {
-            nsplit = 0
+          stop("Invalid r.dim encountered in split rule:  ", event.info$r.dim)
         }
+        splitrule <- splitrule.names[splitrule.idx]
+      }
+      else {
+        ## User split rule specified.
+        splitrule.idx <- which(splitrule.names == splitrule)
+        if (length(splitrule.idx) != 1) {
+          stop("Invalid split rule specified for survival:  ", splitrule)
+        }
+        if (event.info$r.dim == 2) {
+          if ((length(event.info$event.type) ==  1) & (splitrule.idx == which(splitrule.names == "logrankCR"))) {
+            stop("Cannot specify logrankCR splitting for right-censored data")
+          }
+          if ((length(event.info$event.type) >   1) & (splitrule.idx == which(splitrule.names == "logrank"))) {
+            ## Override the splitrule to access the CR split rule.
+            splitrule.idx <- which(splitrule.names == "logrankCR")
+          }
+        }
+        else if (event.info$r.dim == 3) {
+          if (splitrule.idx != which(splitrule.names == "tdc.gradient")) {
+            stop("Must specify tdc.gradient for time dependent covariates")                        
+          }
+        }
+        else {
+          stop("Invalid r.dim encountered in split rule:  ", event.info$r.dim)
+        }
+      }
     }
-    cust.idx <- NULL
-    splitpass <- FALSE
-    if (!is.null(splitrule)) {
-        if(grepl("custom", splitrule)) {
-            splitrule.idx <- which(splitrule.names == "custom")
-            cust.idx <- as.integer(sub("custom", "", splitrule))
-            if (is.na(cust.idx)) cust.idx <- 1
-            splitpass <- TRUE
+    ## class
+    if (fmly == "class") {
+      if (is.null(splitrule)) {
+        ## No split rule specified, use default.
+        splitrule.idx <- which(splitrule.names == "gini")
+        splitrule <- splitrule.names[splitrule.idx]
+      }
+      else {
+        ## User specified split rule.
+        if ((splitrule != "auc") &
+            (splitrule != "entropy") &
+            (splitrule != "gini") &
+            (splitrule != "sg.class")) {
+          stop("Invalid split rule specified for classification:  ", splitrule)
         }
-        else if (splitrule == "random") {
-            splitrule.idx <- which(splitrule.names == "random")
-            ## Override the nsplit value in the case of pure random
-            ## splitting.  It is set to the defalut value of one (1). In the native code,
-            ## values greater than one are ignored in the case of pure random splitting!
-            nsplit <- 1
-            splitpass <- TRUE
-        }
+        splitrule.idx <- which(splitrule.names == splitrule)
+      }
     }
-    if (!splitpass) {
-        if (grepl("surv", fmly)) {
-            if (is.null(splitrule)) {
-                ## No split rule specified, use default.
-                if (event.info$r.dim == 2) {
-                    ## Survival or Competing Risk:
-                    if (length(event.info$event.type) ==  1) {
-                        splitrule.idx <- which(splitrule.names == "logrank")
-                    }
-                    else {
-                        splitrule.idx <- which(splitrule.names == "logrankCR")
-                    }
-                }
-                else if (event.info$r.dim == 3) {
-                    ## Time Dependent Covariates:                    
-                    splitrule.idx <- which(splitrule.names == "tdc.gradient")
-                }
-                else {
-                    stop("Invalid r.dim encountered in split rule:  ", event.info$r.dim)
-                }
-                splitrule <- splitrule.names[splitrule.idx]
-            }
-            else {
-                ## User split rule specified.
-                splitrule.idx <- which(splitrule.names == splitrule)
-                if (length(splitrule.idx) != 1) {
-                    stop("Invalid split rule specified:  ", splitrule)
-                }
-                if (event.info$r.dim == 2) {
-                    if ((length(event.info$event.type) ==  1) & (splitrule.idx == which(splitrule.names == "logrankCR"))) {
-                        stop("Cannot specify logrankCR splitting for right-censored data")
-                    }
-                    if ((length(event.info$event.type) >   1) & (splitrule.idx == which(splitrule.names == "logrank"))) {
-                        ## Override the splitrule to access the CR split rule.
-                        splitrule.idx <- which(splitrule.names == "logrankCR")
-                    }
-                }
-                else if (event.info$r.dim == 3) {
-                    if (splitrule.idx != which(splitrule.names == "tdc.gradient")) {
-                        stop("Must specify tdc.gradient for time dependent covariates")                        
-                    }
-                }
-                else {
-                    stop("Invalid r.dim encountered in split rule:  ", event.info$r.dim)
-                }
-            }
+    ## regression
+    if (fmly == "regr") {
+      if (is.null(splitrule)) {
+        ## No split rule specified, use default.
+        splitrule.idx <- which(splitrule.names == "mse")
+        splitrule <- splitrule.names[splitrule.idx]
+      }
+      else {
+        ## User specified split rule.
+        if ((splitrule != "mse") &
+            (splitrule != "sg.regr") &
+            (splitrule != "la.quantile.regr") &
+            (splitrule != "quantile.regr")) {
+          stop("Invalid split rule specified for regression:  ", splitrule)
         }
-        if (fmly == "class") {
-            if (is.null(splitrule)) {
-                ## No split rule specified, use default.
-                splitrule.idx <- which(splitrule.names == "gini")
-                splitrule <- splitrule.names[splitrule.idx]
-            }
-            else {
-                ## User specified split rule.
-                if ((splitrule != "rps") &
-                    (splitrule != "auc") &
-                    (splitrule != "entropy") &
-                    (splitrule != "gini") &
-                    (splitrule != "sg.class")) {
-                    stop("Invalid split rule specified:  ", splitrule)
-                }
-                splitrule.idx <- which(splitrule.names == splitrule)
-            }
-        }
-        if (fmly == "regr") {
-            if (is.null(splitrule)) {
-                ## No split rule specified, use default.
-                splitrule.idx <- which(splitrule.names == "mse")
-                splitrule <- splitrule.names[splitrule.idx]
-            }
-            else {
-                ## User specified split rule.
-                if ((splitrule != "mse") &
-                    (splitrule != "sg.regr") &
-                    (splitrule != "la.quantile.regr") &
-                    (splitrule != "quantile.regr")) {
-                    stop("Invalid split rule specified:  ", splitrule)
-                }
-                splitrule.idx <- which(splitrule.names == splitrule)
-            }
-        }
-        if (fmly == "regr+") {
-            if (is.null(splitrule)) {
-                ## No split rule specified, use default.
-                splitrule.idx <- which(splitrule.names == "mv.mse")
-                splitrule <- splitrule.names[splitrule.idx]
-            }
-            else {
-                ## User specified split rule.
-                if ((splitrule != "mv.mse")) {
-                    stop("Invalid split rule specified:  ", splitrule)
-                }
-                splitrule.idx <- which(splitrule.names == splitrule)
-            }
-        }
-        if (fmly == "class+") {
-            if (is.null(splitrule)) {
-                ## No split rule specified, use default.
-                splitrule.idx <- which(splitrule.names == "mv.gini")
-                splitrule <- splitrule.names[splitrule.idx]
-            }
-            else {
-                ## User specified split rule.
-                if ((splitrule != "mv.gini")) {
-                    stop("Invalid split rule specified:  ", splitrule)
-                }
-                splitrule.idx <- which(splitrule.names == splitrule)
-            }
-        }
-        if (fmly == "mix+") {
-            if (is.null(splitrule)) {
-                ## No split rule specified, use default.
-                splitrule.idx <- which(splitrule.names == "mv.mse")
-                splitrule <- "mv.mix"
-            }
-            else {
-                ## User specified split rule.
-                if ((splitrule != "mv.mix")) {
-                    stop("Invalid split rule specified:  ", splitrule)
-                }
-                splitrule.idx <- which(splitrule.names == splitrule)
-            }
-        }
-        if (fmly == "unsupv") {
-            if (is.null(splitrule)) {
-                ## No split rule specified, use default.
-                splitrule.idx <- which(splitrule.names == "unsupv")
-                splitrule <- splitrule.names[splitrule.idx]
-            }
-            else {
-                ## User specified split rule.
-                if ((splitrule != "unsupv")) {
-                    stop("Invalid split rule specified:  ", splitrule)
-                }
-                splitrule.idx <- which(splitrule.names == splitrule)
-            }
-        }
+        splitrule.idx <- which(splitrule.names == splitrule)
+      }
     }
-    splitinfo <- list(name = splitrule, index = splitrule.idx, cust = cust.idx, nsplit = nsplit)
-    return (splitinfo)
+    ## multivariate
+    if (fmly == "regr+") {
+      if (is.null(splitrule)) {
+        ## No split rule specified, use default
+        splitrule.idx <- which(splitrule.names == "mv.mse")
+        splitrule <- splitrule.names[splitrule.idx]
+      }
+      else {
+        ## User specified split rule
+        if ((splitrule != "mv.mse") & (splitrule != "mahalanobis")) {
+          stop("Invalid split rule specified for multivariate regression:  ", splitrule)
+        }
+        splitrule.idx <- which(splitrule.names == splitrule)
+      }
+    }
+    if (fmly == "class+") {
+      if (is.null(splitrule)) {
+        ## No split rule specified, use default
+        splitrule.idx <- which(splitrule.names == "mv.gini")
+        splitrule <- splitrule.names[splitrule.idx]
+      }
+      else {
+        ## User specified split rule.
+        if ((splitrule != "mv.gini")) {
+          stop("Invalid split rule specified for multivariate classsification:  ", splitrule)
+        }
+        splitrule.idx <- which(splitrule.names == splitrule)
+      }
+    }
+    if (fmly == "mix+") {
+      if (is.null(splitrule)) {
+        ## No split rule specified, use default.
+        splitrule.idx <- which(splitrule.names == "mv.mse")
+        splitrule <- "mv.mix"
+      }
+      else {
+        ## User specified split rule.
+        if ((splitrule != "mv.mix")) {
+          stop("Invalid split rule specified for mixed multivariate regression:  ", splitrule)
+        }
+        splitrule.idx <- which(splitrule.names == splitrule)
+      }
+    }
+    ## unsupervised
+    if (fmly == "unsupv") {
+      if (is.null(splitrule)) {
+        ## No split rule specified, use default.
+        splitrule.idx <- which(splitrule.names == "unsupv")
+        splitrule <- splitrule.names[splitrule.idx]
+      }
+      else {
+        ## User specified split rule.
+        if ((splitrule != "unsupv")) {
+          stop("Invalid split rule specified:  ", splitrule)
+        }
+        splitrule.idx <- which(splitrule.names == splitrule)
+      }
+    }
+  }## completes !splitpass
+  splitinfo <- list(name = splitrule, index = splitrule.idx, cust = cust.idx, nsplit = nsplit)
+  return (splitinfo)
 }
 get.importance.xvar <- function(importance.xvar, importance, object) {
   ## Check that importance has been requested

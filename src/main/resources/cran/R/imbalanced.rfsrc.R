@@ -1,8 +1,7 @@
 imbalanced.rfsrc <- function(formula, data, ntree = 3000,
                  method = c("rfq", "brf", "standard"),
                  block.size = NULL, perf.type = NULL, fast = FALSE,
-                 ratio = NULL, optimize = FALSE, ngrid = 1e4,
-                 ...)
+                 ratio = NULL,  ...)
 {
   ## preliminary checks: all are fatal
   ## parse the formula to ensure this is a two-class problem
@@ -89,19 +88,7 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
     ##-----------------------------------------------------------
     else {
       o <- do.call(rfsrc.grow, c(list(formula = formula, data = data, ntree = ntree,
-                                 rfq = rfq.flag, perf.type = perf.type, block.size = block.size), dots))
-      ## optimization
-      if (method == "rfq" && optimize) {
-        pi.hat <- table(o$yvar) / length(o$yvar)
-        minority <- which.min(pi.hat)
-        threshold <- seq(0, 1, length = ngrid)
-        gmeanS <-  unlist(mclapply(threshold, function(thresh) {
-          fake.prob <- o$predicted.oob
-          fake.prob[, minority] <- fake.prob[, minority] >= thresh 
-          get.gmean(o$yvar, fake.prob)
-        }))
-        o$gmean <- data.frame(threshold = threshold, gmean = gmeanS)
-      }
+                                 rfq = rfq.flag, perf.type = perf.type, block.size = block.size), dots))    
     }
   }
   ## return the object

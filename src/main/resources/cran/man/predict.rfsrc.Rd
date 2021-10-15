@@ -184,9 +184,9 @@
     missing values.}
   \item{imputed.data}{Data frame comprising imputed test data.  The first
     columns are the y-outcomes followed by the x-variables.}
-  \item{split.depth}{Matrix [i][j] or array [i][j][k] recording the
-    minimal depth for variable [j] for case [i], either averaged over
-    the forest, or by tree [k].}
+  \item{split.depth}{Matrix (i,j) or array (i,j,k) recording the
+    minimal depth for variable j for case i, either averaged over
+    the forest, or by tree k.}
   \item{node.stats}{Split statistics returned when
     \code{statistics=TRUE} which can be parsed using \command{stat.split}.}
   \item{err.rate}{Cumulative OOB error rate for the test data if

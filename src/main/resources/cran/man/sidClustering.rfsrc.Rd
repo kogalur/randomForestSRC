@@ -158,12 +158,12 @@
   understanding random forest, V4.0}.  University of California
   Berkeley, Statistics Department, Berkeley.
   
-  Mantero A. and Ishwaran H. (2020).  Unsupervised random forests.
-  To appear in \emph{Statistical Analysis and Data Mining}.
+  Mantero A. and Ishwaran H. (2021).  Unsupervised random forests.
+  \emph{Statistical Analysis and Data Mining}, 14(2):144-167.
   
   Shi, T. and Horvath, S. (2006). Unsupervised learning with random forest
   predictors. \emph{Journal of Computational and Graphical Statistics},
-  15(1):118--138.  
+  15(1):118-138.  
 }
 
 \seealso{

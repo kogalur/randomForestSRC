@@ -10,14 +10,15 @@
   2001) for regression, classification, survival analysis (Ishwaran
   2008), competing risks (Ishwaran 2012), multivariate (Segal and Xiao
   2011), unsupervised (Mantero and Ishwaran 2020), quantile regression
-  (Meinhausen 2006, Zhang et al. 2019), and class imbalanced
-  q-classification (O'Brien and Ishwaran 2019).  Different splitting
-  rules invoked under deterministic or random splitting (Geurts et
-  al. 2006, Ishwaran 2015) are available for all families.  Variable
-  importance (VIMP), and holdout VIMP, as well as confidence regions
-  (Ishwaran and Lu 2019) can be calculated for single and grouped
-  variables.  Fast interface for missing data imputation using a variety
-  of different random forest methods (Tang and Ishwaran 2017).
+  (Meinhausen 2006, Zhang et al. 2019, Greenwald-Khanna 2001), and class
+  imbalanced q-classification (O'Brien and Ishwaran 2019).  Different
+  splitting rules invoked under deterministic or random splitting
+  (Geurts et al. 2006, Ishwaran 2015) are available for all families.
+  Variable importance (VIMP), and holdout VIMP, as well as confidence
+  regions (Ishwaran and Lu 2019) can be calculated for single and
+  grouped variables.  Minimal depth variable selection (Ishwaran et
+  al. 2010, 2011).  Fast interface for missing data imputation using a
+  variety of different random forest methods (Tang and Ishwaran 2017).
   Visualize trees on your Safari or Google Chrome browser (works for all
   families, see \command{\link{get.tree}}).
   
@@ -101,30 +102,40 @@
   
 }
 
-\section{Source Code, Beta Builds and Bug Reporting}{
+\section{Home page, Vignettes, Discussions, Bug Reporting, Source Code, Beta Builds}{
 
   \enumerate{
 
-    \item Regular stable releases of this package are available on CRAN
-    at \url{https://cran.r-project.org/package=randomForestSRC}
+    \item The home page for the package, containing vignettes, manuals,
+    links to GitHub and other useful information is found at
+    \url{https://luminwin.github.io/randomForestSRC/}
 
-    \item Interim unstable development builds with bug fixes and sometimes additional
-    functionality are available at
-    \url{https://github.com/kogalur/randomForestSRC}
+    \item Questions, comments, and non-bug related issues may be sent
+    via \url{https://github.com/kogalur/randomForestSRC/discussions/}.
 
-    \item Bugs may be reported via \url{https://github.com/kogalur/randomForestSRC/issues/new}.
-    Please provide the accompanying information with any reports:
+    \item Bugs may be reported via \url{https://github.com/kogalur/randomForestSRC/issues/}.
+    This is for bugs only.  Please provide the accompanying information with any reports:
     \enumerate{
       \item \code{sessionInfo()}
       \item A minimal reproducible example consisting of the following items:
       \itemize{
-	\item a minimal dataset, necessary to reproduce the error
-	\item the minimal runnable code necessary to reproduce the error, 
-	which can be run on the given dataset
-	\item the necessary information on the used packages, R version and system it is run on
-	\item in the case of random processes, a seed (set by \code{set.seed()}) for reproducibility
+	      \item a minimal dataset, necessary to reproduce the error
+	      \item the minimal runnable code necessary to reproduce the error, 
+	      which can be run on the given dataset
+	      \item the necessary information on the used packages,
+        R version and system it is run on
+	      \item in the case of random processes, a seed (set by
+        \code{set.seed()}) for reproducibility
       }
     }
+
+    \item Regular stable releases of this package are available on CRAN
+    at \url{https://cran.r-project.org/package=randomForestSRC/}
+
+    \item Interim unstable development builds with bug fixes and
+    sometimes additional functionality are available at
+    \url{https://github.com/kogalur/randomForestSRC/}
+
   }
   
 }
@@ -135,7 +146,7 @@
 
   Additional instructions for configuring OpenMP parallel processing
   are available at
-  \url{https://kogalur.github.io/randomForestSRC/building.html}.
+  \url{https://luminwin.github.io/randomForestSRC/articles/installation.html}.
   
   An understanding of resource utilization (CPU and RAM) is necessary
   when running the package using OpenMP and Open MPI parallel execution.
@@ -160,6 +171,9 @@ statistics are susceptible to Monte Carlo effects.}
 
   Geurts, P., Ernst, D. and Wehenkel, L., (2006). Extremely randomized
   trees. \emph{Machine learning}, 63(1):3-42.
+
+  Greenwald M. and Khanna S. (2001).  Space-efficient online computation of
+  quantile summaries. \emph{Proceedings of ACM SIGMOD}, 30(2):58-66.
 
   Ishwaran H. and Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7(2):25-31.
@@ -197,8 +211,8 @@ statistics are susceptible to Monte Carlo effects.}
   individual treatment effect in observational data using random forest
   methods. \emph{J. Comp. Graph. Statist}, 27(1), 209-219
 
-  Mantero A. and Ishwaran H. (2020).  Unsupervised random forests.
-  To appear in \emph{Statistical Analysis and Data Mining}.
+  Mantero A. and Ishwaran H. (2021).  Unsupervised random forests.
+  \emph{Statistical Analysis and Data Mining}, 14(2):144-167.
 
   Meinshausen N. (2006) Quantile regression forests, \emph{Journal of
   Machine Learning Research}, 7:983-999.
@@ -245,7 +259,7 @@ statistics are susceptible to Monte Carlo effects.}
   \command{\link{rfsrc.cart}},
   \command{\link{rfsrc.fast}},
 
-   
+  \command{\link{sidClustering.rfsrc}},
 
   \command{\link{stat.split.rfsrc}},
   \command{\link{subsample.rfsrc}},

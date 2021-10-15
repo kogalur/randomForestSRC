@@ -2,6 +2,7 @@
 \docType{data}
 \alias{nutrigenomic}
 \title{Nutrigenomic Study}
+
 \description{
   Study the effects of five diet treatments on 21 liver lipids and 120
   hepatic gene expression in wild-type and PPAR-alpha deficient mice.  We
@@ -17,17 +18,17 @@
 \examples{
 \donttest{
 ## ------------------------------------------------------------
-## multivariate mixed forests
-## lipids used as the multivariate y
+## multivariate regression forests using Mahalanobis splitting
+## lipids (all real values) used as the multivariate y
 ## ------------------------------------------------------------
 
 ## load the data
 data(nutrigenomic, package = "_PROJECT_PACKAGE_NAME_")
 
 ## multivariate mixed forest call
-mv.obj <- rfsrc(get.mv.formula(colnames(nutrigenomic$lipids)),
+obj <- rfsrc(get.mv.formula(colnames(nutrigenomic$lipids)),
             data.frame(do.call(cbind, nutrigenomic)),
-            importance=TRUE, nsplit = 10)
+            importance=TRUE, nsplit = 10, splitrule = "mahalanobis")
 
 ## ------------------------------------------------------------
 ## plot the standarized performance and VIMP values
@@ -35,10 +36,10 @@ mv.obj <- rfsrc(get.mv.formula(colnames(nutrigenomic$lipids)),
 
 ## acquire the error rate for each of the 21-coordinates 
 ## standardize to allow for comparison across coordinates
-serr <- get.mv.error(mv.obj, standardize = TRUE)
+serr <- get.mv.error(obj, standardize = TRUE)
 
 ## acquire standardized VIMP 
-svimp <- get.mv.vimp(mv.obj, standardize = TRUE)
+svimp <- get.mv.vimp(obj, standardize = TRUE)
 
 par(mfrow = c(1,2))
 plot(serr, xlab = "Lipids", ylab = "Standardized Performance")
@@ -49,9 +50,24 @@ matplot(svimp, xlab = "Genes/Diet/Genotype", ylab = "Standardized VIMP")
 ## plot some trees
 ## ------------------------------------------------------------
 
-plot(get.tree(mv.obj, 1))
-plot(get.tree(mv.obj, 2))
-plot(get.tree(mv.obj, 3))
+plot(get.tree(obj, 1))
+plot(get.tree(obj, 2))
+plot(get.tree(obj, 3))
+
+
+## ------------------------------------------------------------
+## Compare above to default composite (independent) splitting
+## ------------------------------------------------------------
+
+obj2 <- rfsrc(get.mv.formula(colnames(nutrigenomic$lipids)),
+                data.frame(do.call(cbind, nutrigenomic)),
+                importance=TRUE, nsplit = 10)
+
+imp <- data.frame(mahalanobis = rowMeans(get.mv.vimp(obj,  standardize = TRUE)),
+                  default     = rowMeans(get.mv.vimp(obj2, standardize = TRUE)))
+
+print(imp[order(imp["mahalanobis"]), ])
+
 
 
 }}

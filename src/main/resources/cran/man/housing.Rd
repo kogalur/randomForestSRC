@@ -21,6 +21,11 @@ data(housing, package = "_PROJECT_PACKAGE_NAME_")
 
 ## the original data contains lots of missing data
 ## here's a fast but reasonably accurate way to impute the data
-housing2 <- impute(data = housing, mf.q = 10, fast = TRUE)
+housing2 <- impute(data = housing, mf.q = .5, fast = TRUE)
+
+## even faster, but potentially less acurate
+housing3 <- impute(SalePrice~., housing, splitrule = "random", nimpute = 1)
+
+
 }}
 \keyword{datasets}

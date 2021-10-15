@@ -179,6 +179,7 @@ partial.rfsrc <- function(
                                       data.pass.bits +
                                       experimental.bits),
                                   ## >>>> start of maxi forest object >>>>
+                                  as.integer(1),
                                   as.integer(ntree),
                                   as.integer(n),
                                   list(as.integer(length(yvar.types)),

@@ -36,6 +36,7 @@ generic.predict.rfsrc <-
   gk.quantile <- is.hidden.gk.quantile(user.option)
   prob <- is.hidden.prob(user.option)
   prob.epsilon <- is.hidden.prob.epsilon(user.option)
+  chunkify  <- is.hidden.chunkify(user.option)
   ## set the family
   family <- object$family
   ## incoming parameter checks: all are fatal
@@ -588,6 +589,7 @@ generic.predict.rfsrc <-
                                              data.pass.predict.bits +
                                              experimental.bits),
                                   ## >>>> start of maxi forest object >>>>
+                                  as.integer(chunkify),
                                   as.integer(ntree),
                                   as.integer(n),
                                   list(as.integer(length(yvar.types)),

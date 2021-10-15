@@ -7,7 +7,7 @@
   missing data.  No ensemble estimates or error rates are calculated.
 }
 \usage{\method{impute}{rfsrc}(formula, data,
-  ntree = 500, nodesize = 1, nsplit = 10,
+  ntree = 100, nodesize = 1, nsplit = 10,
   nimpute = 2, fast = FALSE, blocks, 
   mf.q, max.iter = 10, eps = 0.01, 
   ytry = NULL, always.use = NULL, verbose = TRUE,
@@ -101,15 +101,7 @@
     \item If there is no missing data, either before or after processing
     of the data, the algorithm returns the processed data and no
     imputation is performed.
-    
-    \item The default choice \command{nimpute=2} is chosen for coherence
-    with the default missing data algorithm implemented in grow mode.
-    Thus, if the user imputes data with \command{nimpute=2} and runs a
-    grow forest using this imputed data, then performance values such as
-    VIMP and error rates will coincide with those obtained by running a
-    grow forest on the original non-imputed data using \code{na.action =
-      "na.impute"}.  Ignored for multivariate missForest.
-    
+
     \item All options are the same as \command{rfsrc} and the user should
     consult the \command{rfsrc} help file for details.
   }
@@ -215,6 +207,7 @@ imputed_data <- impute(
   data = fake_data_missing,
   mf.q = 0.2,
   ntree = 100,
+  fast = TRUE,
   verbose = TRUE
 )
 

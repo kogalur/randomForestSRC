@@ -10,6 +10,17 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Fix to missing data segfault related to GitHub issue 112.  Mahalanobis
+splitting in multivariate regression settings when all outcomes are
+real-valued.  This can have added benefit when outcomes are correlated
+in contrast to the default composite (independent) splitting rule.
+Improvements to the speed and output for missForest imputation.  New
+home page with documentation and vignettes at
+https://luminwin.github.io/randomForestSRC
+
+---------------------------------------------------------------------------------
+RELEASE 2.12.1
+---------------------------------------------------------------------------------
 Fix to omp.h declaration before R headers per Prof. Ripley, in
 anticipation of clang 13.0.0.
 

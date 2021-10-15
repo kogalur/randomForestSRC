@@ -10,7 +10,7 @@ check.factor <- function(test, gfactor) {
                    #if (length(setdiff(levels(na.omit(fk.test)), levels(fk.train))) > 0) {
                    #if (length(setdiff(levels(na.omit(fk.test)), gfactor$levels[[k]])) > 0) {
                    if (!all(is.element(unique(na.omit(fk.test)), gfactor$levels[[k]]))) {
-                       stop("Factors in test data do not match those in the training data\n")
+                       stop("levels of factors in test data do not match those in training data\n")
                    }
                    #factor(as.character(fk.test), levels = gfactor$levels[[k]], exclude = NULL)
                    factor(fk.test, levels = gfactor$levels[[k]], exclude = NULL)
@@ -26,7 +26,7 @@ check.factor <- function(test, gfactor) {
                    #if (length(setdiff(levels(na.omit(fk.test)), levels(fk.train))) > 0) {
                    #if (length(setdiff(levels(na.omit(fk.test)), gfactor$order.levels[[k]])) > 0) {
                    if (!all(is.element(unique(na.omit(fk.test)), gfactor$order.levels[[k]]))) {
-                       stop("Ordered factors in test data do not match those in the training data\n")
+                       stop("levels of ordered factors in test data do not match those in training data\n")
                    }
                    #factor(as.character(fk.test), levels = gfactor$order.levels[[k]], ordered = TRUE)
                    factor(fk.test, levels = gfactor$order.levels[[k]], ordered = TRUE)

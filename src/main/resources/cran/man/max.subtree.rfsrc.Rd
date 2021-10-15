@@ -60,13 +60,13 @@
   Set \option{sub.order=TRUE} to obtain the minimal depth of a
   variable relative to another variable.  This returns a
   \code{p}x\code{p} matrix, where \code{p} is the number of variables,
-  and entries [i][j] are the normalized relative minimal depth of a
-  variable [j] within the maximal subtree for variable [i], where
-  normalization adjusts for the size of [i]'s maximal subtree.  Entry
-  [i][i] is the normalized minimal depth of i relative to the root
+  and entries (i,j) are the normalized relative minimal depth of a
+  variable j within the maximal subtree for variable i, where
+  normalization adjusts for the size of i's maximal subtree.  Entry
+  (i,i) is the normalized minimal depth of i relative to the root
   node.  The matrix should be read by looking across rows (not down
   columns) and identifies interrelationship between variables.  Small
-  [i][j] entries indicate interactions.  See
+  (i,j) entries indicate interactions.  See
   \command{find.interaction} for related details.
   
   For competing risk data, maximal subtree analyses are unconditional

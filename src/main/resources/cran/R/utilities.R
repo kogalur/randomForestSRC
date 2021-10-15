@@ -1082,3 +1082,12 @@ get.mad.max <- function (mad.max) {
     }
     return (mad.max)
 }
+is.hidden.chunkify <-  function (user.option) {
+    if (is.null(user.option$chunkify)) {
+        ## Zero or One will work the same.  We default to one tree per thread.
+        as.integer(0)
+    }
+    else {
+      as.integer(user.option$chunkify)
+    }
+  }

@@ -424,6 +424,7 @@ int     **RF_fmpSign;
 int      *RF_mpIndex;
 int      *RF_fmpIndex;
 char      RF_inSituEnsembleFlag;
+SplitRuleObj *RF_splitRuleObj;
 double   **RF_importancePtr;
 double **RF_sImputeResponsePtr;
 double **RF_sImputePredictorPtr;
@@ -643,6 +644,10 @@ int   (*randomGetUChainVimp) (uint);
 float (*ran1D) (uint);
 void  (*randomSetChainVimp) (uint, int);
 int   (*randomGetChainVimp) (uint);
+uint RF_forestChunkSize;
+uint RF_forestChunkCount;
+uint *RF_forestChunkSizeActual;
+uint **RF_forestChunk;
 #ifdef _OPENMP
 omp_lock_t   *RF_lockPartial;
 omp_lock_t  **RF_lockWeight;
@@ -4831,13 +4836,16 @@ char imputeNode (char     type,
         imputePtr = predictor[(uint) signedSignatureIndex];
       }
       localDistributionSize = 0;
+      mPredictorFlag = FALSE;
       for (i = 1; i <= repMembrSize; i++) {
-        mPredictorFlag = TRUE;
-        if (RF_mRecordMap[repMembrIndx[i]] == 0) {
-          mPredictorFlag = FALSE;
-        }
-        else if (RF_mpSign[unsignedIndexSource][RF_mRecordMap[repMembrIndx[i]]] == 0) {
-          mPredictorFlag = FALSE;
+        if (RF_mRecordSize > 0) {
+          mPredictorFlag = TRUE;
+          if (RF_mRecordMap[repMembrIndx[i]] == 0) {
+            mPredictorFlag = FALSE;
+          }
+          else if (RF_mpSign[unsignedIndexSource][RF_mRecordMap[repMembrIndx[i]]] == 0) {
+            mPredictorFlag = FALSE;
+          }
         }
         if (mPredictorFlag == FALSE) {
           localDistributionSize ++;
@@ -5714,11 +5722,11 @@ void imputeCommon(char      mode,
                 info = termMembershipPtr[overriddenSerialTreePtr[tree]][mRecordIndex[i]];
                 for (v = 1; v <= info -> lmiSize; v++) {
                   if ((info -> lmiIndex)[v] == p) {
-                        if (!RF_nativeIsNaN((info -> lmiValue)[v])) {
-                          localDistribution[++localDistributionSize] = (info -> lmiValue)[v];
-                        }
-                        else {
-                        }  
+                    if (!RF_nativeIsNaN((info -> lmiValue)[v])) {
+                      localDistribution[++localDistributionSize] = (info -> lmiValue)[v];
+                    }
+                    else {
+                    }  
                     v = info -> lmiSize;
                   }
                 }
@@ -8472,9 +8480,7 @@ char getVarianceDoublePass(uint    repMembrSize,
   else {
     meanResult = RF_nativeNaN;
   }
-  if (mean != NULL) {
-    *mean = meanResult;
-  }
+  if (mean != NULL) *mean = meanResult;
   varResult = 0.0;
   if(!RF_nativeIsNaN(meanResult)) {
     for (i = 1; i <= genSize; i++) {
@@ -8489,9 +8495,7 @@ char getVarianceDoublePass(uint    repMembrSize,
     varResult = RF_nativeNaN;
     result = FALSE;
   }
-  if (variance != NULL) {
-    *variance = varResult;
-  }
+  if (variance != NULL)  *variance = varResult;
   return(result);
 }
 char getVarianceSinglePass(uint    repMembrSize,
@@ -8518,9 +8522,7 @@ char getVarianceSinglePass(uint    repMembrSize,
     result = ((varResultOld <= EPSILON) ? FALSE : TRUE);
   }
   *mean = meanResultOld;
-  if (variance != NULL) {
-    *variance = varResultOld;
-  }
+  if (variance != NULL) *variance = varResultOld;
   return(result);
 }
 void restoreMeanResponse(uint treeID) {
@@ -8810,7 +8812,13 @@ void rfsrc(char mode, int seedValue) {
     selectRandomCovariates = & selectRandomCovariatesGeneric;
     virtuallySplitNode = & virtuallySplitNodeGeneric;
     randomSplit = & randomSplitGeneric;
-    RF_optHigh = RF_optHigh & (~OPT_EXPERMENT);
+    if (RF_hdim == 0) {
+      RF_splitRuleObj = makeSplitRuleObj(RF_splitRule);
+    }
+    else {
+      RF_splitRuleObj = makeSplitRuleObjGreedy(RF_splitRule);
+    }
+    RF_xPreSort = 0;
     if (RF_optHigh & OPT_EXPERMENT) {
       if (RF_mRecordSize == 0) {
         if ((RF_xWeightType == RF_WGHT_UNIFORM) && (RF_baseLearnDepthINTR == 0) && (RF_baseLearnDepthSYTH == 0)) {      
@@ -9191,11 +9199,41 @@ void rfsrc(char mode, int seedValue) {
       RF_userTimeSplit = RF_userTreeID = 0;
       RF_nativePrint("\n");
     }
+    if (RF_forestChunkSize > 1) {
+      RF_forestChunkCount = (RF_ntree + RF_forestChunkSize -1) / RF_forestChunkSize;
+      RF_forestChunkSizeActual = uivector(1, RF_forestChunkCount);
+      adj = RF_ntree % RF_forestChunkSize;
+      k = 0;
+      RF_forestChunk = uimatrix(1, RF_forestChunkCount, 1, RF_forestChunkSize);
+      for (b = 1; b <= RF_forestChunkCount; b++) {
+        RF_forestChunkSizeActual[b] = RF_forestChunkSize;
+        for (j = 1; j <= RF_forestChunkSize; j++) {
+          RF_forestChunk[b][j] = ++k;
+        }
+      }
+      if (adj > 0) {
+        RF_forestChunkSizeActual[RF_forestChunkCount] = adj;
+        for (j = adj + 1; j <= RF_forestChunkSize; j++) {
+          RF_forestChunk[RF_forestChunkCount][j] = 0;
+        }
+      }
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(RF_numThreads)
 #endif
-    for (b = 1; b <= RF_ntree; b++) {
-      acquireTree(mode, r, b);
+      for (b = 1; b <= RF_forestChunkCount; b++) {
+        for (uint bb = 1; bb <= RF_forestChunkSizeActual[b]; bb++) {
+          acquireTree(mode, r, RF_forestChunk[b][bb]);
+        }
+      }
+      free_uimatrix(RF_forestChunk, 1, RF_forestChunkCount, 1, RF_forestChunkSize);
+    }
+    else {
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(RF_numThreads)
+#endif
+      for (b = 1; b <= RF_ntree; b++) {
+        acquireTree(mode, r, b);
+      }
     }
     if (r == RF_nImpute) {
       RF_rejectedTreeCount = RF_validTreeCount = RF_stumpedTreeCount = 0;
@@ -9425,6 +9463,7 @@ void rfsrc(char mode, int seedValue) {
   }
   switch (mode) {
   case RF_GROW:
+    freeSplitRuleObj(RF_splitRuleObj);
     if (RF_xPreSort > 0) {
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(RF_numThreads)
@@ -11008,6 +11047,9 @@ SplitRuleObj *makeSplitRuleObj(uint rule) {
       obj -> function = &customMultivariateSplit;
     }
     break;
+  case MAHALANOBIS:
+    obj -> function = &mahalanobis;
+    break;
   default:
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Split rule not found:  %10d", rule);
@@ -11051,16 +11093,13 @@ char getBestSplit(uint       treeID,
                   Node      *parent,
                   uint       splitRule,
                   SplitInfoMax *splitInfoMax,
-                  GreedyObj    *greedyMembr,
                   char       multImpFlag) {
   char  result;
-  SplitRuleObj *splitRuleObj = makeSplitRuleObj(splitRule);
-  result = splitRuleObj -> function(treeID,
-                                    parent,
-                                    splitInfoMax,
-                                    greedyMembr,
-                                    multImpFlag);
-  freeSplitRuleObj(splitRuleObj);
+  result = RF_splitRuleObj -> function(treeID,
+                                       parent,
+                                       splitInfoMax,
+                                       NULL,  
+                                       multImpFlag);
   return result;
 }
 char randomSplitGeneric(uint       treeID,
@@ -15003,6 +15042,291 @@ void insertRisk(uint treeID, LatOptTreeObj *obj, double value) {
 void freeLatOptTreeObj(LatOptTreeObj *lotObj) {
   free_dvector(lotObj -> risk,  1, RF_lotLag+1);
   free_gblock(lotObj, (size_t) sizeof(LatOptTreeObj));
+}
+char mahalanobis (uint       treeID,
+                  Node      *parent,
+                  SplitInfoMax *splitInfoMax,
+                  GreedyObj    *greedyMembr,
+                  char       multImpFlag) {
+  uint     covariate;
+  uint     covariateCount;
+  double  *splitVector;
+  uint     splitVectorSize;
+  uint   *indxx;
+  uint priorMembrIter, currentMembrIter;
+  uint leftSize, rghtSize;
+  char *localSplitIndicator;
+  uint splitLength;
+  void *splitVectorPtr;
+  double *observation;
+  char factorFlag;
+  uint mwcpSizeAbsolute;
+  char deterministicSplitFlag;
+  char preliminaryResult, result;
+  double delta;
+  double deltaPartial;
+  double partialLeft;
+  double partialRght;
+  uint i, j, r;
+  localSplitIndicator    = NULL;  
+  splitVector            = NULL;  
+  splitVectorSize        = 0;     
+  preliminaryResult = getPreSplitResult(treeID,
+                                        parent,
+                                        multImpFlag,
+                                        TRUE);
+  if (preliminaryResult) {
+    uint  repMembrSize = parent -> repMembrSize;
+    uint *repMembrIndx = parent -> repMembrIndx;
+    char   *impurity   = cvector(1, RF_ySize);
+    double *mean       = dvector(1, RF_ySize);
+    double *variance   = dvector(1, RF_ySize);
+    char impuritySummary;
+    impuritySummary = FALSE;
+    for (r = 1; r <= RF_ySize; r++)  {
+      impurity[r] = getVarianceDoublePass(repMembrSize,
+                                          repMembrIndx,
+                                          0,
+                                          NULL,
+                                          RF_response[treeID][r],
+                                          &mean[r],
+                                          &variance[r]);
+      impuritySummary = impuritySummary | impurity[r];
+    }
+    if (impuritySummary) {
+      stackSplitPreliminary(repMembrSize,
+                            & localSplitIndicator,
+                            & splitVector);
+      DistributionObj *distributionObj = stackRandomCovariates(treeID, parent);
+      uint *impureIdx;
+      uint  impureIdxCount;
+      double **elStar;
+      double **elStarTranspose;
+      double **qStar;
+      double **qStarPlus;
+      double **u, *w, **v;      
+      double *leftMean;
+      double *rghtMean;
+      double **leftCentered;
+      double **rghtCentered;
+      double **leftCenteredT;
+      double **rghtCenteredT;
+      double **tempResult;
+      double **tempResult2;
+      double *sumLeft         = dvector(1, RF_ySize);
+      double *sumRght         = dvector(1, RF_ySize);
+      impureIdx = uivector(1, RF_ySize);
+      impureIdxCount = 0;
+      for (r = 1; r <= RF_ySize; r++) {
+        if (impurity[r]) {
+          impureIdx[++impureIdxCount] = r;
+        }  
+      }  
+      leftMean      = dvector(1, impureIdxCount);
+      rghtMean      = dvector(1, impureIdxCount);
+      leftCentered  = dmatrix(1, impureIdxCount, 1, 1);
+      rghtCentered  = dmatrix(1, impureIdxCount, 1, 1);
+      leftCenteredT = dmatrix(1, 1, 1, impureIdxCount);
+      rghtCenteredT = dmatrix(1, 1, 1, impureIdxCount);
+      elStar = dmatrix(1, repMembrSize, 1, impureIdxCount);
+      for (i = 1; i <= repMembrSize; i++) {
+        for (uint rr = 1; rr <= impureIdxCount; rr++) {
+          r = impureIdx[rr];
+          elStar[i][rr] = RF_response[treeID][r][ repMembrIndx[i] ] - mean[r];
+        }
+      }
+      elStarTranspose = matrixTrans(elStar, repMembrSize, impureIdxCount);
+      qStar = matrixMult(elStarTranspose, elStar, impureIdxCount, repMembrSize, impureIdxCount);
+      svdcmp(qStar, impureIdxCount, impureIdxCount, &u, &w, &v);
+      qStarPlus = svdinv(u, w, v, impureIdxCount, impureIdxCount, impureIdxCount);
+      covariateCount = 0;
+      while (selectRandomCovariates(treeID,
+                                    parent,
+                                    distributionObj,
+                                    & covariate,
+                                    & covariateCount)) {
+        splitVectorSize = stackAndConstructSplitVectorGenericPhase1(treeID,
+                                                                    parent,
+                                                                    covariate,
+                                                                    splitVector,
+                                                                    & indxx,
+                                                                    multImpFlag);
+        if (splitVectorSize >= 2) {
+          splitLength = stackAndConstructSplitVectorGenericPhase2(treeID,
+                                                                  parent,
+                                                                  covariate,
+                                                                  splitVector,
+                                                                  splitVectorSize,
+                                                                  & factorFlag,
+                                                                  & deterministicSplitFlag,
+                                                                  & mwcpSizeAbsolute,
+                                                                  & splitVectorPtr);
+          observation = RF_observation[treeID][covariate];
+          leftSize = 0;
+          priorMembrIter = 0;
+          if (factorFlag == FALSE) {
+            for (j = 1; j <= repMembrSize; j++) {
+              localSplitIndicator[j] = RIGHT;
+            }
+          }
+          for (j = 1; j < splitLength; j++) {
+            if (factorFlag == TRUE) {
+              priorMembrIter = 0;
+              leftSize = 0;
+            }
+            virtuallySplitNode(treeID,
+                               parent,
+                               factorFlag,
+                               mwcpSizeAbsolute,
+                               observation,
+                               indxx,
+                               splitVectorPtr,
+                               j,
+                               localSplitIndicator,
+                               & leftSize,
+                               priorMembrIter,
+                               & currentMembrIter);
+            rghtSize = repMembrSize - leftSize;
+            if ((leftSize != 0) && (rghtSize != 0)) {
+              delta        = 0.0;
+              deltaPartial = 0.0;
+              if (qStarPlus != NULL) {
+                for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                  leftMean[rr] = rghtMean[rr] = 0.0;
+                }
+                for (i = 1; i <= repMembrSize; i++) {
+                  if (localSplitIndicator[i] == LEFT) {
+                    for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                      r = impureIdx[rr];
+                      leftMean[rr] += elStar[i][rr];
+                    }
+                  }
+                  else {
+                    for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                      r = impureIdx[rr];
+                      rghtMean[rr] += elStar[i][rr];
+                    }
+                  }
+                }
+                for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                  leftMean[rr] = leftMean[rr] / leftSize;
+                  rghtMean[rr] = rghtMean[rr] / rghtSize;
+                }
+                partialLeft = partialRght = 0.0;
+                for (i = 1; i <= repMembrSize; i++) {
+                  if (localSplitIndicator[i] == LEFT) {
+                    for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                      r = impureIdx[rr];
+                      leftCentered[rr][1]  = elStar[i][rr] - leftMean[rr];  
+                      leftCenteredT[1][rr] = leftCentered[rr][1];
+                    }
+                    tempResult = matrixMult(leftCenteredT, qStarPlus, 1, impureIdxCount, impureIdxCount);
+                    tempResult2 = matrixMult(tempResult, leftCentered, 1, impureIdxCount, 1);
+                    partialLeft += tempResult2[1][1];
+                  }
+                  else {
+                    for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                      r = impureIdx[rr];
+                      rghtCentered[rr][1]  = elStar[i][rr] - rghtMean[rr];  
+                      rghtCenteredT[1][rr] = rghtCentered[rr][1];
+                    }
+                    tempResult = matrixMult(rghtCenteredT, qStarPlus, 1, impureIdxCount, impureIdxCount);
+                    tempResult2 = matrixMult(tempResult, rghtCentered, 1, impureIdxCount, 1);
+                    partialRght += tempResult2[1][1];
+                  }
+                  free_dmatrix(tempResult,  1, 1, 1, impureIdxCount);
+                  free_dmatrix(tempResult2, 1, 1, 1, 1);
+                }  
+                deltaPartial = ( ((double) leftSize / repMembrSize) * partialLeft) + ( ((double) rghtSize / repMembrSize) * partialRght);
+                delta = 1.0 - (deltaPartial / impureIdxCount);
+              }
+              else {
+                for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                  r = impureIdx[rr];
+                  sumLeft[r] = sumRght[r] = 0.0;
+                }
+                for (i = 1; i <= repMembrSize; i++) {
+                  if (localSplitIndicator[i] == LEFT) {
+                    for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                      r = impureIdx[rr];
+                      sumLeft[r] += RF_response[treeID][r][ repMembrIndx[i] ] - mean[r];
+                    }
+                  }
+                  else {
+                    for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                      r = impureIdx[rr];
+                      sumRght[r] += RF_response[treeID][r][ repMembrIndx[i] ] - mean[r];
+                    }
+                  }
+                }
+                for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                  r = impureIdx[rr];
+                  partialLeft = pow (sumLeft[r], 2.0) / (leftSize * variance[r]);
+                  partialRght = pow (sumRght[r], 2.0) / (rghtSize * variance[r]);
+                  delta = partialLeft + partialRght;
+                }
+              }
+            }
+            else {
+              delta = RF_nativeNaN;
+            }
+            updateMaximumSplit(treeID,
+                               parent,
+                               delta,
+                               covariate,
+                               j,
+                               factorFlag,
+                               mwcpSizeAbsolute,
+                               repMembrSize,
+                               localSplitIndicator,
+                               splitVectorPtr,
+                               splitInfoMax);
+            if (factorFlag == FALSE) {
+              priorMembrIter = currentMembrIter - 1;
+            }
+          }  
+          unstackSplitVectorNew(treeID,
+                                parent,
+                                splitLength,
+                                factorFlag,            
+                                splitVectorSize,
+                                mwcpSizeAbsolute,
+                                deterministicSplitFlag,
+                                splitVectorPtr,
+                                multImpFlag,
+                                indxx);
+        }  
+      }  
+      if (qStarPlus != NULL)  {
+        free_dmatrix(qStarPlus, 1, impureIdxCount, 1, impureIdxCount);
+      }
+      free_svdcmp(qStar, impureIdxCount, impureIdxCount, u, w, v);
+      free_dvector(leftMean, 1, impureIdxCount);
+      free_dvector(rghtMean, 1, impureIdxCount);
+      free_dmatrix(leftCentered, 1, impureIdxCount, 1, 1);
+      free_dmatrix(rghtCentered, 1, impureIdxCount, 1, 1);
+      free_dmatrix(leftCenteredT, 1, 1, 1, impureIdxCount);
+      free_dmatrix(rghtCenteredT, 1, 1, 1, impureIdxCount);
+      free_dmatrix(elStarTranspose, 1, impureIdxCount, 1, repMembrSize);
+      free_dmatrix(elStar, 1, repMembrSize, 1, impureIdxCount);      
+      free_uivector(impureIdx, 1, RF_ySize);
+      free_dvector(sumLeft,     1, RF_ySize);
+      free_dvector(sumRght,     1, RF_ySize);
+      unstackRandomCovariates(treeID, distributionObj);
+      unstackSplitPreliminary(repMembrSize,
+                              localSplitIndicator,
+                              splitVector);
+    }  
+    free_cvector(impurity,   1, RF_ySize);
+    free_dvector(mean,       1, RF_ySize);
+    free_dvector(variance,   1, RF_ySize);
+  }  
+  unstackPreSplit(preliminaryResult,
+                  parent,
+                  multImpFlag,
+                  TRUE);  
+  result = summarizeSplitResult(splitInfoMax);
+  return result;
 }
 char unsupervisedSplit (uint       treeID,
                         Node      *parent,
@@ -26418,7 +26742,8 @@ void stackIncomingArrays(char mode) {
           (RF_splitRule != MVCL_SPLIT)  &&
           (RF_splitRule != MVMX_SPLIT)  &&
           (RF_splitRule != USPV_SPLIT)  &&
-          (RF_splitRule != CUST_SPLIT)) {
+          (RF_splitRule != CUST_SPLIT)  &&
+          (RF_splitRule != MAHALANOBIS)) {
         RF_nativeError("\nRF-SRC:  *** ERROR *** ");
         RF_nativeError("\nRF-SRC:  !SURV data and split rule specified are incompatible.");
         RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
@@ -26432,6 +26757,8 @@ void stackIncomingArrays(char mode) {
           RF_nativeError("\nRF-SRC:  Quantile regression split rules require the presence of a probability vector.");
           RF_nativeExit();
         }
+      }
+      if  (RF_splitRule == MAHALANOBIS) {
       }
     }
     else if ((RF_timeIndex != 0) && (RF_statusIndex != 0)) {
@@ -27976,6 +28303,431 @@ uint getTimeInterestIndex(double *array, uint length, double value) {
   }
   return result;
 }
+void svdcmp(double **aorg, int m, int n, double ***uptr, double **wptr, double ***vptr) {
+  double **a, *w, **v;
+  double pythag(double a, double b);
+  int flag, i, its, j, jj, k, l, nm;
+  double anorm, c, f, g, h, s, scale, x, y, z, *rv1;
+  double sgf;
+  *uptr = a = matrixCopy(aorg, m, n);
+  *wptr = w = dvector(1, n);
+  *vptr = v = dmatrix(1, n, 1, n);
+  rv1 = dvector(1, n);
+  g = scale = anorm = 0.0; 
+  for (i = 1; i <= n; i++) {
+    l = i + 1;
+    rv1[i] = scale * g;
+    g = s = scale = 0.0;
+    if (i <= m) {
+      for (k = i; k <= m; k++) scale += fabs(a[k][i]);
+      if (scale) {
+        for (k = i; k <= m; k++) {
+          a[k][i] /= scale;
+          s += a[k][i] * a[k][i];
+        }
+        f = a[i][i];
+        if (f >= 0.0) {
+          g = -sqrt(s);
+        }
+        else {
+          g = sqrt(s);
+        }
+        h = (f * g) - s;
+        a[i][i] = f - g;
+        for (j = l; j <= n; j++) {
+          for (s = 0.0, k = i; k <= m; k++) s += a[k][i] * a[k][j];
+          f = s / h;
+          for (k = i; k <= m; k++) a[k][j] += f * a[k][i];
+        }
+        for (k = i; k <= m; k++) a[k][i] *= scale;
+      }
+    }
+    w[i] = scale * g;
+    g = s = scale = 0.0;
+    if ((i <= m) && (i != n)) {
+      for (k = l; k <= n; k++) scale += fabs(a[i][k]);
+      if (scale) {
+        for (k = l; k <= n; k++) {
+          a[i][k] /= scale;
+          s += a[i][k] * a[i][k];
+        }
+        f = a[i][l];
+        if (f >= 0.0) {
+          g = -sqrt(s);
+        }
+        else {
+          g = sqrt(s);
+        }
+        h = (f * g) - s;
+        a[i][l] = f - g;
+        for (k = l; k <= n; k++) rv1[k] = a[i][k]/h;
+        for (j = l; j <= m; j++) {
+          for (s = 0.0,k = l; k <= n; k++) s += a[j][k]*a[i][k];
+          for (k = l; k <= n; k++) a[j][k] += s*rv1[k];
+        }
+        for (k = l; k <= n; k++) a[i][k] *= scale;
+      }
+    }
+    anorm = (anorm > (fabs(w[i]) + fabs(rv1[i]))) ? anorm : (fabs(w[i]) + fabs(rv1[i]));
+  }
+  for (i = n; i >= 1; i--) { 
+      if (i < n) {
+        if (g) {
+          for (j = l; j <= n; j++) 
+            v[j][i] = (a[i][j]/a[i][l]) / g;
+          for (j = l; j <= n; j++) {
+            for (s = 0.0, k = l; k <= n; k++) s += a[i][k]*v[k][j];
+            for (k = l; k <= n; k++) v[k][j] += s*v[k][i];
+          }
+        }
+        for (j = l; j <= n; j++) v[i][j] = v[j][i] = 0.0;
+      }
+    v[i][i] = 1.0;
+    g = rv1[i];
+    l = i;
+  }
+  for (i = (m < n) ? m : n; i >= 1; i--) { 
+    l = i+1;
+    g = w[i];
+    for (j = l; j <= n; j++) a[i][j] = 0.0;
+    if (g) {
+      g = 1.0/g;
+      for (j = l; j <= n; j++) {
+        for (s = 0.0,k = l; k <= m; k++) s += a[k][i]*a[k][j];
+        f = (s/a[i][i])*g;
+        for (k = i; k <= m; k++) a[k][j] += f*a[k][i];
+      }
+      for (j = i; j <= m; j++) a[j][i] *= g;
+    } else for (j = i; j <= m; j++) a[j][i] = 0.0;
+    ++a[i][i];
+  }
+  for (k = n; k >= 1; k--) {
+    for (its = 1; its <= 30; its++) {
+      flag = 1;
+      for (l = k; l >= 1; l--) { 
+          nm = l - 1;
+          if ((double) (fabs(rv1[l]) + anorm) == anorm) {
+          flag = 0;
+          break;
+        }
+        if ((double) (fabs(w[nm]) + anorm) == anorm) break;
+      }
+      if (flag) {
+        c = 0.0; 
+        s = 1.0;
+        for (i = l; i <= k; i++) {
+          f = s*rv1[i];
+          rv1[i] = c*rv1[i];
+          if ((double) (fabs(f) + anorm) == anorm) break;
+          g = w[i];
+          h = pythag(f,g);
+          w[i] = h;
+          h = 1.0/h;
+          c = g*h;
+          s = -f*h;
+          for (j = 1; j <= m; j++) {
+            y = a[j][nm];
+            z = a[j][i];
+            a[j][nm] = y*c+z*s;
+            a[j][i] = z*c-y*s;
+          }
+        }
+      }
+      z = w[k];
+      if (l == k) {
+        if (z < 0.0) { 
+          w[k] = -z;
+          for (j = 1; j <= n; j++) v[j][k] = -v[j][k];
+        }
+        break;
+      }
+      if (its == 30) nrerror("no convergence in 30 SVD iterations");
+      x = w[l]; 
+      nm = k-1;
+      y = w[nm];
+      g = rv1[nm];
+      h = rv1[k];
+      f = ( ((y-z) * (y+z)) + ((g-h) * (g+h)) ) / (2.0 * h * y);
+      g = pythag(f,1.0);
+      if (f >= 0.0) {
+        sgf = fabs(g);
+      }
+      else {
+        sgf = -fabs(g);
+      }
+      f = ( ((x-z) * (x+z)) + h * ( (y / ( f + sgf)) - h) ) / x;      
+      c = s = 1.0; 
+      for (j = l; j <= nm; j++) {
+        i = j+1;
+        g = rv1[i];
+        y = w[i];
+        h = s*g;
+        g = c*g;
+        z = pythag(f,h);
+        rv1[j] = z;
+        c = f/z;
+        s = h/z;
+        f = x*c+g*s;
+        g  =  g*c-x*s;
+        h = y*s;
+        y *= c;
+        for (jj = 1; jj <= n; jj++) {
+          x = v[jj][j];
+          z = v[jj][i];
+          v[jj][j] = x * c + z * s;
+          v[jj][i] = z * c - x * s;
+        }
+        z = pythag(f,h);
+        w[j] = z; 
+        if (z) {
+          z = 1.0 / z;
+          c = f * z;
+          s = h * z;
+        }
+        f = c * g + s * y;
+        x = c * y - s * g;
+        for (jj = 1; jj <= m; jj++) {
+          y = a[jj][j];
+          z = a[jj][i];
+          a[jj][j] = y * c + z * s;
+          a[jj][i] = z * c - y * s;
+        }
+      }
+      rv1[l] = 0.0;
+      rv1[k] = f;
+      w[k] = x;
+    }
+  }
+  free_dvector(rv1, 1, n);
+}
+char svdchk(double **a, uint m, uint n, double **u, double *w, double **v) {
+  double **atest;
+  uint k, j, i;
+  double **tmp;
+  char result;
+  atest = dmatrix (1, m, 1, n);
+  tmp = dmatrix(1, m, 1, n);
+  for (i = 1; i <= m; i++) {
+    for (j = 1; j <= n; j++) {
+      tmp[i][j] = u[i][j] * w[j];
+    }
+  }
+  for (i = 1; i <= m; i++) {
+    for (j = 1; j <= n; j++) {
+      atest[i][j] = 0.0;
+      for (k = 1; k <= n; k++) {
+        atest[i][j] += tmp[i][k] * v[j][k];
+      }
+    }
+  }
+  free_dmatrix(tmp, 1, m, 1, n);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n Original [A] of dim m x n :");
+  matrixPrint(a, m, n);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n Recovered [A] of dim m x n :");
+  matrixPrint(atest, m, n);
+  result = TRUE;
+  for (i = 1; i <= m; i++) {
+    for (j = 1; j <= n; j++) {
+      if (fabs(atest[i][j] - a[i][j]) > EPSILON) {
+        result = FALSE;
+        RF_nativePrint("\n TEST 33:  %10d %10d %10.8e", i, j, fabs(atest[i][j] - a[i][j]));
+      }
+    }
+  }
+  RF_nativePrint("\n");
+  if (result) {
+    RF_nativePrint("\n Original [A] == Recovered [A] ? : TRUE");
+  }
+  else {
+    RF_nativePrint("\n Original [A] == Recovered [A] ? : FALSE");
+  }
+  free_dmatrix(atest, 1, m, 1, n);
+  return result;
+}
+double **svdinv(double **u, double *w, double **v, uint m, uint n, uint singularity) {
+  double **aplus, **wplus, **utrans, **tmp;
+  uint i, j, k;
+  wplus = dmatrix(1, n, 1, n);
+  k = 0;
+  for (i = 1; i <= n; i++) {
+    for (j = 1; j <= n; j++) {
+      if (i != j) {
+        wplus[i][j] = 0.0;
+      }
+      else {
+        if (fabs(w[i]) > SVD_EPS) {
+          wplus[i][j] = 1.0 / w[i];
+          k++;
+        }
+        else {
+          wplus[i][j] = 0.0;
+        }
+      }
+    }
+  }
+  if ((k >= singularity) && k > 1) {
+    tmp = matrixMult(v, wplus, n, n, n);
+    utrans = matrixTrans(u, m, n);
+    aplus = matrixMult(tmp, utrans, n, n, m);
+    free_dmatrix(tmp, 1, n, 1, n);
+    free_dmatrix(utrans, 1, n, 1, m);
+  }
+  else {
+    aplus = NULL;
+  }
+  free_dmatrix(wplus, 1, n, 1, n);
+  return aplus;
+}
+void free_svdcmp(double **a, int m, int n, double **u, double *w, double **v) {
+  if (a != NULL) {
+    free_dmatrix(a, 1, m, 1, n);
+    a = NULL;
+  }
+  free_dmatrix(u, 1, m, 1, n);
+  u = NULL;
+  free_dvector(w, 1, n);
+  w = NULL;
+  free_dmatrix(v, 1, n, 1, n);
+  v = NULL;
+}
+void svbksb(double **u, double *w, double **v, uint m, uint n, double *b, double *x) {
+  uint jj, j, i;
+  double s, *tmp;
+  tmp = dvector(1, n);
+  for (j=1; j <= n; j++) {
+    s = 0.0;
+    if (w[j]) {
+      for (i=1; i <= m; i++) s += u[i][j] * b[i];
+      s = s / w[j]; 
+    }
+    tmp[j]=s;
+  }
+  for (j = 1; j <= n; j++) {
+    s = 0.0;
+    for (jj = 1; jj <= n; jj++) s += v[j][jj] * tmp[jj];
+    x[j] = s;
+  }
+  free_dvector(tmp, 1, n);
+}
+double **matrixCopy(double **a, uint m, uint n) {
+  double **acopy;
+  uint i, j;
+  acopy = dmatrix(1, m, 1, n);
+  for (i = 1; i <= m; i++) {
+    for (j = 1; j <= n; j++) {
+      acopy[i][j] = a[i][j];
+    }
+  }
+  return acopy;
+}
+double **matrixTrans(double **a, uint m, uint n) {
+  uint i, j;
+  double **atrans;
+  atrans = dmatrix(1, n, 1, m);
+  for (i = 1; i <= m; i++) {
+    for (j = 1; j <= n; j++) {
+      atrans[j][i] = a[i][j];
+    }
+  }
+  return atrans;
+}
+double **matrixMult(double **a, double **b, uint m, uint n, uint p) {
+  double **c;
+  uint i, j, k;
+  c = dmatrix(1, m, 1, p);
+  for (i = 1; i <= m; i++) {
+    for (j = 1; j <= p; j++) {
+      c[i][j] = 0.0;
+      for (k = 1; k <= n; k++) {
+        c[i][j] += a[i][k] * b[k][j];
+      }
+    }
+  }
+  return c;
+}
+void matrixPrint(double **x, uint m, uint n) {
+  uint i, j;
+  for (i = 1; i <= m; i++) {
+    RF_nativePrint("\n");
+    for (j = 1; j <= n; j++) {
+      RF_nativePrint("  %10.8e", x[i][j]);
+    }
+  }
+}
+double pythag(double a, double b) {
+  double absa, absb;
+  absa = fabs(a);
+  absb = fabs(b);
+  if (absa > absb)
+    return absa * sqrt(1.0 + ((absb/absa) * (absb/absa)));
+  else
+    return (absb == 0.0 ? 0.0 : absb * sqrt(1.0 + ((absa/absb) * (absa/absb))));
+}
+void harness() {
+  uint M, N;
+  M = 3;
+  N = 4;
+  double **a, **aplus, **gident, **gident2, **uident, **uident2;
+  double  *w;
+  double **u, **utrans;
+  double **v, **vtrans, **vident, **vident2;
+  a    = dmatrix(1, M, 1, N);
+  a[1][1] =  3;
+  a[1][2] =  0;
+  a[1][3] =  1;
+  a[1][4] =  3;
+  a[2][1] =  4;
+  a[2][2] =  5;
+  a[2][3] =  6;
+  a[2][4] =  7;
+  a[3][1] =  0;
+  a[3][2] =  1;
+  a[3][3] =  2;
+  a[3][4] = -2;
+  svdcmp(a, M, N, &u, &w, &v);
+  RF_nativePrint("\n");  
+  RF_nativePrint("\n Original [A] of dim m x n :");
+  matrixPrint(a, M, N);
+  svdchk(a, M, N, u, w, v);
+  aplus = svdinv(u, w, v, M, N, 2);
+  gident = matrixMult(a, aplus, M, N, M);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n Check of [A] x [A+] of dim m x m :");
+  matrixPrint(gident, M, M);
+  gident2 = matrixMult(aplus, a, N, M, N);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n Check of [A+] x [A] of dim n x n :");
+  matrixPrint(gident2, N, N);
+  utrans = matrixTrans(u, M, N);
+  uident = matrixMult(u, utrans, M, N, M);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n Check of [U] x [U]^t of dim m x m :");
+  matrixPrint(uident, M, M);
+  uident2 = matrixMult(utrans, u, N, M, N);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n Check of [U]^t x [U] of dim n x n :");
+  matrixPrint(uident2, N, N);
+  vtrans = matrixTrans(v, N, N);
+  vident = matrixMult(v, vtrans, N, N, N);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n Check of [V] x [V]^t of dim n x n :");
+  vident2 = matrixMult(vtrans, v, N, N, N);
+  RF_nativePrint("\n");
+  RF_nativePrint("\n Check of [V]^t x [V] of dim n x n :");
+  matrixPrint(vident2, N, N);
+  free_dmatrix(vident2, 1, N, 1, N);
+  free_dmatrix(vident, 1, N, 1, N);
+  free_dmatrix(vtrans, 1, N, 1, N);
+  free_dmatrix(uident2, 1, N, 1, N);
+  free_dmatrix(uident, 1, M, 1, M);
+  free_dmatrix(utrans, 1, N, 1, M);
+  free_dmatrix(gident2, 1, N, 1, N);
+  free_dmatrix(gident, 1, M, 1, M);  
+  free_dmatrix(aplus, 1, N, 1, M);  
+  free_svdcmp(a, M, N, u, w, v);
+}
 Terminal *makeTerminal() {
   Terminal *parent = (Terminal*) gblock((size_t) sizeof(Terminal));
   parent -> lmiIndex      = NULL;
@@ -28850,26 +29602,26 @@ void acquireTree(char mode, uint r, uint b) {
   if (RF_inSituEnsembleFlag) {
     freeTree(b, RF_root[b]);
   }
+  if (getUserTraceFlag()) {
 #ifdef _OPENMP
 #pragma omp critical (_update_timer)
 #endif
     { 
-      if (getUserTraceFlag()) {
-        double userTimeElapsedFromStart;
-        double userTimeElapsedFromSplit;
-        double userTimeRemaining;
-        time_t current;
-        RF_userTreeID++;
-        current = time(NULL);
-        userTimeElapsedFromSplit = (double) (current - RF_userTimeSplit);
-        if ((userTimeElapsedFromSplit) > (double) getUserTraceFlag()) {
-          userTimeElapsedFromStart = (double) (current - RF_userTimeStart);
-          userTimeRemaining = (userTimeElapsedFromStart / RF_userTreeID * RF_ntree) - userTimeElapsedFromStart;
-          RF_nativePrint("Trees Grown:  %6d,    Time Remaining (sec):  %6.0f \n", RF_userTreeID, ceil(userTimeRemaining));
-          RF_userTimeSplit = current;
-        }
+      double userTimeElapsedFromStart;
+      double userTimeElapsedFromSplit;
+      double userTimeRemaining;
+      time_t current;
+      RF_userTreeID++;
+      current = time(NULL);
+      userTimeElapsedFromSplit = (double) (current - RF_userTimeSplit);
+      if ((userTimeElapsedFromSplit) > (double) getUserTraceFlag()) {
+        userTimeElapsedFromStart = (double) (current - RF_userTimeStart);
+        userTimeRemaining = (userTimeElapsedFromStart / RF_userTreeID * RF_ntree) - userTimeElapsedFromStart;
+        RF_nativePrint("Trees Grown:  %6d,    Time Remaining (sec):  %6.0f \n", RF_userTreeID, ceil(userTimeRemaining));
+        RF_userTimeSplit = current;
       }
     }  
+  }
 }
 void finalizeWeight(char mode) {
   uint    obsSize;
@@ -29889,14 +30641,12 @@ char growTree (uint     r,
   uint rghtRepMembrSize;
   SplitInfoMax *splitInfoMax;
   SplitInfo *splitInfo;
-  GreedyObj *greedyMembr;
   uint *repMembrIndx, *allMembrIndx;
   uint  repMembrSize,  allMembrSize;
   uint i, p;
   bootResult = TRUE;
   terminalFlag = TRUE;
   splitInfo = NULL;
-  greedyMembr = NULL;
   allMembrIndx = parent -> allMembrIndx;
   allMembrSize = parent -> allMembrSize;
   repMembrIndx = parent -> repMembrIndx;
@@ -30051,7 +30801,6 @@ char growTree (uint     r,
                                parent,
                                RF_splitRule,
                                splitInfoMax,
-                               greedyMembr,
                                multImpFlag);
     if (splitResult == TRUE) {
       splitInfo = makeSplitInfo(0);
@@ -31161,11 +31910,11 @@ void processEnsemblePost(char mode) {
           }  
         }  
       }  
+      if (getUserTraceFlag()) {
 #ifdef _OPENMP
 #pragma omp critical (_update_timer)
 #endif
-      { 
-        if (getUserTraceFlag()) {
+        { 
           double userTimeElapsedFromStart;
           double userTimeElapsedFromSplit;
           double userTimeRemaining;
@@ -31179,8 +31928,8 @@ void processEnsemblePost(char mode) {
             RF_nativePrint("Ensembles Processed:  %6d,    Time Remaining (sec):  %6.0f \n", RF_userTreeID, ceil(userTimeRemaining));
             RF_userTimeSplit = current;
           }
-        }
-      }  
+        }  
+      }
     }  
   }  
   if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {

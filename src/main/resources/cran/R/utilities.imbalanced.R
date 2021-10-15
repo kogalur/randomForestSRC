@@ -1,11 +1,13 @@
-get.imbalanced.performance <- function(o, threshold = NULL, robust = FALSE, stealth = TRUE) {
+get.imbalanced.performance <- function(o, threshold = NULL, robust = FALSE) {
   ## if this is not a two-class forest object, return with NULL
   if (!is.factor(o$yvar) || length(levels(o$yvar)) != 2) {
     return(NULL)
   }
   ## get brier and auc using built in functions
-  brier <- get.brier.error(o$yvar, if(!is.null(o$predicted.oob) && !all(is.na(o$predicted.oob))) o$predicted.oob else o$predicted)
-  auc <- get.auc(o$yvar, if(!is.null(o$predicted.oob) && !all(is.na(o$predicted.oob))) o$predicted.oob else o$predicted)
+  brier <- get.brier.error(o$yvar,
+     if(!is.null(o$predicted.oob) && !all(is.na(o$predicted.oob))) o$predicted.oob else o$predicted)
+  auc <- get.auc(o$yvar,
+     if(!is.null(o$predicted.oob) && !all(is.na(o$predicted.oob))) o$predicted.oob else o$predicted)
   ## acquire all other metrics from built in performance evaluator
   perf.o <- get.imbalanced.performance.workhorse(o, threshold = threshold, robust = robust) 
   ## assemble output as a list, with gmean last
@@ -43,6 +45,9 @@ get.imbalanced.performance.workhorse <- function (o, threshold = NULL, robust = 
   if (is.null(threshold)) {
     threshold <- as.numeric(pihat)
   }
+  else {
+    threshold <- as.numeric(threshold)
+  }
   ##-------------------------------------------
   ## extract performance values
   ##
@@ -73,14 +78,9 @@ get.imbalanced.performance.workhorse <- function (o, threshold = NULL, robust = 
       spec <- TN/(TN + FP)
       prec <- TP/(TP + FP)
     }
-    ## if gmean is already computed use that
-    #if (!is.null(o$forest$rfq) && o$forest$perf.type == "g.mean") {
-    #  gmean <- as.numeric(1 - o$err.rate[nrow(o$err.rate), 1])
-    #}
-    #else {
+    ## performance values
     gmean <- sqrt(sens * spec)
-    #}
-    F1 <- 2 * (prec * sens)/(prec + sens) 
+    F1 <- 2 * (prec * sens) / (prec + sens) 
     balanced<- (sens + spec) / 2
     prO <- get.pr.auc(y, prob[, 2])
     pr.auc <- prO[1]
@@ -123,12 +123,12 @@ get.rfq.threshold <- function(y) {
 ##
 ##
 ###################################################################
-optimize.imbalanced <- function(o,
-                                newdata = NULL,
-                                measure = c("gmean", "balanced"),
-                                ngrid = 1000,
-                                plot.it = TRUE) {
-  measure <- match.arg(measure, c("gmean", "balanced"))
+get.imbalanced.optimize <- function(o,
+                                    newdata = NULL,
+                                    measure = c("gmean", "balanced", "F1"),
+                                    ngrid = 1000,
+                                    plot.it = TRUE) {
+  measure <- match.arg(measure, c("gmean", "balanced", "F1"))
   ## if new data present, replace object with predicted object
   if (!is.null(newdata)) {
     o <- predict(o, newdata)
@@ -138,18 +138,21 @@ optimize.imbalanced <- function(o,
   if (measure == "gmean") {
     best <- which.max(x$gmean)
   }
-  else {
+  if (measure == "balanced") {
     best <- which.max(x$balanced)
+  }
+  if (measure == "F1") {
+    best <- which.max(x$F1)
   }
   if (plot.it) {
     par(mfrow = c(2,2))
     pt <- x$threshold < 3 * x$threshold[best]
-    plot(x$threshold[pt], x$balanced[pt], xlab = "threshold", ylab = "balanced")
-    abline(v = x$threshold[best], lty = 2, col = "blue")
     plot(x$threshold[pt], x$gmean[pt], xlab = "threshold", ylab = "gmean")
     abline(v = x$threshold[best], lty = 2, col = "blue")
-    plot(x$threshold[pt][-1], diff(x$balanced[pt]), xlab = "threshold", ylab = "delta-balanced")
-    plot(x$threshold[pt][-1], diff(x$gmean[pt]), xlab = "threshold", ylab = "delta-gmean")
+    plot(x$threshold[pt], x$balanced[pt], xlab = "threshold", ylab = "balanced")
+    abline(v = x$threshold[best], lty = 2, col = "blue")
+    plot(x$threshold[pt], x$F1[pt], xlab = "threshold", ylab = "F1")
+    abline(v = x$threshold[best], lty = 2, col = "blue")
   }
   x[best,, drop = FALSE]
 }
