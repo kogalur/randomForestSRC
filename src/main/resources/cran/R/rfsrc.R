@@ -2,7 +2,7 @@ rfsrc <- function(formula, data, ntree = 500,
                   mtry = NULL, ytry = NULL,
                   nodesize = NULL, nodedepth = NULL,
                   splitrule = NULL, nsplit = 10,
-                  importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
+                  importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
                   block.size = if (any(is.element(as.character(importance), c("none", "FALSE")))) NULL else 10,
                   ensemble = c("all", "oob", "inbag"),
                   bootstrap = c("by.root", "none", "by.user"),
@@ -50,14 +50,14 @@ rfsrc <- function(formula, data, ntree = 500,
     holdout.specs <- is.hidden.holdout.specs(user.option)
     empirical.risk <- is.hidden.empirical.risk(user.option)
     tdc.rule <- is.hidden.tdc.rule(user.option)
-    chunkify  <- is.hidden.chunkify(user.option)
+    vimp.threshold  <- is.hidden.vimp.threshold(user.option)
     ## verify key options
     ensemble <- match.arg(ensemble, c("all", "oob", "inbag"))  
     bootstrap <- match.arg(bootstrap, c("by.root", "none", "by.user"))
     if (bootstrap == "none") {
         ensemble <- "inbag"
     }
-    importance <- match.arg(as.character(importance), c(FALSE, TRUE, "none", "permute", "random", "anti"))
+    importance <- match.arg(as.character(importance), c(FALSE, TRUE, "none", "anti", "permute", "random"))
     na.action <- match.arg(na.action, c("na.omit", "na.impute"))
     proximity <- match.arg(as.character(proximity), c(FALSE, TRUE, "inbag", "oob", "all"))
     distance <- match.arg(as.character(distance), c(FALSE, TRUE, "inbag", "oob", "all"))
@@ -393,19 +393,6 @@ rfsrc <- function(formula, data, ntree = 500,
     if (terminal.qualts | terminal.quants) {
         forest <- TRUE
     }
-    ## Assign low bits for the native code
-    ensemble.bits <- get.ensemble(ensemble)
-    impute.only.bits <- get.impute.only(impute.only, n.miss)
-    var.used.bits <- get.var.used(var.used)
-    split.depth.bits <- get.split.depth(split.depth)
-    importance.bits <- get.importance(importance)
-    bootstrap.bits <- get.bootstrap(bootstrap)
-    forest.bits <- get.forest(forest)
-    proximity.bits <- get.proximity(TRUE, proximity)
-    distance.bits <- get.distance(TRUE, distance)
-    membership.bits <-  get.membership(membership)
-    statistics.bits <- get.statistics(statistics)
-    split.cust.bits <- get.split.cust(splitinfo$cust)
     ## get performance and rfq, gk bits
     perf.type <- get.perf(perf.type, impute.only, family)
     perf.bits <-  get.perf.bits(perf.type)
@@ -414,6 +401,19 @@ rfsrc <- function(formula, data, ntree = 500,
     gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
     empirical.risk.bits <- get.empirical.risk.bits(empirical.risk)
     tdc.rule.bits <- get.tdc.rule.bits(tdc.rule)
+    ## Assign low bits for the native code
+    ensemble.bits <- get.ensemble(ensemble)
+    impute.only.bits <- get.impute.only(impute.only, n.miss)
+    var.used.bits <- get.var.used(var.used)
+    split.depth.bits <- get.split.depth(split.depth)
+    importance.bits <- get.importance(importance, perf.type)
+    bootstrap.bits <- get.bootstrap(bootstrap)
+    forest.bits <- get.forest(forest)
+    proximity.bits <- get.proximity(TRUE, proximity)
+    distance.bits <- get.distance(TRUE, distance)
+    membership.bits <-  get.membership(membership)
+    statistics.bits <- get.statistics(statistics)
+    split.cust.bits <- get.split.cust(splitinfo$cust)
     ## Assign high bits for the native code
     samptype.bits <- get.samptype(samptype)
     forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
@@ -476,7 +476,7 @@ rfsrc <- function(formula, data, ntree = 500,
                                     as.integer(nodedepth),
                                     as.integer(length(cause.wt)),
                                     as.double(cause.wt),
-                                    as.integer(chunkify),
+                                    as.double(vimp.threshold),
                                     as.integer(ntree),
                                     as.integer(n),
                                     list(as.integer(length(yvar.types)),
@@ -612,9 +612,9 @@ rfsrc <- function(formula, data, ntree = 500,
         }
     }
     ## class imbalanced processing
-    pi.hat <- NULL
+    class.relfrq <- NULL
     if (family == "class" && rfq) {
-        pi.hat <- table(yvar) / length(yvar)
+        class.relfrq <- table(yvar) / length(yvar)
     }
     ## map imputed data factors back to original values
     ## does NOT apply for y under unsupervised mode
@@ -934,6 +934,7 @@ rfsrc <- function(formula, data, ntree = 500,
                          seedVimp = if (importance == FALSE) NULL else nativeOutput$seedVimp,
                          terminal.qualts = terminal.qualts,
                          terminal.quants = terminal.quants,
+                         vimp.threshold = vimp.threshold,
                          version = "@PROJECT_VERSION@")
       ## family specific additions to the forest object
       if (grepl("surv", family)) {
@@ -1538,7 +1539,7 @@ rfsrc <- function(formula, data, ntree = 500,
                                       array(nativeOutput$allEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                             c(n, levels.count[i]), dimnames=ens.names) else NULL)
                     classOutput[[i]] <- list(predicted = predicted)
-                    response <- (if (!is.null(predicted)) get.bayes.rule(predicted, pi.hat) else NULL)
+                    response <- (if (!is.null(predicted)) get.bayes.rule(predicted, class.relfrq) else NULL)
                     classOutput[[i]] <- c(classOutput[[i]], class = list(response))
                     remove(predicted)
                     remove(response)
@@ -1546,7 +1547,7 @@ rfsrc <- function(formula, data, ntree = 500,
                                           array(nativeOutput$oobEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                                 c(n, levels.count[i]), dimnames=ens.names) else NULL)
                     classOutput[[i]] <- c(classOutput[[i]], predicted.oob = list(predicted.oob))
-                    response.oob <- (if (!is.null(predicted.oob)) get.bayes.rule(predicted.oob, pi.hat) else NULL)
+                    response.oob <- (if (!is.null(predicted.oob)) get.bayes.rule(predicted.oob, class.relfrq) else NULL)
                     classOutput[[i]] <- c(classOutput[[i]], class.oob = list(response.oob))
                     remove(predicted.oob)
                     remove(response.oob)

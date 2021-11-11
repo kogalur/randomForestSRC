@@ -178,7 +178,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP nodeDepth,
                SEXP crWeightSize,
                SEXP crWeight,
-               SEXP chunkify,
+               SEXP vimpThreshold,
                SEXP ntree,
                SEXP observationSize,
                SEXP yInfo,
@@ -247,7 +247,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_nodeDepth            = INTEGER(nodeDepth)[0];
   RF_crWeightSize         = INTEGER(crWeightSize)[0];
   RF_crWeight             = REAL(crWeight); RF_crWeight--;
-  RF_forestChunkSize      = INTEGER(chunkify)[0];
+  RF_vimpThreshold        = REAL(vimpThreshold)[0];
   RF_ntree                = INTEGER(ntree)[0];
   RF_observationSize      = INTEGER(observationSize)[0];
   RF_ySize                = INTEGER(VECTOR_ELT(yInfo, 0))[0];
@@ -417,7 +417,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP seedPtr,
                   SEXP optLow,
                   SEXP optHigh,
-                  SEXP chunkify,
+                  SEXP vimpThreshold,
                   SEXP ntree,
                   SEXP observationSize,
                   SEXP yInfo,
@@ -480,7 +480,7 @@ clock_t cpuTimeStart = clock();
   int seedValue           = INTEGER(seedPtr)[0];
   RF_opt                  = INTEGER(optLow)[0];
   RF_optHigh              = INTEGER(optHigh)[0];
-  RF_forestChunkSize      = INTEGER(chunkify)[0];
+  RF_vimpThreshold        = REAL(vimpThreshold)[0];
   RF_ntree                = INTEGER(ntree)[0];
   RF_observationSize      = INTEGER(observationSize)[0];
   RF_ySize                = INTEGER(VECTOR_ELT(yInfo, 0))[0];
@@ -880,14 +880,6 @@ void free_2DObject(void *arr, char type, char flag, uint row, uint col) {
 }
 void initProtect(uint  stackCount) {
   if (stackCount > 0) {
-    if ((stackCount >> 6) > 0) {
-      if (FALSE) {
-        RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-        RF_nativeError("\nRF-SRC:  S.E.X.P. vector list limit exceeded:  %20d", stackCount);
-        RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-        RF_nativeExit();
-      }
-    }
     PROTECT(RF_sexpVector[RF_OUTP_ID] = allocVector(VECSXP, stackCount));
     PROTECT(RF_sexpVector[RF_STRG_ID] = allocVector(STRSXP, stackCount));
     setAttrib(RF_sexpVector[RF_OUTP_ID], R_NamesSymbol, RF_sexpVector[RF_STRG_ID]);

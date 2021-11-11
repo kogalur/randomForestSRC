@@ -36,7 +36,7 @@ generic.predict.rfsrc <-
   gk.quantile <- is.hidden.gk.quantile(user.option)
   prob <- is.hidden.prob(user.option)
   prob.epsilon <- is.hidden.prob.epsilon(user.option)
-  chunkify  <- is.hidden.chunkify(user.option)
+  vimp.threshold  <- is.hidden.vimp.threshold(user.option)
   ## set the family
   family <- object$family
   ## incoming parameter checks: all are fatal
@@ -63,14 +63,13 @@ generic.predict.rfsrc <-
   }
   ## verify the importance option
   importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
-                                                         "none", "permute", "random", "anti",
-                                                         "permute.joint", "random.joint", "anti.joint"))
+          "none", "anti", "permute", "random", "anti.joint", "permute.joint", "random.joint"))
   if (grepl("joint", importance)) {
     vimp.joint <- TRUE
   }
-    else {
-      vimp.joint <- FALSE
-    }
+  else {
+    vimp.joint <- FALSE
+  }
   ## pull the x-variable and y-outcome names from the grow object
   xvar.names <- object$xvar.names
   yvar.names <- object$yvar.names
@@ -182,7 +181,7 @@ generic.predict.rfsrc <-
         }
   }
   ## classification specific details related to rfq and perf.type
-  pi.hat <- NULL
+  class.relfrq <- NULL
   if (family == "class") {
     ## rfq specific details
     if (!is.null(rfq)) {##predict has specified rfq
@@ -190,7 +189,7 @@ generic.predict.rfsrc <-
         ## nothing 
       }
       else {##predict has requested rfq
-        pi.hat <- table(object$yvar) / length(object$yvar)
+        class.relfrq <- table(object$yvar) / length(object$yvar)
       }
     }
     if (is.null(rfq)) {##predict  ambivalent about rfq
@@ -198,7 +197,7 @@ generic.predict.rfsrc <-
         ## nothing -> rfq = FALSE
       }
       else {##grow used rfq - use grow spec
-        pi.hat <- table(object$yvar) / length(object$yvar)
+        class.relfrq <- table(object$yvar) / length(object$yvar)
         rfq <- TRUE
       }
     }
@@ -275,7 +274,9 @@ generic.predict.rfsrc <-
   ## with the original training data.
   ## ----------------------------------------------------------------
   ##--------------------------------------------------------
+  ##
   ## NON-RESTORE MODE PROCESSING (includes outcome=="test")
+  ##
   ##--------------------------------------------------------
   if (!restore.mode) {
     ## Filter the test data based on the formula
@@ -383,7 +384,9 @@ generic.predict.rfsrc <-
     remove(newdata)
   }
   ##--------------------------------------------------------
+  ##
   ## RESTORE MODE PROCESSING (excludes outcome=="test")
+  ##
   ##--------------------------------------------------------
   else {
     ## There cannot be test data in restore mode
@@ -402,6 +405,10 @@ generic.predict.rfsrc <-
     else {
       ## do nothing.
     }
+    ## restore hidden parameters
+    if (is.null(user.option$vimp.threshold)) {
+      vimp.threshold <- object$vimp.threshold 
+    }      
   } ## ends restore.mode check
   ## ------------------------------------------------------------
   ## We have completed the restore/non-restore mode processing
@@ -455,14 +462,6 @@ generic.predict.rfsrc <-
   ## to extract from the forest.  This is only relevant to restore mode.
   ## The parameter is ignored in predict mode.
   get.tree <- get.tree.index(get.tree, ntree)
-  ## initialize the low bits
-  ensemble.bits <- get.ensemble(ensemble)
-  importance.bits <- get.importance(importance)
-  proximity.bits <- get.proximity(restore.mode, proximity)
-  distance.bits <- get.distance(restore.mode, distance)
-  split.depth.bits <- get.split.depth(split.depth)
-  var.used.bits <- get.var.used(var.used)
-  outcome.bits <- get.outcome(outcome)
   ## get performance and rfq, gk bits
   perf.type <- get.perf(perf.type, FALSE, family)
   perf.bits <-  get.perf.bits(perf.type)
@@ -471,6 +470,14 @@ generic.predict.rfsrc <-
   gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
   statistics.bits <- get.statistics(statistics)
   bootstrap.bits <- get.bootstrap(object$bootstrap)
+  ## initialize the low bits
+  ensemble.bits <- get.ensemble(ensemble)
+  importance.bits <- get.importance(importance, perf.type)
+  proximity.bits <- get.proximity(restore.mode, proximity)
+  distance.bits <- get.distance(restore.mode, distance)
+  split.depth.bits <- get.split.depth(split.depth)
+  var.used.bits <- get.var.used(var.used)
+  outcome.bits <- get.outcome(outcome)
   ## Initalize the high bits
   samptype.bits <- get.samptype(object$samptype)
   ## forest weights
@@ -589,7 +596,7 @@ generic.predict.rfsrc <-
                                              data.pass.predict.bits +
                                              experimental.bits),
                                   ## >>>> start of maxi forest object >>>>
-                                  as.integer(chunkify),
+                                  as.double(vimp.threshold),
                                   as.integer(ntree),
                                   as.integer(n),
                                   list(as.integer(length(yvar.types)),
@@ -1314,7 +1321,7 @@ generic.predict.rfsrc <-
                             array(nativeOutput$allEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                   c(n.observed, levels.count[target.idx]), dimnames=ens.names) else NULL)
             classOutput[[target.idx]] <- list(predicted = predicted)
-            response <- (if (!is.null(predicted)) get.bayes.rule(predicted, pi.hat) else NULL)
+            response <- (if (!is.null(predicted)) get.bayes.rule(predicted, class.relfrq) else NULL)
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], class = list(response))
             remove(predicted)
             remove(response)
@@ -1322,7 +1329,7 @@ generic.predict.rfsrc <-
                                 array(nativeOutput$oobEnsbCLS[(iter.ensb.start + 1):iter.ensb.end],
                                       c(n.observed, levels.count[target.idx]), dimnames=ens.names) else NULL)
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], predicted.oob = list(predicted.oob))
-            response.oob <- (if (!is.null(predicted.oob)) get.bayes.rule(predicted.oob, pi.hat) else NULL)
+            response.oob <- (if (!is.null(predicted.oob)) get.bayes.rule(predicted.oob, class.relfrq) else NULL)
             classOutput[[target.idx]] <- c(classOutput[[target.idx]], class.oob = list(response.oob))
             remove(predicted.oob)
             remove(response.oob)

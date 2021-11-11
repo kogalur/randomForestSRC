@@ -3,6 +3,9 @@
 \alias{imbalanced}
 \alias{get.imbalanced.performance}
 \alias{get.imbalanced.optimize}
+\alias{get.pr.auc}
+\alias{get.pr.curve}
+\alias{get.rfq.threshold}
 \title{Imbalanced Two Class Problems}
 \description{
   Implements various solutions to the two-class imbalanced problem,
@@ -37,7 +40,7 @@
     The default for \code{rfq} and \code{brf} is to use the G-mean
     (Kubat et al., 1997).  For standard random forests, the default is
     misclassification error.  Users can over-ride the default performance
-    measure by manually selecting either \code{g.mean} for the G-mean,
+    measure by manually selecting either \code{gmean} for the G-mean,
     \code{misclass} for misclassification error, or \code{brier} for the
     normalized Brier score. See the examples below.}
 
@@ -73,6 +76,11 @@
   Currently, missing values cannot be handled for BRF or when the
   \code{ratio} option is used; in these cases, missing data is removed
   prior to the analysis.
+
+  Permutation VIMP is used by default and not anti-VIMP which is the
+  default for all other families and settings.  Our experiments indicate
+  the former performs better in imbalanced settings, especially when
+  imbalanced ratio is high.
 
   We recommend setting \code{ntree} to a relatively large value when
   dealing with imbalanced data to ensure convergence of the performance
@@ -122,7 +130,7 @@ o.rfq <- imbalanced(f, breast)
 print(o.rfq)
 
 ## equivalent to:
-## rfsrc(f, breast, rfq =  TRUE, ntree = 3000, perf.type = "g.mean") 
+## rfsrc(f, breast, rfq =  TRUE, ntree = 3000, perf.type = "gmean") 
 
 ##----------------------------------------------------------------
 ## detailed output using customized performance function
@@ -145,7 +153,7 @@ o.rfq <- imbalanced(f, breast, fast = TRUE)
 print(o.rfq)
 
 ## equivalent to:
-## rfsrc.fast(f, breast, ntree = 3000, rfq =  TRUE, perf.type = "g.mean") 
+## rfsrc.fast(f, breast, ntree = 3000, rfq =  TRUE, perf.type = "gmean") 
 
 ##-----------------------------------------------------------------
 ## standard RF (uses misclassification)
@@ -157,10 +165,10 @@ o.std <- imbalanced(f, breast, method = "stand")
 ## standard RF using G-mean performance
 ## ------------------------------------------------------------
 
-o.std <- imbalanced(f, breast, method = "stand", perf.type = "g.mean")
+o.std <- imbalanced(f, breast, method = "stand", perf.type = "gmean")
 
 ## equivalent to:
-## rfsrc(f, breast, ntree = 3000, perf.type = "g.mean")
+## rfsrc(f, breast, ntree = 3000, perf.type = "gmean")
 
 ##----------------------------------------------------------------
 ## default BRF call 
@@ -169,7 +177,7 @@ o.std <- imbalanced(f, breast, method = "stand", perf.type = "g.mean")
 o.brf <- imbalanced(f, breast, method = "brf")
 
 ## equivalent to:
-## imbalanced(f, breast, method = "brf", perf.type = "g.mean")
+## imbalanced(f, breast, method = "brf", perf.type = "gmean")
 
 ##----------------------------------------------------------------
 ## BRF call with misclassification performance 
@@ -212,9 +220,9 @@ if (library("caret", logical.return = TRUE)) {
   d <- d[c(idx.0,idx.1),, drop = FALSE]
 
   ## split data into train and test
-  trn.pt <- sample(1:n, size = n / 2)
+  trn.pt <- sample(1:nrow(d), size = nrow(d) / 2)
   trn <- d[trn.pt, ]
-  tst <- d[setdiff(1:n, trn.pt), ]
+  tst <- d[setdiff(1:nrow(d), trn.pt), ]
 
   ## run rfq on training data
   o <- imbalanced(f, trn)
@@ -225,14 +233,14 @@ if (library("caret", logical.return = TRUE)) {
 
   ## training performance
   cat("-------- train performance ---------\n")
-  print(get.imbalanced.performance(o, th.1))
-  print(get.imbalanced.performance(o, th.2))
+  print(get.imbalanced.performance(o, thresh=th.1))
+  print(get.imbalanced.performance(o, thresh=th.2))
 
   ## test performance
   cat("-------- test performance ---------\n")
   pred.o <- predict(o, tst)
-  print(get.imbalanced.performance(pred.o, th.1))
-  print(get.imbalanced.performance(pred.o, th.2))
+  print(get.imbalanced.performance(pred.o, thresh=th.1))
+  print(get.imbalanced.performance(pred.o, thresh=th.2))
  
 } 
 

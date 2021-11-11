@@ -1,7 +1,7 @@
 vimp.rfsrc <- function(object,
                        xvar.names,
                        m.target = NULL,
-                       importance = c("permute", "random", "anti"),
+                       importance = c("anti", "permute", "random"),
                        block.size = 10,
                        joint = FALSE,
                        seed = NULL,
@@ -34,8 +34,7 @@ vimp.rfsrc <- function(object,
       }
   }
   importance <- match.arg(as.character(importance),
-                          c("permute", "random", "anti",
-                            "permute.joint", "random.joint", "anti.joint"))
+      c("anti", "permute", "random", "anti.joint", "permute.joint", "random.joint"))
   ## grow objects under non-standard bootstrapping are devoid of performance values
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.null(object$forest)) {

@@ -41,9 +41,9 @@ get.auc <- function(y, prob) {
   }
 }                          
 ## bayes rule 
-get.bayes.rule <- function(prob, pi.hat = NULL) {
+get.bayes.rule <- function(prob, class.relfrq = NULL) {
   class.labels <- colnames(prob)
-  if (is.null(pi.hat)) {
+  if (is.null(class.relfrq)) {
     factor(class.labels[apply(prob, 1, function(x) {
       if (!all(is.na(x))) {
         resample(which(x == max(x, na.rm = TRUE)), 1)
@@ -55,15 +55,15 @@ get.bayes.rule <- function(prob, pi.hat = NULL) {
   }
   ## added to handle the rfq classifier
   else {
-    minority <- which.min(pi.hat)
+    minority <- which.min(class.relfrq)
     majority <- setdiff(1:2, minority)      
     rfq.rule <- rep(majority, nrow(prob))
-    rfq.rule[prob[, minority] >= min(pi.hat, na.rm = TRUE)] <- minority
+    rfq.rule[prob[, minority] >= min(class.relfrq, na.rm = TRUE)] <- minority
     factor(class.labels[rfq.rule], levels = class.labels)
   }
 }
 ## normalized brier (normalized to one for strawman coin toss)
-get.brier.error <- function(y, prob) {
+get.brier.error <- function(y, prob, normalized = TRUE, vector = FALSE) {
   if (is.null(colnames(prob))) {
     colnames(prob) <- levels(y)
   }
@@ -74,8 +74,20 @@ get.brier.error <- function(y, prob) {
     bs[j] <<- mean((1 * (y == cl[j]) - prob[, j]) ^ 2, na.rm = TRUE)
     NULL
   })
-  norm.const <- (J / (J - 1))
-  sum(bs * norm.const, na.rm = TRUE)
+  if (normalized) {##normalized to 100
+    norm.const <- (J / (J - 1))
+  }
+  else {##standard, normalized to 0.25
+    norm.const <- (1 / J)
+  }
+  ## return the summary value 
+  if (!vector) {
+    sum(bs * norm.const, na.rm = TRUE)
+  }
+  ## return the vector of brier values
+  else {
+    bs * norm.const
+  }
 }
 ## get confusion matrix
 get.confusion <- function(y, class.or.prob) {
@@ -127,7 +139,7 @@ get.gmean.rule <- function(y, prob) {
   if (length(frq) > 2) {
     return(NULL)
   }
-  ## call bayes rule with pi.hat
+  ## call bayes rule using class relative frequencies 
   get.bayes.rule(prob, frq / sum(frq, na.rm = TRUE))
 }
 ## gmean for imbalanced classification

@@ -11,7 +11,8 @@
     or \code{(rfsrc, predict)}.}
   \item{outcome.target}{Character value for multivariate families
     specifying the target outcome to be used. The default is to use the
-    first coordinate.}
+    first coordinate from the continuous outcomes (otherwise if none,
+    the first coordinate from the categorical outcomes).}
   \item{...}{Further arguments passed to or from other methods.}
 }
 \author{

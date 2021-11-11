@@ -1,37 +1,41 @@
 \name{plot.survival.rfsrc}
 \alias{plot.survival.rfsrc}
 \alias{plot.survival}
+\alias{get.brier.survival}
 \title{Plot of Survival Estimates}
 \description{
   Plot various survival estimates.
 }
-\usage{\method{plot.survival}{rfsrc}(x, plots.one.page = TRUE, 
-  show.plots = TRUE, subset, collapse = FALSE,
-  cens.model = c("km", "rfsrc"), ...)
+\usage{\method{plot.survival}{rfsrc}(x, show.plots = TRUE, subset,
+  collapse = FALSE, cens.model = c("km", "rfsrc"), ...)
 }
 \arguments{
   \item{x}{An object of class \code{(rfsrc, grow)} or
     \code{(rfsrc, predict)}.}
-  \item{plots.one.page}{Should plots be placed on one page?}
+
   \item{show.plots}{Should plots be displayed?}
-  \item{subset}{Vector indicating which individuals we want estimates for.
-    All individuals are used if not specified.}
-  \item{collapse}{Collapse the survival and cumulative hazard function
-    across the individuals specified by \option{subset}?  Only applies
-    when \option{subset} is specified.}
-  \item{cens.model}{Method for estimating the censoring distribution
-    used in the inverse probability of censoring weights (IPCW) for the
-    Brier score:      
+
+  \item{subset}{Vector indicating which cases from \code{x} we want
+    estimates for.  All cases used if not specified.}
+
+  \item{collapse}{Collapse the survival function?}
+
+  \item{cens.model}{Using the training data, specifies method for
+    estimating the censoring distribution used in the inverse
+    probability of censoring weights (IPCW) for calculating the Brier
+    score:
+
     \describe{
       \item{\code{km}:}{Uses the Kaplan-Meier estimator.}
       \item{\code{rfscr}:}{Uses a censoring random survival forest estimator.}
     }
   }
-  \item{...}{Further arguments passed to or from other methods.}
+  
+ \item{...}{Further arguments passed to or from other methods.}
+
 }
 \details{  
-  If \option{subset} is not specified, generates the following 
-  plots (going from top to bottom, left to right):
+  Produces the following plots (going from top to bottom, left to right):
   
   \enumerate{
     
@@ -43,41 +47,30 @@
     by ensemble mortality.  Based on the IPCW method described in Gerds
     et al. (2006).  Stratification is into 4 groups corresponding to the
     0-25, 25-50, 50-75 and 75-100 percentile values of mortality.  Red
-    line is the overall (non-stratified) Brier score.
+    line is overall (non-stratified) Brier score.
 
     \item Continuous rank probability score (CRPS) equal to the
     integrated Brier score divided by time.
     
     \item Plot of mortality of each individual versus observed time.
     Points in blue correspond to events, black points are censored
-    observations.
-
-  }
-  
-  When \option{subset} is specified, then for each individual in
-  \option{subset}, the following three plots are generated:
-  
-  \enumerate{
-    \item Forest estimated survival function.
+    observations.  Not given for prediction settings lacking
+    survival response information.
     
-    \item Forest estimated cumulative hazard function (CHF) (displayed
-    using black lines).  Blue lines are the CHF from the estimated hazard
-    function.
   }
-
-  Note that when the object \code{x} is of class \code{(rfsrc, predict)}
-  not all plots will be produced.  In particular, Brier scores are not
-  calculated.
-  
-  Only applies to survival families.  In particular, fails for competing
-  risk analyses.  Use \code{plot.competing.risk} in such cases.
   
   Whenever possible, out-of-bag (OOB) values are used.
+
+  Only applies to survival families.  In particular, fails for competing
+  risk analyses.  Use \command{plot.competing.risk} in such cases.
+
+  The utility function \code{get.brier.survival} can be used to extract
+  the Brier score among other useful quantities.
   
 }
 \value{
   Invisibly, the conditional and unconditional Brier scores, and the
-  integrated Brier score (if they are available).
+  integrated Brier score.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -114,8 +107,12 @@ pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc)
 ## use subset to focus on specific individuals
 plot.survival(pbc.obj, subset = 3)
 plot.survival(pbc.obj, subset = c(3, 10))
+plot.survival(pbc.obj, subset = c(3, 10), collapse = TRUE)
 
-
+## get.brier.survival function does many nice things!
+plot(get.brier.survival(pbc.obj, cens.mode="km")$brier.score,type="s", col=2)
+lines(get.brier.survival(pbc.obj, cens.model="rfsrc")$brier.score, type="s", col=4)
+legend("bottomright", legend=c("cens.model = km", "cens.model = rfsrc"), fill=c(2,4))
 
 }
 }

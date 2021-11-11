@@ -26,20 +26,31 @@
   imbalanced q-classification (O'Brien and Ishwaran 2019).  Different
   splitting rules invoked under deterministic or random splitting
   (Geurts et al. 2006, Ishwaran 2015) are available for all families.
-  Variable importance (VIMP), and holdout VIMP, as well as confidence
-  regions (Ishwaran and Lu 2019) can be calculated for single and
-  grouped variables.  Minimal depth variable selection (Ishwaran et
-  al. 2010, 2011).  Fast interface for missing data imputation using a
-  variety of different random forest methods (Tang and Ishwaran 2017).
+  Different types of variable importance (VIMP), holdout VIMP, as well
+  as confidence regions (Ishwaran and Lu 2019) can be calculated for
+  single and grouped variables.  Minimal depth variable selection
+  (Ishwaran et al. 2010, 2011).  Fast interface for missing data
+  imputation using a variety of different random forest methods (Tang
+  and Ishwaran 2017).
 
   New items users should be aware of:
   \enumerate{
 
-    \item Mahalanobis splitting for multivariate regression with
-    correlated y-outcomes  (\code{splitrule="mahalanobis"}). 
+    \item The default VIMP is no longer "permute" (Breiman-Cutler
+    permutation importance) and has been switched to "anti"
+    (\code{importance="anti"}, \code{importance=TRUE}). This calculates
+    VIMP by assigning OOB cases to the opposite (anti) split and is
+    considerably faster.  Note in some situations, such as highly
+    imbalanced classification, permutation VIMP may perform better.
+    Users can always obtain permutation VIMP using
+    \code{importance="permute"}.  
+    
+    \item Now available, Mahalanobis splitting for multivariate
+    regression with correlated y-outcomes
+    (\code{splitrule="mahalanobis"}).
 
-    \item Visualize trees on your Safari or Google Chrome browser (works
-    for all families).  See \command{\link{get.tree}}.
+    \item Now available, visualize trees on your Safari or Google Chrome
+    browser (works for all families).  See \command{\link{get.tree}}.
 
     %\item Fast hold out VIMP (see \command{\link{holdout.vimp}}).
     %Can be conservative but has good false discovery properties
@@ -68,7 +79,7 @@ rfsrc(formula, data, ntree = 500,
   mtry = NULL, ytry = NULL,
   nodesize = NULL, nodedepth = NULL,
   splitrule = NULL, nsplit = 10,
-  importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
+  importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
   block.size = if (any(is.element(as.character(importance),
                      c("none", "FALSE")))) NULL else 10,
   ensemble = c("all", "oob", "inbag"),
@@ -137,7 +148,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     the value to an integer between \code{1} and \code{ntree}.  As an
     intended side effect, if importance is requested, VIMP is
     calculated in "blocks" of size equal to \code{block.size}, thus
-    resulting in a useful compromise between ensemble and permutation
+    resulting in a useful compromise between ensemble and tree
     VIMP. The default action is to use 10 trees.}
 
   \item{ensemble}{Specifies the type of ensemble.  By default both
@@ -520,52 +531,46 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     the \command{predict.rfsrc} function).
     
     \item \emph{Variable Importance (VIMP)}
+
+    By default, \code{importance=FALSE} and VIMP is not calculated
+    unless requested.
     
-    To obtain VIMP use the option \code{importance}.  Setting this to
-    "permute" or "TRUE" returns permutation VIMP from permuting OOB
-    cases.  Choosing "random" replaces permutation with random
-    assignment.  Thus when an OOB case is dropped down a tree, the case
-    goes left or right randomly whenever a split is encountered
-    for the target variable.  If "anti" is specified, the case is
-    assigned to the opposite split.  By default \code{importance="FALSE"}
-    and VIMP is not requested.
+    The option \code{importance="permute"} returns permutation VIMP by
+    permuting OOB cases (classical Breiman-Cutler importance). The
+    option \code{importance="random"} returns importance by random
+    daughter assignment of OOB cases whenever a split is encountered for
+    the target variable.  The default is \code{importance="anti"}
+    (equivalent to \code{importance=TRUE}) which assigns OOB cases to
+    the anti (opposite) split.
 
     VIMP depends upon \code{block.size}, an integer value between 1 and
-    \code{ntree}, specifying the number of trees in a block used to
-    determine VIMP.  When \code{block.size}=1, VIMP is calculated by
-    tree.  The difference between prediction error under the perturbed
-    predictor and the original predictor is calculated for each tree and
-    averaged over the forest.  This yields Breiman-Cutler VIMP (Breiman
-    2001).
+    \code{ntree}, specifying number of trees in a block used for VIMP.
+    When \code{block.size}=1, VIMP is calculated for each tree.  When
+    \code{block.size="ntree"}, VIMP is calculated for the entire forest
+    by comparing the perturbed OOB forest ensemble (using all trees) to
+    the unperturbed OOB forest ensemble (using all trees).  This yields
+    ensemble VIMP, which does not measure the tree average effect of a
+    variable, but rather its overall forest effect.  
 
-    When \code{block.size="ntree"}, VIMP is calculated across the forest
-    by comparing the perturbed OOB forest ensemble (using all trees) to the
-    unperturbed OOB forest ensemble (using all trees).  Unlike
-    Breiman-Cutler VIMP, ensemble VIMP does not measure the tree average
-    effect of \emph{x}, but rather its overall forest effect.  This is
-    called Ishwaran-Kogalur VIMP (Ishwaran et al. 2008).
-
-    A useful compromise between Breiman-Cutler (BC) and Ishwaran-Kogalur
-    (IK) VIMP can be obtained by setting \code{block.size} to a value
-    between 1 and \code{ntree}.  Smaller values are closer to BC and
-    larger values closer to IK.  Smaller generally gives better
-    accuracy, however computational times will be higher because VIMP is
-    calculated over more blocks.  Also see \command{imbalanced} for
-    imbalanced classification data where a larger \code{block.size}
-    works better (O'Brien and Ishwaran, 2019).
+    A useful compromise between tree VIMP and ensemble VIMP can be
+    obtained by setting \code{block.size} to a value between 1 and
+    \code{ntree}.  Smaller values generally gives better accuracy,
+    however computational times will be higher because VIMP is
+    calculated over more blocks.  However, see \command{imbalanced} for
+    imbalanced classification data where larger \code{block.size}
+    often works better (O'Brien and Ishwaran, 2019).
 
     See \command{vimp} for a user interface for extracting VIMP and
     \command{subsampling} for calculating confidence intervals for VIMP.
 
     Also see \command{holdout.vimp} for holdout VIMP, which calculates
-    importance by holding out variables.  This leads to a more
-    conservative procedure but with good false discovery properties.
+    importance by holding out variables.  This is more conservative, but
+    with good false discovery properties.
 
-
-    Note that for classification, VIMP is returned as a matrix with with
-    J+1 columns where J is the number of classes.  The first column
-    "all" is the unconditional VIMP, while the remaining columns are
-    VIMP conditioned on cases corresponding to that class label.
+    For classification, VIMP is returned as a matrix with with J+1
+    columns where J is the number of classes.  The first column "all" is
+    the unconditional VIMP, while the remaining columns are VIMP
+    conditioned on cases corresponding to that class label.
       
     
     \item \emph{Multivariate Forests}
@@ -1362,8 +1367,8 @@ ydta <- data.frame(diet = nutrigenomic$diet,
 ## multivariate mixed forest call
 ## uses "get.mv.formula" for conveniently setting formula
 mv.obj <- rfsrc(get.mv.formula(colnames(ydta)),
-             data.frame(do.call(cbind, nutrigenomic)),
-             importance=TRUE, nsplit = 10)
+                data.frame(ydta, nutrigenomic$genes),
+		importance=TRUE, nsplit = 10)
 
 ## print results for diet and genotype y values	    
 print(mv.obj, outcome.target = "diet")

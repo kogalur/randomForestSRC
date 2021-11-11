@@ -22,14 +22,18 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
   ## set default performance
   if (is.null(perf.type)) {
     if (method == "brf" || method == "rfq") {
-      perf.type <- "g.mean"
+      perf.type <- "gmean"
     }
     else {
       perf.type <- "default"##equivalent to misclass
     }
   }
   ## check performance type is properly set
-  perf.type <- match.arg(perf.type, c("none", "default", "standard", "misclass", "brier", "g.mean"))
+  perf.type <- match.arg(perf.type,
+        c("none", "default", "standard", "misclass", "brier", "gmean", "g.mean"))
+  if (perf.type == "g.mean") {##legacy
+    perf.type <- "gmean"
+  }
   ##-----------------------------------------
   ##
   ## rfsrc call - depends on what's requested

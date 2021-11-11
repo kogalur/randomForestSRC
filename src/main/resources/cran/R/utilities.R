@@ -144,16 +144,20 @@ get.forest.wt <- function (grow.equivalent, bootstrap, weight) {
     }
     return (wght.bits)
 }
-get.importance <-  function (importance) {
-  ## Convert importance option into native code parameter.
+get.importance <-  function(importance, perf.type = NULL) {
+  ## convert importance option into native code parameter
   if (!is.null(importance)) {
-    ## Override lazy values.
-    if (importance == TRUE) {
+    ## use permute with gmean as default
+    if (!is.null(perf.type) && perf.type == "gmean" && as.character(importance) == TRUE) {
       importance <- "permute"
     }
-      else if (importance == FALSE) {
-        importance <- "none"
-      }
+    ## default vimp is now anti
+    if (importance == TRUE) {
+      importance <- "anti"
+    }
+    else if (importance == FALSE) {
+      importance <- "none"
+    }
     if (importance == "none") {
       importance <- 0
     }
@@ -179,9 +183,9 @@ get.importance <-  function (importance) {
         stop("Invalid choice for 'importance' option:  ", importance)
     }
   }
-    else {
-      stop("Invalid choice for 'importance' option:  ", importance)
-    }
+  else {
+    stop("Invalid choice for 'importance' option:  ", importance)
+  }
   return (importance)
 }
 get.impute.only <-  function (impute.only, nMiss) {
@@ -283,9 +287,12 @@ get.perf <-  function (perf, impute.only, family) {
   if (is.null(perf)) {
     return("default")
   }
-  perf <- match.arg(perf, c("none", "default", "standard", "misclass", "brier", "g.mean"))##only allowed values
+  perf <- match.arg(perf, c("none", "default", "standard", "misclass", "brier", "gmean", "g.mean"))
   if (perf == "standard" || perf == "misclass") {
     perf <- "default"
+  }
+  if (perf == "g.mean") {
+    perf <- "gmean"
   }
   perf
 }
@@ -293,7 +300,7 @@ get.perf.bits <- function (perf) {
   if (perf == "default") {
     return (2^2)
   }
-  else if (perf == "g.mean") {
+  else if (perf == "gmean" || perf == "g.mean") {
     return (2^2 + 2^14)
   }
   else if (perf == "brier") {
@@ -1082,12 +1089,18 @@ get.mad.max <- function (mad.max) {
     }
     return (mad.max)
 }
-is.hidden.chunkify <-  function (user.option) {
-    if (is.null(user.option$chunkify)) {
-        ## Zero or One will work the same.  We default to one tree per thread.
-        as.integer(0)
+is.hidden.vimp.threshold <-  function (user.option) {
+    if (is.null(user.option$vimp.threshold)) {
+        ## This is value from zero (0) to one (1) that represents the
+        ## probability that variables will be noised up for random and
+        ## anti vimp.  Thus zero means that vimp is effectively turned off.
+        ## One means that the vimp protocol will be respected all the
+        ## time.  If the threshold value alpha is such that 0 < alpha
+        ## < 1, we draw a random value b. If b <= alpha, we respect
+        ## the vimp protocol.
+        1.0
     }
     else {
-      as.integer(user.option$chunkify)
+      user.option$vimp.threshold
     }
-  }
+}

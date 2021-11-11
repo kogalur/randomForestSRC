@@ -846,11 +846,6 @@ void put_nativeEnsembleInfoList(uint size) {
     if((*RF_java_env) -> ExceptionCheck(RF_java_env)) {
       RF_nativeExit();
     }
-    if (FALSE) {
-      RF_nativePrint("\nRF-SRC:  Unable to put ensemble object to java/util/LinkedHashMap.\n");
-      RF_nativePrint("\nRF-SRC:  The application will now exit.\n");
-      RF_nativeExit();
-    }
     (*RF_java_env) -> DeleteLocalRef(RF_java_env, ensembleInfo -> dim);      
     (*RF_java_env) -> DeleteLocalRef(RF_java_env, ensembleInfo -> array);      
     stringLength = strlen(ensembleInfo -> identity) + 1;

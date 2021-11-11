@@ -311,6 +311,7 @@ uint    **RF_rLevels;
 uint      RF_ytry;
 double    RF_wibsTau;
 double    RF_xPreSort;
+double    RF_vimpThreshold;
 uint      RF_fobservationSize;
 uint      RF_frSize;
 double  **RF_fresponseIn;
@@ -587,7 +588,6 @@ Node    **RF_root;
 Node   ***RF_nodeMembership;
 Node   ***RF_fnodeMembership;
 Node   ***RF_pNodeMembership;
-Node   ***RF_tNodeList;
 Node   ***RF_pNodeList;
 Terminal   ***RF_tTermMembership;
 Terminal   ***RF_ftTermMembership;
@@ -2788,7 +2788,6 @@ double getGMeanIndex(uint    size,
 void restoreMultiClassProb(uint treeID) {
   LeafLinkedObj *leafLinkedPtr;
   Terminal *parent;
-  double maxValue, maxClass;
   uint leaf;
   uint j, k;
   leafLinkedPtr = RF_leafLinkedObjHead[treeID] -> fwdLink;
@@ -2799,17 +2798,6 @@ void restoreMultiClassProb(uint treeID) {
       for (j = 1; j <= RF_rFactorCount; j++) {
         for (k = 1; k <= RF_rFactorSize[j]; k++) {
           (parent -> multiClassProb)[j][k] = RF_TN_CLAS_ptr[treeID][leaf][j][k];
-        }
-        if (FALSE) {
-          maxValue = 0.0;
-          maxClass = 0.0;
-          for (k=1; k <= RF_rFactorSize[j]; k++) {
-            if (maxValue < (double) (parent -> multiClassProb[j][k])) {
-              maxValue = (double) parent -> multiClassProb[j][k];
-              maxClass = (double) k;
-            }
-          }
-          (parent -> maxClass)[j] = maxClass;
         }
       }
     }
@@ -3579,64 +3567,83 @@ Node *identifyPerturbedMembership (Node    *parent,
   return result;
 }
 Node *randomMembership(Node    *parent,
-                          double **predictor,
-                          uint     individual,
-                          uint     splitParameter,
-                          uint     treeID) {
+                       double **predictor,
+                       uint     individual,
+                       uint     vimpX,
+                       uint     treeID) {
   char daughterFlag;
   char randomSplitFlag;
   Node *result;
   SplitInfo *info;
+  double alpha;
   result = parent;
   if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
     info = parent -> splitInfo;
     randomSplitFlag = FALSE;
-    if (splitParameter > 0) {
-      if ((uint) info -> randomVar[1] == splitParameter) {
+    if (vimpX > 0) {
+      if ((uint) info -> randomVar[1] == vimpX) {
         randomSplitFlag = TRUE;
       }
     }
     else {
-      if(RF_importanceFlag[info -> randomVar[1]] == TRUE) {
+      if (RF_importanceFlag[info -> randomVar[1]] == TRUE) {
         randomSplitFlag = TRUE;
       }
     }
-    if(randomSplitFlag == TRUE) {
+    if (randomSplitFlag == TRUE) {
       if (RF_inSituEnsembleFlag) {
-        if (ran1D(treeID) <= 0.5) {
-          result = randomMembership(parent ->  left, predictor, individual, splitParameter, treeID);
+        alpha = ran1D(treeID);
+        if (alpha <= RF_vimpThreshold) {
+          if (alpha <= (RF_vimpThreshold / 2.0)) {
+            daughterFlag = LEFT;
+          }
+          else {
+            daughterFlag = RIGHT;
+          }
         }
         else {
-          result = randomMembership(parent -> right, predictor, individual, splitParameter, treeID);
+          daughterFlag = getDaughterPolarity(0, info, individual, predictor);
         }
-      }
+      }  
       else {
         if (RF_opt & OPT_VIMP_JOIN) {
-          if (ran1D(info -> randomVar[1]) <= 0.5) {
-            result = randomMembership(parent ->  left, predictor, individual, splitParameter, treeID);
+          alpha = ran1D(individual);
+          if (alpha <= RF_vimpThreshold) {
+            if (alpha <= (RF_vimpThreshold / 2.0)) {
+              daughterFlag = LEFT;
+            }
+            else {
+              daughterFlag = RIGHT;
+            }
           }
           else {
-            result = randomMembership(parent -> right, predictor, individual, splitParameter, treeID);
+            daughterFlag = getDaughterPolarity(0, info, individual, predictor);
           }
-        }
+        }  
         else {
-          if (ran1D(info -> randomVar[1]) <= 0.5) {
-            result = randomMembership(parent ->  left, predictor, individual, splitParameter, treeID);
+          alpha = ran1D(vimpX);
+          if (alpha <= RF_vimpThreshold) {
+            if (alpha <= (RF_vimpThreshold / 2.0)) {
+              daughterFlag = LEFT;
+            }
+            else {
+              daughterFlag = RIGHT;
+            }
           }
           else {
-            result = randomMembership(parent -> right, predictor, individual, splitParameter, treeID);
+            daughterFlag = getDaughterPolarity(0, info, individual, predictor);
           }
-        }
-      }
-    }
+        }  
+      }  
+    }  
     else {
       daughterFlag = getDaughterPolarity(0, info, individual, predictor);
-      if (daughterFlag == LEFT) {
-        result = randomMembership(parent ->  left, predictor, individual, splitParameter, treeID);
-      }
-      else {
-        result = randomMembership(parent -> right, predictor, individual, splitParameter, treeID);
-      }
+    }  
+    if (daughterFlag == LEFT) {
+      result = randomMembership(parent ->  left, predictor, individual, vimpX, treeID);
+    }
+    else {
+      result = randomMembership(parent -> right, predictor, individual, vimpX, treeID);
     }
   }
   return result;
@@ -3644,18 +3651,19 @@ Node *randomMembership(Node    *parent,
 Node *antiMembership(Node    *parent,
                      double **predictor,
                      uint     individual,
-                     uint     splitParameter,
+                     uint     vimpX,
                      uint     treeID) {
   char daughterFlag;
   char antiSplitFlag;
   Node *result;
   SplitInfo *info;
+  double alpha;
   result = parent;
   if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
     info = parent -> splitInfo;
     antiSplitFlag = FALSE;
-    if (splitParameter > 0) {
-      if ((uint) info -> randomVar[1] == splitParameter) {
+    if (vimpX > 0) {
+      if ((uint) info -> randomVar[1] == vimpX) {
         antiSplitFlag = TRUE;
       }
     }
@@ -3666,18 +3674,55 @@ Node *antiMembership(Node    *parent,
     }
     daughterFlag = getDaughterPolarity(0, info, individual, predictor);
     if(antiSplitFlag == TRUE) {
-      if (daughterFlag == LEFT) {
-        daughterFlag = RIGHT;
-      }
+      if (RF_inSituEnsembleFlag) {
+        alpha = ran1D(treeID);
+        if (alpha <= RF_vimpThreshold) {
+          if (daughterFlag == LEFT) {
+            daughterFlag = RIGHT;
+          }
+          else {
+            daughterFlag = LEFT;
+          }
+        }
+        else {
+        }
+      }  
       else {
-        daughterFlag = LEFT;
-      }
-    }
+        if (RF_opt & OPT_VIMP_JOIN) {
+          alpha = ran1D(individual);
+          if (alpha <= RF_vimpThreshold) {
+            if (daughterFlag == LEFT) {
+              daughterFlag = RIGHT;
+            }
+            else {
+              daughterFlag = LEFT;
+            }
+          }
+          else {
+          }
+        }  
+        else {
+          alpha = ran1D(vimpX);
+          if (alpha <= RF_vimpThreshold) {
+            if (daughterFlag == LEFT) {
+              daughterFlag = RIGHT;
+            }
+            else {
+              daughterFlag = LEFT;
+            }
+          }
+          else {
+          }
+        }  
+      }  
+    }  
+    else {
+    }  
     if (daughterFlag == LEFT) {
-      result = randomMembership(parent ->  left, predictor, individual, splitParameter, treeID);
+      result = antiMembership(parent ->  left, predictor, individual, vimpX, treeID);
     }
     else {
-      result = randomMembership(parent -> right, predictor, individual, splitParameter, treeID);
+      result = antiMembership(parent -> right, predictor, individual, vimpX, treeID);
     }
   }
   return result;
@@ -4604,7 +4649,6 @@ uint getVimpRecoverySeedDimension(char mode, uint opt) {
   uint bnpSize;
   bnpSize = 0;
   if (opt & OPT_VIMP) {
-#ifdef _OPENMP
     if (RF_inSituEnsembleFlag == TRUE) {
       bnpSize = RF_ntree;
     }
@@ -4640,9 +4684,6 @@ uint getVimpRecoverySeedDimension(char mode, uint opt) {
         bnpSize = RF_xSize;
       }
     }
-#else
-    bnpSize = 1;
-#endif
   }
   return bnpSize;
 }
@@ -8757,7 +8798,6 @@ void rfsrc(char mode, int seedValue) {
   stackPreDefinedCommonArrays(mode,
                               &RF_nodeMembership,
                               &RF_tTermMembership,
-                              &RF_tNodeList,
                               &RF_tTermList,
                               &RF_root);
   switch (mode) {
@@ -8821,7 +8861,7 @@ void rfsrc(char mode, int seedValue) {
     RF_xPreSort = 0;
     if (RF_optHigh & OPT_EXPERMENT) {
       if (RF_mRecordSize == 0) {
-        if ((RF_xWeightType == RF_WGHT_UNIFORM) && (RF_baseLearnDepthINTR == 0) && (RF_baseLearnDepthSYTH == 0)) {      
+        if ((RF_xWeightType == RF_WGHT_UNIFORM) && (RF_baseLearnDepthINTR == 0) && (RF_baseLearnDepthSYTH == 0)) {
           stackRandomCovariates = & stackRandomCovariatesSimple;
           unstackRandomCovariates = & unstackRandomCovariatesSimple;
           selectRandomCovariates = & selectRandomCovariatesSimple;
@@ -8981,7 +9021,6 @@ void rfsrc(char mode, int seedValue) {
   stackTNQuantitativeForestObjectsPtrOnly(mode);
   uint bnpSize;
   bnpSize = getVimpRecoverySeedDimension(mode, RF_opt);
-#ifdef _OPENMP
   ran1A = &randomChainParallel;
   ran1B = &randomUChainParallel;
   ran1D = &randomChainParallelVimp;
@@ -9023,105 +9062,41 @@ void rfsrc(char mode, int seedValue) {
     }
   }  
   else {
-    if (TRUE) {
-      for (b = 1; b <= RF_ntree; b++) {
-        randomSetChain(b , RF_seed_[b]);
-      }
-      for (b = 1; b <= RF_ntree; b++) {
+    for (b = 1; b <= RF_ntree; b++) {
+      randomSetChain(b , RF_seed_[b]);
+    }
+    for (b = 1; b <= RF_ntree; b++) {
+      lcgenerator(&seedValueLC, FALSE);
+      lcgenerator(&seedValueLC, FALSE);
+      while(seedValueLC == 0) {
         lcgenerator(&seedValueLC, FALSE);
-        lcgenerator(&seedValueLC, FALSE);
-        while(seedValueLC == 0) {
-          lcgenerator(&seedValueLC, FALSE);
-        }
-        randomSetUChain(b, -seedValueLC);
       }
-      if (RF_opt & OPT_VIMP) {
-        if ( (RF_opt & (OPT_INSITU | OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)) ==
-             (RF_optLoGrow & (OPT_INSITU | OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)) )  {
-          for (p = 1; p <= bnpSize; p++) {
-            randomSetChainVimp(p , RF_seedVimp_[p]);
-          }
-        }
-        else {
-          for (p = 1; p <= bnpSize; p++) {
-            lcgenerator(&seedValueLC, FALSE);
-            lcgenerator(&seedValueLC, FALSE);
-            while(seedValueLC == 0) {
-              lcgenerator(&seedValueLC, FALSE);
-            }
-            randomSetChainVimp(p, -seedValueLC);
-          }
+      randomSetUChain(b, -seedValueLC);
+    }
+    if (RF_opt & OPT_VIMP) {
+      if ( (RF_opt & (OPT_INSITU | OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)) ==
+           (RF_optLoGrow & (OPT_INSITU | OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)) )  {
+        for (p = 1; p <= bnpSize; p++) {
+          randomSetChainVimp(p , RF_seedVimp_[p]);
         }
       }
       else {
+        for (p = 1; p <= bnpSize; p++) {
+          lcgenerator(&seedValueLC, FALSE);
+          lcgenerator(&seedValueLC, FALSE);
+          while(seedValueLC == 0) {
+            lcgenerator(&seedValueLC, FALSE);
+          }
+          randomSetChainVimp(p, -seedValueLC);
+        }
       }
-    }  
+    }
+    else {
+    }
   }  
+#ifdef _OPENMP
   stackLocksOpenMP(mode);
 #else
-  ran1A = &randomChainSerial;
-  ran1B = &randomUChainSerial;
-  ran1D = &randomChainSerialVimp;
-  randomSetChain = &randomSetChainSerial;
-  randomSetUChain = &randomSetUChainSerial;
-  randomSetChainVimp = &randomSetChainSerialVimp;
-  randomGetChain = &randomGetChainSerial;
-  randomGetUChain = &randomGetUChainSerial;
-  randomGetChainVimp = &randomGetChainSerialVimp;
-  randomStack(1, bnpSize);
-  if (mode == RF_GROW) {
-    seedValueLC = abs(seedValue);
-    lcgenerator(&seedValueLC, TRUE);
-    lcgenerator(&seedValueLC, FALSE);
-    lcgenerator(&seedValueLC, FALSE);
-    while(seedValueLC == 0) {
-      lcgenerator(&seedValueLC, FALSE);
-    }
-    randomSetChain(1, -seedValueLC);
-    lcgenerator(&seedValueLC, FALSE);
-    lcgenerator(&seedValueLC, FALSE);
-    while(seedValueLC == 0) {
-      lcgenerator(&seedValueLC, FALSE);
-    }
-    randomSetUChain(1, -seedValueLC);
-    if (bnpSize > 0) {
-      lcgenerator(&seedValueLC, FALSE);
-      lcgenerator(&seedValueLC, FALSE);
-      while(seedValueLC == 0) {
-        lcgenerator(&seedValueLC, FALSE);
-      }
-      randomSetChainVimp(1, -seedValueLC);
-    }
-  }  
-  else {
-    if (TRUE) {
-      randomSetChain(1 , RF_seed_[1]);
-      lcgenerator(&seedValueLC, FALSE);
-      lcgenerator(&seedValueLC, FALSE);
-      while(seedValueLC == 0) {
-        lcgenerator(&seedValueLC, FALSE);
-      }
-      randomSetUChain(1, -seedValueLC);
-      if (RF_opt & OPT_VIMP) { 
-        if ( (RF_opt & (OPT_INSITU | OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)) ==
-             (RF_optLoGrow & (OPT_INSITU | OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)) )  {
-          randomSetChainVimp(1 , RF_seedVimp_[1]);
-        }
-        else {
-          if (bnpSize > 0) {
-            lcgenerator(&seedValueLC, FALSE);
-            lcgenerator(&seedValueLC, FALSE);
-            while(seedValueLC == 0) {
-              lcgenerator(&seedValueLC, FALSE);
-            }
-            randomSetChainVimp(1, -seedValueLC);
-          }
-        }
-      }
-      else {
-      }
-    }  
-  }  
 #endif
   for (r = 1; r <= RF_nImpute; r++) {
     if (getUserTraceFlag()) {
@@ -9132,7 +9107,6 @@ void rfsrc(char mode, int seedValue) {
       }
     }
     if (r == RF_nImpute) {
-#ifdef _OPENMP
       if (mode == RF_GROW) {
         if (RF_opt & OPT_SEED) {
           for (b = 1; b <= RF_ntree; b++) {
@@ -9161,31 +9135,8 @@ void rfsrc(char mode, int seedValue) {
           }
         }
       }
+#ifdef _OPENMP
 #else
-      if (mode == RF_GROW) {
-        if (RF_opt & OPT_SEED) {
-          if (r > 1) {
-            lcgenerator(&seedValueLC, FALSE);
-            lcgenerator(&seedValueLC, FALSE);
-            while(seedValueLC == 0) {
-              lcgenerator(&seedValueLC, FALSE);
-            }
-            randomSetChain(1, -seedValueLC);
-          }
-          RF_seed_[1] = randomGetChain(1);
-          if (bnpSize > 0) {
-            if (r > 1) {
-              lcgenerator(&seedValueLC, FALSE);
-              lcgenerator(&seedValueLC, FALSE);
-              while(seedValueLC == 0) {
-                lcgenerator(&seedValueLC, FALSE);
-              }
-              randomSetChainVimp(1, -seedValueLC);
-            }
-            RF_seedVimp_[1] = randomGetChainVimp(1);
-          }
-        }
-      }
 #endif
     }  
     for(b = 1; b <= RF_ntree; b++) {
@@ -9199,6 +9150,7 @@ void rfsrc(char mode, int seedValue) {
       RF_userTimeSplit = RF_userTreeID = 0;
       RF_nativePrint("\n");
     }
+    RF_forestChunkSize = 0;
     if (RF_forestChunkSize > 1) {
       RF_forestChunkCount = (RF_ntree + RF_forestChunkSize -1) / RF_forestChunkSize;
       RF_forestChunkSizeActual = uivector(1, RF_forestChunkCount);
@@ -9510,15 +9462,13 @@ void rfsrc(char mode, int seedValue) {
   unstackPreDefinedCommonArrays(mode,
                                 RF_nodeMembership,
                                 RF_tTermMembership,
-                                RF_tNodeList,
                                 RF_tTermList,
                                 RF_root);
   unstackIncomingArrays(mode);
-#ifdef _OPENMP
   randomUnstack(RF_ntree, bnpSize);
+#ifdef _OPENMP
   unstackLocksOpenMP(mode);
 #else
-  randomUnstack(1, bnpSize);
 #endif
   unstackFactorArrays(mode);
 }
@@ -13096,10 +13046,12 @@ char forkAndUpdate(uint       treeID,
     RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
     RF_nativeExit();
   }
-  if (info -> indicator != NULL) {
-    free_cvector(info -> indicator, 1, info -> size);
-    info -> indicator = NULL;
-    info -> size = 0;
+  if (info -> size > 0) {
+    if (info -> indicator != NULL) {
+      free_cvector(info -> indicator, 1, info -> size);
+      info -> indicator = NULL;
+      info -> size = 0;
+    }
   }
   return result;
 }
@@ -19487,16 +19439,6 @@ char updateMaximumSplit(uint    treeID,
       }
       splitInfoMax -> splitValueMaxCont = ((double*) splitVectorPtr)[index];
     }
-    if (FALSE) {
-    if (localSplitIndicator != NULL) {
-      if (splitInfoMax -> indicator == NULL) {
-        splitInfoMax -> indicator = cvector(1, repMembrSize);
-      }
-      for (k=1; k <= repMembrSize; k++) {
-        (splitInfoMax -> indicator)[k] = localSplitIndicator[k];
-      }
-    }
-    }
   }
   else {
   }
@@ -20550,12 +20492,6 @@ uint stackAndConstructSplitVectorTDCPhase1 (uint     treeID,
       }
     }
     if ((minTimeIndxAbs == 0) || (maxTimeIndxAbs == 0)) {
-      if (FALSE) {
-        RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-        RF_nativeError("\nRF-SRC:  Min or max time interest index (absolute) not initialized:  (%10d, %10d)", minTimeIndxAbs, maxTimeIndxAbs);
-        RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
-        RF_nativeExit();
-      }
     }
     else {
       minTimeInterestIndx = RF_masterToInterestTimeMap[RF_masterTimeIndex[treeID][minTimeIndxAbs]];
@@ -26820,7 +26756,6 @@ void unstackIncomingArrays(char mode) {
 void stackPreDefinedCommonArrays(char          mode,
                                  Node      ****nodeMembership,
                                  Terminal  ****tTermMembership,
-                                 Node      ****tNodeList,
                                  Terminal  ****tTermList,
                                  Node       ***root) {
   uint i, j, k;
@@ -26829,7 +26764,6 @@ void stackPreDefinedCommonArrays(char          mode,
   if ((RF_startTimeIndex > 0) && (RF_timeIndex > 0) && (RF_statusIndex > 0)) {
     RF_hTermMembership = (LeafLinkedObj ***) new_vvector(1, RF_ntree, NRUTIL_LEAFPTR2);
   }
-  *tNodeList = NULL;
   *tTermList = (Terminal ***) new_vvector(1, RF_ntree, NRUTIL_NPTR2);
   RF_nodeCount = uivector(1, RF_ntree);
   for (i = 1; i <= RF_ntree; i++) {
@@ -26916,7 +26850,6 @@ void stackPreDefinedCommonArrays(char          mode,
 void unstackPreDefinedCommonArrays(char         mode,
                                    Node      ***nodeMembership,
                                    Terminal  ***tTermMembership,
-                                   Node      ***tNodeList,
                                    Terminal  ***tTermList,
                                    Node       **root) {
   free_new_vvector(nodeMembership, 1, RF_ntree, NRUTIL_NPTR2);

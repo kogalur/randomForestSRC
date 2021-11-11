@@ -1827,13 +1827,11 @@ void checkInteraction();
 void stackPreDefinedCommonArrays(char          mode,
                                  Node      ****nodeMembership,
                                  Terminal  ****tTermMembership,
-                                 Node      ****tNodeList,
                                  Terminal  ****tTermList,
                                  Node       ***root);
 void unstackPreDefinedCommonArrays(char          mode,
                                    Node      ***nodeMembership,
                                    Terminal  ***tTermMembership,
-                                   Node      ***tNodeList,
                                    Terminal  ***tTermList,
                                    Node       **root);
 void stackPreDefinedGrowthArrays();

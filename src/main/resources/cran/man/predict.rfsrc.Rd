@@ -8,7 +8,7 @@
 \usage{\method{predict}{rfsrc}(object,
   newdata,
   m.target = NULL,
-  importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
+  importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
   get.tree = NULL,
   block.size = if (any(is.element(as.character(importance),
                      c("none", "FALSE")))) NULL else 10,
@@ -34,13 +34,13 @@
   
 
   \item{m.target}{Character vector for multivariate families
-    specifying the target outcomes to be used. The default is to use all
+    specifying the target outcomes to be used. The default uses all
     coordinates.}
   
-  \item{importance}{Method for computing variable importance (VIMP) when
-    test data contains y-outcomes values.  Also see \command{vimp} for more
-    flexibility, including joint vimp calculations.  Another way to
-    calculate VIMP is \command{holdoutvimp}.}
+  \item{importance}{Method used for variable importance (VIMP).  Also
+    see \command{vimp} for more flexibility, including joint vimp
+    calculations.  See \command{holdoutvimp} for an alternate importance
+    measure.}
   
   \item{get.tree}{Vector of integer(s) identifying trees over which the
     ensembles are calculated over.  By default, uses all trees in the
@@ -148,10 +148,10 @@
   to ensure unbiased estimates.  See the examples below for
   illustration.
 
-  Use option \code{csv=TRUE} to request case specific VIMP
-  \code{csv=TRUE} to request case specific error rates.  Applies to all
-  families except survival families.  See examples below.  These options
-  can also be applied at the grow stage.
+  \code{csv=TRUE} returns case specific VIMP while \code{cse=TRUE} returns
+  case specific error rates.  Applies to all families except survival
+  families.  See examples below.  These options can also be applied at
+  the grow stage.
   
 }    
 \value{

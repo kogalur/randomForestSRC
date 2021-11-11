@@ -14,10 +14,16 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
       sum(inherits(x, c("rfsrc", "predict"), TRUE) == c(1, 2)) != 2) {
     stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, predict)'")
   }
+  ## pull the unnamed options
+  dots <- list(...)
+  cex <- par("cex")
+  if (!is.null(dots$cex)) {
+    cex <- dots$cex
+  }
   ## print a subsampled object
   if (sum(inherits(x, c("rfsrc", "subsample"), TRUE) == c(1, 4)) == 2 ||
       sum(inherits(x, c("rfsrc", "bootsample"), TRUE) == c(1, 4)) == 2) {
-    return(plot.subsample(x, m.target = m.target, ...))
+    return(plot.subsample(x, m.target = m.target, cex = cex))
   }
   ## coerce the (potentially) multivariate object if necessary.
   m.target <- get.univariate.target(x, m.target)
@@ -61,15 +67,11 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
   else {
     plot.yvar.names <- paste("(", x$yvar.names, ")", sep = "")
   }
-  ## save par for later restoration
-  old.par <- par(no.readonly = TRUE)
-  cex <- par("cex")
-  on.exit(par(old.par))
   ## decide what plots to generate
   if (all(is.na(x$importance))) {
     if (x$ntree > 1 && !all(is.na(x$err.rate))) {
       err <- cbind(x$err.rate)      
-      par(cex = cex, mfrow = c(1,1))
+      par(mfrow = c(1,1))
       plot.err(err, plot.yvar.names)
     }
   }
@@ -94,10 +96,10 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
           dotchart.labels <- x.var.names[pred.order]
         }
       if (x$ntree > 1 & !all(is.na(x$err.rate)) & plots.one.page) {
-        par(cex = cex, mfrow = c(1,2))
+        par(mfrow = c(1,2))
       }
         else {
-          par(cex = cex, mfrow = c(1,1))
+          par(mfrow = c(1,1))
         }
       if (x$ntree > 1 & !all(is.na(x$err.rate))) {
         plot.err(err, plot.yvar.names)
@@ -139,9 +141,7 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
   }
 }
 ## error rate plot
-plot.err <- function(err, yname = NULL, ...) {
-  opar <- par("cex")
-  on.exit(par(opar))
+plot.err <- function(err, yname = NULL) {
   matplot(1:nrow(err), err,
           xlab = "Number of Trees",
           ylab = paste("Error rate", yname),

@@ -25,10 +25,16 @@
 ## load the data
 data(nutrigenomic, package = "_PROJECT_PACKAGE_NAME_")
 
+## parse into y and x data
+ydta <- nutrigenomic$lipids
+xdta <- data.frame(nutrigenomic$genes,
+                   diet = nutrigenomic$diet,
+                   genotype = nutrigenomic$genotype)
+
 ## multivariate mixed forest call
-obj <- rfsrc(get.mv.formula(colnames(nutrigenomic$lipids)),
-            data.frame(do.call(cbind, nutrigenomic)),
-            importance=TRUE, nsplit = 10, splitrule = "mahalanobis")
+obj <- rfsrc(get.mv.formula(colnames(ydta)),
+             data.frame(ydta, xdta),
+             importance=TRUE, nsplit = 10, splitrule = "mahalanobis")
 
 ## ------------------------------------------------------------
 ## plot the standarized performance and VIMP values
@@ -59,9 +65,9 @@ plot(get.tree(obj, 3))
 ## Compare above to default composite (independent) splitting
 ## ------------------------------------------------------------
 
-obj2 <- rfsrc(get.mv.formula(colnames(nutrigenomic$lipids)),
-                data.frame(do.call(cbind, nutrigenomic)),
-                importance=TRUE, nsplit = 10)
+obj2 <- rfsrc(get.mv.formula(colnames(ydta)),
+              data.frame(ydta, xdta),
+              importance=TRUE, nsplit = 10)
 
 imp <- data.frame(mahalanobis = rowMeans(get.mv.vimp(obj,  standardize = TRUE)),
                   default     = rowMeans(get.mv.vimp(obj2, standardize = TRUE)))

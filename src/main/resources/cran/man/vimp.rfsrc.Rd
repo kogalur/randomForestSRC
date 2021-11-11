@@ -7,7 +7,7 @@
   variables for training or test data.
 }
 \usage{\method{vimp}{rfsrc}(object, xvar.names, m.target = NULL, 
-  importance = c("permute", "random", "anti"), block.size = 10,
+  importance = c("anti", "permute", "random"), block.size = 10,
   joint = FALSE, seed = NULL, do.trace = FALSE, ...)
 }
 \arguments{
@@ -36,10 +36,10 @@
   calculation using \code{newdata}.  See \command{rfsrc} for more
   details about how VIMP is calculated.
   
-  Joint VIMP is requested using \option{joint} and equals importance for
+  \option{joint=TRUE} returns joint VIMP, defined as importance for
   a group of variables when the group is perturbed simultaneously.
 
-  Use option \code{csv=TRUE} to request case specific VIMP.  Applies to
+  \code{csv=TRUE} return case specific VIMP.  Applies to
   all families except survival families.  See example below.  
 }
 \value{
@@ -66,19 +66,22 @@
 
 iris.obj <- rfsrc(Species ~ ., data = iris)
 
-# Permutation vimp (default)
+## anti vimp (default)
 print(vimp(iris.obj)$importance)
 
-# VIMP using brier prediction error
+## anti vimp using brier prediction error
 print(vimp(iris.obj, perf.type = "brier")$importance)
 
-# Random daughter vimp
+## permutation vimp
+print(vimp(iris.obj, importance = "permute")$importance)
+
+## random daughter vimp
 print(vimp(iris.obj, importance = "random")$importance)
 
-# Joint permutation vimp 
+## joint anti vimp 
 print(vimp(iris.obj, joint = TRUE)$importance)
 
-# Paired vimp
+## paired anti vimp
 print(vimp(iris.obj, c("Petal.Length", "Petal.Width"), joint = TRUE)$importance)
 print(vimp(iris.obj, c("Sepal.Length", "Petal.Width"), joint = TRUE)$importance)
 
@@ -93,11 +96,11 @@ breast <- na.omit(breast)
 f <- as.formula(status ~ .)
 o <- rfsrc(f, breast, ntree = 2000)
 
-## Breiman importance
-print(100 * vimp(o)$importance)
+## permutation vimp
+print(100 * vimp(o, importance = "permute")$importance)
 
-## G-mean importance
-print(100 * vimp(o, perf.type = "g.mean")$importance[, 1])
+## anti vimp using gmean performance
+print(100 * vimp(o, perf.type = "gmean")$importance[, 1])
 
 ## ------------------------------------------------------------
 ## regression example
@@ -114,11 +117,11 @@ set.seed(100080)
 train <- sample(1:nrow(airquality), size = 80)
 airq.obj <- rfsrc(Ozone~., airquality[train, ])
 
-#training data vimp
+## training data vimp
 print(airq.obj$importance)
 print(vimp(airq.obj)$importance)
 
-#test data vimp
+## test data vimp
 print(vimp(airq.obj, newdata = airquality[-train, ])$importance)
 
 ## ------------------------------------------------------------

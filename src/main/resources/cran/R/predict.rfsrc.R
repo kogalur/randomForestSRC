@@ -2,7 +2,7 @@ predict.rfsrc <-
   function(object,
            newdata,
            m.target = NULL,
-           importance = c(FALSE, TRUE, "none", "permute", "random", "anti"),
+           importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
            get.tree = NULL,
            block.size = if (any(is.element(as.character(importance), c("none", "FALSE")))) NULL else 10,
            ensemble = NULL,

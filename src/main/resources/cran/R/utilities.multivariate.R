@@ -263,6 +263,7 @@ get.mv.error.block <- function(obj, standardize = FALSE) {
   get.mv.error(obj, standardize = standardize, block = TRUE)
 }
 get.mv.formula <- function(ynames) {
+  ynames <- sapply(ynames, as.name) ##adds backticks to handle non-standard ynames
   as.formula(paste("Multivar(", paste(ynames, collapse = ","),paste(") ~ ."), sep = ""))
 }
 get.mv.predicted <- function(obj, oob = TRUE) {
