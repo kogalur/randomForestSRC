@@ -16,6 +16,9 @@ partial.rfsrc <- function(
   user.option <- list(...)
   terminal.qualts <- is.hidden.terminal.qualts(user.option)
   terminal.quants <- is.hidden.terminal.quants(user.option)
+  ## insitu/jitt
+  insitu.ensemble  <- is.hidden.insitu.ensemble(user.option)
+  jitt <- is.hidden.jitt(user.option, "none", partial = TRUE)
   data.pass <- is.hidden.data.pass(user.option)
   experimental <- is.hidden.data.pass(user.option)
   ## Object consistency
@@ -129,6 +132,12 @@ partial.rfsrc <- function(
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
   data.pass.bits <- get.data.pass(data.pass)
   experimental.bits <- get.data.pass(experimental)
+  ## In situ ensembles.
+  insitu.ensemble.bits = get.insitu.ensemble(insitu.ensemble)
+  ## Just in Time Tree Topology Restoration.  Note that we do not
+  ## support augmented data, SGT, TDC, here, but we do no checks for
+  ## these. We defer to the user option for JITT.
+  jitt.bits <- get.jitt(jitt)
   seed <- get.seed(seed)
   do.trace <- get.trace(do.trace)
   ## Check that hdim is initialized.  If not, set it zero.
@@ -139,45 +148,51 @@ partial.rfsrc <- function(
   else {
     hdim <- object$hdim
   }
-  ## Marker for start of native forest topology.  This can change with the outputs requested.
-  ## For the arithmetic related to the pivot point, you need to refer to stackOutput.c and in
-  ## particular, stackForestOutputObjects().
-  ## added from generic.predict.rfsrc.R per UBK instruction 11/04/2019
+  ## The pivot in this predict related function is different from
+  ## the pivot used in the grow related function.  In rfsrc we are
+  ## referencing the list nativeOutput[[]].  Here we are referencing
+  ## the $nativeArray[[]] object which is a massaged version of
+  ## nativeOutput[[]].  Here, pivot points to the record PRIOR to
+  ## parmID2.  We adjust for the presence of interactions, and
+  ## synthetics.  The default chunk is parmIDx, contPTx, contPTRx,
+  ## mwcpSZx, fsrecIDx.
+  ## WARNING: Note that the maximum number of slots in the following
+  ## foreign function call is 64.  Ensure that this limit is not
+  ## exceeded.  Otherwise, the program will error on the call.
   if (hdim == 0) {
-    offset = 0
-    chunk = 0
+      pivot = 0
+      chunk = 0
   } else {
-    ## Offset starts at parmID2. We adjust for the presence of interactions.
-    offset = 7
-    ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2.
-    chunk = 4
-    if (!is.null(object$base.learner)) {
-      if (object$base.learner$interact.depth > 1) {
-        ## Offset with interactions is adjusted.
-        ## Adjusted for AUGM_X1, AUGM_X2.
-        offset = 9
-        ## A chunk is parmID2, contPT2, contPTR2, mwcpSZ2, augmXone2, augmXtwo2.
-        chunk = 6
+      pivot <- which(names(object$nativeArray) == "contPTR")
+      chunk = 5
+      if (!is.null(object$base.learner)) {
+          if (object$base.learner$interact.depth > 1) {
+              ## Adjusted for pairCT, augmXone2, augmXtwo2 above, but the chunck size needs to increased.
+              ## pivot = pivot + 3
+              chunk = chunk + 2
+          }
+          if (object$base.learner$synthetic.depth > 1) {
+              ## Adjusted for sythSZ, augmXS2 above, but the chunck size needs to increased.
+              ## pivot = pivot + 2
+              chunk = chunk + 1
+          }
       }
-    }
   }
-  pivot <- which(names(object$nativeArray) == "treeID")
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
-                                  as.integer(
-                                      ensemble.bits +
-                                      bootstrap.bits +
-                                      cr.bits), 
-                                  ## note that no in-situ flag is passed here (TBD TBD)
-                                  as.integer(
-                                      samptype.bits +
-                                      na.action.bits +
-                                      terminal.qualts.bits +
-                                      terminal.quants.bits +
-                                      partial.bits + 
-                                      data.pass.bits +
-                                      experimental.bits),
+                                  as.integer(ensemble.bits +
+                                             bootstrap.bits +
+                                             cr.bits +
+                                             insitu.ensemble.bits),
+                                  as.integer(samptype.bits +
+                                             na.action.bits +
+                                             terminal.qualts.bits +
+                                             terminal.quants.bits +
+                                             partial.bits + 
+                                             data.pass.bits +
+                                             jitt.bits +
+                                             experimental.bits),
                                   ## >>>> start of maxi forest object >>>>
                                   as.numeric(1),
                                   as.integer(ntree),
@@ -227,10 +242,12 @@ partial.rfsrc <- function(
                                   object$base.learner, 
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
+                                  as.integer((object$nativeArray)$brnodeID),
                                   ## This is hc_zero.  It is never NULL.
                                   list(as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
+                                  as.integer((object$nativeArray)$fsrecID),
                                   as.integer((object$nativeFactorArray)$mwcpPT)),
                                   ## This slot is hc_one_augm_intr.  This slot can be NULL.
                                   if (!is.null(object$base.learner)) {
@@ -252,28 +269,25 @@ partial.rfsrc <- function(
                                       list(as.integer((object$nativeArray)$hcDim),
                                       as.double((object$nativeArray)$contPTR))
                                   } else { NULL },
-                                  ## See the offset documentation in
-                                  ## rfsrc.R after the nativeArray
-                                  ## SEXP objects are populated in the
-                                  ## post-forest parsing for an
-                                  ## explanation of the offsets below.
-                                  ## These offset are DIFFERENT than the offsets used to
-                                  ## 
                                   if (hdim > 1) {
                                       ## parmIDx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 1 + (chunk * x)])})
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 1 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
                                       ## contPTx
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , offset + 2 + (chunk * x)])})
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , pivot + 2 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
                                       ## contPTRx
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , offset + 3 + (chunk * x)])})
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , pivot + 3 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
                                       ## mwcpSZx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 4 + (chunk * x)])})
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 4 + (chunk * x)])})
+                                  } else { NULL },
+                                  if (hdim > 1) {
+                                      ## fsrecIDx
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 5 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
                                       ## mwcpPTx
@@ -283,7 +297,7 @@ partial.rfsrc <- function(
                                       if (!is.null(object$base.learner)) {
                                           if (object$base.learner$interact.depth > 1) {
                                               ## augmXonex
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 5 + (chunk * x)])})
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + 5 + (chunk * x)])})
                                           } else { NULL }
                                       } else { NULL }
                                   } else { NULL },
@@ -291,7 +305,7 @@ partial.rfsrc <- function(
                                       if (!is.null(object$base.learner)) {
                                           if (object$base.learner$interact.depth > 1) {
                                               ## augmXtwox
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 6 + (chunk * x)])})
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + 6 + (chunk * x)])})
                                           } else { NULL }
                                       } else { NULL }
                                   } else { NULL },
@@ -299,7 +313,7 @@ partial.rfsrc <- function(
                                       if (!is.null(object$base.learner)) {
                                           if (object$base.learner$synthetic.depth > 1) {
                                               ## augmXSx
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + (if(object$base.learner$interact.depth > 1) 7 else 5) + (chunk * x)])})
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + (if(object$base.learner$interact.depth > 1) 7 else 5) + (chunk * x)])})
                                           } else { NULL }
                                       } else { NULL }
                                   } else { NULL },

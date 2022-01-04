@@ -72,11 +72,21 @@
     
     \item For survival, the choices are:
     \itemize{
-	    \item  Mortality (\code{mort}).
+      
+	    \item Mortality (\code{mort}).  Mortality (Ishwaran et al.,
+                  2008) represents estimated risk for an individual
+                  calibrated to the scale of number of events (as a
+                  specific example, if \emph{i} has a mortality value of
+                  100, then if all individuals had the same x-values as
+                  \emph{i}, we would expect an average of 100 events).
+		  
 	    \item  Relative frequency of mortality (\code{rel.freq}).
+
 	    \item Predicted survival (\code{surv}), where the predicted
-      survival is for the time point specified using
-      \code{time} (the default is the median follow up time).
+                  survival is for the time point specified using
+                  \code{time} (the default is the median follow up
+                  time).
+		  
     }
     \item For competing risks, the choices are:
     \itemize{

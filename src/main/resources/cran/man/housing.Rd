@@ -19,12 +19,15 @@
 ## load the data
 data(housing, package = "_PROJECT_PACKAGE_NAME_")
 
-## the original data contains lots of missing data
-## here's a fast but reasonably accurate way to impute the data
-housing2 <- impute(data = housing, mf.q = .5, fast = TRUE)
+## the original data contains lots of missing data, so impute it
+## use missForest, can be slow so grow trees with small training sizes
+housing2 <- impute(data = housing, mf.q = 1, sampsize = function(x){x * .1})
+
+## same idea ... but directly use rfsrc.fast and multivariate missForest 
+housing3 <- impute(data = housing, mf.q = .5, fast = TRUE)
 
 ## even faster, but potentially less acurate
-housing3 <- impute(SalePrice~., housing, splitrule = "random", nimpute = 1)
+housing4 <- impute(SalePrice~., housing, splitrule = "random", nimpute = 1)
 
 
 }}

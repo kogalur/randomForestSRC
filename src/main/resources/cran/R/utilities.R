@@ -854,6 +854,7 @@ is.hidden.tdc.rule <-  function (user.option) {
     }
   }
   is.hidden.terminal.qualts <-  function (user.option) {
+      ## From > 2.14.0 we now assert terminal qualts and quants as the default. 
     if (is.null(user.option$terminal.qualts)) {
       TRUE
     }
@@ -862,8 +863,9 @@ is.hidden.tdc.rule <-  function (user.option) {
       }
   }
   is.hidden.terminal.quants <-  function (user.option) {
+    ## From > 2.14.0 we now assert terminal qualts and quants as the default. 
     if (is.null(user.option$terminal.quants)) {
-      FALSE
+      TRUE
     }
       else {
         as.logical(as.character(user.option$terminal.quants))
@@ -950,7 +952,8 @@ get.csv <- function (csv) {
 }
 is.hidden.insitu.ensemble <-  function (user.option) {
     if (is.null(user.option$insitu.ensemble)) {
-      FALSE
+        ## From > 2.14.0 we now assert insitu.ensemble as the default. 
+        TRUE
     }
     else {
         as.logical(as.character(user.option$insitu.ensemble))
@@ -973,6 +976,39 @@ get.insitu.ensemble <- function (insitu.ensemble) {
         stop("Invalid choice for 'insitu.ensemble' option:  ", insitu.ensemble)
     }
     return (insitu.ensemble)
+}
+is.hidden.jitt <-  function (user.option, importance, partial = FALSE) {
+  if (is.null(user.option$jitt)) {
+    if (partial || importance == "permute" || importance == "permute.joint") {
+      ##partial is generally a full restore
+      ##permutation importance is synthetic, so default JITT = FALSE
+      FALSE
+    }
+    else {
+      TRUE
+    }
+  }
+  else {
+    as.logical(as.character(user.option$jitt))
+  }
+}
+get.jitt <- function (jitt) {
+    ## Convert jitt option into native code parameter.
+    if (!is.null(jitt)) {
+        if (jitt == TRUE) {
+            jitt <- 2^23
+        }
+        else if (jitt == FALSE) {
+            jitt <- 0
+        }
+        else {
+            stop("Invalid choice for 'jitt' option:  ", jitt)
+        }
+    }
+    else {
+        stop("Invalid choice for 'jitt' option:  ", jitt)
+    }
+    return (jitt)
 }
 is.hidden.presort.xvar <-  function (user.option) {
     if (is.null(user.option$presort.xvar)) {

@@ -13,6 +13,7 @@
   block.size = 1,
   subratio = NULL,
   stratify = TRUE,
+  performance = FALSE,
   joint = FALSE,
   bootstrap = FALSE,
   verbose = TRUE)
@@ -26,6 +27,8 @@
   \item{subratio}{Ratio of subsample size to original sample size.  The
     default is the inverse square root of the sample size.}
   \item{stratify}{Use stratified subsampling?  See details below.}
+  \item{performance}{Error rate of forest?  Used to obtain
+    standard error and confidence region for the ensemble out-of-sample performance.}
   \item{joint}{Include the VIMP for all variables jointly perturbed?
     This is useful reference problems where one might be suspicious that
     many (or all) variables are noise.}  
@@ -38,7 +41,9 @@
   Given a forest object, subsamples the data and constructs subsampled
   forests to estimate standard errors and confidence intervals for VIMP
   (Ishwaran and Lu, 2019).  If bootstrapping is requested, a double
-  bootstrap is applied in place of subsampling.
+  bootstrap is applied in place of subsampling.  The option
+  \code{performance} can also be used to obtain standard errors and
+  confidence regions for the ensemble out-of-sample performance.
 
   If VIMP is not present in the original forest object, the algorithm
   will first need to calculate VIMP.  Therefore, if the user plans to

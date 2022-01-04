@@ -3,6 +3,7 @@ subsample.rfsrc <- function(obj,
                             block.size = 1,
                             subratio = NULL,
                             stratify = TRUE,
+                            performance = FALSE,
                             joint = FALSE,
                             bootstrap = FALSE,
                             verbose = TRUE) 
@@ -113,7 +114,8 @@ subsample.rfsrc <- function(obj,
   ##
   ##--------------------------------------------------------------
   if (bootstrap) {
-    bootO <- bootsample(obj, rf.prms, B = B, block.size = block.size, joint = joint, verbose = verbose)
+    bootO <- bootsample(obj, rf.prms, B = B, block.size = block.size,
+                        joint = joint, performance = performance, verbose = verbose)
     rO <- list(rf = bootO$rf, vmp = bootO$vmp, vmpB = bootO$vmpB, subratio = NULL)
     class(rO) <- c(class(obj), "bootsample")
     return(rO)
@@ -144,10 +146,18 @@ subsample.rfsrc <- function(obj,
   ## call joint vimp - reference vimp value for pure noise settings
   ##
   ##--------------------------------------------------------------
-  obj.joint <- NULL
   if (joint) {
     vmp.joint <- get.mv.vimp(get.joint.vimp(obj, rf.prms), FALSE, FALSE)
-    vmp <- vimp.combine(vmp, vmp.joint)
+    vmp <- vimp.combine(vmp, vmp.joint, "joint")
+  }
+  ##--------------------------------------------------------------
+  ##
+  ## obtain performance value - used for error rate confidence intervals
+  ##
+  ##--------------------------------------------------------------
+  if (performance) {
+    err <- get.mv.error(obj, FALSE, FALSE)
+    vmp <- vimp.combine(vmp, err, "err")
   }
   ##----------------------------------------------------------
   ##
@@ -186,8 +196,13 @@ subsample.rfsrc <- function(obj,
     vmp.b <- get.mv.vimp(rf.b, FALSE, FALSE)
     if (joint) {
       vmp.b.joint <- get.mv.vimp(get.joint.vimp(rf.b, rf.prms), FALSE, FALSE)
-      vmp.b <- vimp.combine(vmp.b, vmp.b.joint)
+      vmp.b <- vimp.combine(vmp.b, vmp.b.joint, "joint")
     }
+    if (performance) {
+      err.b <- get.mv.error(rf.b, FALSE, FALSE)
+      vmp.b <- vimp.combine(vmp.b, err.b, "err")
+    }
+    ## combine
     rO.b <- lapply(1:length(vmp), function(j) {
       vmp.j <- vmp[[j]]
       vmp.b.j <- vmp.b[[j]]
@@ -438,9 +453,13 @@ print.subsample <- print.subsample.rfsrc
 ## combine two lists of vimp: o1 is master, o2 is appended
 ##
 ###################################################################
-vimp.combine <- function(o1, o2) {
+vimp.combine <- function(o1, o2, o2.name = NULL) {
   rO <- lapply(1:length(o1), function(j) {
-    rbind(o1[[j]], o2[[j]])
+    rO.j <- rbind(o1[[j]], o2[[j]])
+    if (!is.null(o2.name)) {
+      rownames(rO.j)[nrow(rO.j)] <- o2.name
+    }
+    rO.j
   })
   names(rO) <- names(o1)
   rO
@@ -450,7 +469,7 @@ vimp.combine <- function(o1, o2) {
 ## core bootstrap function
 ##
 ###################################################################
-bootsample <- function(obj, rf.prms, B, block.size, joint, verbose) {
+bootsample <- function(obj, rf.prms, B, block.size, joint, performance, verbose) {
   ##--------------------------------------------------------------
   ##
   ## extract data from the previously grown forest
@@ -478,10 +497,18 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, verbose) {
   ## call joint vimp - reference vimp value for pure noise settings
   ##
   ##--------------------------------------------------------------
-  obj.joint <- NULL
   if (joint) {
     vmp.joint <- get.mv.vimp(get.joint.vimp(obj, rf.prms), FALSE, FALSE)
     vmp <- vimp.combine(vmp, vmp.joint)
+  }
+  ##--------------------------------------------------------------
+  ##
+  ## obtain performance value - used for error rate confidence intervals
+  ##
+  ##--------------------------------------------------------------
+  if (performance) {
+    err <- get.mv.error(obj, FALSE, FALSE)
+    vmp <- vimp.combine(vmp, err, "err")
   }
   ##----------------------------------------------------------
   ##
@@ -515,6 +542,11 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, verbose) {
       vmp.b.joint <- get.mv.vimp(get.joint.vimp(rf.b, rf.prms), FALSE, FALSE)
       vmp.b <- vimp.combine(vmp.b, vmp.b.joint)
     }
+    if (performance) {
+      err.b <- get.mv.error(rf.b, FALSE, FALSE)
+      vmp.b <- vimp.combine(vmp.b, err.b, "err")
+    }
+    ## combine
     rO.b <- lapply(1:length(vmp), function(j) {
       vmp.j <- vmp[[j]]
       vmp.b.j <- vmp.b[[j]]

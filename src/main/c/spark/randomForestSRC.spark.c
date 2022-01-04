@@ -668,7 +668,8 @@ void free_jni2DList(uint size) {
 }
 void initProtect(uint stackCount) {
 }
-void *stackAndProtect(uint  *index,
+void *stackAndProtect(char   mode,
+                      uint  *index,
                       char   type,
                       uint   unused,
                       ulong  size,
@@ -767,7 +768,8 @@ void *stackAndProtect(uint  *index,
   (ensembleInfo -> isCopy) = isCopy;
   (ensembleInfo -> array) = thisArray;
   (ensembleInfo -> arrayPtr) = thisArrayPtr;
-  allocateAuxiliaryInfo(type,
+  allocateAuxiliaryInfo((mode == RF_GROW) ? FALSE : TRUE,
+                        type,
                         sexpString,
                         RF_snpAuxiliaryInfoList,
                         *index,

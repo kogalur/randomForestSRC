@@ -52,7 +52,8 @@ void *copy2DObject(jarray arr, char type, uint *index);
 void free_jni1DList(uint size);
 void free_jni2DList(uint size);
 void initProtect(uint stackCount);
-void *stackAndProtect(uint  *index,
+void *stackAndProtect(char   mode,
+                      uint  *index,
                       char   type,
                       uint   identity,
                       ulong  size,

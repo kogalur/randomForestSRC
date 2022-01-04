@@ -21,14 +21,14 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList(&RF_snpAuxiliaryInfoList, RF_stackCount);
-  v = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, 1, 0, sexpString[2], NULL, 1, 1);
+  v = (double*) stackAndProtect(RF_GROW, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, 1, 0, sexpString[2], NULL, 1, 1);
   *v = getConcordanceIndex( 1,
                             size,
                             time,
                             censoring,
                             predicted,
                             denom);
-  unstackAuxiliaryInfoAndList(RF_snpAuxiliaryInfoList, RF_stackCount);
+  unstackAuxiliaryInfoAndList(FALSE, RF_snpAuxiliaryInfoList, RF_stackCount);
   memoryCheck();
   R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
@@ -46,9 +46,9 @@ SEXP rfsrcTestSEXP(SEXP sexp_size) {
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList(&RF_snpAuxiliaryInfoList, RF_stackCount);
-  v = (char*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_CHARACTER, 2, size, 0, sexpString[2], NULL, 1, size);
+  v = (char*) stackAndProtect(RF_GROW, &RF_nativeIndex, NATIVE_TYPE_CHARACTER, 2, size, 0, sexpString[2], NULL, 1, size);
   v --;
-  unstackAuxiliaryInfoAndList(RF_snpAuxiliaryInfoList, RF_stackCount);
+  unstackAuxiliaryInfoAndList(FALSE, RF_snpAuxiliaryInfoList, RF_stackCount);
   memoryCheck();
   R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
@@ -124,7 +124,7 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
   RF_stackCount = 1;
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList(&RF_snpAuxiliaryInfoList, RF_stackCount);
-  dist = (double*) stackAndProtect(&RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, size, 0, sexpString[2], NULL, 1, size);
+  dist = (double*) stackAndProtect(RF_GROW, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, size, 0, sexpString[2], NULL, 1, size);
   dist --;
   xMatrix = (double **) new_vvector(1, p, NRUTIL_DPTR);
   for (i = 1; i <= p; i++) {
@@ -143,7 +143,7 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
     free_uivector(rowI, 1, size);
     free_uivector(rowJ, 1, size);
   }
-  unstackAuxiliaryInfoAndList(RF_snpAuxiliaryInfoList, RF_stackCount);
+  unstackAuxiliaryInfoAndList(FALSE, RF_snpAuxiliaryInfoList, RF_stackCount);
   memoryCheck();
   R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
@@ -435,6 +435,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP baseLearn,
                   SEXP treeID,
                   SEXP nodeID,
+                  SEXP brnodeID,
                   SEXP hc_zero,
                   SEXP hc_oneAugIntr,
                   SEXP hc_oneAugSyth,
@@ -443,6 +444,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP hc_contPT,
                   SEXP hc_contPTR,
                   SEXP hc_mwcpSZ,
+                  SEXP hc_fsrecID,
                   SEXP hc_mwcpPT,
                   SEXP hc_augmXone,
                   SEXP hc_augmXtwo,
@@ -614,8 +616,9 @@ clock_t cpuTimeStart = clock();
   if (VECTOR_ELT(baseLearn, 2) != R_NilValue) {
     RF_baseLearnDepthSYTH = INTEGER(VECTOR_ELT(baseLearn, 2))[0];
   }
-  RF_treeID_              = (uint *) INTEGER(treeID);  RF_treeID_ --;
-  RF_nodeID_              = (uint *) INTEGER(nodeID);  RF_nodeID_ --;
+  RF_treeID_              = (uint *) INTEGER(treeID);   RF_treeID_ --;
+  RF_nodeID_              = (uint *) INTEGER(nodeID);   RF_nodeID_ --;
+  RF_brnodeID_            = (uint *) INTEGER(brnodeID); RF_brnodeID_ --;
   RF_RMBR_ID_             = (uint *) INTEGER(tnRMBR);
   RF_AMBR_ID_             = (uint *) INTEGER(tnAMBR);
   RF_TN_RCNT_             = (uint *) INTEGER(tnRCNT);
@@ -699,11 +702,12 @@ clock_t cpuTimeStart = clock();
   processDefaultPredict();
   mode = (RF_fobservationSize > 0)? RF_PRED : RF_REST;  
   stackForestObjectsAuxOnly(mode);
-  RF_parmID_[1]              = (int *) INTEGER(VECTOR_ELT(hc_zero, 0));  RF_parmID_[1]  --;
+  RF_parmID_[1]              = (int *) INTEGER(VECTOR_ELT(hc_zero, 0));   RF_parmID_[1]  --;
   RF_contPT_[1]              =             REAL(VECTOR_ELT(hc_zero, 1));  RF_contPT_[1]  --;
   RF_mwcpSZ_[1]              = (uint *) INTEGER(VECTOR_ELT(hc_zero, 2));  RF_mwcpSZ_[1]  --;
-  if (VECTOR_ELT(hc_zero, 3) != R_NilValue) {
-    RF_mwcpPT_[1]            = (uint *) INTEGER(VECTOR_ELT(hc_zero, 3));  RF_mwcpPT_[1]  --;
+  RF_fsrecID_[1]             = (uint *) INTEGER(VECTOR_ELT(hc_zero, 3));  RF_fsrecID_[1] --;
+  if (VECTOR_ELT(hc_zero, 2) != R_NilValue) {
+    RF_mwcpPT_[1]            = (uint *) INTEGER(VECTOR_ELT(hc_zero, 4));  RF_mwcpPT_[1]  --;
   }
   else {
     RF_mwcpPT_[1] = NULL;
@@ -740,6 +744,7 @@ clock_t cpuTimeStart = clock();
       RF_contPT_[i]            =          REAL(VECTOR_ELT(hc_contPT, i-2));     RF_contPT_[i] --;
       RF_contPTR_[i]           =          REAL(VECTOR_ELT(hc_contPTR, i-2));    RF_contPTR_[i] --;
       RF_mwcpSZ_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_mwcpSZ, i-2));  RF_mwcpSZ_[i] --;
+      RF_fsrecID_[i]           = (uint *) INTEGER(VECTOR_ELT(hc_fsrecID, i-2)); RF_fsrecID_[i] --;
       RF_mwcpPT_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_mwcpPT, i-2));  RF_mwcpPT_[i] --;
       if (RF_baseLearnDepthINTR > 1) {      
         RF_augmX1_[i]            = (int *) INTEGER(VECTOR_ELT(hc_augmXone, i-2));  RF_augmX1_[i] --;
@@ -888,7 +893,8 @@ void initProtect(uint  stackCount) {
     UNPROTECT(2);
   }
 }
-void *stackAndProtect(uint  *sexpIndex,
+void *stackAndProtect(char   mode,
+                      uint  *sexpIndex,
                       char   sexpType,
                       uint   sexpIdentity,
                       ulong  size,
@@ -958,7 +964,8 @@ void *stackAndProtect(uint  *sexpIndex,
     }
     break;
   }
-  allocateAuxiliaryInfo(sexpType,
+  allocateAuxiliaryInfo((mode == RF_GROW) ? FALSE : TRUE,
+                        sexpType,
                         sexpString,
                         RF_snpAuxiliaryInfoList,
                         *sexpIndex,

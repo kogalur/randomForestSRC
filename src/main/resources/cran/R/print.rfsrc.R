@@ -135,7 +135,8 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   }
   ## error rates 
   if (!is.null(x$err.rate)) {
-    err.rate <- cbind(x$err.rate)    
+    err.rate <- na.omit(cbind(x$err.rate))
+    attributes(err.rate)$na.action <- NULL
     if (grepl("surv", x$family)) {
       err.rate <- digits.pretty(err.rate[nrow(err.rate), ], 8)
     }

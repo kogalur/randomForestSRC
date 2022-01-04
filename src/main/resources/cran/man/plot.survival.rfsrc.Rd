@@ -64,6 +64,12 @@
   Only applies to survival families.  In particular, fails for competing
   risk analyses.  Use \command{plot.competing.risk} in such cases.
 
+  Mortality (Ishwaran et al., 2008) represents estimated risk for an
+  individual calibrated to the scale of number of events (as a specific
+  example, if \emph{i} has a mortality value of 100, then if all
+  individuals had the same x-values as \emph{i}, we would expect an
+  average of 100 events).
+  
   The utility function \code{get.brier.survival} can be used to extract
   the Brier score among other useful quantities.
   
@@ -87,6 +93,9 @@
   
   Ishwaran H. and Kogalur U.B. (2007).  Random survival forests for R,
   \emph{Rnews}, 7(2):25-31.
+
+  Ishwaran H., Kogalur U.B., Blackstone E.H. and Lauer M.S.
+  (2008).  Random survival forests, \emph{Ann. App. Statist.}, 2:841-860.
 
 }
 \seealso{

@@ -12,7 +12,6 @@
   get.tree = NULL,
   block.size = if (any(is.element(as.character(importance),
                      c("none", "FALSE")))) NULL else 10,
-  ensemble = NULL,
   na.action = c("na.omit", "na.impute"),
   outcome = c("train", "test"),
   proximity = FALSE,
@@ -58,11 +57,6 @@
     resulting in a useful compromise between ensemble and permutation
     VIMP.}
   
-  \item{ensemble}{Optional parameter for specifying the type of
-    ensemble.  Can be \code{oob}, \code{inbag} or \code{all}, although
-    not all choices will be applicable depending on the setting (e.g.
-    when predicting on newdata there is no notion of out-of-bag).}
-
   \item{na.action}{Missing value action. The default \code{na.omit}
     removes the entire record if even one of its entries is \code{NA}.
     Selecting \option{na.impute} imputes the test data.  Also see the
@@ -278,7 +272,7 @@
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 train <- sample(1:nrow(veteran), round(nrow(veteran) * 0.80))
 veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ], ntree = 100) 
-veteran.pred <- predict(veteran.grow, veteran[-train , ])
+veteran.pred <- predict(veteran.grow, veteran[-train, ])
 print(veteran.grow)
 print(veteran.pred)
 

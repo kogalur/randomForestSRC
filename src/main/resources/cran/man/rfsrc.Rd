@@ -82,7 +82,6 @@ rfsrc(formula, data, ntree = 500,
   importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
   block.size = if (any(is.element(as.character(importance),
                      c("none", "FALSE")))) NULL else 10,
-  ensemble = c("all", "oob", "inbag"),
   bootstrap = c("by.root", "none", "by.user"),
   samptype = c("swor", "swr"), samp = NULL, membership = FALSE,
   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
@@ -150,10 +149,6 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     calculated in "blocks" of size equal to \code{block.size}, thus
     resulting in a useful compromise between ensemble and tree
     VIMP. The default action is to use 10 trees.}
-
-  \item{ensemble}{Specifies the type of ensemble.  By default both
-    out-of-bag (OOB) and inbag ensembles are returned.  Always use OOB
-    values for inference on the training data.}
 
   \item{bootstrap}{Bootstrap protocol.  The default is \code{by.root}
     which bootstraps the data by sampling with or without replacement

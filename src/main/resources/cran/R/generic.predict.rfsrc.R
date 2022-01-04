@@ -1,7 +1,6 @@
 generic.predict.rfsrc <-
   function(object,
            newdata,
-           ensemble = NULL,
            m.target = NULL,
            importance = FALSE,
            get.tree = NULL,
@@ -25,17 +24,31 @@ generic.predict.rfsrc <-
   univariate.nomenclature <- TRUE
   ## get any hidden options
   user.option <- list(...)
-  terminal.qualts <- is.hidden.terminal.qualts(user.option)
-  terminal.quants <- is.hidden.terminal.quants(user.option)
+  ## case specific
   cse  <- is.hidden.cse(user.option)
   csv  <- is.hidden.csv(user.option)
+  ## terminal node
+  terminal.qualts <- is.hidden.terminal.qualts(user.option)
+  terminal.quants <- is.hidden.terminal.quants(user.option)
+  ## verify the importance option (needed up front to decide JITT)
+  importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
+          "none", "anti", "permute", "random", "anti.joint", "permute.joint", "random.joint"))
+  if (grepl("joint", importance)) {
+    vimp.joint <- TRUE
+  }
+  else {
+    vimp.joint <- FALSE
+  }
+  ## insitu/jitt
   insitu.ensemble  <- is.hidden.insitu.ensemble(user.option)
+  jitt <- is.hidden.jitt(user.option, importance)
   ## TBD TBD make perf.type visible TBD TBD    
   perf.type <- is.hidden.perf.type(user.option)
   rfq <- is.hidden.rfq(user.option)
   gk.quantile <- is.hidden.gk.quantile(user.option)
   prob <- is.hidden.prob(user.option)
   prob.epsilon <- is.hidden.prob.epsilon(user.option)
+  ## vimp
   vimp.threshold  <- is.hidden.vimp.threshold(user.option)
   ## set the family
   family <- object$family
@@ -60,15 +73,6 @@ generic.predict.rfsrc <-
   }
   else {
       anonymize.bits <- 0
-  }
-  ## verify the importance option
-  importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
-          "none", "anti", "permute", "random", "anti.joint", "permute.joint", "random.joint"))
-  if (grepl("joint", importance)) {
-    vimp.joint <- TRUE
-  }
-  else {
-    vimp.joint <- FALSE
   }
   ## pull the x-variable and y-outcome names from the grow object
   xvar.names <- object$xvar.names
@@ -95,32 +99,14 @@ generic.predict.rfsrc <-
   ##   but is then switched to restore.mode = TRUE for the native .Call
   if (missing(newdata)) {
     restore.mode <- TRUE
-    outcome <- "train"    
-    if (is.null(ensemble)) {
-      ## default action assigns the grow forest ensemble option
-        if (!is.null(object$ensemble)) {
-            ensemble <- object$ensemble
-        }
-        else {
-            ## backwards compatibility with prior versions
-            ensemble <- "all"
-        }
-    }
-    else {
-      ensemble <-  match.arg(ensemble, c("oob", "inbag", "all"))   
-    }
+    outcome <- "train"
+    ensemble <- "all"##remove option to select between "all", "oob", "inbag"
   }
   else {##there is test data present
     restore.mode <- FALSE
     ## special treatment for outcome=="test" (which is really restore mode)
     if (outcome == "test") {
-      if (is.null(ensemble)) {
-        ## default action is to provide all ensembles
-        ensemble <- "all"
-      }
-      else {
-        ensemble <-  match.arg(ensemble, c("oob", "inbag", "all"))   
-      }
+      ensemble <- "all"##remove option to select between "all", "oob", "inbag"
     }
     ## standard prediction scenario on new test data - there is no OOB
     else {
@@ -488,6 +474,28 @@ generic.predict.rfsrc <-
   cse.bits = get.cse(cse)
   csv.bits = get.csv(csv)
   insitu.ensemble.bits = get.insitu.ensemble(insitu.ensemble)
+  ## Just in Time Tree Topology Restoration. We override the user here where necessary.
+  ## JITT has dependencies:
+  ## anonymous bit needs to be asserted in restore or predict mode.
+  ## This is equivalent to:
+  ## 1. no missing test data
+  ## 2. terminal.qualts asserted
+  ## 3. terminal.quants asserted
+  ## Additional dependencies are as follows:
+  ## 1. no augmented data for SGTs, no TDC (internally TDC is seen as augmented data)
+  if (!anonymize.bits && jitt && !restore.mode) {
+    n.miss <- get.nmiss(xvar.newdata, yvar.newdata)
+    if (n.miss > 0) {
+      jitt <- FALSE
+    }
+  }
+  if (!is.null(object$base.learner)) {
+    if (object$base.learner$interact.depth > 1 ||
+        object$base.learner$synthetic.depth > 1) {
+      jitt <- FALSE
+    }
+  }
+  jitt.bits <- get.jitt(jitt)
   ## The experimental flag simply inherits the grow mode flag.  We do not
   ## offer the user any other alternative. Currently this option
   ## really only affects the splitting related functions. So it's a
@@ -525,6 +533,7 @@ generic.predict.rfsrc <-
       na.action = object$na.action
     }
   na.action.bits <- get.na.action(na.action)
+  do.trace <- get.trace(do.trace)
   ## Check that hdim is initialized.  If not, set it zero.
   ## This is necessary for backwards compatibility with 2.3.0
   if (is.null(object$hdim)) {
@@ -533,33 +542,32 @@ generic.predict.rfsrc <-
   else {
     hdim <- object$hdim
   }
-  do.trace <- get.trace(do.trace)
-  ## Marker for start of native forest topology.  This can change
-  ## with the outputs requested.  For the arithmetic related to the
-  ## pivot point, refer to rfsrc.R, in the POST PROCESSING section,
-  ## after $nativeArray has been defined.  This is the structure
-  ## that is parsed below.  Prior code in rfsrc.R is parsing the
-  ## native code output from the grow call and is irrelevant here.
+  ## The pivot in this predict related function is different from
+  ## the pivot used in the grow related function.  In rfsrc we are
+  ## referencing the list nativeOutput[[]].  Here we are referencing
+  ## the $nativeArray[[]] object which is a massaged version of
+  ## nativeOutput[[]].  Here, pivot points to the record PRIOR to
+  ## parmID2.  We adjust for the presence of interactions, and
+  ## synthetics.  The default chunk is parmIDx, contPTx, contPTRx,
+  ## mwcpSZx, fsrecIDx.
   ## WARNING: Note that the maximum number of slots in the following
   ## foreign function call is 64.  Ensure that this limit is not
   ## exceeded.  Otherwise, the program will error on the call.
   if (hdim == 0) {
-      offset = 0
+      pivot = 0
       chunk = 0
   } else {
-      ## The default offset points to the record PRIOR to parmID2. We adjust for the presence of interactions, and synthetics.
-      offset = 7
-      ## The default chunk is parmID2, contPT2, contPTR2, mwcpSZ2.
-      chunk = 4
+      pivot <- which(names(object$nativeArray) == "contPTR")
+      chunk = 5
       if (!is.null(object$base.learner)) {
           if (object$base.learner$interact.depth > 1) {
-              ## Adjusted for pairCT, augmXone2, augmXtwo2.
-              offset = offset + 3
+              ## Adjusted for pairCT, augmXone2, augmXtwo2 above, but the chunck size needs to increased.
+              ## pivot = pivot + 3
               chunk = chunk + 2
           }
           if (object$base.learner$synthetic.depth > 1) {
-              ## Adjusted for sythSZ, augmXS2.
-              offset = offset + 2
+              ## Adjusted for sythSZ, augmXS2 above, but the chunck size needs to increased.
+              ## pivot = pivot + 2
               chunk = chunk + 1
           }
       }
@@ -594,6 +602,7 @@ generic.predict.rfsrc <-
                                              csv.bits +
                                              data.pass.bits +
                                              data.pass.predict.bits +
+                                             jitt.bits +
                                              experimental.bits),
                                   ## >>>> start of maxi forest object >>>>
                                   as.double(vimp.threshold),
@@ -644,10 +653,12 @@ generic.predict.rfsrc <-
                                   object$base.learner, 
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
+                                  as.integer((object$nativeArray)$brnodeID),
                                   ## This is hc_zero.  It is never NULL.
                                   list(as.integer((object$nativeArray)$parmID),
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
+                                  as.integer((object$nativeArray)$fsrecID),
                                   as.integer((object$nativeFactorArray)$mwcpPT)),
                                   ## This slot is hc_one_augm_intr.  This slot can be NULL.
                                   if (!is.null(object$base.learner)) {
@@ -669,28 +680,25 @@ generic.predict.rfsrc <-
                                       list(as.integer((object$nativeArray)$hcDim),
                                       as.double((object$nativeArray)$contPTR))
                                   } else { NULL },
-                                  ## See the offset documentation in
-                                  ## rfsrc.R after the nativeArray
-                                  ## SEXP objects are populated in the
-                                  ## post-forest parsing for an
-                                  ## explanation of the offsets below.
-                                  ## These offset are DIFFERENT than the offsets used to
-                                  ## 
                                   if (hdim > 1) {
                                       ## parmIDx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 1 + (chunk * x)])})
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 1 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
                                       ## contPTx
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , offset + 2 + (chunk * x)])})
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , pivot + 2 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
                                       ## contPTRx
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , offset + 3 + (chunk * x)])})
+                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , pivot + 3 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
                                       ## mwcpSZx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, offset + 4 + (chunk * x)])})
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 4 + (chunk * x)])})
+                                  } else { NULL },
+                                  if (hdim > 1) {
+                                      ## fsrecIDx
+                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 5 + (chunk * x)])})
                                   } else { NULL },
                                   if (hdim > 1) {
                                       ## mwcpPTx
@@ -700,7 +708,7 @@ generic.predict.rfsrc <-
                                       if (!is.null(object$base.learner)) {
                                           if (object$base.learner$interact.depth > 1) {
                                               ## augmXonex
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 5 + (chunk * x)])})
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + 6 + (chunk * x)])})
                                           } else { NULL }
                                       } else { NULL }
                                   } else { NULL },
@@ -708,7 +716,7 @@ generic.predict.rfsrc <-
                                       if (!is.null(object$base.learner)) {
                                           if (object$base.learner$interact.depth > 1) {
                                               ## augmXtwox
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + 6 + (chunk * x)])})
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + 7 + (chunk * x)])})
                                           } else { NULL }
                                       } else { NULL }
                                   } else { NULL },
@@ -716,7 +724,7 @@ generic.predict.rfsrc <-
                                       if (!is.null(object$base.learner)) {
                                           if (object$base.learner$synthetic.depth > 1) {
                                               ## augmXSx
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , offset + (if(object$base.learner$interact.depth > 1) 7 else 5) + (chunk * x)])})
+                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + (if(object$base.learner$interact.depth > 1) 8 else 6) + (chunk * x)])})
                                           } else { NULL }
                                       } else { NULL }
                                   } else { NULL },
@@ -791,7 +799,12 @@ generic.predict.rfsrc <-
       n.miss <- get.nmiss(xvar, yvar)
     }
     else {
-      n.miss <- get.nmiss(xvar.newdata, yvar.newdata)
+      if (!jitt) {
+        n.miss <- get.nmiss(xvar.newdata, yvar.newdata)
+      }
+      else {
+        ## already calculated while setting jitt.bits
+      }
     }
   }
   else {

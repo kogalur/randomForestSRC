@@ -155,9 +155,14 @@ impute.rfsrc <- function(formula, data,
     }
     ## set the multivariate response dimension
     ## convert mf.q to a fraction
+    ## will we do original mforest?
     p0 <- length(which.x.na)
+    mfOriginal <- FALSE
     if (mf.q == 0) {
       stop("mf.q must be greater than zero")
+    }
+    if (mf.q == 1 && is.null(always.use)) {
+      mfOriginal <- TRUE
     }
     if (mf.q >= 1) {
       mf.q <- min(p0 - 1, mf.q) / p0
@@ -178,8 +183,10 @@ impute.rfsrc <- function(formula, data,
                            fast = fast), dots.rough))$data
     data$zZ999Zz <- NULL
     ###############################################################
+    ##
     ## main loop: data blocks/groups of variables
     ## we use lapply to avoid for-looping
+    ##
     ###############################################################
     ## set flags
     diff.err <- Inf
@@ -189,12 +196,12 @@ impute.rfsrc <- function(formula, data,
     K <- length(var.grp)
     ## verbose
     if (verbose) {
-      if (K == p0) {
-        cat("missForest parameters:", paste0("(#iter, #vars)=(", max.iter, ",", p0, ")"), "\n")
+      if (mfOriginal) {
+        cat("missForest parameters:", paste0("(#max.iter, #vars)=(", max.iter, ",", p0, ")"), "\n")
       }
       else {
-        cat("multivariate missForest parameters:",
-            paste0("(#iter, #vars, #blks)=(", max.iter, ",", p0, ",", K, ")"), "\n")
+          cat("multivariate missForest parameters:",
+              paste0("(#iter, #vars, #blks)=(", max.iter, ",", p0, ",", K, ")"), "\n")
       }
     }
     nullWhile <- lapply(1:max.iter, function(m) {
@@ -224,46 +231,94 @@ impute.rfsrc <- function(formula, data,
           if (verbose) {
             cat(".")
           }
-          ## multivariate formula
-          ynames <- unique(c(var.names[grp], all.var.names[always.use]))
-          dots$formula <- as.formula(paste("Multivar(", paste(ynames, collapse = ","), paste(") ~ ."), sep = ""))
-          ## reset the chosen y missing data back to NA
-          dta <- data[blk,, drop = FALSE]
-          dta[, ynames] <- lapply(ynames, function(nn) {
-            xk <- data[, nn]
-            xk[unlist(x.na[nn])] <- NA
-            xk[blk]
-          })
+          ## ------------------------------------------------------
+          ##
           ## multivariate missForest call
           ## first column of returned object contains the imputed "y-values" which is what we want
           ## we do not use the other imputed data: this is very important
-          retO <- tryCatch({do.call("generic.impute.rfsrc",
-                                    c(list(data = dta,
-                                           ntree = ntree,
-                                           nodesize = nodesize,
-                                           nsplit = nsplit,
-                                           nimpute = 1,
-                                           fast = fast), dots))}, error = function(e) {NULL})
-          ## confirm that the impute object is non-null in order to proceed
-          if (!is.null(retO)) {
-            ## overlay the imputed data
-            ## we retain the same column order
-            if (!is.null(retO$missing$row)) {
-              blk <- blk[-retO$missing$row]
+          ##
+          ## -----------------------------------------------------
+          if (!mfOriginal) {
+            ## multivariate formula
+            ynames <- unique(c(var.names[grp], all.var.names[always.use]))
+            dots$formula <- as.formula(paste("Multivar(", paste(ynames, collapse = ","), paste(") ~ ."), sep = ""))
+            ## reset the chosen y missing data back to NA
+            dta <- data[blk,, drop = FALSE]
+            dta[, ynames] <- lapply(ynames, function(nn) {
+              xk <- data[, nn]
+              xk[unlist(x.na[nn])] <- NA
+              xk[blk]
+            })
+            ## multivariate generic impute call
+            mvimpute <- tryCatch({do.call("generic.impute.rfsrc",
+                                      c(list(data = dta,
+                                             ntree = ntree,
+                                             nodesize = nodesize,
+                                             nsplit = nsplit,
+                                             nimpute = 1,
+                                             fast = fast), dots))}, error = function(e) {NULL})
+            ## confirm that the impute object is non-null in order to proceed
+            if (!is.null(mvimpute)) {
+              ## overlay the imputed data
+              ## we retain the same column order
+              if (!is.null(mvimpute$missing$row)) {
+                blk <- blk[-mvimpute$missing$row]
+              }
+              if (!is.null(mvimpute$missing$col)) {
+                ynames <- ynames[-mvimpute$missing$col]
+              }
+              data[blk, ynames] <<- mvimpute$data[, ynames, drop = FALSE]
+              rm(dta)
             }
-            if (!is.null(retO$missing$col)) {
-              ynames <- ynames[-retO$missing$col]
-            }
-            data[blk, ynames] <<- retO$data[, ynames, drop = FALSE]
-            rm(dta)
           }
+          ## ------------------------------------------------------
+          ##
+          ## original mforest: grow (train) followed by prediction (test)
+          ##
+          ## -----------------------------------------------------
+          if (mfOriginal) {
+            ## make train, test data
+            yname <- var.names[grp]
+            trn <- setdiff(blk,  unlist(x.na[yname]))
+            tst <- setdiff(blk,  trn)
+            ## we must have train (no missing y) and test (missing y)
+            if (length(trn) > 0 && length(tst) > 0) {
+              dots$formula <- as.formula(paste0(yname, "~."))
+              grow <- tryCatch({do.call("rfsrc",
+                                        c(list(data = data[trn,, drop = FALSE],
+                                               ntree = ntree,
+                                               nodesize = nodesize,
+                                               nsplit = nsplit,
+                                               fast = fast), dots))}, error = function(e) {NULL})
+              ## confirm grow object is non-null in order to proceed
+              if (!is.null(grow)) {
+                ## impute the data using prediction
+                pred <- predict(grow, data[tst,, drop = FALSE])
+                if (grow$family == "regr") {
+                  data[tst, yname] <<- pred$predicted
+                }
+                else {
+                  data[tst, yname] <<- pred$class
+                }
+              }
+            }
+          }
+          ##-------------------------------------
+          ##
+          ## imputation finished for this block
+          ##
+          ##-------------------------------------
           ## return NULL (memory management)
           NULL
         })
         ## return NULL (memory management)
         NULL
       })
+      ##-------------------------------------
+      ##     
       ## check whether algorithm has converged
+      ##
+      ##-------------------------------------
       diff.new.err <- mean(sapply(var.names, function(nn) {
         xo <- data.old[unlist(x.na[nn]), nn]
         xn <- data[unlist(x.na[nn]), nn]

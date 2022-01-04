@@ -4,7 +4,6 @@ rfsrc <- function(formula, data, ntree = 500,
                   splitrule = NULL, nsplit = 10,
                   importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
                   block.size = if (any(is.element(as.character(importance), c("none", "FALSE")))) NULL else 10,
-                  ensemble = c("all", "oob", "inbag"),
                   bootstrap = c("by.root", "none", "by.user"),
                   samptype = c("swor", "swr"),  samp = NULL, membership = FALSE,
                   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
@@ -34,6 +33,7 @@ rfsrc <- function(formula, data, ntree = 500,
     experimental <- is.hidden.experimental(user.option)
     ## this is always false by default
     data.pass <- is.hidden.data.pass(user.option)
+    ## mad max splitting TBD TBD this might go away soon
     mad.max <- is.hidden.mad.max(user.option)
     ## TBD TBD make perf.type visible TBD TBD
     perf.type <- is.hidden.perf.type(user.option)
@@ -52,7 +52,7 @@ rfsrc <- function(formula, data, ntree = 500,
     tdc.rule <- is.hidden.tdc.rule(user.option)
     vimp.threshold  <- is.hidden.vimp.threshold(user.option)
     ## verify key options
-    ensemble <- match.arg(ensemble, c("all", "oob", "inbag"))  
+    ensemble <- "all"##remove option to select between "all", "oob", "inbag"
     bootstrap <- match.arg(bootstrap, c("by.root", "none", "by.user"))
     if (bootstrap == "none") {
         ensemble <- "inbag"
@@ -635,21 +635,28 @@ rfsrc <- function(formula, data, ntree = 500,
             mwcpCountSummary = rep (0, hdim)
             nativeFactorArray <- vector("list", hdim)
         }
-        ## Marker for start of native forest topology.  This can
+        ## Marker for start of forest topology.  This can
         ## change with the outputs requested.  For the arithmetic
         ## related to the pivot point, refer to
         ## stackOutput.c and in particular,
         ## stackForestOutputObjects().  Do not reference internal.c or
         ## global.h for proxies of these as they may not always map to
-        ## stackForestOutputObjects().
+        ## stackForestOutputObjects(). The order in the list represented by
+        ## nativeOutput[[]] is TOTALLY dependent on the order in
+        ## which stackAndProtect() in the C-code is executed.  So,
+        ## pay attention to this, when you are not calling the list
+        ## elements by their name and instead using the offset nativeOutput[[...]].
         pivot <- which(names(nativeOutput) == "treeID")
+        ## The offset, when added to the pivot gives the start of the
+        ## repeatable chunks representing the hyper-splits, 
+        ## including $hcDim, and $contPTR for the case of hdim == 1.
         if (hdim == 0) {
             ## The offset is irrelevant, no calculations are conducted, so we just safe it.
             offset = 0
         }
         else {
             ## Default offset in the absence of interactions and synthetics.
-            offset = 7
+            offset = 10
             if (!is.null(base.learner)) {
                 if (base.learner$interact.depth > 1) {
                     offset = offset + 3
@@ -679,10 +686,20 @@ rfsrc <- function(formula, data, ntree = 500,
                 nativeArraySize <<- nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
                 mwcpCountSummary[1] <<- mwcpCountSummary[1] + nativeOutput$mwcpCT[b]
                 if (hdim > 1) {
-                    ## The multiplier of 5 is due to each set of (parmID, contPT, contPTR, mwrpSZ, mwcpPT).
-                    ## We also adjust the offset for the single occurrence of HC_DIM, and CONT_PTR
+                    ## The pivot is the slot that treeID occupies in
+                    ## the nativeOutput list.  This is entirely
+                    ## determined by the stackAndProtect order in the
+                    ## C-code.
+                    ## We are targetting $mwcpCTxx here, and need to
+                    ## find out what consecutive slots they
+                    ## occupy. They occur after $parmIDxx, $contPTxx,
+                    ## $contPTRxx, $mwcpSZxx, $fsrecIDxx,
+                    ## $mwcpPTxx. There will be hdim-1 of each, and
+                    ## six groups in all.  We also adjust the offset
+                    ## by two (2) for the single occurrence of HC_DIM,
+                    ## and CONT_PTR.
                     for (i in 2:hdim) {
-                        mwcpCountSummary[i] <<- mwcpCountSummary[i] + nativeOutput[[pivot + (offset + 2) + (5 * (hdim - 1)) + (i-2)]][b]
+                        mwcpCountSummary[i] <<- mwcpCountSummary[i] + nativeOutput[[pivot + (offset + 2) + (6 * (hdim-1)) + (i-2)]][b]
                     }
                 }
             }
@@ -695,14 +712,17 @@ rfsrc <- function(formula, data, ntree = 500,
             NULL
         })
         rm(nullO)##memory saving device
+        ## Note that we don't save the $blnodeID that is output from the C-side.
         nativeArray <- as.data.frame(cbind(nativeOutput$treeID[1:nativeArraySize],
-                                           nativeOutput$nodeID[1:nativeArraySize]))
-        nativeArrayHeader <- c("treeID", "nodeID")
+                                           nativeOutput$nodeID[1:nativeArraySize],
+                                           nativeOutput$brnodeID[1:nativeArraySize]))
+        nativeArrayHeader <- c("treeID", "nodeID", "brnodeID")
         nativeArray <- as.data.frame(cbind(nativeArray,
                                            nativeOutput$parmID[1:nativeArraySize],
                                            nativeOutput$contPT[1:nativeArraySize],
-                                           nativeOutput$mwcpSZ[1:nativeArraySize]))
-        nativeArrayHeader <- c(nativeArrayHeader, "parmID", "contPT", "mwcpSZ") 
+                                           nativeOutput$mwcpSZ[1:nativeArraySize],
+                                           nativeOutput$fsrecID[1:nativeArraySize]))
+        nativeArrayHeader <- c(nativeArrayHeader, "parmID", "contPT", "mwcpSZ", "fsrecID") 
         if (mwcpCountSummary[1] > 0) {
             ## This can be NULL if there are no factor splits along this dimension.
             nativeFactorArray[[1]] <- nativeOutput$mwcpPT[1:mwcpCountSummary[1]]
@@ -747,25 +767,29 @@ rfsrc <- function(formula, data, ntree = 500,
         if (hdim > 1) {
             for (i in 2:hdim) {
                 nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput[[pivot + offset + (0 * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                                                   nativeOutput[[pivot + offset + (0 * (hdim-1)) + (i-2)]][1:nativeArraySize]))
                 nativeArrayHeader <- c(nativeArrayHeader, paste("parmID", i, sep=""))
                 nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput[[pivot + offset + (1 * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                                                   nativeOutput[[pivot + offset + (1 * (hdim-1)) + (i-2)]][1:nativeArraySize]))
                 nativeArrayHeader <- c(nativeArrayHeader, paste("contPT", i, sep=""))
                 nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput[[pivot + offset + (2 * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                                                   nativeOutput[[pivot + offset + (2 * (hdim-1)) + (i-2)]][1:nativeArraySize]))
                 nativeArrayHeader <- c(nativeArrayHeader, paste("contPTR", i, sep=""))
                 nativeArray <- as.data.frame(cbind(nativeArray,
-                                                   nativeOutput[[pivot + offset + (3 * (hdim-1)) + i - 2]][1:nativeArraySize]))
+                                                   nativeOutput[[pivot + offset + (3 * (hdim-1)) + (i-2)]][1:nativeArraySize]))
                 nativeArrayHeader <- c(nativeArrayHeader, paste("mwcpSZ", i, sep=""))
+                nativeArray <- as.data.frame(cbind(nativeArray,
+                                                   nativeOutput[[pivot + offset + (4 * (hdim-1)) + (i-2)]][1:nativeArraySize]))
+                nativeArrayHeader <- c(nativeArrayHeader, paste("fsrecID", i, sep=""))
                 if (mwcpCountSummary[i] > 0) {
                     ## This can be NULL if there are no factor splits along this dimension.
-                    nativeFactorArray[[i]] <- nativeOutput[[pivot + offset + (4 * (hdim-1)) + i - 2]][1:mwcpCountSummary[i]]
+                    ## The multiplier of 5 is due to each hyper-dimensional set of (parmID, contPT, contPTR, mwcpSZ, fsrecID).
+                    nativeFactorArray[[i]] <- nativeOutput[[pivot + offset + (5 * (hdim-1)) + (i-2)]][1:mwcpCountSummary[i]]
                 }
                 nativeFactorArrayHeader <- c(nativeFactorArrayHeader, paste("mwcpPT", i, sep=""))
                 if (!is.null(base.learner)) {
                     ## See stackForestObjectsOutput() for an explanation of the offset.
-                    hdim.multiplier <- 6
+                    hdim.multiplier <- 7
                     if (base.learner$interact.depth > 1) {
                         nativeArray <- as.data.frame(cbind(nativeArray,
                                                            nativeOutput[[pivot + offset + (hdim.multiplier * (hdim-1)) + i - 2]][1:nativeArraySize]))
@@ -812,13 +836,13 @@ rfsrc <- function(formula, data, ntree = 500,
             }
         }
         ## An example of the FINAL form of the forest$nativeArray is as follows:
-        ## col 01      02      03      04      05      06       07        08       09         10       11      12           13       14        15       16        17       18        19
-        ## treeID  nodeID  parmID  contPT  mwcpSZ   hcDim  contPTR    pairCT   sythSZ   augmXone augmXtwo  augmXS      parmID2  contPT2  contPTR2  mwcpSZ2 augmXone2 augmXtwo2  augmXS2 
-        ##                                         ---------------- ------------------- -------------------------      ----------->
-        ##                                         single  (hdim1)          single            augm (hdim1)              hdim > 1 
-        ##                                          occur                   occur
-        ##                                                                                                                  20       21        22       23        24        25       26
-        ##                                                                                                             parmID3   contPT3 contPTR3  mwcpSZ3 augmXone3 augmXtwo3  augmXS3
+        ## col 01      02      03      04      05      06       07        08       09         10        11       12      13       14        15       16        17        18        19        20       21
+        ## treeID  nodeID  parmID  contPT  mwcpSZ fsrecID    hcDim   contPTR   pairCT     sythSZ  augmXone augmXtwo  augmXS  parmID2   contPT2 contPTR2   mwcpSZ2  fsrecID2 augmXone2 augmXtwo2  augmXS2 
+        ##                                                   ---------------- ------------------- -------------------------  ----------->
+        ##                                                   single  (hdim1)          single            augm (hdim1)          hdim > 1 
+        ##                                                   occur                     occur
+        ##                                                                                                                        22       23        24       25        26        27        28       29
+        ##                                                                                                                   parmID3  contPT3  contPTR3  mwcpSZ3  fsrecID3 augmXone3 augmXtwo3  augmXS3
         ## The final form of the forestNativeFactorArray is as follows, will NULL entries for some columns depending on hdim:
         ## col 01 -- hdim = 0 or 1
         ##     02 -- hdim = 2
@@ -911,7 +935,6 @@ rfsrc <- function(formula, data, ntree = 500,
                          block.size = block.size,
                          bootstrap = bootstrap,
                          case.wt = case.wt,
-                         ensemble = ensemble,
                          event.info = event.info,
                          gk.quantile = gk.quantile,
                          hdim = hdim,

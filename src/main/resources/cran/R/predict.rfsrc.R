@@ -5,7 +5,6 @@ predict.rfsrc <-
            importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
            get.tree = NULL,
            block.size = if (any(is.element(as.character(importance), c("none", "FALSE")))) NULL else 10,
-           ensemble = NULL,
            na.action = c("na.omit", "na.impute"),
            outcome = c("train", "test"),
            proximity = FALSE,
@@ -23,7 +22,6 @@ predict.rfsrc <-
 {
   result.predict <- generic.predict.rfsrc(object,
                                           newdata,
-                                          ensemble = ensemble,
                                           m.target = m.target,
                                           importance = importance,
                                           get.tree = get.tree,                                          
