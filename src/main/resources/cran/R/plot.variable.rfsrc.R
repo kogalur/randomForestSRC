@@ -427,14 +427,14 @@ plot.variable.rfsrc <- function(
                                y = c(NA, yhat, NA, yhat + 2 * yhat.se, yhat - 2 * yhat.se),
                                type = "n"), dots[names(dots) %in% plot.names]))
         points(x.uniq, yhat, pch = 16, cex = cex.pt, col = 2)
-        if (!is.na(yhat.se) && any(yhat.se > 0)) {
-          if (smooth.lines) {
-            lines(lowess(x.uniq, yhat + 2 * yhat.se), lty = 3, col = 2)
-            lines(lowess(x.uniq, yhat - 2 * yhat.se), lty = 3, col = 2)
-          }
+        if (any(yhat.se > 0)) {
+            if (smooth.lines && !any(is.na(yhat.se))) {
+                lines(lowess(x.uniq, yhat + 2 * yhat.se), lty = 3, col = 2)
+                lines(lowess(x.uniq, yhat - 2 * yhat.se), lty = 3, col = 2)
+            }
             else {
-              lines(x.uniq, yhat + 2 * yhat.se, lty = 3, col = 2)
-              lines(x.uniq, yhat - 2 * yhat.se, lty = 3, col = 2)
+                lines(x.uniq, yhat + 2 * yhat.se, lty = 3, col = 2)
+                lines(x.uniq, yhat - 2 * yhat.se, lty = 3, col = 2)
             }
         }
         if (smooth.lines) {

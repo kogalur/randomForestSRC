@@ -14,6 +14,7 @@
                      c("none", "FALSE")))) NULL else 10,
   na.action = c("na.omit", "na.impute"),
   outcome = c("train", "test"),
+  perf.type = NULL,
   proximity = FALSE,
   forest.wt = FALSE,
   ptn.count = 0,
@@ -70,6 +71,14 @@
     settings.  The option is also ignored whenever the test data is
     devoid of y-outcomes.  See the details and examples below for more
     information.}
+
+  \item{perf.type}{Optional character value for requesting metric used
+    for predicted value, variable importance (VIMP) and error rate.  If not
+    specified, values returned are calculated by the default action used
+    for the family. Currently applicable only to classification and
+    multivariate classification; allowed values are
+    \code{perf.type="misclass"} (default), \code{perf.type="brier"} and
+    \code{perf.type="gmean"}.}
 
   \item{proximity}{Should proximity between test observations
     be calculated?  Possible choices are \code{"inbag"}, \code{"oob"},
@@ -278,7 +287,7 @@ print(veteran.pred)
 
 \donttest{
 ## ------------------------------------------------------------
-## example illustrating restore mode
+## restore mode
 ## - if predict is called without specifying the test data
 ##   the original training data is used and the forest is restored
 ## ------------------------------------------------------------
@@ -304,10 +313,18 @@ var.used <- predict(airq.obj, var.used = "by.tree")$var.used
 print(head(var.used))
 
 ## ------------------------------------------------------------
-## vimp for each tree
-## illustrates get.tree and how to extract information
-## from trees, even if that information was not requested
-## in the original call
+## requesting different performance for classification
+## ------------------------------------------------------------
+
+## default performance is misclassification
+o <- rfsrc(Species~., iris)
+print(o)
+
+## get (normalized) brier performance
+print(predict(o, perf.type = "brier"))
+
+## ------------------------------------------------------------
+## vimp for each tree: illustrates get.tree 
 ## ------------------------------------------------------------
 
 ## regression analysis but no VIMP

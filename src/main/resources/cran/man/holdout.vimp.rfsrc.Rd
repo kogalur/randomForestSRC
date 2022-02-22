@@ -40,39 +40,36 @@
 }
 \details{
 
-  Holdout variable importance (holdout VIMP) is based on comparing the
-  results of two mini forests of trees (blocks of trees), the first in
+  Holdout variable importance (holdout VIMP) is based on comparing error
+  performance of two mini forests of trees (blocks of trees): the first in
   which a random set of \code{vtry} features are held out (the holdout
   forest), and the second in which no features are held out (the
-  baseline forest).  The mini forests are constructed from blocks of
-  trees, where if the block size is one, then this is similar to the
-  idea of Breiman-Cutler which calculates permuation VIMP using one tree
-  at a time.  
+  baseline forest).  
 
-  If a feature is held out in a block of trees, we refer to this as the
-  (feature, block) pair.  The bootstrap for the trees in a (feature,
-  block) pair are identical in both forests. That is, the holdout block
-  is grow by holding out the feature, and the baseline block is grown
-  over the same trees, with the same bootstrap, but without holding out
-  any features.  \code{vtry} controls how many features are held out in
-  every tree. If set to one (default), only one variable is held out in
-  every tree.  Once a (feature, block) of trees has been grown, holdout
-  VIMP for a given variable v is calculated as follows.  Gather the
-  block of trees where the feature was held out (from the holdout
-  forest) and calculate OOB prediction error.  Next gather the
-  corresponding block of trees where v was not held out (from the
-  baseline forest) and calculate OOB prediction error.  Holdout VIMP for
-  the (feature, block) pair is the difference between these two values.
-  The final holdout VIMP estimate for a feature v is obtained by averaging
-  holdout VIMP for (feature=v, block) over all blocks.
-  
   To summarize, holdout VIMP measures the importance of a variable when
-  that variable is truly removed from growing the tree.
+  that variable is truly removed from the tree growing process.
+
+  Specifically, if a feature is held out in a block of trees, we refer
+  to this as the (feature, block) pair.  The bootstrap for the trees in
+  a (feature, block) pair are identical in both forests. That is, the
+  holdout block is grown by holding out the feature, and the baseline
+  block is grown over the same trees, with the same bootstrap, but
+  without holding out any features.  \code{vtry} controls how many
+  features are held out in every tree. If set to one (default), only one
+  variable is held out in every tree.  Once a (feature, block) of trees
+  has been grown, holdout VIMP for a given variable v is calculated as
+  follows.  Gather the block of trees where the feature was held out
+  (from the holdout forest) and calculate OOB prediction error.  Next
+  gather the corresponding block of trees where v was not held out (from
+  the baseline forest) and calculate OOB prediction error.  Holdout VIMP
+  for the (feature, block) pair is the difference between these two
+  values.  The final holdout VIMP estimate for a feature v is obtained
+  by averaging holdout VIMP for (feature=v, block) over all blocks.
 
   Accuracy of hold out VIMP depends critically on total number of trees.
   If total number of trees is too small, then number of times a variable
   is held out will be small and OOB error can suffer from high variance.
-  Therefore, \code{ntree} should be set fairly high - we recommend using
+  Therefore, \code{ntree} should be set fairly high---we recommend using
   1000 times the number of features.  Increasing \code{vtry} is another
   way to increase number of times a variable is held out and therefore
   reduces the burden of growing a large number of trees.  In particular,
@@ -82,21 +79,23 @@
   when \code{vtry} is different than one.  Thus this option should be
   used with caution.
 
-  Accuracy also depends on the value of \code{blocksize}.  Smaller
+  Accuracy also depends on the value of \code{block.size}.  Smaller
   values generally produce better results but are more computationally
-  demanding.  The value of \code{blocksize} should not exceed
+  demanding.  The most computationally demanding, but most accurate, is
+  \code{block.size=1}.  This is similar to how \code{block.size} is used
+  for usual variable importance: see the help file for \command{rfsrc}
+  for details.  Note the value of \code{block.size} should not exceed
   \code{ntree} divided by number of features, otherwise there may not be
   enough trees to satisify the target block size for a feature and
   missing values will result.
 
-  Finally, we note that a targeted hold out VIMP analysis can be
-  requested by setting \code{vtry} to a list with two entries.  The
-  first entry is a vector of integer values specifying the variables of
-  interest.  The second entry is a boolean logical flag indicating
-  whether individual or joint VIMP should be calculated.  For example,
-  suppose variables 1, 4 and 5 are our variables of interest.  To
-  calculate holdout VIMP for these variables, and these variables only,
-  \code{vtry} would be specified by
+  A targeted hold out VIMP analysis can be requested by setting
+  \code{vtry} to a list with two entries.  The first entry is a vector
+  of integer values specifying the variables of interest.  The second
+  entry is a boolean logical flag indicating whether individual or joint
+  VIMP should be calculated.  For example, suppose variables 1, 4 and 5
+  are our variables of interest.  To calculate holdout VIMP for these
+  variables, and these variables only, \code{vtry} would be specified by
 
    vtry = list(xvar = c(1, 4, 5), joint = FALSE)
 

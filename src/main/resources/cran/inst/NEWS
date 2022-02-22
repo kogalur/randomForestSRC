@@ -10,6 +10,14 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Minor changes to Rd files. Re-introduction of competing risk
+generalized logrank split rule (3.1.1 in the CR paper).  This had been
+accidentally removed in CRAN build 2_9_0. Fix to DESCRIPTION URL per
+Prof. Ripley's request.
+  
+---------------------------------------------------------------------------------
+RELEASE 3.0.0
+---------------------------------------------------------------------------------
 Added the ability to get confidence intervals for out-of-bag error
 rates using the subsample function.  Significant improvements in CPU
 times for restoration of models and prediction with new data.  Fixed the

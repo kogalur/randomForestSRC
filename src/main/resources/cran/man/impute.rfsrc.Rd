@@ -78,21 +78,21 @@
     
     \item If \code{mf.q} is specified, a multivariate version of
     missForest imputation (Stekhoven and Buhlmann, 2012) is applied.
-    When \code{mf.q} is set to 1 this is similar to missForest.  Otherwise
-    a fraction \code{mf.q} of variables are used as multivariate responses
-    and split by the remaining variables using multivariate composite
-    splitting (Tang and Ishwaran, 2017).  Missing data for responses are
-    imputed by prediction.  The process is repeated using a new set of
-    variables for responses (mutually exclusive to the previous fit),
-    until all variables have been imputed.  This is one iteration.  The
-    entire process is repeated, and the algorithm iterated until a
-    convergence criteria is met (specified using options \code{max.iter}
-    and \code{eps}).  Integer values for \code{mf.q} are allowed and
-    interpreted as a request that \code{mf.q} variables be selected for
-    the multivariate response.  This is generally the most accurate of
-    all the imputation procedures, but also the most computationally
-    demanding.  However see examples below for strategies to increase
-    speed.
+    Specifically, a fraction \code{mf.q} of variables are used as
+    multivariate responses and split by the remaining variables using
+    multivariate composite splitting (Tang and Ishwaran, 2017).  Missing
+    data for responses are imputed by prediction.  The process is
+    repeated using a new set of variables for responses (mutually
+    exclusive to the previous fit), until all variables have been
+    imputed.  This is one iteration.  The entire process is repeated,
+    and the algorithm iterated until a convergence criteria is met
+    (specified using options \code{max.iter} and \code{eps}).  Integer
+    values for \code{mf.q} are allowed and interpreted as a request that
+    \code{mf.q} variables be selected for the multivariate response.  If
+    \code{mf.q=1}, the algorithm reverts to the original missForest
+    procedure. This is generally the most accurate of all the
+    imputation procedures, but also the most computationally demanding.
+    See examples below for strategies to increase speed.
 
     \item Prior to imputation, the data is processed and records with
     all values missing are removed, as are variables having all missing

@@ -128,6 +128,18 @@ if (library("akima", logical.return = TRUE)) {
 }
 
 ## ------------------------------------------------------------
+## tuning for class imbalanced data problem
+## - see imbalanced function for details
+## - use rfq and perf.type = "gmean" 
+## ------------------------------------------------------------
+
+data(breast, package = "_PROJECT_PACKAGE_NAME_")
+breast <- na.omit(breast)
+o <- tune(status ~ ., data = breast, rfq = TRUE, perf.type = "gmean")
+print(o)
+
+
+## ------------------------------------------------------------
 ## tune nodesize for competing risk - wihs data 
 ## ------------------------------------------------------------
 

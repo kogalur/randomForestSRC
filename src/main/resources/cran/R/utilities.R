@@ -1111,7 +1111,7 @@ get.mad.max <- function (mad.max) {
     ## Convert mad.max option into native code parameter.
     if (!is.null(mad.max)) {
         if (mad.max == TRUE) {
-            mad.max <- 2^23
+            mad.max <- 2^30
         }
         else if (mad.max == FALSE) {
             mad.max <- 0

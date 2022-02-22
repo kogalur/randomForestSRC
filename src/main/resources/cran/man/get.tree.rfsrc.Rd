@@ -150,12 +150,16 @@ plot(get.tree(breast.obj, 1, class.type = "bayes", ensemble = TRUE))
 ## classification
 ## ------------------------------------------------------------
 
-iris.obj <- rfsrc(Species ~., data = iris)
+iris.obj <- rfsrc(Species ~., data = iris, nodesize = 10)
+
+## equivalent
 plot(get.tree(iris.obj, 25))
 plot(get.tree(iris.obj, 25, class.type = "bayes"))
-plot(get.tree(iris.obj, 25, target = "setosa"))
-plot(get.tree(iris.obj, 25, target = "versicolor"))
-plot(get.tree(iris.obj, 25, target = "virginica"))
+
+## predicted probability displayed for terminal nodes
+plot(get.tree(iris.obj, 25, class.type = "prob", target = "setosa"))
+plot(get.tree(iris.obj, 25, class.type = "prob", target = "versicolor"))
+plot(get.tree(iris.obj, 25, class.type = "prob", target = "virginica"))
 
 
 ## ------------------------------------------------------------

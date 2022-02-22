@@ -144,7 +144,7 @@ plot(pdta$x, pdta$yhat, type = "b", pch = 16,
 
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)
 
-## define target wind and temperature values
+## specify wind and temperature values of interest
 wind <- sort(unique(airq.obj$xvar$Wind))
 temp <- sort(unique(airq.obj$xvar$Temp))
 

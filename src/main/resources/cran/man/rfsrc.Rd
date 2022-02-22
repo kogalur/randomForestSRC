@@ -33,6 +33,7 @@
   imputation using a variety of different random forest methods (Tang
   and Ishwaran 2017).
 
+
   New items users should be aware of:
   \enumerate{
 
@@ -87,6 +88,7 @@ rfsrc(formula, data, ntree = 500,
   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
   na.action = c("na.omit", "na.impute"), nimpute = 1,
   ntime = 150, cause,
+  perf.type = NULL,
   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
   xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt  = NULL,
   forest = TRUE,
@@ -208,6 +210,14 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     ones reverts to the default composite split statistic).  Finally,
     regardless of how \code{cause} is specified, the returned forest
     object always provides estimates for all event types.}
+
+  \item{perf.type}{Optional character value for requesting metric used
+    for predicted value, variable importance (VIMP) and error rate.  If not
+    specified, values returned are calculated by the default action used
+    for the family. Currently applicable only to classification and
+    multivariate classification; allowed values are
+    \code{perf.type="misclass"} (default), \code{perf.type="brier"} and
+    \code{perf.type="gmean"}.}
   
   \item{proximity}{Proximity of cases as measured by the frequency of
     sharing the same terminal node.  This is an \code{n}x\code{n}
@@ -397,14 +407,14 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       \item Multivariate analysis:
       \enumerate{
 
-         \item When one or both regression and classification outcomes
-	 are detected, a multivariate normalized composite split rule of
-	 mean-squared error and Gini index splitting is invoked.  See
-	 Tang and Ishwaran (2017).
+         \item Default splitting is the multivariate normalized
+	 composite split rule of mean-squared error and Gini index (Tang
+	 and Ishwaran, 2017).
 
-	 \item \code{splitrule="mahalanobis"}: Mahalanobis splitting
-	 that adjusts for correlation can be specified in the special
-	 case of multivariate regression (all outcomes must be real).
+	 \item Setting \code{splitrule="mahalanobis"} implements
+	 Mahalanobis splitting, which adjusts for correlation.  Only
+	 available for multivariate regression (all outcomes must be
+	 real).
 
       }
        
@@ -584,7 +594,17 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     multivariate forest is grown; i.e. whether it is real-valued,
     categorical, or a combination of both (mixed). Performance measures
     (when requested) are returned for all outcomes.
-    
+
+    Helper functions \command{get.mv.formula},
+    \command{get.mv.predicted}, \command{get.mv.error} can be used for
+    defining the multivariate forest formula and extracting predicted
+    values (all outcomes) and VIMP (all variables, all outcomes;
+    assuming importance was requested in the call).  The latter two
+    functions also work for univariate (regular) forests.  Both
+    functions return standardized values (dividing by the variance for
+    regression, or multiplying by 100, otherwise) using option
+    \code{standardize="TRUE"}.
+	 
     \item \emph{Unsupervised Forests and sidClustering}
 
     See sidClustering \command{sidClustering} for a more sophisticated
@@ -1191,11 +1211,11 @@ if (library("survival", logical.return = TRUE)) {
  
   ## log-rank cause-1 specific splitting and targeted VIMP for cause 1
   pbc.log1 <- rfsrc(Surv(time, status) ~ ., pbc, 
-              splitrule = "logrank", cause = c(1,0), importance = TRUE)
+              splitrule = "logrankCR", cause = c(1,0), importance = TRUE)
 
   ## log-rank cause-2 specific splitting and targeted VIMP for cause 2
   pbc.log2 <- rfsrc(Surv(time, status) ~ ., pbc, 
-              splitrule = "logrank", cause = c(0,1), importance = TRUE)
+              splitrule = "logrankCR", cause = c(0,1), importance = TRUE)
 
   ## extract VIMP from the log-rank forests: event-specific
   ## extract minimal depth from the Gray log-rank forest: non-event specific

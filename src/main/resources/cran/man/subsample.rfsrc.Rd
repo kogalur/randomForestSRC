@@ -222,7 +222,7 @@ plot(srv.smp.o)
 if (library("survival", logical.return = TRUE)) {
   data(pbc, package = "survival")
   pbc$id <- NULL
-  cr.o <- rfsrc(Surv(time, status) ~ ., pbc, splitrule = "logrank", cause = 2)
+  cr.o <- rfsrc(Surv(time, status) ~ ., pbc, splitrule = "logrankCR", cause = 2)
   cr.smp.o <- subsample(cr.o, B = 100)
   plot.subsample(cr.smp.o, target = 2)
 }

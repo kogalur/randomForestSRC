@@ -370,7 +370,8 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
                        "sg.class",             ## 18
                        "sg.surv",              ## 19
                        "tdc.gradient",         ## 20
-                       "mahalanobis")          ## 21
+                       "mahalanobis",          ## 21
+                       "logrankCRGeneral")     ## 22
   ## set the family
   fmly <- formula.detail$family
   ## Preliminary check for consistency.
@@ -452,8 +453,9 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
             stop("Cannot specify logrankCR splitting for right-censored data")
           }
           if ((length(event.info$event.type) >   1) & (splitrule.idx == which(splitrule.names == "logrank"))) {
-            ## Override the splitrule to access the CR split rule.
-            splitrule.idx <- which(splitrule.names == "logrankCR")
+              ## Override the splitrule to access the generalized CR split rule (see 3.3.1 in the paper).
+              ## The default splitrule is 3.3.2 or Gray's test.
+            splitrule.idx <- which(splitrule.names == "logrankCRGeneral")
           }
         }
         else if (event.info$r.dim == 3) {

@@ -86,6 +86,16 @@
   dealing with imbalanced data to ensure convergence of the performance
   value -- this is especially true for the G-mean.  Consider using 5 times
   the usual number of trees.
+
+  A new helper function \code{get.imbalanced.performance} has been added
+  for extracting performance metrics.  Metrics are self-titled and their
+  meaning should generally be clear.  Metrics that may be less familiar
+  include: F1, the F-score or the F-measure which measures balance
+  between the precision and the recall.  F1mod, the harmonic mean of
+  sensitivity, specificity, precision and the negative predictive value.
+  F1gmean, the average of F1 and the G-mean.  F1modgmean, the average of
+  F1mod and the G-mean.
+  
 }   
 \value{
   A two-class random forest fit under the requested method and
@@ -144,16 +154,6 @@ print(get.imbalanced.performance(o.rfq))
 
 print(o.rfq <- imbalanced(f, breast, splitrule = "auc"))
 print(get.imbalanced.performance(o.rfq))
-
-##----------------------------------------------------------------
-## RFQ call with fast rfsrc
-##----------------------------------------------------------------
-
-o.rfq <- imbalanced(f, breast, fast = TRUE)
-print(o.rfq)
-
-## equivalent to:
-## rfsrc.fast(f, breast, ntree = 3000, rfq =  TRUE, perf.type = "gmean") 
 
 ##-----------------------------------------------------------------
 ## standard RF (uses misclassification)

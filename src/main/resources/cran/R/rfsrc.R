@@ -9,6 +9,7 @@ rfsrc <- function(formula, data, ntree = 500,
                   sampsize = if (samptype == "swor") function(x){x * .632} else function(x){x},
                   na.action = c("na.omit", "na.impute"), nimpute = 1,
                   ntime = 150, cause,
+                  perf.type = NULL,
                   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
                   xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt = NULL, 
                   forest = TRUE,
@@ -35,15 +36,17 @@ rfsrc <- function(formula, data, ntree = 500,
     data.pass <- is.hidden.data.pass(user.option)
     ## mad max splitting TBD TBD this might go away soon
     mad.max <- is.hidden.mad.max(user.option)
-    ## TBD TBD make perf.type visible TBD TBD
-    perf.type <- is.hidden.perf.type(user.option)
+    ## rfq
     rfq <- is.hidden.rfq(user.option)
+    ## quantile regression
     gk.quantile <- is.hidden.gk.quantile(user.option)
     quantile.regr <- is.hidden.quantile.regr(user.option)
     prob <- is.hidden.prob(user.option)
     prob.epsilon <- is.hidden.prob.epsilon(user.option)
+    ## lot
     lot <- is.hidden.lot(user.option)    
     hdim <- lot$hdim
+    ## misc.
     base.learner <- is.hidden.base.learner(user.option)
     vtry <- is.hidden.vtry(user.option)
     holdout.array <- is.hidden.holdout.array(user.option)
@@ -427,7 +430,7 @@ rfsrc <- function(formula, data, ntree = 500,
     presort.xvar  <- get.presort.xvar(presort.xvar)
     data.pass.bits <- get.data.pass(data.pass)
     experimental.bits <- get.experimental(experimental)
-    mad.max.bits <- get.data.pass(mad.max)
+    mad.max.bits <- get.mad.max(mad.max)
     ## Set the trace
     do.trace <- get.trace(do.trace)
     ## Start the C external timer.
