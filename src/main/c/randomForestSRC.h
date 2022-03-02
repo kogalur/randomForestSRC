@@ -206,7 +206,6 @@ typedef unsigned long ulong;
 #define OPT_MISS_SKIP 0x00000010 
 #define OPT_MEMB_PRUN 0x00000020 
 #define OPT_MEMB_USER 0x00000040 
-#define OPT_EXPERMENT 0x00000080 
 #define OPT_SPLT_CUST 0x00000F00 
 #define OPT_BOOT_SWOR 0x00001000 
 #define OPT_TREE_ERR  0x00002000 
@@ -227,7 +226,8 @@ typedef unsigned long ulong;
 #define OPT_DATA_PASP 0x08000000 
 #define OPT_CSE       0x10000000 
 #define OPT_CSV       0x20000000 
-#define OPT_MAD_MAX   0x40000000 
+#define OPT_EXPERMNT1 0x00000001 
+#define OPT_EXPERMNT2 0x00000002 
 #define RF_PART_MORT 1
 #define RF_PART_NLSN 2
 #define RF_PART_SURV 3
@@ -352,6 +352,7 @@ struct node {
   unsigned int lotsSize;
   uint *minRank;
   uint *maxRank;
+  double sumRght;
 };
 typedef struct terminal Terminal;
 struct terminal {
@@ -405,14 +406,24 @@ struct leafLinkedObj {
   uint ibgMembrCount;
   uint allMembrCount;
 };
+typedef struct leafLinkedObjSimple LeafLinkedObjSimple;
+struct leafLinkedObjSimple {
+  struct leafLinkedObjSimple *fwdLink;
+  struct leafLinkedObjSimple *bakLink;
+  struct node     *nodePtr;
+};
 LeafLinkedObj *makeLeafLinkedObj();
+LeafLinkedObjSimple *makeLeafLinkedObjSimple();
 LeafLinkedObj *makeAndSpliceLeafLinkedObj(LeafLinkedObj *tail,
                                           Node *nodePtr,
                                           uint ibgCount,
                                           uint allCount);
+LeafLinkedObjSimple *makeAndSpliceLeafLinkedObjSimple(LeafLinkedObjSimple *tail,
+                                                      Node *nodePtr);
 LeafLinkedObj *makeAndSpliceLeafLinkedObjAux(LeafLinkedObj *tail,
                                              Terminal *termPtrAux);
 void freeLeafLinkedObj(LeafLinkedObj *obj);
+void freeLeafLinkedObjSimple(LeafLinkedObjSimple *obj);
 void freeLeafLinkedObjList(LeafLinkedObj *obj);
 void freeLeafLinkedObjListRev(LeafLinkedObj *obj);
 typedef struct splitInfo SplitInfo;
@@ -1017,6 +1028,13 @@ char getVarianceClassic(uint    repMembrSize,
                         double *targetResponse,
                         double *mean,
                         double *variance);
+char getVarianceClassicNoMiss(uint    repMembrSize,
+                              uint   *repMembrIndx,
+                              uint    nonMissMembrSize,
+                              uint   *nonMissMembrIndx,
+                              double *targetResponse,
+                              double *mean,
+                              double *variance);
 char getVarianceSinglePass(uint    repMembrSize,
                            uint   *repMembrIndx,
                            uint    nonMissMembrSize,
@@ -1160,6 +1178,11 @@ char randomSplitGeneric(uint       treeID,
                         SplitInfoMax *splitInfoMax,
                         GreedyObj    *greedyMembr,
                         char       multImpFlag);
+char randomSplitGenericNew(uint       treeID,
+                           Node      *parent,
+                           SplitInfoMax *splitInfoMax,
+                           GreedyObj    *greedyMembr,
+                           char       multImpFlag);
 typedef double (*customFunction) (unsigned int n,
                                   char        *membership,
                                   double      *time,
@@ -1334,7 +1357,7 @@ char quantileRegrSplit (uint       treeID,
                         char       multImpFlag);
 double quantile7 (double *r, uint s, double p);
 char regressionXwghtSplitOld(uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
-char regressionXwghtSplit(uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
+char regressionXwghtSplitNew (uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
 char logRankNCR(uint       treeID,
                 Node      *parent,
                 SplitInfoMax *splitInfoMax,
@@ -1470,12 +1493,18 @@ void freeSortedLinkedObjList(SortedLinkedObj *obj);
 void freeSortedLinkedObj(SortedLinkedObj *obj);
 DistributionObj *stackRandomCovariatesSimple(uint treeID, Node *parent);
 void unstackRandomCovariatesSimple(uint treeID, DistributionObj *obj);
-char selectRandomCovariatesSimple(uint  treeID,
+char selectRandomCovariatesSimpleSingle(uint  treeID,
                                   Node *parent,
                                   DistributionObj *distributionObj,
                                   char *factorFlag,
                                   uint *covariate,
                                   uint *covariateCount);
+char selectRandomCovariatesSimpleVector(uint  treeID,
+                                        Node *parent,
+                                        DistributionObj *distributionObj,
+                                        char *factorFlag,
+                                        uint *covariate,
+                                        uint *covariateCount);
 uint stackAndConstructSplitVectorSimple (uint     treeID,
                                          Node    *parent,
                                          uint     covariate,
@@ -1501,14 +1530,22 @@ char updateMaximumSplitSimple(uint    treeID,
                               char  **polarity,
                               void   *splitVectorPtr,
                               SplitInfoMax *splitInfoMax);
-char growTreeSimple (uint     r,
-                     char     rootFlag,
-                     char     multImpFlag,
-                     uint     treeID,
-                     Node    *parent,
-                     uint    *bootMembrIndxIter,
-                     uint    *rmbrIterator,
-                     uint    *ombrIterator);
+char growTreeRecursiveSimple (uint     r,
+                              char     rootFlag,
+                              char     multImpFlag,
+                              uint     treeID,
+                              Node    *parent,
+                              uint    *bootMembrIndxIter,
+                              uint    *rmbrIterator,
+                              uint    *ombrIterator);
+char growTreeNonRecursiveSimple (uint     r,
+                                 char     rootFlag,
+                                 char     multImpFlag,
+                                 uint     treeID,
+                                 Node    *root,
+                                 uint    *bootMembrIndxIter,
+                                 uint    *rmbrIterator,
+                                 uint    *ombrIterator);
 void stackAndGetSplitSurv(uint    treeID,
                           Node    *parent,
                           char    eventType,
@@ -2009,14 +2046,14 @@ void getNodesAtDepth(Node *parent, uint tagDepth, Node **nodesAtDepth, uint *nad
 void acquireTreeJIT(char mode, uint r, uint treeID);
 void restoreTerminalNodeJIT(uint treeID, Node *root, uint indv, double **xArray, Terminal **termMembership);
 void getTerminalNodeJIT(uint treeID, Node *root, uint indv, double **xArray, Terminal **termMembership);
-char growTree(uint     r,
-              char     rootFlag,
-              char     multImpFlag,
-              uint     b,
-              Node    *parent,
-              uint    *bootMembrIndxIter,
-              uint    *rmbrIterator,
-              uint    *ambrIterator);
+char growTreeRecursive(uint     r,
+                       char     rootFlag,
+                       char     multImpFlag,
+                       uint     b,
+                       Node    *parent,
+                       uint    *bootMembrIndxIter,
+                       uint    *rmbrIterator,
+                       uint    *ambrIterator);
 char growTreeLOT (uint     r,
                   char     multImpFlag,
                   uint     treeID,

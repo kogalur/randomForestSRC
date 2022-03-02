@@ -91,7 +91,7 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime = NULL) {
       time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
       ## trim the time points if the user has requested it
       ## we also allow the user to pass requested time points
-      if (!(is.null(ntime) || ntime == 0)) {
+      if (!is.null(ntime) && !((length(ntime) == 1) && ntime == 0)) {
         if (length(ntime) == 1 && length(time.interest) > ntime) {
           time.interest <- time.interest[
             unique(round(seq.int(1, length(time.interest), length.out = ntime)))]
@@ -138,7 +138,7 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime = NULL) {
       time.interest <- sort(unique(time[nonMissingOutcome[nonMissingDeathFlag]]))
       ## trim the time points if the user has requested it
       ## we also allow the user to pass requested time points
-      if (!missing(ntime)) {
+      if (!is.null(ntime) && !((length(ntime) == 1) && ntime == 0)) {
         if (length(ntime) == 1 && length(time.interest) > ntime) {
           ## select evenly spaced values over [0,1] and not event times 
           time.interest <- seq(0,  min(1, max(time[nonMissingOutcome])), length = ntime)

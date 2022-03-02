@@ -72,7 +72,8 @@ print(rfsrc.anonymous(mpg ~ ., mtcars))
 ## plot anonymous regression tree (using get.tree)
 ## ------------------------------------------------------------
 ## illustrates minimal information saved by the forest
-plot(get.tree(rfsrc.anonymous(mpg ~ ., mtcars), 10))
+## TBD TBD currently not yet implemented TBD TBD
+## plot(get.tree(rfsrc.anonymous(mpg ~ ., mtcars), 10))
 
 ## ------------------------------------------------------------
 ## classification

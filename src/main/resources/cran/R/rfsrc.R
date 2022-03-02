@@ -30,12 +30,10 @@ rfsrc <- function(formula, data, ntree = 500,
     csv  <- is.hidden.csv(user.option)
     insitu.ensemble  <- is.hidden.insitu.ensemble(user.option)
     presort.xvar  <- is.hidden.presort.xvar(user.option)
-    ## this is true by default now
+    ## Experimental option(s).
     experimental <- is.hidden.experimental(user.option)
     ## this is always false by default
     data.pass <- is.hidden.data.pass(user.option)
-    ## mad max splitting TBD TBD this might go away soon
-    mad.max <- is.hidden.mad.max(user.option)
     ## rfq
     rfq <- is.hidden.rfq(user.option)
     ## quantile regression
@@ -430,7 +428,6 @@ rfsrc <- function(formula, data, ntree = 500,
     presort.xvar  <- get.presort.xvar(presort.xvar)
     data.pass.bits <- get.data.pass(data.pass)
     experimental.bits <- get.experimental(experimental)
-    mad.max.bits <- get.mad.max(mad.max)
     ## Set the trace
     do.trace <- get.trace(do.trace)
     ## Start the C external timer.
@@ -463,9 +460,8 @@ rfsrc <- function(formula, data, ntree = 500,
                                                tdc.rule.bits +
                                                cse.bits +
                                                csv.bits +
-                                               data.pass.bits +
-                                               experimental.bits +
-                                               mad.max.bits),
+                                               data.pass.bits),
+                                    as.integer(experimental.bits),
                                     as.integer(splitinfo$index),
                                     as.integer(splitinfo$nsplit),
                                     as.integer(mtry),
@@ -473,7 +469,7 @@ rfsrc <- function(formula, data, ntree = 500,
                                     base.learner, ## Object containing base learner settings.  This is never NULL.
                                     as.integer(vtry),
                                     as.integer(holdout.array),
-                                    holdout.specs, ## object containing experimental holdout settings
+                                    holdout.specs, ## object containing speculative holdout settings
                                     as.integer(formulaDetail$ytry),
                                     as.integer(nodesize),
                                     as.integer(nodedepth),

@@ -165,6 +165,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP seedPtr,
                SEXP optLow,
                SEXP optHigh,
+               SEXP optSup,
                SEXP splitRule,
                SEXP nsplit,
                SEXP mtry,
@@ -203,6 +204,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
   int seedValue           = INTEGER(seedPtr)[0];
   RF_opt                  = INTEGER(optLow)[0];
   RF_optHigh              = INTEGER(optHigh)[0];
+  RF_optSup               = INTEGER(optSup)[0];
   RF_splitRule            = INTEGER(splitRule)[0];
   RF_nsplit               = INTEGER(nsplit)[0];
   RF_mtry                 = INTEGER(mtry)[0];

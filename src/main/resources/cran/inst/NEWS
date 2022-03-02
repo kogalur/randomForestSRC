@@ -10,6 +10,12 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Miner changes to donttest examples that caused issues.  Continued
+improvements to overall speed of the package.
+
+---------------------------------------------------------------------------------
+RELEASE 3.0.1
+---------------------------------------------------------------------------------
 Minor changes to Rd files. Re-introduction of competing risk
 generalized logrank split rule (3.1.1 in the CR paper).  This had been
 accidentally removed in CRAN build 2_9_0. Fix to DESCRIPTION URL per

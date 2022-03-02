@@ -8,7 +8,7 @@
 \usage{\method{get.tree}{rfsrc}(object, tree.id, target, m.target = NULL,
    time, surv.type = c("mort", "rel.freq", "surv", "years.lost", "cif", "chf"),
    class.type = c("bayes", "rfq", "prob"),
-   ensemble = FALSE, oob = TRUE, show.plots = TRUE)
+   ensemble = FALSE, oob = TRUE, show.plots = TRUE, do.trace = FALSE)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)}.}
@@ -32,7 +32,10 @@
     the requested tree for prediction (this is the default).}
   \item{oob}{OOB (TRUE) or in-bag (FALSE) predicted values.  Only
     applies when \code{ensemble=TRUE}.}
-   \item{show.plots}{Should plots be displayed?}
+  \item{show.plots}{Should plots be displayed?}
+  \item{do.trace}{Number of seconds between updates to the user on
+    approximate time to completion.}
+
 }
 \details{
 

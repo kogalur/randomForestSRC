@@ -782,7 +782,7 @@ is.hidden.tdc.rule <-  function (user.option) {
     }
     else {
         ## Check the class of the object.
-        if (class(user.option$base.learner) == "base.learner") {
+        if (inherits(user.option$base.learner, "base.learner")) {
             base.learner <- user.option$base.learner
         }
         else {
@@ -798,7 +798,7 @@ is.hidden.tdc.rule <-  function (user.option) {
     }
     else {
         ## Check the class of the object.
-        if (class(user.option$lot) == "lot") {
+        if (inherits(user.option$lot, "lot")) {
             lot <- user.option$lot
         }
         else {
@@ -1028,7 +1028,7 @@ get.presort.xvar <- function (presort.xvar) {
     }
     return (presort.xvar)
 }
-is.hidden.data.pass <-  function (user.option, experimental) {
+is.hidden.data.pass <-  function (user.option) {
     if (is.null(user.option$data.pass)) {
       FALSE
     }
@@ -1073,57 +1073,35 @@ get.data.pass.predict <- function (data.pass) {
     return (data.pass)
 }
 is.hidden.experimental <-  function (user.option) {
-    if (is.null(user.option$experimental)) {
-     ## Caution:  We are setting experimental mode to true as the default here!
-     !FALSE
+    if (is.null(user.option$experimental1)) {
+        e1  <- FALSE
     }
     else {
-        as.logical(as.character(user.option$experimental))
+        e1  <- as.logical(as.character(user.option$experimental1))
     }
+    if (is.null(user.option$experimental2)) {
+        e2  <- FALSE
+    }
+    else {
+        e2  <- as.logical(as.character(user.option$experimental2))
+    }
+    if (is.null(user.option$experimental3)) {
+        e3  <- FALSE
+    }
+    else {
+        e3  <- as.logical(as.character(user.option$experimental3))
+    }
+    return (c(e1, e2, e3))
 }
 get.experimental <- function (experimental) {
     ## Convert experimental option into native code parameter.
-    if (!is.null(experimental)) {
-        if (experimental == TRUE) {
-            experimental <- 2^7
-        }
-        else if (experimental == FALSE) {
-            experimental <- 0
-        }
-        else {
-            stop("Invalid choice for 'experimental' option:  ", experimental)
+    bits <- 0
+    for (i in 1:length(experimental)) {
+        if (experimental[i] == TRUE) {
+            bits <- bits + 2^(i-1)
         }
     }
-    else {
-        stop("Invalid choice for 'experimental' option:  ", experimental)
-    }
-    return (experimental)
-}
-is.hidden.mad.max <-  function (user.option) {
-    if (is.null(user.option$mad.max)) {
-      FALSE
-    }
-    else {
-        as.logical(as.character(user.option$mad.max))
-    }
-}
-get.mad.max <- function (mad.max) {
-    ## Convert mad.max option into native code parameter.
-    if (!is.null(mad.max)) {
-        if (mad.max == TRUE) {
-            mad.max <- 2^30
-        }
-        else if (mad.max == FALSE) {
-            mad.max <- 0
-        }
-        else {
-            stop("Invalid choice for 'mad.max' option:  ", mad.max)
-        }
-    }
-    else {
-        stop("Invalid choice for 'mad.max' option:  ", mad.max)
-    }
-    return (mad.max)
+    return (bits)
 }
 is.hidden.vimp.threshold <-  function (user.option) {
     if (is.null(user.option$vimp.threshold)) {

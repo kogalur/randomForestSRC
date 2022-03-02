@@ -20,7 +20,6 @@ partial.rfsrc <- function(
   insitu.ensemble  <- is.hidden.insitu.ensemble(user.option)
   jitt <- is.hidden.jitt(user.option, "none", partial = TRUE)
   data.pass <- is.hidden.data.pass(user.option)
-  experimental <- is.hidden.data.pass(user.option)
   ## Object consistency
   ## (TBD, TBD, TBD) Version checking is NOT implemented in this mode (TBD, TBD, TBD)
   if (missing(object)) {
@@ -131,7 +130,6 @@ partial.rfsrc <- function(
   terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
   terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
   data.pass.bits <- get.data.pass(data.pass)
-  experimental.bits <- get.data.pass(experimental)
   ## In situ ensembles.
   insitu.ensemble.bits = get.insitu.ensemble(insitu.ensemble)
   ## Just in Time Tree Topology Restoration.  Note that we do not
@@ -191,8 +189,7 @@ partial.rfsrc <- function(
                                              terminal.quants.bits +
                                              partial.bits + 
                                              data.pass.bits +
-                                             jitt.bits +
-                                             experimental.bits),
+                                             jitt.bits),
                                   ## >>>> start of maxi forest object >>>>
                                   as.numeric(1),
                                   as.integer(ntree),
