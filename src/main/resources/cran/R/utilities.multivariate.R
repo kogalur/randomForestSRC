@@ -416,3 +416,109 @@ get.univariate.target <- function(x, outcome.target = NULL) {
   ## guaranteed to exist in the object.
   outcome.target
 }
+####################################################################
+##
+##  SVD-generalized inverse UTILITY FUNCTIONS
+##
+####################################################################
+## generalized inverse of matrix X (typically X=covariance matrix)
+ginverse <- function(X, tol = sqrt(.Machine$double.eps), test = FALSE) {
+  X <- as.matrix(X)
+  if (nrow(X) >= ncol(X)) {
+    Xinv <- ginverse.workhorse(X, tol)
+  }
+  else {
+    Xinv <- t(ginverse.workhorse(t(X), tol))
+  }
+  if (test) {
+    p1 <- summary(c(X %*% Xinv %*% X - X))
+    p2 <- summary(c(Xinv %*% X %*% Xinv - Xinv))
+    p3 <- summary(c(X %*% Xinv - t(X %*% Xinv)))
+    cat("test 3 properties of generalized inverse:\n")
+    print(p1);print(p2);print(p3)
+  }
+  Xinv
+}
+## generalized inverse workhorse
+ginverse.workhorse <- function (X, tol) {
+  Xsvd <- svd(X)
+  Positive <- Xsvd$d > max(tol * Xsvd$d[1L], 0)
+  if (all(Positive)) {
+    Xsvd$v %*% (1/Xsvd$d * t(Xsvd$u))
+  }
+  else if (!any(Positive)) { 
+    array(0, dim(X)[2L:1L])
+  }
+  else {
+    Xsvd$v[, Positive, drop = FALSE] %*% ((1/Xsvd$d[Positive]) * 
+                       t(Xsvd$u[, Positive, drop = FALSE]))
+  }
+}
+## minimum least squares via generalized inverse 
+ginverse.mlse <- function(f, data) {
+  ## acquire y and x
+  ## convert x to a data matrix
+  ynms <- all.vars(as.formula(f))[1]
+  x <- data.matrix(data[, colnames(data) != ynms, drop = FALSE])
+  y <- data[, ynms]
+  ## mlse
+  o.mlse <- ginverse.mlse.workhorse(y, x)
+  ## ols
+  o.lm <- lm(y~., data.frame(y = y, x))
+  ## add mlse to ols
+  tbl <- summary(o.lm)$coef
+  ## for p>n the OLS may fail ... break this up into two cases
+  if (nrow(tbl) == length(o.mlse$coef)) {
+    cnms <- colnames(tbl); cnms[1] <- "ols"
+    tbl <- data.frame(tbl)
+    colnames(tbl) <- cnms
+    tbl$mls <- o.mlse$coef
+  }
+  else {## ... looks like OLS failed
+    tbl <- data.frame(ols = coef(o.lm),
+                      mls = o.mlse$coef)
+  }
+  ## return the goodies
+  print(tbl)
+  invisible(list(summary = tbl, ols = o.lm, mls = o.mlse, y = y, x = x))
+}
+ginverse.mlse.workhorse <- function(y, x) {
+  A <- as.matrix(data.matrix(cbind(1, x)))
+  n <- nrow(A)
+  p <- ncol(x)
+  bhat <- c(ginverse(A) %*% y)
+  yhat <- c(A %*% c(bhat))
+  ssq <- sum((y - yhat)^2, na.rm = TRUE)
+  ss0 <- sum((y - mean(y, na.rm = TRUE))^2, na.rm = TRUE)
+  rsq <- (1 - ssq / ss0)
+  rsq.adj <- NA
+  if ((p + 1) < n) {
+    rsq.adj <- (1 - (n - 1) / (n - p - 1) * (ssq / ss0))
+  }
+  names(bhat) <- c("Int", colnames(x))
+  list(coef = bhat, fitted.values = yhat, rsq = rsq, rsq.adj = rsq.adj)
+}
+## generalized inverse of A=(X^T X) using svd
+ginverseA <- function (X, ridge = 0, tol = sqrt(.Machine$double.eps)) {
+  if (!is.matrix(X)) {
+    X <- as.matrix(X)
+  }
+  ## we can sometimes expect NA or infinite values in the data
+  ## for example repeated recursive splitting can yield features with no data
+  ## clean this up by setting colums where this occurs to a constant - zero will do
+  na.pt <- apply(is.na(X), 2, any)
+  if (sum(na.pt) > 0) {
+    X[, na.pt] <- 0
+  }
+  inf.pt <- apply(is.infinite(X), 2, any)
+  if (sum(inf.pt) > 0) {
+    X[, inf.pt] <- 0
+  }
+  ## calculate A
+  A <- t(X) %*% X
+  ## ridge stabilization
+  if (ridge > 0) {
+    A <- A + diag(ridge, ncol(A))
+  }
+  ginverse(A, tol)
+}

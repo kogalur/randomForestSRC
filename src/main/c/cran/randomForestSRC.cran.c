@@ -196,6 +196,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP nImpute,
                SEXP perfBlock,
                SEXP quantileInfo,
+               SEXP qStarPlus,
                SEXP xPreSort,
                SEXP numThreads) {
   clock_t cpuTimeStart = clock();
@@ -382,6 +383,12 @@ SEXP rfsrcGrow(SEXP traceFlag,
     RF_quantile = NULL;
   }
   RF_qEpsilon = REAL(VECTOR_ELT(quantileInfo, 2))[0];
+  RF_qStarPlus = NULL;
+  if(RF_ySize > 0) {
+    if (qStarPlus != R_NilValue) {
+      RF_qStarPlus         = (double **) copy2DObject(qStarPlus, NATIVE_TYPE_NUMERIC, TRUE, RF_ySize, RF_ySize);
+    }
+  }
   RF_xPreSort            = REAL(xPreSort)[0];
   RF_vtry                = INTEGER(vtry)[0];
   RF_vtryArray           = (uint **) copy2DObject(vtryArray, NATIVE_TYPE_INTEGER, RF_vtry > 0, RF_ntree, RF_xSize);
@@ -408,6 +415,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
   free_2DObject(RF_responseIn, NATIVE_TYPE_NUMERIC, RF_ySize > 0, RF_ySize, RF_observationSize);
   free_2DObject(RF_bootstrapIn, NATIVE_TYPE_INTEGER, (RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2), RF_ntree, RF_subjSize);
   free_2DObject(RF_observationIn, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);  
+  free_2DObject(RF_qStarPlus, NATIVE_TYPE_NUMERIC, RF_qStarPlus != NULL, RF_ySize, RF_ySize);
   free_2DObject(RF_vtryArray, NATIVE_TYPE_INTEGER, RF_vtry > 0, RF_ntree, RF_xSize);  
   memoryCheck();
   RF_cpuTime_[1] = (double) (clock() - cpuTimeStart) / CLOCKS_PER_SEC;
@@ -437,6 +445,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP baseLearn,
                   SEXP treeID,
                   SEXP nodeID,
+                  SEXP nodeSZ,
                   SEXP brnodeID,
                   SEXP hc_zero,
                   SEXP hc_oneAugIntr,
@@ -620,6 +629,7 @@ clock_t cpuTimeStart = clock();
   }
   RF_treeID_              = (uint *) INTEGER(treeID);   RF_treeID_ --;
   RF_nodeID_              = (uint *) INTEGER(nodeID);   RF_nodeID_ --;
+  RF_nodeSZ_              = (uint *) INTEGER(nodeSZ);   RF_nodeSZ_ --;
   RF_brnodeID_            = (uint *) INTEGER(brnodeID); RF_brnodeID_ --;
   RF_RMBR_ID_             = (uint *) INTEGER(tnRMBR);
   RF_AMBR_ID_             = (uint *) INTEGER(tnAMBR);

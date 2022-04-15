@@ -80,7 +80,8 @@ get.tree.rfsrc <- function(object,
     stop("forest is missing.  Re-run rfsrc (grow call) with forest=TRUE")
   }
   if (inherits(object, "anonymous")) {
-    anonymous <- TRUE
+    ## anonymous <- TRUE
+    stop("get.tree does not currently work with anonymous forests\n")
   }
   else {
     anonymous <- FALSE

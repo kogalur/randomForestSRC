@@ -17,42 +17,61 @@
   nvar, npts = 25, smooth.lines = FALSE, subset, ...)
 }
 \arguments{
-  \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc,
+
+ \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc,
     synthetic)}, or \code{(rfsrc, plot.variable)}.}
-  \item{xvar.names}{Names of the x-variables to be used.}
-  \item{target}{For classification, an integer or
+
+ \item{xvar.names}{Names of the x-variables to be used.}
+
+ \item{target}{For classification, an integer or
     character value specifying the class to focus on (defaults to the
     first class).  For competing risks, an integer value between
     1 and \code{J} indicating the event of interest, where \code{J} is
     the number of event types.  The default is to use the first event
     type.}
+
   \item{m.target}{Character value for multivariate families
     specifying the target outcome to be used.  If left unspecified, the
     algorithm will choose a default target.}
-   \item{time}{For survival, the time at which the predicted
+
+  \item{time}{For survival, the time at which the predicted
     survival value is evaluated at (depends on \code{surv.type}).}
+
   \item{surv.type}{For survival, specifies the predicted value.
     See details below.}
+
   \item{class.type}{For classification, specifies the predicted value.
     See details below.}
+
   \item{partial}{Should partial plots be used?}
+
   \item{oob}{OOB (TRUE)  or in-bag (FALSE) predicted values.}
-   \item{show.plots}{Should plots be displayed?}
+
+  \item{show.plots}{Should plots be displayed?}
+
   \item{plots.per.page}{Integer value controlling page layout.}
+
   \item{granule}{Integer value controlling whether a plot for a
     specific variable should be treated as a factor and therefore given
     as a boxplot. Larger values coerce boxplots.}
+
   \item{sorted}{Should variables be sorted by importance values.}
+
   \item{nvar}{Number of variables to be plotted. Default is all.}
+
   \item{npts}{Maximum number of points used when generating partial
     plots for continuous variables.}
+
   \item{smooth.lines}{Use lowess to smooth partial plots.}
+
   \item{subset}{Vector indicating which rows of the x-variable matrix
     \code{x$xvar} to use. All rows are used if not specified.  Do not
     define subset based on the original data (which could have been processed
     due to missing values or for other reasons in the previous forest call) but
     define subset based on the rows of \code{x$xvar}.}
+
   \item{...}{Further arguments passed to or from other methods.}
+  
 }
 \details{
   The vertical axis displays the ensemble predicted value, while

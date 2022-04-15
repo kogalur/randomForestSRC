@@ -1,7 +1,7 @@
 quantreg.rfsrc <- function(formula, data, object, newdata,
-                              method = "local", splitrule = NULL,
-                              prob = NULL, prob.epsilon = NULL,
-                              oob = TRUE, fast = FALSE, maxn = 1e3, ...)
+                           method = "local", splitrule = NULL,
+                           prob = NULL, prob.epsilon = NULL,
+                           oob = TRUE, fast = FALSE, maxn = 1e3, ...)
 {
   ## we intialize the grow primary operation as false
   grow <- FALSE
@@ -19,17 +19,24 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
   if (missing(object)) {
     ## the primary operation is grow 
     grow <- TRUE
-    ## pull unnamed parameters to pass to rfsrc
+    ## list of forest parameters
+    rfnames <- get.rfnames(hidden = TRUE)
+     
+    ## restrict to allowed values
+    rfnames <- rfnames[rfnames != "formula"            &
+                       rfnames != "data"               &
+                       rfnames != "splitrule"          ]
+    ## get the permissible hidden options
     dots <- list(...)
-    dots$formula <- dots$data <- NULL
-    ## if prob and prob.epsilon are NULL, leave them alone
+    dots <- dots[names(dots) %in% rfnames]
+    ## manually set key hidden options 
     dots$prob <- prob
     dots$prob.epsilon <- prob.epsilon
     ## set the default split rule
     if (is.null(splitrule)) {
       splitrule <- "la.quantile.regr"
     }
-    ## TBD TBD quantile splitrule fails in the case of multivariate regression
+    ## TBD2 quantile splitrule fails in the case of multivariate regression
     fmly <- parseFormula(formula, data)$family
     if (fmly == "regr+" || fmly == "class+" || fmly == "mix+") {
       splitrule <- NULL

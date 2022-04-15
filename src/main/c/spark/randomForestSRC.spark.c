@@ -185,6 +185,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   populateBaseLearnObject(baseLearn);
   RF_treeID_              = (uint *)   copy1DObject(treeID, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
   RF_nodeID_              = (uint *)   copy1DObject(nodeID, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
+  RF_nodeSZ_              = (uint *)   copy1DObject(nodeSZ, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
   RF_RMBR_ID_             = (uint *)   copy1DObject(tnRMBR, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
   RF_AMBR_ID_             = (uint *)   copy1DObject(tnAMBR, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
   RF_TN_RCNT_             = (uint *)   copy1DObject(tnRCNT, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);

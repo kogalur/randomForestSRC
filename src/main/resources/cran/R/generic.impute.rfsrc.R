@@ -22,8 +22,7 @@ generic.impute.rfsrc <- function(data,
                            nsplit = nsplit,
                            nimpute = nimpute,
                            na.action = "na.impute",
-                           impute.only = TRUE,
-                           forest = FALSE), dots))
+                           impute.only = TRUE), dots))
   }
   else {## user has requested the fast forest interface
     object <- do.call("rfsrc.fast",

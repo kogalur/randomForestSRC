@@ -5,7 +5,7 @@ predict.rfsrc <-
            importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
            get.tree = NULL,
            block.size = if (any(is.element(as.character(importance), c("none", "FALSE")))) NULL else 10,
-           na.action = c("na.omit", "na.impute"),
+           na.action = c("na.omit", "na.impute", "na.random"),
            outcome = c("train", "test"),
            perf.type = NULL,
            proximity = FALSE,

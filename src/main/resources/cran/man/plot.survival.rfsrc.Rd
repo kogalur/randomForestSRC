@@ -119,7 +119,7 @@ plot.survival(pbc.obj, subset = c(3, 10))
 plot.survival(pbc.obj, subset = c(3, 10), collapse = TRUE)
 
 ## get.brier.survival function does many nice things!
-plot(get.brier.survival(pbc.obj, cens.mode="km")$brier.score,type="s", col=2)
+plot(get.brier.survival(pbc.obj, cens.model="km")$brier.score,type="s", col=2)
 lines(get.brier.survival(pbc.obj, cens.model="rfsrc")$brier.score, type="s", col=4)
 legend("bottomright", legend=c("cens.model = km", "cens.model = rfsrc"), fill=c(2,4))
 

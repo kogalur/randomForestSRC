@@ -88,7 +88,7 @@ impute.rfsrc <- function(formula, data,
         ytry <- min(p - 1, max(25, ceiling(sqrt(p))))
       }
       dots$formula <- as.formula(paste("Unsupervised(", ytry, ") ~ ."))
-      ## TBD TBD splitrule not permissible with unsupervised forests?
+      ## TBD2 splitrule not permissible with unsupervised forests?
       dots$splitrule <- NULL
     }
     else {

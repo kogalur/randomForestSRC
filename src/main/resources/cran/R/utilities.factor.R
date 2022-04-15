@@ -4,32 +4,32 @@ check.factor <- function(test, gfactor) {
       test[, match(gfactor$factor, colnames(test))] <- data.frame(
         mclapply(1:length(gfactor$factor),
                  function(k) {
-                   #fk.train <- train[, colnames(train) == gfactor$factor[k]]
-                   #fk.test <- test[ , colnames(test) == gfactor$factor[k]]
                    fk.test <- as.character(test[ , colnames(test) == gfactor$factor[k]])
-                   #if (length(setdiff(levels(na.omit(fk.test)), levels(fk.train))) > 0) {
-                   #if (length(setdiff(levels(na.omit(fk.test)), gfactor$levels[[k]])) > 0) {
                    if (!all(is.element(unique(na.omit(fk.test)), gfactor$levels[[k]]))) {
-                       stop("levels of factors in test data do not match those in training data\n")
+                     #stop("levels of factors in test data do not match those in training data\n")
+                     fake.level.k <- paste0(tail(gfactor$levels[[k]], 1), "+")
+                     fk.test[!is.element(fk.test, gfactor$levels[[k]])] <- fake.level.k
+                     factor(fk.test, levels = c(gfactor$levels[[k]], fake.level.k), exclude = NULL)
                    }
-                   #factor(as.character(fk.test), levels = gfactor$levels[[k]], exclude = NULL)
-                   factor(fk.test, levels = gfactor$levels[[k]], exclude = NULL)
+                   else {
+                     factor(fk.test, levels = gfactor$levels[[k]], exclude = NULL)
+                   }
                  }))
     }
     if (length(gfactor$order) > 0) {
       test[, match(gfactor$order, colnames(test))] <- data.frame(
         mclapply(1:length(gfactor$order),
                  function(k) {
-                   #fk.train <- train[, colnames(train) == gfactor$order[k]]
-                   #fk.test <- test[ , colnames(test) == gfactor$order[k]]
                    fk.test <- as.character(test[ , colnames(test) == gfactor$order[k]])
-                   #if (length(setdiff(levels(na.omit(fk.test)), levels(fk.train))) > 0) {
-                   #if (length(setdiff(levels(na.omit(fk.test)), gfactor$order.levels[[k]])) > 0) {
                    if (!all(is.element(unique(na.omit(fk.test)), gfactor$order.levels[[k]]))) {
-                       stop("levels of ordered factors in test data do not match those in training data\n")
+                     #stop("levels of ordered factors in test data do not match those in training data\n")
+                     fake.order.level.k <- paste0(tail(gfactor$order.levels[[k]], 1), "+")
+                     fk.test[!is.element(fk.test, gfactor$order.levels[[k]])] <- fake.order.level.k
+                     factor(fk.test, levels = c(gfactor$order.levels[[k]], fake.order.level.k), ordered = TRUE)
                    }
-                   #factor(as.character(fk.test), levels = gfactor$order.levels[[k]], ordered = TRUE)
-                   factor(fk.test, levels = gfactor$order.levels[[k]], ordered = TRUE)
+                   else {
+                     factor(fk.test, levels = gfactor$order.levels[[k]], ordered = TRUE)
+                   }
                  }))
     }
   }

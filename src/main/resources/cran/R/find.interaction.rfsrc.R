@@ -8,20 +8,21 @@ find.interaction.rfsrc <- function(
   sorted = TRUE,
   nvar = NULL, 
   nrep  = 1,
-  na.action = c("na.omit", "na.impute"),
+  na.action = c("na.omit", "na.impute", "na.random"),
   seed = NULL,
   do.trace = FALSE,
   verbose = TRUE,
   ...)
 {
-  ## Check that 'object' is of the appropriate type.
-  if (is.null(object)) stop("Object is empty!")
+  ## incoming object must be a grow forest or a forest object
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2    &
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2)
-    stop("This function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'.")
+    stop("this function only works for objects of class `(rfsrc, grow)' or '(rfsrc, forest)'")
+  ## grow forests must have true forest information
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
-    if (is.null(object$forest)) 
-      stop("Forest is empty!  Re-run grow call with forest set to 'TRUE'.")
+    if (is.forest.missing(object)) {
+      stop("Forest information for prediction is missing.  Re-run rfsrc (grow call) with forest=TRUE")
+    }
   }
   ## specify the default event type for CR
   if (missing(cause)) {

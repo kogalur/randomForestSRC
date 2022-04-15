@@ -1,14 +1,13 @@
-synthetic.rfsrc <-
-  function(formula, data, object, newdata,
-           ntree = 1000, mtry = NULL, nodesize = 5, nsplit = 10,
-           mtrySeq = NULL, nodesizeSeq = c(1:10,20,30,50,100),
-           min.node = 3,
-           fast = TRUE,
-           use.org.features = TRUE,
-           na.action = c("na.omit", "na.impute"),
-           oob = TRUE,
-           verbose = TRUE,
-           ...)
+synthetic.rfsrc <- function(formula, data, object, newdata,
+                            ntree = 1000, mtry = NULL, nodesize = 5, nsplit = 10,
+                            mtrySeq = NULL, nodesizeSeq = c(1:10,20,30,50,100),
+                            min.node = 3,
+                            fast = TRUE,
+                            use.org.features = TRUE,
+                            na.action = c("na.omit", "na.impute"),
+                            oob = TRUE,
+                            verbose = TRUE,
+                            ...)  
 {
   ## --------------------------------------------------------------
   ##   
@@ -17,9 +16,29 @@ synthetic.rfsrc <-
   ## --------------------------------------------------------------
   ## verify key options
   na.action <- match.arg(na.action, c("na.omit", "na.impute"))
-  ## set ensemble to "all" to avoid inbag/oob distinction
+  ##--------------------------------------------------------------
+  ##
+  ## extract additional options specified by user
+  ## we lock this down to allowed types
+  ##
+  ##--------------------------------------------------------------
+  ## list of forest parameters
+  rfnames <- get.rfnames(hidden = TRUE)
+   
+  ## restrict to allowed values
+  rfnames <- rfnames[rfnames != "ntree"              &
+                     rfnames != "mtry"               &
+                     rfnames != "nodesize"           &
+                     rfnames != "nsplit"             &
+                     rfnames != "na.action"          ]
+  ## get the permissible hidden options
   dots <- list(...)
-  dots$ensemble <- "all"
+  dots <- dots[names(dots) %in% rfnames]
+  ##--------------------------------------------------------------
+  ##
+  ## process the object
+  ##
+  ##--------------------------------------------------------------
   if (!missing(object)) {
     ## incoming parameter check
     if (sum(inherits(object, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) != 2) {
@@ -109,13 +128,13 @@ synthetic.rfsrc <-
         }
         if (oob) {
           do.call(rfsrc.grow,
-                  c(list(formula = f.org, data = data, ensemble = "all", forest = TRUE,
+                  c(list(formula = f.org, data = data, forest = TRUE, 
                          ntree = ntree, mtry = mm, nodesize = nn, nsplit = nsplit[1],
                          bootstrap = "by.user", samp = samp)))
         }
         else {
           do.call(rfsrc.grow,
-                  c(list(formula = f.org, data = data, ensemble = "all", forest = TRUE,
+                  c(list(formula = f.org, data = data, forest = TRUE,
                          ntree = ntree, mtry = mm, nodesize = nn, nsplit = nsplit[1])))
         }
       })

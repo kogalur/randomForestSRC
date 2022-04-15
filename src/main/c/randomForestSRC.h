@@ -18,7 +18,7 @@ struct augmentationObj {
   int    *sythX;
   unsigned int obsSize;
   unsigned int fobsSize;
-  char *permissibilityFlag;
+  char *permissible;
 };
 #include <stdio.h>
 #include <stdarg.h>
@@ -30,6 +30,9 @@ struct augmentationObj {
 #include <time.h>
 #ifdef _OPENMP
 #include <omp.h>
+#endif
+#ifdef NOT_HAVE_PTHREAD
+#include <pthread.h>
 #endif
 @RF_CRANX_BEG@
 #include <R_ext/Print.h>
@@ -93,7 +96,7 @@ typedef unsigned long ulong;
 #define RF_VMP_CLS  27  
 #define RF_VMP_RGR  28  
 #define RF_MISS_ID  29  
-#define RF_OMIS_ID  30  
+#define RF_XXXX_30  30  
 #define RF_VUSE_ID  31  
 #define RF_DPTH_ID  32  
 #define RF_MEMB_ID  33  
@@ -162,10 +165,11 @@ typedef unsigned long ulong;
 #define RF_BL_NODE_ID     96  
 #define RF_BR_NODE_ID     97  
 #define RF_FS_REC_ID      98  
-#define RF_OPT_LO_GROW    99  
-#define RF_OPT_HI_GROW   100  
-#define RF_CPU_TIME      101  
-#define RF_SEXP_CNT      102  
+#define RF_NODE_SZ        99  
+#define RF_OPT_LO_GROW   100  
+#define RF_OPT_HI_GROW   101  
+#define RF_CPU_TIME      102  
+#define RF_SEXP_CNT      103  
 #define RF_SEXP_ASCII_SIZE 16
 #define OPT_FENS      0x00000001 
 #define OPT_OENS      0x00000002 
@@ -174,11 +178,10 @@ typedef unsigned long ulong;
 #define OPT_LEAF      0x00000010 
 #define OPT_TREE      0x00000020 
 #define OPT_SEED      0x00000040 
-#define OPT_MISS      0x00000080 
+#define OPT_MISS_OUT  0x00000080 
 #define OPT_VIMP_TYP1 0x00000100 
 #define OPT_VIMP_TYP2 0x00000200 
 #define OPT_VIMP_JOIN 0x00000400 
-#define OPT_INSITU    0x00000800 
 #define OPT_VARUSED_F 0x00001000 
 #define OPT_VARUSED_T 0x00002000 
 #define OPT_PERF_GMN2 0x00004000 
@@ -307,10 +310,11 @@ struct node {
   struct node *right;
   struct terminal *mate;
   unsigned int xSize;
-  char *permissibleSplit;
-  uint *permissibleSplitIndx;
-  uint  permissibleSplitIndxSize;
-  char  permissibleSplitReIndxFlag;
+  char *permissible;
+  uint *permissibleIndx;
+  uint  permissibleIndxSize;
+  char  permissibleReIndxFlag;
+  char  permissibleOwnershipFlag;
   char splitFlag;
   double splitStatistic;
   double mean;
@@ -609,6 +613,9 @@ void getRawNodeSize(uint  type,
                     uint *allMembrIndx,
                     uint *allMembrSize);
 void printTreeInfo(uint treeID, Node *parent);
+void initTimer();
+void printTimer();
+void printParameters(char mode);
 void processDefaultGrow();
 void processDefaultPredict();
 typedef struct factor Factor;
@@ -636,7 +643,6 @@ char splitOnFactor(uint level, uint *mwcp);
 Node *identifyExtrapolatedMembership (Node      *parent,
                                       double  **yShadow,
                                       double  **xShadow);
-void permute(uint ranGenID, uint p, uint n, uint *indx);
 void getVimpMembership(char       mode,
                        uint       treeID,
                        Terminal **vimpMembership,
@@ -659,12 +665,6 @@ void normalizeBlockedEnsembleEstimates(char      mode,
                                        double  **blkEnsembleRGRnum,
                                        double   *blkEnsembleDen);
 void resetBlockedEnsembleEstimates(char mode);
-#ifdef _OPENMP
-void rfsrc_omp_set_lock (omp_lock_t *lock) ;
-#endif
-#ifdef _OPENMP
-void rfsrc_omp_unset_lock (omp_lock_t *lock);
-#endif
 void rfsrc_omp_atomic_update(double *addr, double incr);
 uint getVimpRecoverySeedDimension(char mode, uint opt);
 void getAntiMembership(char       mode,
@@ -703,6 +703,7 @@ Node *getMembershipJIT(uint     treeID,
                        Node    *parent,
                        uint     individual,
                        double **xArray);
+void permute(uint ranGenID, uint parallelID, uint n, uint *indx);
 void getRandomMembership (char       mode,
                           uint       treeID,
                           Terminal **vimpMembership,
@@ -804,7 +805,8 @@ void marginalMembership(uint     treeID,
                         uint     obsSize,
                         double **xArray);
 Node *makeNode(unsigned int xSize);
-void freeNode(Node *parent);
+void freeNodeGeneric(Node *parent);
+void freeNodeNew(Node *parent);
 void setParent(
   Node *daughter,
   Node *parent
@@ -859,6 +861,8 @@ enum alloc_type{
   NRUTIL_GPTR,   
   NRUTIL_OMPLPTR,  
   NRUTIL_OMPLPTR2, 
+  NRUTIL_PTMLPTR,  
+  NRUTIL_PTMLPTR2, 
   NRUTIL_LEAFPTR,  
   NRUTIL_LEAFPTR2, 
   NRUTIL_SRTLNKPTR, 
@@ -903,6 +907,14 @@ void free_dmatrix4(double ****v, unsigned long long n4l, unsigned long long n4h,
 omp_lock_t *ompvector(unsigned long long nl, unsigned long long nh);
 void free_ompvector(omp_lock_t *v, unsigned long long nl, unsigned long long nh);
 #endif
+#ifdef NOT_HAVE_PTHREAD
+pthread_mutex_t *ptmvector(unsigned long long nl, unsigned long long nh);
+void free_ptmvector(pthread_mutex_t *v, unsigned long long nl, unsigned long long nh);
+#endif
+#ifdef NOT_HAVE_PTHREAD
+pthread_t *pthreadvector(unsigned long long nl, unsigned long long nh);
+void free_pthreadvector(pthread_t *v, unsigned long long nl, unsigned long long nh);
+#endif
 void *new_vvector(unsigned long long nl, unsigned long long nh, enum alloc_type type);
 void free_new_vvector(void *v, unsigned long long nl, unsigned long long nh, enum alloc_type type);
 void nrCopyMatrix(
@@ -917,6 +929,26 @@ void nrCopyVector(
   unsigned int ncol
 );
 void testEndianness();
+void acquireTreePosix (void *arg);
+typedef struct _acquireTreeArg acquireTreeArg;
+struct _acquireTreeArg {
+  char mode;
+  uint r;
+  uint b;
+};
+void execPreSortPosix (void *arg);
+typedef struct _execPreSortArg execPreSortArg;
+struct _execPreSortArg {
+  uint  b;
+  uint  p;
+  uint *index;
+  uint  indexSize;
+};
+void processEnsembleHoldoutPostPosix (void *arg);
+typedef struct _processEnsembleHoldoutPostArg processEnsembleHoldoutPostArg;
+struct _processEnsembleHoldoutPostArg {
+  uint bb;
+};
 void getAndUpdatePartialMembership(uint treeID, Node *root);
 void partialMembershipGeneric(uint       treeID,
                               Node      *parent,
@@ -949,6 +981,7 @@ void unstackFactorInSitu(uint treeID);
 void processEnsembleInSitu(char mode, char multImpFlag, uint b);
 void processEnsemblePost(char mode);
 void processEnsembleHoldout(uint xVarIdx, uint b);
+void processEnsembleHoldoutPost(uint bb);
 typedef struct quantileObj QuantileObj;
 struct quantileObj {
   double v;
@@ -1066,8 +1099,7 @@ void getMembrCountOnly (uint       treeID,
                         uint      *repMembrIndx,
                         uint       repMembrSize,
                         uint      *allMembrIndx,
-                        uint       allMembrSize,
-                        uint      *rmbrIterator);
+                        uint       allMembrSize);
 void updateEnsemble (char mode, uint b);
 void summarizeFaithfulBlockPerformance (char        mode,
                                         uint        b,
@@ -1116,9 +1148,9 @@ char getPerfFlag (char mode, uint serialTreeID);
 void getVariablesUsed(uint treeID, Node *rootPtr, uint *varUsedVector);
 typedef struct distributionObj DistributionObj;
 struct distributionObj {
-  uint *permissibilityIndex;
-  char *permissibilityFlag;
-  uint permissibilitySize;
+  uint *permissibleIndex;
+  char *permissible;
+  uint permissibleSize;
   uint *augmentationSize;
   uint weightType;
   double *weight;
@@ -1178,11 +1210,11 @@ char randomSplitGeneric(uint       treeID,
                         SplitInfoMax *splitInfoMax,
                         GreedyObj    *greedyMembr,
                         char       multImpFlag);
-char randomSplitGenericNew(uint       treeID,
-                           Node      *parent,
-                           SplitInfoMax *splitInfoMax,
-                           GreedyObj    *greedyMembr,
-                           char       multImpFlag);
+char randomSplitSimple(uint       treeID,
+                       Node      *parent,
+                       SplitInfoMax *splitInfoMax,
+                       GreedyObj    *greedyMembr,
+                       char       multImpFlag);
 typedef double (*customFunction) (unsigned int n,
                                   char        *membership,
                                   double      *time,
@@ -1509,6 +1541,7 @@ uint stackAndConstructSplitVectorSimple (uint     treeID,
                                          Node    *parent,
                                          uint     covariate,
                                          ...);
+char forkNodeSimple(Node *parent, SplitInfo *info);
 char forkAndUpdateSimple(uint       treeID,
                          Node      *parent,
                          uint      *repMembrIndx,
@@ -1768,7 +1801,8 @@ void stackFactorGeneric(char    respFlag,
                         uint  **p_nonfactorIndex);
 void unstackFactorArrays(char mode);
 void initializeFactorArrays(char mode);
-char stackMissingArrays(char mode);
+char stackMissingArraysPhase1(char mode);
+char stackMissingArraysPhase2(char mode);
 void unstackMissingArrays(char mode);
 void stackMissingSignatures(uint     obsSize,
                             uint     rspSize,

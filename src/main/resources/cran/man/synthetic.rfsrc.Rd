@@ -18,35 +18,51 @@
   ...)
 }
 \arguments{
-  \item{formula}{A symbolic description of the model to be fit.
-    Must be specified unless \code{object} is given.}
+
+  \item{formula}{Model to be fit. Must be specified unless \code{object} is given.}
+
   \item{data}{Data frame containing the y-outcome and x-variables in
     the model. Must be specified unless \code{object} is given.}
+
   \item{object}{An object of class \code{(rfsrc, synthetic)}.
     Not required when \code{formula} and \code{data} are supplied.}
+
   \item{newdata}{Test data used for prediction (optional).}
+
   \item{ntree}{Number of trees.}
+
   \item{mtry}{mtry value for over-arching synthetic forest.}
+
   \item{nodesize}{Nodesize value for over-arching synthetic forest.}
+
   \item{nsplit}{nsplit-randomized splitting for significantly increased speed.}
+
   \item{mtrySeq}{Sequence of mtry values used for fitting the
-    collection of RF machines.  If \code{NULL}, set to the default
-    value \code{p}/3.}
+    collection of RF machines.  If \code{NULL}, default is number of
+    variables divided by 3, rounded up.}
+
   \item{nodesizeSeq}{Sequence of nodesize values used for the fitting the
     collection of RF machines.}
+
   \item{min.node}{Minimum forest averaged number of nodes a RF machine
     must exceed in order to be used as a synthetic feature.}
+
   \item{fast}{Use fast random forests, \code{rfsrc.fast}, in place of
     \code{rfsrc}?  Improves speed but may be less accurate.}
+
   \item{use.org.features}{In addition to synthetic features, should
     the original features be used when fitting synthetic forests?}
+
   \item{na.action}{Missing value action. The default \code{na.omit}
     removes the entire record if even one of its entries is \code{NA}.
     The action \code{na.impute} pre-imputes the data using fast
     imputation via \command{impute.rfsrc}.}
+
   \item{oob}{Preserve "out-of-bagness" so that error rates and
     VIMP are honest?  Default is yes (\option{oob=TRUE}).}
+
   \item{verbose}{Set to \code{TRUE} for verbose output.}
+
   \item{...}{Further arguments to be passed to the \code{rfsrc}
     function used for fitting the synthetic forest.}
 }

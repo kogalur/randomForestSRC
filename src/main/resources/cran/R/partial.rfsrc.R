@@ -14,14 +14,8 @@ partial.rfsrc <- function(
 {
   ## hidden options
   user.option <- list(...)
-  terminal.qualts <- is.hidden.terminal.qualts(user.option)
-  terminal.quants <- is.hidden.terminal.quants(user.option)
-  ## insitu/jitt
-  insitu.ensemble  <- is.hidden.insitu.ensemble(user.option)
-  jitt <- is.hidden.jitt(user.option, "none", partial = TRUE)
-  data.pass <- is.hidden.data.pass(user.option)
   ## Object consistency
-  ## (TBD, TBD, TBD) Version checking is NOT implemented in this mode (TBD, TBD, TBD)
+  ## (TBD3) Version checking is NOT implemented in this mode
   if (missing(object)) {
     stop("object is missing!")
   }
@@ -34,6 +28,9 @@ partial.rfsrc <- function(
   if (inherits(object, "anonymous")) {
     stop("this function does work with anonymous forests")
   }
+  ## jitt/data.pass
+  jitt <- is.hidden.jitt(user.option, "none", "na.omit", FALSE, partial = TRUE)
+  data.pass <- is.hidden.data.pass(user.option)
   ## acquire the forest --> hereafter the object is the forest
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (is.forest.missing(object)) {
@@ -127,11 +124,9 @@ partial.rfsrc <- function(
   ## Initalize the high bits
   samptype.bits <- get.samptype(object$samptype)
   partial.bits <- get.partial.bits(length(partial.values))
-  terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
-  terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
+  terminal.qualts.bits <- get.terminal.qualts.predict(object$terminal.qualts)
+  terminal.quants.bits <- get.terminal.quants.predict(object$terminal.quants)
   data.pass.bits <- get.data.pass(data.pass)
-  ## In situ ensembles.
-  insitu.ensemble.bits = get.insitu.ensemble(insitu.ensemble)
   ## Just in Time Tree Topology Restoration.  Note that we do not
   ## support augmented data, SGT, TDC, here, but we do no checks for
   ## these. We defer to the user option for JITT.
@@ -181,8 +176,7 @@ partial.rfsrc <- function(
                                   as.integer(seed),
                                   as.integer(ensemble.bits +
                                              bootstrap.bits +
-                                             cr.bits +
-                                             insitu.ensemble.bits),
+                                             cr.bits),
                                   as.integer(samptype.bits +
                                              na.action.bits +
                                              terminal.qualts.bits +
@@ -239,6 +233,7 @@ partial.rfsrc <- function(
                                   object$base.learner, 
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
+                                  as.integer((object$nativeArray)$nodeSZ),
                                   as.integer((object$nativeArray)$brnodeID),
                                   ## This is hc_zero.  It is never NULL.
                                   list(as.integer((object$nativeArray)$parmID),
@@ -261,77 +256,20 @@ partial.rfsrc <- function(
                                                as.integer((object$nativeArray)$augmXS))
                                       } else { NULL }
                                   } else { NULL },
-                                  ## This slot is hc_one.  This slot can be NULL.                                  
-                                  if (hdim > 0) {
-                                      list(as.integer((object$nativeArray)$hcDim),
-                                      as.double((object$nativeArray)$contPTR))
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## parmIDx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 1 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## contPTx
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , pivot + 2 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## contPTRx
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , pivot + 3 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## mwcpSZx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 4 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## fsrecIDx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 5 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## mwcpPTx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$interact.depth > 1) {
-                                              ## augmXonex
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + 5 + (chunk * x)])})
-                                          } else { NULL }
-                                      } else { NULL }
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$interact.depth > 1) {
-                                              ## augmXtwox
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + 6 + (chunk * x)])})
-                                          } else { NULL }
-                                      } else { NULL }
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$synthetic.depth > 1) {
-                                              ## augmXSx
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + (if(object$base.learner$interact.depth > 1) 7 else 5) + (chunk * x)])})
-                                          } else { NULL }
-                                      } else { NULL }
-                                  } else { NULL },
-                                  ## This slot is the synthetic topology!
-                                  if (hdim > 0) {
-                                      if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$synthetic.depth > 1) {
-                                              if (!is.null(object$nativeArraySyth)) {
-                                                  list(as.integer(object$nodeCountSyth),
-                                                       as.integer((object$nativeArraySyth)$treeID),
-                                                       as.integer((object$nativeArraySyth)$nodeID),
-                                                       as.integer((object$nativeArraySyth)$hcDim),
-                                                       as.integer((object$nativeArraySyth)$parmID),
-                                                       as.double((object$nativeArraySyth)$contPT),
-                                                       as.double((object$nativeArraySyth)$contPTR),
-                                                       as.integer((object$nativeArraySyth)$mwcpSZ),
-                                                       as.integer((object$nativeFactorArray)$mwcpPT))
-                                              } else { NULL }
-                                          } else { NULL }
-                                      } else { NULL }
-                                  } else { NULL },
+                                  
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  
+                                   
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
                                   as.integer(object$nativeArrayTNDS$tnRCNT),

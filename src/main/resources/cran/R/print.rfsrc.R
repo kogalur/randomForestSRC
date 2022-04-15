@@ -70,7 +70,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     else {
       event.freq <- NA
     }
-    if (!is.null(x$err.rate)) {
+    if (!is.null(x$err.rate) && !is.null(x$yvar)) {
       conf.matx <- get.confusion(x$yvar,
                          if(!is.null(x$class.oob) && !all(is.na(x$class.oob))) x$class.oob else x$class)
       miss.err.rate <- 1 - sum(diag(conf.matx[, -ncol(conf.matx), drop = FALSE])) / sum(conf.matx[, -ncol(conf.matx), drop = FALSE])
@@ -153,7 +153,12 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       }
     }
     else if (x$family == "regr") {
-      r.squared <- 1 - err.rate[nrow(err.rate), ] / var(x$yvar, na.rm = TRUE)
+      if (!is.null(x$yvar)) {
+        r.squared <- 1 - err.rate[nrow(err.rate), ] / var(x$yvar, na.rm = TRUE)
+      }
+      else {
+        r.squared <- NULL
+      }
       err.rate <- digits.pretty(err.rate[nrow(err.rate), ], 8)
     }
     else {
@@ -211,7 +216,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       cat("                      Splitting rule: ", x$splitrule,                        "\n", sep="")
     } 
     if (!is.null(err.rate)) {
-      if (x$family == "regr") {
+      if (x$family == "regr" && !is.null(r.squared)) {
         cat("                     (OOB) R squared: ", digits.pretty(r.squared, 8),      "\n", sep="")
       }
       if (x$family == "class" && !is.null(iratio)) {
@@ -277,11 +282,11 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       cat("         User has requested response: ", outcome.target,                       "\n", sep="")
     }
     cat("       Resampling used to grow trees: ", sampUsed,                               "\n",sep="")
-    cat("    Resample size used to grow trees: ", round(x$forest$sampsize(x$n)),          "\n",sep="")
+    cat("    Resample size used to grow trees: ", round(x$forest$sampsize(x$forest$n)),   "\n",sep="")
     cat("                            Analysis: ", familyPretty,                           "\n", sep="")
     cat("                              Family: ", familyOrg,                              "\n", sep="")
     if (!is.null(err.rate)) {
-      if (x$family == "regr") {
+      if (x$family == "regr" && !is.null(r.squared)) {
         cat("                           R squared: ", digits.pretty(r.squared, 8),        "\n", sep="")
       }
       if (x$family == "class" && !is.null(iratio)) {

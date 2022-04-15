@@ -30,24 +30,33 @@
   In order to predict on test data, it is however necessary for certain
   minimal information to be saved from the training data.  This includes
   the names of the original variables, and if factor variables are
-  present, the levels of the factors.  The topology of grow trees is
-  also saved, which includes among other things, the split values used
-  for splitting tree nodes.
+  present, the levels of the factors.  The mean value and maximal class
+  value for real and factor variables in the training data are also
+  stored for the purposes of imputation on test data (see below).  The
+  topology of grow trees is also saved, which includes among other
+  things, the split values used for splitting tree nodes.
 
   For the most privacy, we recommend that variable names be made
   non-identifiable and that data be coerced to real values.  If factors
   are required, the user should consider using non-identifiable factor
   levels.  However, in all cases, it is the users responsibility to
   de-identify their data and to check that data privacy holds.  We
-  provide no guarantees of this.
+  provide NO GUARANTEES of this.
 
-  While anonymous random forests works similar to random forests, there
-  are caveats to keep in mind.  First, no missing data is allowed since
-  missing data imputation requires training data.  Second, while
-  anonymous forest tries to play nice with the functions in the package,
-  it only works with functions that specifically do not require training
-  data.  Thus users are advised to keep this in mind if they decide to
-  go this route.
+  Missing data is especially delicate with anonymous forests.  Training
+  data cannot be imputed and the option \code{na.action="na.impute"}
+  simply reverts to \code{na.action="na.omit"}.  Therefore if you have
+  training data with missing values consider using pre-imputing the data
+  using \command{impute}.  It is however possible to impute on test
+  data.  The option \code{na.action="na.impute"} in the prediction call
+  triggers a rough and fast imputation method where the value of missing
+  test data are replaced by the mean (or maximal class) value from the
+  training data.  A second option \code{na.action="na.random"} uses a
+  fast random imputation method.
+  
+  In general, it is important to keep in mind that while anonymous
+  forests tries to play nice with other functions in the package, it
+  only works with calls that do not specifically require training data.
   
     
 }
@@ -70,9 +79,8 @@ print(rfsrc.anonymous(mpg ~ ., mtcars))
 
 ## ------------------------------------------------------------
 ## plot anonymous regression tree (using get.tree)
+## TBD CURRENTLY NOT IMPLEMENTED 
 ## ------------------------------------------------------------
-## illustrates minimal information saved by the forest
-## TBD TBD currently not yet implemented TBD TBD
 ## plot(get.tree(rfsrc.anonymous(mpg ~ ., mtcars), 10))
 
 ## ------------------------------------------------------------
@@ -87,7 +95,7 @@ data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 print(rfsrc.anonymous(Surv(time, status) ~ ., data = veteran))
 
 ## ------------------------------------------------------------
-## competing risk
+## competing risks
 ## ------------------------------------------------------------
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
 print(rfsrc.anonymous(Surv(time, status) ~ ., wihs, ntree = 100))
@@ -101,6 +109,21 @@ print(rfsrc.anonymous(data = iris))
 ## multivariate regression
 ## ------------------------------------------------------------
 print(rfsrc.anonymous(Multivar(mpg, cyl) ~., data = mtcars))
+
+## ------------------------------------------------------------
+## prediction on test data with missing values using pbc data
+## cases 1 to 312 have no missing values
+## cases 313 to 418 having missing values
+## ------------------------------------------------------------
+data(pbc, package = "_PROJECT_PACKAGE_NAME_")
+pbc.obj <- rfsrc.anonymous(Surv(days, status) ~ ., pbc)
+print(pbc.obj)
+
+## mean value imputation
+print(predict(pbc.obj, pbc[-(1:312),], na.action = "na.impute"))
+
+## random imputation
+print(predict(pbc.obj, pbc[-(1:312),], na.action = "na.random"))
 
 ## ------------------------------------------------------------
 ## train/test setting but tricky because factor labels differ over

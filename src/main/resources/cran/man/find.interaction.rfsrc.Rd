@@ -9,7 +9,7 @@
   importance = c("permute", "random", "anti",
                  "permute.ensemble", "random.ensemble", "anti.ensemble"),
   method = c("maxsubtree", "vimp"), sorted = TRUE, nvar, nrep = 1, 
-  na.action = c("na.omit", "na.impute"),
+  na.action = c("na.omit", "na.impute", "na.random"),
   seed = NULL, do.trace = FALSE, verbose = TRUE, ...)
 }
 \arguments{

@@ -5,6 +5,7 @@ subsample.rfsrc <- function(obj,
                             stratify = TRUE,
                             performance = FALSE,
                             joint = FALSE,
+                            xvar.names = NULL,
                             bootstrap = FALSE,
                             verbose = TRUE) 
 {
@@ -13,8 +14,15 @@ subsample.rfsrc <- function(obj,
   ## coherence checks
   ##
   ##--------------------------------------------------------------
+  ## incoming object must be a grow forest
   if (sum(inherits(obj, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2) {
     stop("This function only works for objects of class `(rfsrc, grow)'")
+  }
+  ## grow forests must have true forest information
+  if (sum(inherits(obj, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
+    if (is.forest.missing(obj)) {
+      stop("Forest information for prediction is missing.  Re-run rfsrc (grow call) with forest=TRUE")
+    }
   }
   if (inherits(obj, "anonymous")) {
     stop("this function does work with anonymous forests")
@@ -115,7 +123,8 @@ subsample.rfsrc <- function(obj,
   ##--------------------------------------------------------------
   if (bootstrap) {
     bootO <- bootsample(obj, rf.prms, B = B, block.size = block.size,
-                        joint = joint, performance = performance, verbose = verbose)
+                        joint = joint, xvar.names = xvar.names,
+                        performance = performance, verbose = verbose)
     rO <- list(rf = bootO$rf, vmp = bootO$vmp, vmpB = bootO$vmpB, subratio = NULL)
     class(rO) <- c(class(obj), "bootsample")
     return(rO)
@@ -147,7 +156,7 @@ subsample.rfsrc <- function(obj,
   ##
   ##--------------------------------------------------------------
   if (joint) {
-    vmp.joint <- get.mv.vimp(get.joint.vimp(obj, rf.prms), FALSE, FALSE)
+    vmp.joint <- get.mv.vimp(get.joint.vimp(obj, rf.prms, xvar.names), FALSE, FALSE)
     vmp <- vimp.combine(vmp, vmp.joint, "joint")
   }
   ##--------------------------------------------------------------
@@ -195,7 +204,7 @@ subsample.rfsrc <- function(obj,
                      c(list(data = dta[pt,, drop = FALSE], importance = TRUE), rf.prms))
     vmp.b <- get.mv.vimp(rf.b, FALSE, FALSE)
     if (joint) {
-      vmp.b.joint <- get.mv.vimp(get.joint.vimp(rf.b, rf.prms), FALSE, FALSE)
+      vmp.b.joint <- get.mv.vimp(get.joint.vimp(rf.b, rf.prms, xvar.names), FALSE, FALSE)
       vmp.b <- vimp.combine(vmp.b, vmp.b.joint, "joint")
     }
     if (performance) {
@@ -353,13 +362,14 @@ extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, sta
 ## get joint vimp from a forest object
 ##
 ###################################################################
-get.joint.vimp <- function(o, rf.prms = NULL) {
+get.joint.vimp <- function(o, rf.prms = NULL, xvar.names) {
   class(o)[2] <- "grow"  ##fake the class to trick vimp()
   if (is.null(rf.prms)) {
-    return(vimp(o, joint = TRUE))
+    return(vimp(o, joint = TRUE, xvar.names = xvar.names))
   }
   else {
-    return(vimp(o, joint = TRUE, perf.type = rf.prms$perf.type, block.size = rf.prms$block.size))
+    return(vimp(o, joint = TRUE, xvar.names = xvar.names,
+                perf.type = rf.prms$perf.type, block.size = rf.prms$block.size))
   }
 }
 ###################################################################
@@ -469,7 +479,7 @@ vimp.combine <- function(o1, o2, o2.name = NULL) {
 ## core bootstrap function
 ##
 ###################################################################
-bootsample <- function(obj, rf.prms, B, block.size, joint, performance, verbose) {
+bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names, performance, verbose) {
   ##--------------------------------------------------------------
   ##
   ## extract data from the previously grown forest
@@ -498,7 +508,7 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, performance, verbose)
   ##
   ##--------------------------------------------------------------
   if (joint) {
-    vmp.joint <- get.mv.vimp(get.joint.vimp(obj, rf.prms), FALSE, FALSE)
+    vmp.joint <- get.mv.vimp(get.joint.vimp(obj, rf.prms, xvar.names), FALSE, FALSE)
     vmp <- vimp.combine(vmp, vmp.joint)
   }
   ##--------------------------------------------------------------
@@ -539,7 +549,7 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, performance, verbose)
      c(list(data = dta[smp.unq,, drop = FALSE], importance = TRUE, bootstrap = "by.user", samp = dbl.smp), rf.prms))
     vmp.b <- get.mv.vimp(rf.b, FALSE, FALSE)
     if (joint) {
-      vmp.b.joint <- get.mv.vimp(get.joint.vimp(rf.b, rf.prms), FALSE, FALSE)
+      vmp.b.joint <- get.mv.vimp(get.joint.vimp(rf.b, rf.prms, xvar.names), FALSE, FALSE)
       vmp.b <- vimp.combine(vmp.b, vmp.b.joint)
     }
     if (performance) {

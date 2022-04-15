@@ -6,7 +6,7 @@ generic.predict.rfsrc <-
            get.tree = NULL,
            block.size = NULL,
            importance.xvar,
-           na.action = c("na.omit", "na.impute"),
+           na.action = c("na.omit", "na.impute", "na.random"),
            outcome = c("train", "test"),
            perf.type = NULL,
            proximity = FALSE,
@@ -25,34 +25,6 @@ generic.predict.rfsrc <-
   univariate.nomenclature <- TRUE
   ## get any hidden options
   user.option <- list(...)
-  ## case specific
-  cse  <- is.hidden.cse(user.option)
-  csv  <- is.hidden.csv(user.option)
-  ## terminal node
-  terminal.qualts <- is.hidden.terminal.qualts(user.option)
-  terminal.quants <- is.hidden.terminal.quants(user.option)
-  ## verify the importance option (needed up front to decide JITT)
-  importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
-          "none", "anti", "permute", "random", "anti.joint", "permute.joint", "random.joint"))
-  if (grepl("joint", importance)) {
-    vimp.joint <- TRUE
-  }
-  else {
-    vimp.joint <- FALSE
-  }
-  ## insitu/jitt
-  insitu.ensemble  <- is.hidden.insitu.ensemble(user.option)
-  jitt <- is.hidden.jitt(user.option, importance)
-  ## rfq
-  rfq <- is.hidden.rfq(user.option)
-  ## quantile regression
-  gk.quantile <- is.hidden.gk.quantile(user.option)
-  prob <- is.hidden.prob(user.option)
-  prob.epsilon <- is.hidden.prob.epsilon(user.option)
-  ## vimp
-  vimp.threshold  <- is.hidden.vimp.threshold(user.option)
-  ## set the family
-  family <- object$family
   ## incoming parameter checks: all are fatal
   if (missing(object)) {
     stop("object is missing!")
@@ -67,37 +39,31 @@ generic.predict.rfsrc <-
       stop("Forest information for prediction is missing.  Re-run rfsrc (grow call) with forest=TRUE")
     }
   }
-  ## check if this is an anonymous object - coerce values as necessary
-  if (inherits(object, "anonymous")) {
-    anonymize.bits <- 2^26
-    outcome <- "train"
+  ## case specific performance
+  cse  <- is.hidden.cse(user.option)
+  csv  <- is.hidden.csv(user.option)
+  ## verify importance (needed for jitt)
+  importance <- match.arg(as.character(importance)[1], c(FALSE, TRUE,
+          "none", "anti", "permute", "random", "anti.joint", "permute.joint", "random.joint"))
+  if (grepl("joint", importance)) {
+    vimp.joint <- TRUE
   }
   else {
-      anonymize.bits <- 0
+    vimp.joint <- FALSE
   }
-  ## pull the x-variable and y-outcome names from the grow object
-  xvar.names <- object$xvar.names
-  yvar.names <- object$yvar.names
-  subj.names <- object$subj.names
-  importance.xvar <- get.importance.xvar(importance.xvar, importance, object)
-  importance.xvar.idx <- match(importance.xvar, xvar.names)
-  ## verify key options
-  na.action <- match.arg(na.action, c("na.omit", "na.impute"))
+  ## verify na.action (needed for jitt)
+  na.action <- match.arg(na.action, c("na.omit", "na.impute", "na.random"))
+  if (inherits(object, "anonymous") && na.action == "na.impute") {
+      na.action <- "na.mean"
+  }
+  ## verify other key options
   outcome <- match.arg(outcome, c("train", "test"))
   proximity <- match.arg(as.character(proximity), c(FALSE, TRUE, "inbag", "oob", "all"))
   forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))  
   distance <- match.arg(as.character(distance), c(FALSE, TRUE, "inbag", "oob", "all"))
-   
-  var.used <- match.arg(as.character(var.used), c("FALSE", "all.trees", "by.tree"))
-  if (var.used == "FALSE") var.used <- FALSE
-  split.depth <- match.arg(as.character(split.depth),  c("FALSE", "all.trees", "by.tree"))
-  if (split.depth == "FALSE") split.depth <- FALSE
-  ## initialize the seed
-  seed <- get.seed(seed)
   ## set restore.mode and the ensemble option
-  ## - if newdata is missing we assume restore.mode 
-  ## - outcome = "test" is treated as restore.mode = FALSE for R-processing
-  ##   but is then switched to restore.mode = TRUE for the native .Call
+  ## newdata missing --> restore.mode = TRUE
+  ## outcome = "test" --> restore.mode = FALSE for R-processing but switched later for .Call
   if (missing(newdata)) {
     restore.mode <- TRUE
     outcome <- "train"
@@ -114,15 +80,51 @@ generic.predict.rfsrc <-
       ensemble <- "inbag"
     }
   }
+  ## check if this is an anonymous object
+  ## coerce values as necessary
+  ## graceful return if restore.mode = TRUE which is not allowed for anonymous
+  if (inherits(object, "anonymous")) {
+    anonymize.bits <- 2^26
+    outcome <- "train"
+    if (restore.mode) {
+      stop("in order to predict with anonymous forests please provide a test data set")
+    }
+  }
+  else {
+    anonymize.bits <- 0
+  }
+  ## jitt
+  jitt <- is.hidden.jitt(user.option, importance, na.action, inherits(object, "anonymous"), partial = FALSE)
+  ## rfq
+  rfq <- is.hidden.rfq(user.option)
+  ## quantile regression
+  gk.quantile <- is.hidden.gk.quantile(user.option)
+  prob <- is.hidden.prob(user.option)
+  prob.epsilon <- is.hidden.prob.epsilon(user.option)
+  ## vimp
+  vimp.threshold  <- is.hidden.vimp.threshold(user.option)
+  ## set the family
+  family <- object$family
+  ## pull the x-variable and y-outcome names from the grow object
+  xvar.names <- object$xvar.names
+  yvar.names <- object$yvar.names
+  subj.names <- object$subj.names
+  importance.xvar <- get.importance.xvar(importance.xvar, importance, object)
+  importance.xvar.idx <- match(importance.xvar, xvar.names)
+   
+  var.used <- match.arg(as.character(var.used), c("FALSE", "all.trees", "by.tree"))
+  if (var.used == "FALSE") var.used <- FALSE
+  split.depth <- match.arg(as.character(split.depth),  c("FALSE", "all.trees", "by.tree"))
+  if (split.depth == "FALSE") split.depth <- FALSE
+  ## initialize the seed
+  seed <- get.seed(seed)
   ## REDUCES THE OBJECT TO THE FOREST -- REDUCTION STARTS HERE
   ## hereafter we only need the forest and reassign "object" to the forest
-  ## (TBD, TBD, TBD) memory management "big.data" not currently implemented: (TBD, TBD, TBD)
+  ## (TBD3) memory management "big.data" not currently implemented:
+  big.data <- FALSE
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {
     if (inherits(object, "bigdata")) {
       big.data <- TRUE
-    }
-    else {
-      big.data <- FALSE
     }
     object <- object$forest
   }
@@ -130,9 +132,6 @@ generic.predict.rfsrc <-
     ## object is already a forest
     if (inherits(object, "bigdata")) {
       big.data <- TRUE
-    }
-    else {
-      big.data <- FALSE
     }
   }
   ## confirm version coherence
@@ -268,6 +267,11 @@ generic.predict.rfsrc <-
   if (!restore.mode) {
     ## Filter the test data based on the formula
     newdata <- newdata[, is.element(names(newdata), c(yvar.names, xvar.names)), drop = FALSE]
+    ## impute.mean for anonymous forests
+    if (inherits(object, "anonymous") && na.action == "na.mean") {
+      newdata <- assign.impute.mean(newdata, object$impute.mean)
+      na.action <- "na.omit"
+    }
     ## Check that test/train factors are the same.  If factor has an
     ## NA in its levels, remove it.  Confirm factor labels overlap.
     newdata <- rm.na.levels(newdata, xvar.names)
@@ -470,38 +474,15 @@ generic.predict.rfsrc <-
   ## forest weights
   forest.wt.bits <- get.forest.wt(restore.mode, object$bootstrap, forest.wt)
   membership.bits <-  get.membership(membership)
-  terminal.qualts.bits <- get.terminal.qualts(terminal.qualts, object$terminal.qualts)
-  terminal.quants.bits <- get.terminal.quants(terminal.quants, object$terminal.quants)
+  terminal.qualts.bits <- get.terminal.qualts.predict(object$terminal.qualts)
+  terminal.quants.bits <- get.terminal.quants.predict(object$terminal.quants)
   cse.bits = get.cse(cse)
   csv.bits = get.csv(csv)
-  insitu.ensemble.bits = get.insitu.ensemble(insitu.ensemble)
-  ## Just in Time Tree Topology Restoration. We override the user here where necessary.
-  ## JITT has dependencies:
-  ## anonymous bit needs to be asserted in restore or predict mode.
-  ## This is equivalent to:
-  ## 1. no missing test data
-  ## 2. terminal.qualts asserted
-  ## 3. terminal.quants asserted
-  ## Additional dependencies are as follows:
-  ## 1. no augmented data for SGTs, no TDC (internally TDC is seen as augmented data)
-  if (!anonymize.bits && jitt && !restore.mode) {
-    n.miss <- get.nmiss(xvar.newdata, yvar.newdata)
-    if (n.miss > 0) {
-      jitt <- FALSE
-    }
-  }
-  if (!is.null(object$base.learner)) {
-    if (object$base.learner$interact.depth > 1 ||
-        object$base.learner$synthetic.depth > 1) {
-      jitt <- FALSE
-    }
-  }
   jitt.bits <- get.jitt(jitt)
-  ## We have two data.pass flags. We have one for the training data, and
-  ## one for the test data. In restore mode, the the training data.pass flag
-  ## inherits the grow data.pass flag.  
+  ## set the data.pass flags: we do this here because the restore.mode flag is now finalized
+  ## training data.pass acquires the grow data.pass flag 
   data.pass.bits <- get.data.pass(object$data.pass)
-  ## For the test data, we look at na.action, and set the data.pass flag accordingly.
+  ## testing data.pass is na.action AND restore.mode dependent
   if (restore.mode == FALSE) {
     if (na.action == "na.omit") {
       data.pass.predict.bits  <- get.data.pass.predict(TRUE)
@@ -511,22 +492,18 @@ generic.predict.rfsrc <-
     }
   }
   else {
-      ## Safe the test data.pass flag as it is irrelevant.  We are in restore mode.
-      data.pass.predict.bits  <- get.data.pass.predict(FALSE)
+    ## we are in restore mode -> we are safe and the test data.pass flag irrelevant
+    data.pass.predict.bits  <- get.data.pass.predict(FALSE)
   }
   ## We over-ride block-size in the case that get.tree is user specified
   block.size <- min(get.block.size(block.size, ntree), sum(get.tree))
   ## Turn off partial option.
   partial.bits <- get.partial.bits(0)
-  ## na.action in the native code is only revelant to the training data.
-  ## Unless outcome == "test", we send in the protocol used for the training data.
-  if (outcome == "test") {
-    ## respect the user defined protocol
+  ## na.action bit
+  ## in restore mode, we send in the protocol used for the training data.
+  if (restore.mode) {
+    na.action = object$na.action
   }
-    else {
-      ## Use the training data protocol
-      na.action = object$na.action
-    }
   na.action.bits <- get.na.action(na.action)
   do.trace <- get.trace(do.trace)
   ## Check that hdim is initialized.  If not, set it zero.
@@ -551,22 +528,8 @@ generic.predict.rfsrc <-
   if (hdim == 0) {
       pivot = 0
       chunk = 0
-  } else {
-      pivot <- which(names(object$nativeArray) == "contPTR")
-      chunk = 5
-      if (!is.null(object$base.learner)) {
-          if (object$base.learner$interact.depth > 1) {
-              ## Adjusted for pairCT, augmXone2, augmXtwo2 above, but the chunck size needs to increased.
-              ## pivot = pivot + 3
-              chunk = chunk + 2
-          }
-          if (object$base.learner$synthetic.depth > 1) {
-              ## Adjusted for sythSZ, augmXS2 above, but the chunck size needs to increased.
-              ## pivot = pivot + 2
-              chunk = chunk + 1
-          }
-      }
   }
+   
   ## Start the C external timer.
   ctime.external.start  <- proc.time()
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
@@ -584,8 +547,7 @@ generic.predict.rfsrc <-
                                              cr.bits +
                                              gk.quantile.bits +
                                              statistics.bits +
-                                             anonymize.bits +
-                                             insitu.ensemble.bits),
+                                             anonymize.bits),
                                   as.integer(forest.wt.bits +
                                              distance.bits +
                                              samptype.bits +
@@ -647,6 +609,7 @@ generic.predict.rfsrc <-
                                   object$base.learner, 
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
+                                  as.integer((object$nativeArray)$nodeSZ),
                                   as.integer((object$nativeArray)$brnodeID),
                                   ## This is hc_zero.  It is never NULL.
                                   list(as.integer((object$nativeArray)$parmID),
@@ -669,77 +632,20 @@ generic.predict.rfsrc <-
                                                as.integer((object$nativeArray)$augmXS))
                                       } else { NULL }
                                   } else { NULL },
-                                  ## This slot is hc_one.  This slot can be NULL.                                  
-                                  if (hdim > 0) {
-                                      list(as.integer((object$nativeArray)$hcDim),
-                                      as.double((object$nativeArray)$contPTR))
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## parmIDx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 1 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## contPTx
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , pivot + 2 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## contPTRx
-                                      lapply(0:(hdim-2), function(x) {as.double(object$nativeArray[ , pivot + 3 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## mwcpSZx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 4 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## fsrecIDx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[, pivot + 5 + (chunk * x)])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      ## mwcpPTx
-                                      lapply(0:(hdim-2), function(x) {as.integer(object$nativeFactorArray[[x + 1]])})
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$interact.depth > 1) {
-                                              ## augmXonex
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + 6 + (chunk * x)])})
-                                          } else { NULL }
-                                      } else { NULL }
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$interact.depth > 1) {
-                                              ## augmXtwox
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + 7 + (chunk * x)])})
-                                          } else { NULL }
-                                      } else { NULL }
-                                  } else { NULL },
-                                  if (hdim > 1) {
-                                      if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$synthetic.depth > 1) {
-                                              ## augmXSx
-                                              lapply(0:(hdim-2), function(x) {as.integer(object$nativeArray[ , pivot + (if(object$base.learner$interact.depth > 1) 8 else 6) + (chunk * x)])})
-                                          } else { NULL }
-                                      } else { NULL }
-                                  } else { NULL },
-                                  ## This slot is the synthetic topology!
-                                  if (hdim > 0) {
-                                      if (!is.null(object$base.learner)) {
-                                          if (object$base.learner$synthetic.depth > 1) {
-                                              if (!is.null(object$nativeArraySyth)) {
-                                                  list(as.integer(object$nodeCountSyth),
-                                                       as.integer((object$nativeArraySyth)$treeID),
-                                                       as.integer((object$nativeArraySyth)$nodeID),
-                                                       as.integer((object$nativeArraySyth)$hcDim),
-                                                       as.integer((object$nativeArraySyth)$parmID),
-                                                       as.double((object$nativeArraySyth)$contPT),
-                                                       as.double((object$nativeArraySyth)$contPTR),
-                                                       as.integer((object$nativeArraySyth)$mwcpSZ),
-                                                       as.integer((object$nativeFactorArray)$mwcpPT))
-                                              } else { NULL }
-                                          } else { NULL }
-                                      } else { NULL }
-                                  } else { NULL },
+                                  
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  NULL,
+                                  
+                                   
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
                                   as.integer(object$nativeArrayTNDS$tnRCNT),
@@ -787,22 +693,17 @@ generic.predict.rfsrc <-
   if (is.null(nativeOutput)) {
     stop("An error has occurred in prediction.  Please turn trace on for further analysis.")
   }
-  ## determine missingness according to mode (REST vs. PRED)
-  if (!anonymize.bits) {
+  ## determine missingness which is used for imputed data
+  ## not done for anonymous forests or na.random imputation
+  if (!inherits(object, "anonymous") && na.action != "na.random") {
     if (restore.mode) {
       n.miss <- get.nmiss(xvar, yvar)
     }
     else {
-      if (!jitt) {
-        n.miss <- get.nmiss(xvar.newdata, yvar.newdata)
-      }
-      else {
-        ## already calculated while setting jitt.bits
-      }
-    }
+      n.miss <- get.nmiss(xvar.newdata, yvar.newdata)
+     }
   }
   else {
-    ## missing values not allowed in anonymous 
     n.miss <- 0
   }
   ## extract the imputed data if there was missingness

@@ -34,7 +34,9 @@ xdta <- data.frame(nutrigenomic$genes,
 ## multivariate mixed forest call
 obj <- rfsrc(get.mv.formula(colnames(ydta)),
              data.frame(ydta, xdta),
-             importance=TRUE, nsplit = 10, splitrule = "mahalanobis")
+             importance=TRUE, nsplit = 10,
+             splitrule = "mahalanobis")
+print(obj)
 
 ## ------------------------------------------------------------
 ## plot the standarized performance and VIMP values
@@ -62,18 +64,32 @@ plot(get.tree(obj, 3))
 
 
 ## ------------------------------------------------------------
-## Compare above to default composite (independent) splitting
+##
+## Compare above to (1) user specified covariance matrix
+##                  (2) default composite (independent) splitting
+##
 ## ------------------------------------------------------------
 
+## user specified sigma matrix
 obj2 <- rfsrc(get.mv.formula(colnames(ydta)),
               data.frame(ydta, xdta),
+              importance = TRUE, nsplit = 10,
+              splitrule = "mahalanobis",
+              sigma = cov(ydta))
+print(obj2)
+
+## default independence split rule
+obj3 <- rfsrc(get.mv.formula(colnames(ydta)),
+              data.frame(ydta, xdta),
               importance=TRUE, nsplit = 10)
+print(obj3)
 
-imp <- data.frame(mahalanobis = rowMeans(get.mv.vimp(obj,  standardize = TRUE)),
-                  default     = rowMeans(get.mv.vimp(obj2, standardize = TRUE)))
+## compare vimp
+imp <- data.frame(mahalanobis  = rowMeans(get.mv.vimp(obj,  standardize = TRUE)),
+                  mahalanobis2 = rowMeans(get.mv.vimp(obj2, standardize = TRUE)),
+                  default      = rowMeans(get.mv.vimp(obj3, standardize = TRUE)))
 
-print(imp[order(imp["mahalanobis"]), ])
-
+print(head(100 * imp[order(imp["mahalanobis"], decreasing = TRUE), ], 15))
 
 
 }}

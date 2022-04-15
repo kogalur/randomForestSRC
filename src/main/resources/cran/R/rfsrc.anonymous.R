@@ -5,9 +5,9 @@ rfsrc.anonymous <- function(formula, data, forest = TRUE, ...)
   ##   preliminary processing
   ##
   ## --------------------------------------------------------------
-  if (any(is.na(data))) {
-    stop("missing values not allowed in anonymous mode")
-  }
+  #if (any(is.na(data))) {
+    #stop("missing values not allowed in anonymous mode")
+  #}
   ##--------------------------------------------------------------
   ##
   ## extract additional options specified by user
@@ -15,15 +15,13 @@ rfsrc.anonymous <- function(formula, data, forest = TRUE, ...)
   ##
   ##--------------------------------------------------------------
   ## list of forest parameters
-  rfnames <- names(formals(rfsrc))
-  ## add key hidden parameters
-  rfnames <- c(rfnames, "rfq", "perf.type", "gk.quantile", "prob", "prob.epsilon", "vtry", "holdout.array")
+  rfnames <- get.rfnames(hidden = TRUE)
    
   ## restrict to allowed values
-  rfnames <- rfnames[rfnames != "forest"]
+  rfnames <- rfnames[rfnames != "data" & rfnames != "forest"]
   ## get the permissible hidden options
-  dots <- list(...)
   ## add formula if present
+  dots <- list(...)
   dots <- dots[names(dots) %in% rfnames]
   if (!missing(formula)) {
     dots$formula <- formula
@@ -36,7 +34,13 @@ rfsrc.anonymous <- function(formula, data, forest = TRUE, ...)
   ## make the grow call
   ##
   ##--------------------------------------------------------------
-  retO <- do.call("rfsrc", c(list(data = data, forest = forest), dots))
+  retO <- do.call("rfsrc", c(list(data = data, forest = forest, na.action = "na.omit"), dots))
+  ##--------------------------------------------------------------
+  ##
+  ## save impute mean 
+  ##
+  ##--------------------------------------------------------------
+  retO$forest$impute.mean <- get.impute.mean(data)
   ##--------------------------------------------------------------
   ##
   ## strip out the training data

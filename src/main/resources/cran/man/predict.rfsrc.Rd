@@ -12,7 +12,7 @@
   get.tree = NULL,
   block.size = if (any(is.element(as.character(importance),
                      c("none", "FALSE")))) NULL else 10,
-  na.action = c("na.omit", "na.impute"),
+  na.action = c("na.omit", "na.impute", "na.random"),
   outcome = c("train", "test"),
   perf.type = NULL,
   proximity = FALSE,
@@ -53,15 +53,15 @@
   \item{block.size}{Should the error rate be calculated on every tree?
     When \code{NULL}, it will only be calculated on the last tree.  To
     view the error rate on every nth tree, set the value to an integer
-    between \code{1} and \code{ntree}.  If importance is requested, VIMP is
-    calculated in "blocks" of size equal to \code{block.size}, thus
-    resulting in a useful compromise between ensemble and permutation
-    VIMP.}
+    between \code{1} and \code{ntree}.  If importance is requested, VIMP
+    is calculated in "blocks" of size equal to \code{block.size}, thus
+    resulting in a compromise between ensemble and permutation VIMP.}
   
   \item{na.action}{Missing value action. The default \code{na.omit}
-    removes the entire record if even one of its entries is \code{NA}.
-    Selecting \option{na.impute} imputes the test data.  Also see the
-    function \command{impute} for fast direct imputation.}
+    removes the entire record if any entry is \code{NA}.  
+    Selecting \option{na.random} uses fast random imputation, while
+    \option{na.impute} uses the imputation method described in
+    \command{rfsrc}.}
   
   \item{outcome}{Determines whether the y-outcomes from the training
     data or the test data are used to calculate the predicted value.
@@ -124,37 +124,28 @@
 }
 \details{
 
-  Predicted values are obtained by "dropping" test data down the
-  training forest (the forest grown using the training data).
-  Performance values are returned if test data contains y-outcome
-  values.  Single as well as joint VIMP are also returned if requested.
+  Predicted values are obtained by "dropping" test data down the trained
+  forest (forest calculated using training data).  Performance values are
+  returned if test data contains y-outcome values.  Single as well as
+  joint VIMP are also returned if requested.
   
-  Setting \option{na.action="na.impute"} imputes missing test data
-  (x-variables and/or y-outcomes).  Test imputation uses only the
-  grow-forest and training data to avoid biasing error rates and VIMP
-  (Ishwaran et al. 2008).  Also see the function \command{impute} for an
-  alternate way to do fast and accurate imputation.
-  
-  If no test data is provided, the original training data is used,
-  and the code reverts to restore mode allowing the user to restore the
-  original grow forest.  This is useful, because it gives the user the
-  ability to extract outputs from the forest that were not asked for in
-  the original grow call.  
+  If no test data is provided, the original training data is used, and
+  the code reverts to restore mode allowing the user to restore the
+  original trained forest.  This feature allows extracting outputs from
+  the forest not asked for in the original grow call.
   
   If \option{outcome="test"}, the predictor is calculated by using
   y-outcomes from the test data (outcome information must be present).
-  Terminal nodes from the grow-forest are recalculated using y-outcomes
+  Terminal nodes from the trained forest are recalculated using y-outcomes
   from the test set.  This yields a modified predictor in which the
   topology of the forest is based solely on the training data, but where
   predicted values are obtained from test data.  Error rates and VIMP
   are calculated by bootstrapping the test data and using out-of-bagging
-  to ensure unbiased estimates.  See the examples below for
-  illustration.
+  to ensure unbiased estimates.  
 
-  \code{csv=TRUE} returns case specific VIMP while \code{cse=TRUE} returns
-  case specific error rates.  Applies to all families except survival
-  families.  See examples below.  These options can also be applied at
-  the grow stage.
+  \code{csv=TRUE} returns case specific VIMP;  \code{cse=TRUE} returns
+  case specific error rates.  Applies to all families except survival.
+  These options can also be applied while training.
   
 }    
 \value{
@@ -292,7 +283,7 @@ print(veteran.pred)
 ##   the original training data is used and the forest is restored
 ## ------------------------------------------------------------
 
-## first we make the grow call
+## first train the forest
 airq.obj <- rfsrc(Ozone ~ ., data = airquality)
 
 ## now we restore it and compare it to the original call
@@ -311,6 +302,21 @@ print(prox[1:10,1:10])
 ## the grow forest
 var.used <- predict(airq.obj, var.used = "by.tree")$var.used
 print(head(var.used))
+
+## ------------------------------------------------------------
+## prediction when test data has missing values
+## ------------------------------------------------------------
+
+data(pbc, package = "_PROJECT_PACKAGE_NAME_")
+trn <- pbc[1:312,]
+tst <- pbc[-(1:312),]
+o <- rfsrc(Surv(days, status) ~ ., trn)
+
+## default imputation method used by rfsrc
+print(predict(o, tst, na.action = "na.impute"))
+
+## random imputation
+print(predict(o, tst, na.action = "na.random"))
 
 ## ------------------------------------------------------------
 ## requesting different performance for classification
@@ -403,32 +409,40 @@ print(breast.pred$class)
 
 ## first we convert all x-variables to factors
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
-veteran.factor <- data.frame(lapply(veteran, factor))
-veteran.factor$time <- veteran$time
-veteran.factor$status <- veteran$status
+veteran2 <- data.frame(lapply(veteran, factor))
+veteran2$time <- veteran$time
+veteran2$status <- veteran$status
 
-## split the data into unbalanced train/test data (5/95)
+## split the data into unbalanced train/test data (25/75)
 ## the train/test data have the same levels, but different labels
-train <- sample(1:nrow(veteran), round(nrow(veteran) * .05))
-summary(veteran.factor[train,])
-summary(veteran.factor[-train,])
+train <- sample(1:nrow(veteran2), round(nrow(veteran2) * .25))
+summary(veteran2[train,])
+summary(veteran2[-train,])
 
-## grow the forest on the training data and predict on the test data
-veteran.f.grow <- rfsrc(Surv(time, status) ~ ., veteran.factor[train, ]) 
-veteran.f.pred <- predict(veteran.f.grow, veteran.factor[-train , ])
-print(veteran.f.grow)
-print(veteran.f.pred)
+## train the forest and use this to predict on test data
+o.grow <- rfsrc(Surv(time, status) ~ ., veteran2[train, ]) 
+o.pred <- predict(o.grow, veteran2[-train , ])
+print(o.grow)
+print(o.pred)
+
+## even harder ... factor level not previously encountered in training
+veteran3 <- veteran2[1:3, ]
+veteran3$celltype <- factor(c("newlevel", "1", "3"))
+o2.pred <- predict(o.grow, veteran3)
+print(o2.pred)
+## the unusual level is treated like a missing value but is not removed
+print(o2.pred$xvar)
 
 ## ------------------------------------------------------------
 ## example illustrating the flexibility of outcome = "test"
 ## illustrates restoration of forest via outcome = "test"
 ## ------------------------------------------------------------
 
-## first we make the grow call
+## first we train the forest
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 pbc.grow <- rfsrc(Surv(days, status) ~ ., pbc)
 
-## now use predict with outcome = TEST
+## use predict with outcome = TEST
 pbc.pred <- predict(pbc.grow, pbc, outcome = "test")
 
 ## notice that error rates are the same!!
@@ -458,13 +472,13 @@ print(predict.rfsrc(iris.obj, iris, outcome = "test"))
 ## unique way to check reproducibility of the forest
 ## ------------------------------------------------------------
 
-## primary call
+## training step
 set.seed(542899)
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 train <- sample(1:nrow(pbc), round(nrow(pbc) * 0.50))
 pbc.out <- rfsrc(Surv(days, status) ~ .,  data=pbc[train, ])
 
-## standard predict call
+## standard prediction call
 pbc.train <- predict(pbc.out, pbc[-train, ], outcome = "train")
 ##non-standard predict call: overlays the test data on the grow forest
 pbc.test <- predict(pbc.out, pbc[-train, ], outcome = "test")
@@ -481,7 +495,7 @@ matlines(Time, t(pbc.test$survival[1:3,]), col = 2)
 ## compare the predicted value to RSF
 ## ------------------------------------------------------------
 
-## fit the pbc data using RSF
+## train survival forest using pbc data
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
 rsf.obj <- rfsrc(Surv(days, status) ~ ., pbc)
 yvar <- rsf.obj$yvar

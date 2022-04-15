@@ -10,6 +10,27 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Added a new way to deal with missing data in prediction where missing
+data is assigned randomly by daughter size.  Use option
+na.action="na.random".  Added enhanced capability to deal with test
+data with factors.  Previously test data with factor levels not
+matching training data would throw an error.  This then required users
+to apply hot encoding and other inferior workarounds.  These
+workaround are no longer needed.  Continued improvements to CPU times
+for training and prediction.  Added a save.memory feature for big
+survival data to address slow training times that users were
+experiencing with large competing risk and right censored survival
+data.  Added the ability for users to supply their own sigma matrix
+for the mahalanobis splitting rule.  Added new features to subsample
+(used for VIMP confidence intervals).  Users can now specify variables
+for joint VIMP confidence intervals and selectively plot confidence
+intervals using variables of their choosing. VIMP random now also uses
+daughter sizes as the secondary threshold after considering the
+primary vimp.threshold.
+
+---------------------------------------------------------------------------------
+RELEASE 3.0.2
+---------------------------------------------------------------------------------
 Miner changes to donttest examples that caused issues.  Continued
 improvements to overall speed of the package.
 

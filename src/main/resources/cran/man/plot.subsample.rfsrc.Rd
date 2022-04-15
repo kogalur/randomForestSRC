@@ -6,30 +6,44 @@
   Plots VIMP (variable importance) confidence regions obtained from
   subsampling a forest.
 }
-\usage{\method{plot.subsample}{rfsrc}(x, alpha = .01,
+\usage{\method{plot.subsample}{rfsrc}(x, alpha = .01, xvar.names,
  standardize = TRUE, normal = TRUE, jknife = TRUE,
  target, m.target = NULL, pmax = 75, main = "", ...)}
 \arguments{
+
   \item{x}{An object obtained from calling \command{subample}.}
+
   \item{alpha}{Desired level of significance.}
+
+  \item{xvar.names}{Names of the x-variables to be used.  If not
+  specified all variables used.}
+  
   \item{standardize}{Standardize VIMP?  For regression families, VIMP is
     standardized by dividing by the variance and then multipled by 100.
     For all other families, VIMP is scaled by 100.}
+
   \item{normal}{Use parametric normal confidence regions or
     nonparametric regions?  Generally, parametric regions perform better.}
+
   \item{jknife}{Use the delete-d jackknife variance estimator?}
+
   \item{target}{For classification families, an integer or
     character value specifying the class VIMP will be conditioned on
     (default is to use unconditional VIMP).
     For competing risk families, an integer value between
     1 and \code{J} indicating the event VIMP is requested, where \code{J} is
     the number of event types.  The default is to use the first event.}
+
   \item{m.target}{Character value for multivariate families
     specifying the target outcome to be used.  If left unspecified, the
     algorithm will choose a default target.}
+
   \item{pmax}{Trims the data to this number of variables (sorted by VIMP).}
+
   \item{main}{Title used for plot.}
+
   \item{...}{Further arguments that can be passed to \command{bxp}.}
+  
 }
 \details{
   Most of the options used by the R function bxp will work here and can
@@ -42,6 +56,10 @@
   "ylab", "cex.lab", "col.lab"
 		 
 }
+\value{
+  Invisibly, returns the boxplot data that is plotted.
+}
+
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }
@@ -65,6 +83,7 @@
 o <- rfsrc(Ozone ~ ., airquality)
 oo <- subsample(o)
 plot.subsample(oo)
+plot.subsample(oo, xvar.names = o$xvar.names[1:3])
 plot.subsample(oo, jknife = FALSE)
 plot.subsample(oo, alpha = .01)
 plot(oo,cex.axis=.5)

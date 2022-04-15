@@ -23,20 +23,20 @@ extern SEXP rfsrcDistance(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP     rfsrcGrow(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
-                          SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
+                          SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP);
 extern SEXP  rfsrcPredict(SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
                           SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP, SEXP,
-                          SEXP);
+                          SEXP, SEXP);
 
 static const R_CallMethodDef CallEntries[] = {
     {"rfsrcCIndex",   (DL_FUNC) &rfsrcCIndex,    6},
     {"rfsrcDistance", (DL_FUNC) &rfsrcDistance,  9},
-    {"rfsrcGrow",     (DL_FUNC) &rfsrcGrow,     37},
-    {"rfsrcPredict",  (DL_FUNC) &rfsrcPredict,  61},
+    {"rfsrcGrow",     (DL_FUNC) &rfsrcGrow,     38},
+    {"rfsrcPredict",  (DL_FUNC) &rfsrcPredict,  62},
     {NULL, NULL, 0}
 };
 

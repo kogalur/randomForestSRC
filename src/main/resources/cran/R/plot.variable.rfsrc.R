@@ -316,7 +316,7 @@ plot.variable.rfsrc <- function(
     class(plot.variable.obj) <- c("rfsrc", "plot.variable", family)
   }
   ## ---------------------------------------------------------------------------------
-  ## TBD TBD Currently, the plot.variable family is not implemented!
+  ## TBD2 Currently, the plot.variable family is not implemented!
   ## Just pull the precomputed variables ...
     else {
       plot.variable.obj <- object

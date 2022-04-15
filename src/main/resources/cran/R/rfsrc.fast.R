@@ -2,12 +2,12 @@ rfsrc.fast <- function(formula, data,
                        ntree = 500,
                        nsplit = 10,
                        bootstrap = "by.root",
-                       ensemble = "oob",
                        sampsize = function(x){min(x * .632, max(150, x ^ (3/4)))},
                        samptype = "swor",
                        samp = NULL,
                        ntime = 50,
                        forest = FALSE,
+                       save.memory = TRUE,
                        ...)
 {
   ## --------------------------------------------------------------
@@ -19,9 +19,6 @@ rfsrc.fast <- function(formula, data,
   if (!is.function(sampsize) && !is.numeric(sampsize)) {
     stop("sampsize must be a function or number specifying size of subsampled data")
   }
-  ##if (is.function(sampsize)) {
-  ##  sampsize <- sampsize(nrow(data))
-  ##}
   ##--------------------------------------------------------------
   ##
   ## extract additional options specified by user
@@ -29,19 +26,18 @@ rfsrc.fast <- function(formula, data,
   ##
   ##--------------------------------------------------------------
   ## list of forest parameters
-  rfnames <- names(formals(rfsrc))
-  ## add key hidden parameters
-  rfnames <- c(rfnames, "rfq", "perf.type", "gk.quantile", "prob", "prob.epsilon", "vtry", "holdout.array")
+  rfnames <- get.rfnames(hidden = TRUE)
    
   ## restrict to allowed values
-  rfnames <- rfnames[rfnames != "ntree"              &
+  rfnames <- rfnames[rfnames != "data"               &
+                     rfnames != "ntree"              &
                      rfnames != "nsplit"             &
                      rfnames != "bootstrap"          &
-                     rfnames != "ensemble"           &
                      rfnames != "sampsize"           &
                      rfnames != "samptype"           &
                      rfnames != "ntime"              &
-                     rfnames != "forest"             ]
+                     rfnames != "forest"             &
+                     rfnames != "save.memory"        ]
   ## get the permissible hidden options
   ## add formula if present
   dots <- list(...)
@@ -58,6 +54,7 @@ rfsrc.fast <- function(formula, data,
   if (!forest) {
     dots$terminal.qualts <- FALSE
     dots$terminal.quants <- FALSE
+    dots$save.memory <- TRUE
   }
   ##--------------------------------------------------------------
   ##
@@ -69,7 +66,6 @@ rfsrc.fast <- function(formula, data,
                  ntree = ntree,
                  nsplit = nsplit,
                  bootstrap = bootstrap,
-                 ensemble = ensemble,
                  sampsize = sampsize,
                  samptype = samptype,
                  samp = samp,

@@ -1,4 +1,4 @@
-plot.subsample.rfsrc <- function(x, alpha = .01,
+plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
                           standardize = TRUE, normal = TRUE, jknife = TRUE,
                           target, m.target = NULL, pmax = 75, main = "", 
                           ...)
@@ -119,16 +119,24 @@ plot.subsample.rfsrc <- function(x, alpha = .01,
   }
   ##--------------------------------------------------------------
   ##
-  ## trim the data if too many variables
+  ## trim the data (a) if user has requested fewer variables (b) if too many variables
   ##
   ##--------------------------------------------------------------
   p <- ncol(boxplot.dta)
   o.pt <- 1:p
-  if (p > pmax) {
-    o.pt <- order(ci[1, ], decreasing = TRUE)[1:pmax]
-    boxplot.dta <- boxplot.dta[, o.pt]
-    ci <- ci[, o.pt]
+  if (!missing(xvar.names)) {
+    trim.pt <- colnames(boxplot.dta) %in% xvar.names 
+    if (sum(trim.pt) > 0) {
+      o.pt <- which(trim.pt)
+    }
   }
+  else {  
+    if (p > pmax) {
+      o.pt <- order(ci[1, ], decreasing = TRUE)[1:pmax]
+    }
+  }
+  boxplot.dta <- boxplot.dta[, o.pt, drop = FALSE]
+  ci <- ci[, o.pt, drop = FALSE]
   ##--------------------------------------------------------------
   ##
   ## skeleton boxplot 
@@ -188,5 +196,11 @@ plot.subsample.rfsrc <- function(x, alpha = .01,
   bxp(bp, boxfill=colr,xaxt="n",yaxt="n",
       outline=FALSE,horizontal=TRUE,add=TRUE,
       whisklty=1,whisklwd=2)
+  ##--------------------------------------------------------------
+  ##
+  ## return the invisible boxplot data
+  ##
+  ##--------------------------------------------------------------
+  invisible(bp)
 }
 plot.subsample <- plot.subsample.rfsrc

@@ -9,36 +9,50 @@
   ntree = 500,
   nsplit = 10,
   bootstrap = "by.root",
-  ensemble = "oob",
   sampsize = function(x){min(x * .632, max(150, x ^ (3/4)))},
   samptype = "swor",
   samp = NULL,
   ntime = 50,
   forest = FALSE,
+  save.memory = TRUE,
   ...)
 }
 \arguments{
-  \item{formula}{A symbolic description of the model to be fit. If
-    missing, unsupervised splitting is implemented.}
+
+  \item{formula}{Model to be fit. If missing, unsupervised splitting is
+    implemented.}
+
   \item{data}{Data frame containing the y-outcome and x-variables.} 
+
   \item{ntree}{Number of trees.}
+
   \item{nsplit}{Non-negative integer value specifying number of 
     random split points used to split a node (deterministic splitting
-    corresponds to the value zero and is much slower).}
+    corresponds to the value zero and can be slower).}
+
   \item{bootstrap}{Bootstrap protocol used in growing a tree.}
-  \item{ensemble}{Specifies the type of ensemble.  We request only
-    out-of-sample which corresponds to "oob".}
+
   \item{sampsize}{Function specifying size of subsampled data. Can also be a number.}
+
   \item{samptype}{Type of bootstrap used.}
+
   \item{samp}{Bootstrap specification when \code{"by.user"} is used.}
+
   \item{ntime}{Integer value used for survival to
     constrain ensemble calculations to a grid of \code{ntime} time points.}
-  \item{forest}{Should the forest object be returned?  Turn this on if
-    you want prediction on test data but for big data this can be large.}
+
+  \item{forest}{Save key forest values? Turn this on if you want prediction on test data.}
+
+  \item{save.memory}{Save memory?  Setting this to \code{FALSE} stores
+    terminal node quantities used for prediction on test data.  This
+    yields rapid prediction but can be memory intensive for big data,
+    especially competing risks and survival models.}
+  
   \item{...}{Further arguments to be passed to \code{\link{rfsrc}}.}
+  
 }
 \details{
-  Calls \code{\link{rfsrc}} under various options (including subsampling) to
+  Calls \code{\link{rfsrc}} by choosing options (like subsampling) to
   encourage computational speeds.  This will provide a good
   approximation but will not be as good as default settings of
   \code{\link{rfsrc}}.
@@ -55,7 +69,7 @@
 \examples{
 \donttest{
 ## ------------------------------------------------------------
-## Iowa housing regression example
+## regression 
 ## ------------------------------------------------------------
 
 ## load the Iowa housing data
@@ -76,7 +90,7 @@ o3 <- rfsrc.fast(cbind(SalePrice,Overall.Qual) ~ ., housing)
 print(o3)
 
 ## ------------------------------------------------------------
-## White wine classification example
+## classification 
 ## ------------------------------------------------------------
 
 data(wine, package = "_PROJECT_PACKAGE_NAME_")
@@ -84,21 +98,50 @@ wine$quality <- factor(wine$quality)
 o <- rfsrc.fast(quality ~ ., wine)
 print(o)
 
+## ------------------------------------------------------------
+## grow fast random survival forests without C-calculation
+## use brier score to assess model performance
+## compare pure random splitting to logrank splitting
+## ------------------------------------------------------------
+
+data(peakVO2, package = "_PROJECT_PACKAGE_NAME_")
+f <- as.formula(Surv(ttodead, died)~.)
+o1 <- rfsrc.fast(f, peakVO2, perf.type = "none")
+o2 <- rfsrc.fast(f, peakVO2, perf.type = "none", splitrule = "random")
+bs1 <- get.brier.survival(o1, cens.model = "km")
+bs2 <- get.brier.survival(o2, cens.model = "km")
+plot(bs2$brier.score, type = "s", col = 2)
+lines(bs1$brier.score, type = "s", col = 4)
+legend("bottomright", legend = c("random", "logrank"), fill = c(2,4))
 
 ## ------------------------------------------------------------
-## pbc survival example
-## ------------------------------------------------------------
-
-data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-o <- rfsrc.fast(Surv(days, status) ~ ., pbc)
-print(o)
-
-## ------------------------------------------------------------
-## WIHS competing risk example
+## competing risks
 ## ------------------------------------------------------------
 
 data(wihs, package = "_PROJECT_PACKAGE_NAME_")
 o <- rfsrc.fast(Surv(time, status) ~ ., wihs)
+print(o)
+
+## ------------------------------------------------------------
+## class imbalanced data using gmean performance
+## ------------------------------------------------------------
+
+data(breast, package = "_PROJECT_PACKAGE_NAME_")
+breast <- na.omit(breast)
+f <- as.formula(status ~ .)
+o <- rfsrc.fast(f, breast, perf.type = "gmean")
+print(o)
+
+## ------------------------------------------------------------
+## class imbalanced data using random forests quantile-classifer (RFQ)
+## fast=TRUE => rfsrc.fast
+## see imbalanced function for further details
+## ------------------------------------------------------------
+
+data(breast, package = "_PROJECT_PACKAGE_NAME_")
+breast <- na.omit(breast)
+f <- as.formula(status ~ .)
+o <- imbalanced(f, breast, fast = TRUE)
 print(o)
 
 }}

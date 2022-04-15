@@ -12,7 +12,8 @@ importFrom("graphics", "abline", "axis", "box", "boxplot", "bxp",
 importFrom("stats", "as.dist", "as.formula", "cutree", "dlnorm", "formula",
            "hclust", "lowess", "median", "model.matrix", "na.omit",
            "optim", "pgamma", "plnorm", "pnorm", "predict", 
-           "quantile", "qnorm", "runif", "sd", "supsmu", "var", "wilcox.test", "rnorm")
+           "quantile", "qnorm", "runif", "sd", "supsmu", "var", "wilcox.test", "rnorm",
+           "lm", "coef")
 importFrom("utils", "installed.packages", "txtProgressBar", "setTxtProgressBar",
            "write.table", "tail")
 importFrom("grDevices", "gray")

@@ -3,94 +3,106 @@ adrop3d.last <- function(x, d, keepColNames = FALSE) {
   if (!is.array(x)) {
     x
   }
-    else {
-      if (d > 1) {
-        x[,,1:d, drop = FALSE]
-      }
-        else {
-          if (dim(x)[1] == 1) {
-            rbind(x[,,1, drop = TRUE])
-          }
-            else {
-              if (dim(x)[2] == 1) {
-                if (keepColNames) {
-                  ##needed for J=1 classification pathology
-                  xnew <- cbind(x[,,1, drop = TRUE])
-                  colnames(xnew) <- colnames(x)
-                  xnew
-                }
-                  else {
-                    cbind(x[,,1, drop = TRUE])
-                  }
-              }
-                else {
-                  x[,,1, drop = TRUE]
-                }
-            }
-        }
+  else {
+    if (d > 1) {
+      x[,,1:d, drop = FALSE]
     }
+    else {
+      if (dim(x)[1] == 1) {
+        rbind(x[,,1, drop = TRUE])
+      }
+      else {
+        if (dim(x)[2] == 1) {
+          if (keepColNames) {
+            ##needed for J=1 classification pathology
+            xnew <- cbind(x[,,1, drop = TRUE])
+            colnames(xnew) <- colnames(x)
+            xnew
+          }
+          else {
+            cbind(x[,,1, drop = TRUE])
+          }
+        }
+        else {
+          x[,,1, drop = TRUE]
+        }
+      }
+    }
+  }
 }
 adrop2d.first <- function(x, d, keepColNames = FALSE) {
   ## this function is for arrays only
   if (!is.array(x)) {
     x
   }
-    else {
-      if (d > 1) {
-        x[1:d,, drop = FALSE]
-      }
-        else {
-          x[1, , drop = TRUE]
-        }
+  else {
+    if (d > 1) {
+      x[1:d,, drop = FALSE]
     }
+    else {
+      x[1, , drop = TRUE]
+    }
+  }
 }
 adrop2d.last <- function(x, d, keepColNames = FALSE) {
   ## this function is for arrays only
   if (!is.array(x)) {
     x
   }
-    else {
-      if (d > 1) {
-        x[,1:d, drop = FALSE]
-      }
-        else {
-          x[,1, drop = TRUE]
-        }
+  else {
+    if (d > 1) {
+      x[,1:d, drop = FALSE]
     }
+    else {
+      x[,1, drop = TRUE]
+    }
+  }
 }
 amatrix <- function(x, d, names) {
   x <- matrix(x, d, dimnames = names)
   if (ncol(x) > 1) {
     x
   }
-    else {
-      c(x)
-    }
+  else {
+    c(x)
+  }
 }
 amatrix.remove.names <- function(x) {
   if (!is.null(dim(x)) && ncol(x) == 1) {
     unlist(c(x), use.names = FALSE)
   }
-    else {
-      x
+  else {
+    x
+  }
+}
+assign.impute.mean <- function(data, impute.mean) {
+  d <- data.frame(mclapply(colnames(data), function(xnms) {
+    x <- data[, xnms]
+    is.na.x <- is.na(x)
+    if (any(is.na.x)) {
+      x[is.na.x] <- impute.mean[[xnms]]
     }
+    x
+  }), stringsAsFactors = TRUE)
+  colnames(d) <- colnames(data)
+  d
 }
 atmatrix <- function(x, d, names, keep.names = FALSE) {
   x <- t(matrix(x, ncol = d, dimnames = names))
   if (ncol(x) > 1) {
     x
   }
-    else {
-      if (keep.names == FALSE) {
-        c(x)
-      }
-        else {
-          x.names <- rownames(x)
-          x <- c(x)
-          names(x) <- x.names
-          x
-        }
+  else {
+    if (keep.names == FALSE) {
+      c(x)
     }
+    else {
+      x.names <- rownames(x)
+      x <- c(x)
+      names(x) <- x.names
+      x
+    }
+  }
 }
 avector <- function(x, name = FALSE) {
   if (!is.null(dim(x)) && nrow(x) > 1 && ncol(x) == 1) {
@@ -99,18 +111,18 @@ avector <- function(x, name = FALSE) {
     if (name) names(x) <- x.names else names(x) <- NULL
     x
   }
-    else if (!is.null(dim(x)) && nrow(x) == 1 && ncol(x) > 1) {
-      x.names <- colnames(x)
-      x <- unlist(c(x))
-      if (name) names(x) <- x.names else names(x) <- NULL
-      x
-    }
-      else if (!is.null(dim(x)) && nrow(x) == 1 && ncol(x) == 1) {
-        unlist(c(x))
-      }
-        else {
-          x
-        }
+  else if (!is.null(dim(x)) && nrow(x) == 1 && ncol(x) > 1) {
+    x.names <- colnames(x)
+    x <- unlist(c(x))
+    if (name) names(x) <- x.names else names(x) <- NULL
+    x
+  }
+  else if (!is.null(dim(x)) && nrow(x) == 1 && ncol(x) == 1) {
+    unlist(c(x))
+  }
+  else {
+    x
+  }
 }
 available <- function (package, lib.loc = NULL, quietly = TRUE)
 {
@@ -374,31 +386,10 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
                        "logrankCRGeneral")     ## 22
   ## set the family
   fmly <- formula.detail$family
-  ## Preliminary check for consistency.
-  if (hdim > 0) {
-    if(!is.null(nsplit)) {
-      nsplit <- round(nsplit)    
-      if (nsplit < 0) {
-        stop("Invalid nsplit value: set nsplit >= 0")
-      }
-    }
-    else {
-      nsplit = 1
-    }
-  }
-  else {
-    if(!is.null(nsplit)) {
-      nsplit <- round(nsplit)    
-      if (nsplit < 0) {
-        stop("Invalid nsplit value:  set nsplit >= 0")
-      }
-    }
-    else {
-      nsplit = 0
-    }
-  }
+  ## initialization
   cust.idx <- NULL
   splitpass <- FALSE
+  ## set splitpass
   if (!is.null(splitrule)) {
     if(grepl("custom", splitrule)) {
       splitrule.idx <- which(splitrule.names == "custom")
@@ -408,13 +399,10 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
     }
     else if (splitrule == "random") {
       splitrule.idx <- which(splitrule.names == "random")
-      ## Override the nsplit value in the case of pure random
-      ## splitting.  It is set to the defalut value of one (1). In the native code,
-      ## values greater than one are ignored in the case of pure random splitting!
-      nsplit <- 1
       splitpass <- TRUE
     }
   }
+  ## do this unless pass given for split 
   if (!splitpass) {
     ## if splitrule is present, confirm it is correctly set
     if (!is.null(splitrule)) {
@@ -563,6 +551,30 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
       }
     }
   }## completes !splitpass
+  ## set nsplit based on splitrule
+  if(!is.null(nsplit)) {
+    nsplit <- round(nsplit)    
+    if (nsplit < 0) {
+      stop("Invalid nsplit value: set nsplit >= 0")
+    }
+  }
+  else {
+    ## pure random
+    if (splitrule.idx == 4) {
+      nsplit <- 1
+    }
+    ## fast families
+    else if (splitrule.idx %in% c(5, 6)) {
+      nsplit <- 0
+    }
+    ## sg families
+    else if (splitrule.idx %in% c(17, 18, 19)) {
+      nsplit <- 10 ## can change this as needed later
+    }
+    else {
+      nsplit <- 10
+    }
+  }    
   splitinfo <- list(name = splitrule, index = splitrule.idx, cust = cust.idx, nsplit = nsplit)
   return (splitinfo)
 }
@@ -587,6 +599,24 @@ get.importance.xvar <- function(importance.xvar, importance, object) {
       importance.xvar <- NULL
     }
   return (importance.xvar)
+}
+get.impute.mean <- function(data) {
+  imean <- mclapply(data, function(x) {
+    if (all(is.na(x))) {
+      NA
+    }
+    else {
+      if (is.factor(x)) {
+        x.table <- table(x)
+        names(x.table)[which.max(x.table)]
+      }
+      else {
+        mean(x, na.rm = TRUE)
+      }
+    }
+  })
+  names(imean) <- colnames(data)
+  imean
 }
  
 get.nmiss <- function(xvar, yvar = NULL) {
@@ -614,6 +644,24 @@ get.outcome.target <- function(family, yvar.names, outcome.target) {
       ## This is surv or surv-CR
       outcome.target <- 0
     }
+}
+get.rfnames <- function(hidden = TRUE, stealth = FALSE) {
+  rfnames <- names(formals(rfsrc))
+  if (hidden) {
+    rfnames <- c(rfnames,              
+               "impute.only",
+               "presort.xvar",
+               "experimental",
+               "rfq",
+               "perf.type",
+               "gk.quantile",
+               "prob",
+               "prob.epsilon",
+               "vtry",
+               "holdout.array")
+  }
+   
+  rfnames
 }
 get.weight <- function(weight, n) {
   ## set the default weight
