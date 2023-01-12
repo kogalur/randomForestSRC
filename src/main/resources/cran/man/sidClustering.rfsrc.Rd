@@ -12,6 +12,7 @@
   method = "sid",
   k = NULL,
   reduce = TRUE,
+  ntree = 500,
   ntree.reduce = function(p, vtry){100 * p / vtry},
   fast = FALSE,
   x.no.sid = NULL,
@@ -41,6 +42,7 @@
   \item{reduce}{Apply dimension reduction? Uses holdout vimp which is
     computationally intensive and conservative but has good false
     discovery properties.  Only applies to \code{method="sid"}.}
+  \item{ntree}{Number of trees used by sidClustering in the main analysis.}
   \item{ntree.reduce}{Number of trees used by holdout vimp in the
     reduction step.  See \command{holdout.vimp} for details.}
   \item{fast}{Use fast random forests, \code{rfsrcFast}, in place of

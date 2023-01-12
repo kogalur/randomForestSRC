@@ -26,22 +26,23 @@
   \item{object}{(Optional) A previously grown quantile regression
     forest.}
 
+  \item{newdata}{(Optional) Test data frame used for prediction.  Note
+    that prediction on test data must always be done with the
+    \code{quantreg} function and not the \code{predict} function.  See
+    example below.}
+
   \item{method}{Method used to calculate quantiles.  Three methods are
-    provided. Forest weighted averaging (\code{method = "forest"}) is
-    the standard method provided in most random forest packages.  A
-    second method is the Greenwald-Khanna algorithm which is suited for
-    big data and is specified by any one of the following: "gk", "GK",
-    "G-K", "g-k".  The third method (\code{method = "local"}) is the
-    default method used and uses the local adjusted cdf approach of
-    Zhang et al. (2019).  This does not use forest weights and is
-    therefore reasonably fast and can be used for large data - however
-    it relies on the assumption of a homogeneous (equal variance) error
-    distribution which can be a strong assumption and undesireable
-    consequences can result if the assumption is violated.  See below
-    for further discussion.}
+    provided: (1) A variation of the method used in Meinshausen (2006)
+    based on forest weight (\code{method = "forest"}); (2) The
+    Greenwald-Khanna algorithm, suited for big data, and specified by
+    any one of the following: "gk", "GK", "G-K", "g-k"; (3) The default
+    method, \code{method = "local"}, which uses the local adjusted cdf
+    approach of Zhang et al. (2019).  This does not rely on forest
+    weights and is reasonably fast. See below for further discussion.}
 
   \item{splitrule}{The default action is local adaptive quantile regression splitting,
-    but this can be over-ridden by the user.}
+    but this can be over-ridden by the user.  Not applicable to
+    multivariate forests.  See details below.}
   
   \item{prob}{Target quantile probabilities when training.  If left unspecified,
     uses percentiles (1 through 99) for \code{method = "forest"}, and 
@@ -51,13 +52,10 @@
   \item{prob.epsilon}{Greenwald-Khanna allowable error for quantile
     probabilities when training.}
   
-  \item{newdata}{Test data (optional) over which conditional quantiles
-    are evaluated over.}
-
   \item{oob}{Return OOB (out-of-bag) quantiles?  If false, in-bag values
     are returned.}
 
-  \item{fast}{Use fast random forests, \code{rfsrcFast}, in place of
+  \item{fast}{Use fast random forests, \code{rfsrc.fast}, in place of
     \code{rfsrc}?  Improves speed but may be less accurate.}
 
   \item{maxn}{Maximum number of unique y training values used when
@@ -68,20 +66,26 @@
 }
 \details{
   
-  The most common method for calculating RF quantiles uses forest
-  weights (Meinshausen, 2006).  However we note that the forest weighted
-  method used here (specified using \code{method}="forest") differs from
-  Meinshuasen (2006) in two important ways: (1) local adaptive quantile
-  regression splitting is used instead of CART regression mean squared
-  splitting, and (2) quantiles are estimated using a weighted local
-  cumulative distribution function estimator.  For this reason, results
-  may differ from Meinshausen (2006).
+  The most common method for calculating RF quantiles uses the method
+  described in Meinshausen (2006) using forest weights.  The forest
+  weights method employed here (specified using \code{method}="forest"),
+  however differs in that quantiles are estimated using a
+  weighted local cumulative distribution function estimator.  For this
+  reason, results may differ from Meinshausen (2006).  Moreover, results
+  may also differ as the default splitting rule uses local adaptive
+  quantile regression splitting instead of CART regression mean squared
+  splitting which was used by Meinshausen (2006).  Note that local
+  adaptive quantile regression splitting is not available for
+  multivariate forests which reverts to the default multivariate
+  composite splitting rule. In multivariate regression, users however do
+  have the option to over-ride this using
+  Mahalanobis splitting by setting \code{splitrule="mahalanobis"}
 
-  A second method uses the Greenwald-Khanna (2001) algorithm (invoked by
-  \code{method}="gk", "GK", "G-K" or "g-k").  While this will not be as
-  accurate as forest weights, the high memory efficiency of
-  Greenwald-Khanna makes it feasible to implement in big data settings
-  unlike forest weights.
+  A second method for estimating quantiles uses the Greenwald-Khanna
+  (2001) algorithm (invoked by \code{method}="gk", "GK", "G-K" or
+  "g-k").  While this will not be as accurate as forest weights, the
+  high memory efficiency of Greenwald-Khanna makes it feasible to
+  implement in big data settings unlike forest weights.
   
   The Greenwald-Khanna algorithm is implemented roughly as follows.  To
   form a distribution of values for each case, from which we sample to
@@ -110,16 +114,15 @@
   unspecified.  This will be slow, especially for big data, and less
   stringent choices should be used if computational speed is of concern.
 
-  Finally the default method, \code{method}="local", implements the
-  locally adjusted cdf estimator of Zhang et al. (2019).  This is the
-  default procedure used here as it does not rely on forest weights and
-  is therefore fast and can be used for large data.  However be aware
-  this relies on the assumption of homogeneity of the error
-  distribution, i.e. that errors are iid and therefore have equal
-  variance.  Now while reasonably robust to departures of homogeneity,
+  Finally, the default method, \code{method}="local", implements the
+  locally adjusted cdf estimator of Zhang et al. (2019).  This does not
+  use forest weights and is reasonably fast and can be used for large
+  data.  However, this relies on the assumption of homogeneity of the
+  error distribution, i.e. that errors are iid and therefore have equal
+  variance.  While this is reasonably robust to departures of homogeneity,
   there are instances where this may perform poorly; see Zhang et
   al. (2019) for details.  If hetereogeneity is suspected we recommend
-  \code{method}="forest" instead.
+  \code{method}="forest".
   
 }
 \value{
@@ -221,6 +224,7 @@ if (library("mlbench", logical.return = TRUE)) {
 
 ## ------------------------------------------------------------
 ## multivariate mixed outcomes example
+## quantiles are only returned for the continous outcomes
 ## ------------------------------------------------------------
 
 dta <- mtcars
@@ -231,6 +235,15 @@ o <- quantreg(cbind(carb, mpg, cyl, disp) ~., data = dta)
 plot.quantreg(o, m.target = "mpg")
 plot.quantreg(o, m.target = "disp")
 
+## ------------------------------------------------------------
+## multivariate regression example using Mahalanobis splitting
+## ------------------------------------------------------------
+
+dta <- mtcars
+o <- quantreg(cbind(mpg, disp) ~., data = dta, splitrule = "mahal")
+
+plot.quantreg(o, m.target = "mpg")
+plot.quantreg(o, m.target = "disp")
 
 ## ------------------------------------------------------------
 ## example of quantile regression for ordinal data

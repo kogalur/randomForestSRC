@@ -62,6 +62,8 @@ rfsrc <- function(formula, data, ntree = 500,
   empirical.risk <- is.hidden.empirical.risk(user.option)
   tdc.rule <- is.hidden.tdc.rule(user.option)
   vimp.threshold  <- is.hidden.vimp.threshold(user.option)
+  ## case.depth
+  case.depth  <- is.hidden.case.depth(user.option)
   ## verify key options
   ensemble <- "all"##remove option to select between "all", "oob", "inbag"
   bootstrap <- match.arg(bootstrap, c("by.root", "none", "by.user"))
@@ -366,6 +368,7 @@ rfsrc <- function(formula, data, ntree = 500,
     membership   <- FALSE
     perf.type    <- "none"
     importance   <- "none"
+    case.depth   <- FALSE
     terminal.qualts <- FALSE
     terminal.quants <- FALSE
     cse  <- FALSE
@@ -416,32 +419,34 @@ rfsrc <- function(formula, data, ntree = 500,
   empirical.risk.bits <- get.empirical.risk.bits(empirical.risk)
   tdc.rule.bits <- get.tdc.rule.bits(tdc.rule)
   ## Assign low bits for the native code
-  ensemble.bits <- get.ensemble(ensemble)
-  impute.only.bits <- get.impute.only(impute.only, n.miss)
-  var.used.bits <- get.var.used(var.used)
-  split.depth.bits <- get.split.depth(split.depth)
-  importance.bits <- get.importance(importance, perf.type)
-  bootstrap.bits <- get.bootstrap(bootstrap)
-  forest.bits <- get.forest(forest)
-  proximity.bits <- get.proximity(TRUE, proximity)
-  distance.bits <- get.distance(TRUE, distance)
-  membership.bits <-  get.membership(membership)
-  statistics.bits <- get.statistics(statistics)
-  split.cust.bits <- get.split.cust(splitinfo$cust)
+  ensemble.bits <- get.ensemble.bits(ensemble)
+  impute.only.bits <- get.impute.only.bits(impute.only, n.miss)
+  var.used.bits <- get.var.used.bits(var.used)
+  split.depth.bits <- get.split.depth.bits(split.depth)
+  importance.value <-  get.importance(importance, perf.type)
+  importance.bits <- get.importance.bits(importance, perf.type)
+  bootstrap.bits <- get.bootstrap.bits(bootstrap)
+  forest.bits <- get.forest.bits(forest)
+  proximity.bits <- get.proximity.bits(TRUE, proximity)
+  distance.bits <- get.distance.bits(TRUE, distance)
+  membership.bits <-  get.membership.bits(membership)
+  statistics.bits <- get.statistics.bits(statistics)
+  split.cust.bits <- get.split.cust.bits(splitinfo$cust)
+  case.depth.bits  <- get.case.depth.bits(case.depth)
   ## Assign high bits for the native code
-  samptype.bits <- get.samptype(samptype)
-  forest.wt.bits <- get.forest.wt(TRUE, bootstrap, forest.wt)
-  na.action.bits <- get.na.action(na.action)
-  block.size <- get.block.size(block.size, ntree)
-  terminal.qualts.bits <- get.terminal.qualts(terminal.qualts)
-  terminal.quants.bits <- get.terminal.quants(terminal.quants)
-  cse.bits = get.cse(cse)
-  csv.bits = get.csv(csv)
-  presort.xvar  <- get.presort.xvar(presort.xvar)
-  data.pass.bits <- get.data.pass(data.pass)
-  experimental.bits <- get.experimental(experimental)
+  samptype.bits <- get.samptype.bits(samptype)
+  forest.wt.bits <- get.forest.wt.bits(TRUE, bootstrap, forest.wt)
+  na.action.bits <- get.na.action.bits(na.action)
+  block.size <- get.block.size.bits(block.size, ntree)
+  terminal.qualts.bits <- get.terminal.qualts.bits(terminal.qualts)
+  terminal.quants.bits <- get.terminal.quants.bits(terminal.quants)
+  cse.bits = get.cse.bits(cse)
+  csv.bits = get.csv.bits(csv)
+  presort.xvar  <- get.presort.xvar.bits(presort.xvar)
+  data.pass.bits <- get.data.pass.bits(data.pass)
+  experimental.bits <- get.experimental.bits(experimental)
   ## Set the trace
-  do.trace <- get.trace(do.trace)
+  do.trace <- get.trace.bits(do.trace)
   ## Start the C external timer.
   ctime.external.start  <- proc.time()
   nativeOutput <- tryCatch({.Call("rfsrcGrow",
@@ -459,7 +464,8 @@ rfsrc <- function(formula, data, ntree = 500,
                                              rfq.bits +
                                              gk.quantile.bits +
                                              statistics.bits +
-                                             empirical.risk.bits),
+                                             empirical.risk.bits +
+                                             case.depth.bits),
                                   as.integer(samptype.bits +
                                              forest.wt.bits +
                                              distance.bits + 
@@ -846,6 +852,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        seedVimp = if (importance == FALSE) NULL else nativeOutput$seedVimp,
                        terminal.qualts = terminal.qualts,
                        terminal.quants = terminal.quants,
+                       importance = importance.value,
                        vimp.threshold = vimp.threshold,
                        version = "@PROJECT_VERSION@")
     ## family specific additions to the forest object
@@ -927,6 +934,14 @@ rfsrc <- function(formula, data, ntree = 500,
   }
   else {
     forest.wt.out <- NULL
+  }
+  ## process case.depth
+  if (case.depth != FALSE) {
+    case.depth.out <- matrix(nativeOutput$caseDepth, c(ntree, n), byrow = TRUE)
+    nativeOutput$caseDepth <- NULL
+  }
+  else {
+    case.depth.out <- NULL
   }
   ## membership
   if (membership) {
@@ -1035,7 +1050,8 @@ rfsrc <- function(formula, data, ntree = 500,
     leaf.count = nativeOutput$leafCount,
     proximity = proximity.out,
     forest = forest.out,
-    forest.wt = forest.wt.out,    
+    forest.wt = forest.wt.out,
+    case.depth = case.depth.out,
     distance = distance.out,
     membership = membership.out,
     tdc.membership = tdc.membership.out,
@@ -1061,6 +1077,7 @@ rfsrc <- function(formula, data, ntree = 500,
   remove(proximity.out)
   remove(forest.out)
   remove(forest.wt.out)
+  remove(case.depth.out)
   remove(distance.out)
   remove(membership.out)
   remove(inbag.out)

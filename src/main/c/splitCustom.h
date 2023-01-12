@@ -19,7 +19,7 @@
    vvvvvvvv Do Not Touch These Delarations Below vvvvvvvv
 */
 
-void registerCustomFunctions();
+void registerCustomFunctions(void);
 
 extern void registerThis (double (*func) (unsigned int    n,
                                           char           *membership,

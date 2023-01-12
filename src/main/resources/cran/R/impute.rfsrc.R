@@ -289,6 +289,7 @@ impute.rfsrc <- function(formula, data,
                                                ntree = ntree,
                                                nodesize = nodesize,
                                                nsplit = nsplit,
+                                               perf.type = "none",
                                                fast = fast), dots))}, error = function(e) {NULL})
               ## confirm grow object is non-null in order to proceed
               if (!is.null(grow)) {

@@ -108,7 +108,7 @@
 
     \item The home page for the package, containing vignettes, manuals,
     links to GitHub and other useful information is found at
-    \url{https://luminwin.github.io/randomForestSRC/}
+    \url{https://www.randomforestsrc.org/index.html}
 
     \item Questions, comments, and non-bug related issues may be sent
     via \url{https://github.com/kogalur/randomForestSRC/discussions/}.
@@ -146,7 +146,7 @@
 
   Additional instructions for configuring OpenMP parallel processing
   are available at
-  \url{https://luminwin.github.io/randomForestSRC/articles/installation.html}.
+  \url{https://www.randomforestsrc.org/articles/installation.html}.
   
   An understanding of resource utilization (CPU and RAM) is necessary
   when running the package using OpenMP and Open MPI parallel execution.

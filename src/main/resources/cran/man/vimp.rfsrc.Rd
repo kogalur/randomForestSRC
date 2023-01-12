@@ -95,6 +95,18 @@ print(vimp(iris.obj, joint = TRUE)$importance)
 print(vimp(iris.obj, c("Petal.Length", "Petal.Width"), joint = TRUE)$importance)
 print(vimp(iris.obj, c("Sepal.Length", "Petal.Width"), joint = TRUE)$importance)
 
+## ------------------------------------------------------------
+## survival example
+## anti versus permute VIMP with different block sizes
+## ------------------------------------------------------------
+
+data(pbc, package = "_PROJECT_PACKAGE_NAME_")
+pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc)
+
+print(vimp(pbc.obj)$importance)
+print(vimp(pbc.obj, block.size=1)$importance)
+print(vimp(pbc.obj, importance="permute")$importance)
+print(vimp(pbc.obj, importance="permute", block.size=1)$importance)
 
 ## ------------------------------------------------------------
 ## imbalanced classification example

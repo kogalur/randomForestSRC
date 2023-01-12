@@ -10,6 +10,20 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Added case-depth.  Improved plot.subsample. Improved get.brier.survival.
+
+---------------------------------------------------------------------------------
+RELEASE 3.1.1
+---------------------------------------------------------------------------------
+Fixed long standing bug in mtry when xvar.wt is specified as a real
+vector (not uniform, or integers). In such situations, mtry was not
+correctly being implemented.  Generalized mtry to ytry which is now
+fully functional in the multivariate mixed case.
+Changed suggests from akima to interp. Updated homepage URL's.
+  
+---------------------------------------------------------------------------------
+RELEASE 3.1.0
+---------------------------------------------------------------------------------
 Added a new way to deal with missing data in prediction where missing
 data is assigned randomly by daughter size.  Use option
 na.action="na.random".  Added enhanced capability to deal with test
@@ -53,7 +67,8 @@ ensemble calculation.  This can be useful when doing these
 calculations in parallel causes significant contention for memory
 locations that are in critical OpenMP regions.
   
----------------------------------------------------------------------------------
+
+  ---------------------------------------------------------------------------------
 RELEASE 2.14.0
 ---------------------------------------------------------------------------------
 Fix to R_init per Prof. Ripley.  Improved output from analysis,
@@ -78,7 +93,6 @@ RELEASE 2.12.1
 ---------------------------------------------------------------------------------
 Fix to omp.h declaration before R headers per Prof. Ripley, in
 anticipation of clang 13.0.0.
-
 
 ---------------------------------------------------------------------------------
 RELEASE 2.12.0
@@ -229,7 +243,6 @@ behaviour.  Fix to incorrect passing of time option parameter in
 plot.variable().  Introduction of partial.rfsrc() to allow direct
 access to partial ensembles.  Added support for long vectors on native
 code side.
-
   
 RELEASE 2.3.0
 ---------------------------------------------------------------------------------  
@@ -380,6 +393,5 @@ options(), and environment variables.  Reduced [S] memory footprint by
 prematurely de-allocating terminal node information.
 
 ---------------------------------------------------------------------------------
-RELEASE 1.0.0 represents the first release of the
-package.  
+RELEASE 1.0.0 represents the first release of the package.  
 

@@ -1,4 +1,4 @@
-get.block.size <- function (block.size, ntree) {
+get.block.size.bits <- function (block.size, ntree) {
   ## Check for user silliness.
   if (!is.null(block.size)) {
     ## for backwards compatibility allow TRUE/FALSE
@@ -22,7 +22,7 @@ get.block.size <- function (block.size, ntree) {
   }
   return (block.size)
 }
-get.bootstrap <- function (bootstrap) {
+get.bootstrap.bits <- function (bootstrap) {
   if (bootstrap == "by.root") {
     bootstrap <- 0
   }
@@ -40,6 +40,23 @@ get.bootstrap <- function (bootstrap) {
   }
   return (bootstrap)
 }
+get.case.depth.bits <- function (case.depth) {
+  if (!is.null(case.depth)) {
+    if (case.depth == TRUE) {
+      case.depth <- 2^11
+    }
+    else if (case.depth == FALSE) {
+      case.depth <- 0
+    }
+    else {
+      stop("Invalid choice for 'case.depth' option:  ", case.depth)
+    }
+  }
+  else {
+    stop("Invalid choice for 'case.depth' option:  ", case.depth)
+  }
+  return (case.depth)
+}
 get.cr.bits <- function (fmly) {
   if (fmly == "surv-CR") {
     return(2^21)
@@ -47,7 +64,7 @@ get.cr.bits <- function (fmly) {
     return(0)
   }
 }
-get.cse <- function (cse) {
+get.cse.bits <- function (cse) {
   if (!is.null(cse)) {
     if (cse == TRUE) {
       cse <- 2^28
@@ -64,7 +81,7 @@ get.cse <- function (cse) {
   }
   return (cse)
 }
-get.csv <- function (csv) {
+get.csv.bits <- function (csv) {
   if (!is.null(csv)) {
     if (csv == TRUE) {
       csv <- 2^29
@@ -81,7 +98,7 @@ get.csv <- function (csv) {
   }
   return (csv)
 }
-get.data.pass <- function (data.pass) {
+get.data.pass.bits <- function (data.pass) {
   if (!is.null(data.pass)) {
     if (data.pass == TRUE) {
       data.pass <- 2^15
@@ -98,7 +115,7 @@ get.data.pass <- function (data.pass) {
   }
   return (data.pass)
 }
-get.data.pass.predict <- function (data.pass) {
+get.data.pass.predict.bits <- function (data.pass) {
   if (!is.null(data.pass)) {
     if (data.pass == TRUE) {
       data.pass <- 2^27
@@ -115,7 +132,7 @@ get.data.pass.predict <- function (data.pass) {
   }
   return (data.pass)
 }
-get.distance <- function (grow.equivalent, distance) {
+get.distance.bits <- function (grow.equivalent, distance) {
   ## Convert distance option into native code parameter.
   if (!is.null(distance)) {
     if (distance == FALSE) {
@@ -167,7 +184,7 @@ get.empirical.risk.bits <-  function (empirical.risk) {
   }
 }
 ## convert ensemble option into native code parameter.
-get.ensemble <- function (ensemble) {
+get.ensemble.bits <- function (ensemble) {
   if (ensemble == "oob") {
     ensemble <- 2^1
   }
@@ -182,7 +199,7 @@ get.ensemble <- function (ensemble) {
   }
   return (ensemble)
 }
-get.experimental <- function (experimental) {
+get.experimental.bits <- function (experimental) {
   ## Convert experimental option into native code parameter.
   bits <- 0
   for (i in 1:length(experimental)) {
@@ -192,7 +209,7 @@ get.experimental <- function (experimental) {
   }
   return (bits)
 }
-get.forest <- function (forest) {
+get.forest.bits <- function (forest) {
   ## Convert forest option into native code parameter.
   if (!is.null(forest)) {
     if (forest == TRUE) {
@@ -210,7 +227,7 @@ get.forest <- function (forest) {
   }
   return (forest)
 }
-get.forest.wt <- function (grow.equivalent, bootstrap, weight) {
+get.forest.wt.bits <- function (grow.equivalent, bootstrap, weight) {
   ## Convert weight option into native code parameter.
   if (!is.null(weight)) {
     if (weight == FALSE) {
@@ -268,7 +285,7 @@ get.gk.quantile.bits <-  function (gk.quantile) {
   }
 }
 ## This has been deprecated!
-get.insitu.ensemble <- function (insitu.ensemble) {
+get.insitu.ensemble.bits <- function (insitu.ensemble) {
   ## Convert insitu.ensemble option into native code parameter.
   if (!is.null(insitu.ensemble)) {
     if (insitu.ensemble == TRUE) {
@@ -300,6 +317,13 @@ get.importance <-  function(importance, perf.type = NULL) {
     else if (importance == FALSE) {
       importance <- "none"
     }
+  }
+  importance
+}
+get.importance.bits <-  function(importance, perf.type = NULL) {
+  ## convert importance option into native code parameter
+  if (!is.null(importance)) {
+    importance <- get.importance(importance, perf.type)
     if (importance == "none") {
       importance <- 0
     }
@@ -330,7 +354,7 @@ get.importance <-  function(importance, perf.type = NULL) {
   }
   return (importance)
 }
-get.impute.only <-  function (impute.only, nMiss) {
+get.impute.only.bits <-  function (impute.only, nMiss) {
   if (impute.only) {
     if (nMiss > 0) {
       return (2^16)
@@ -343,8 +367,8 @@ get.impute.only <-  function (impute.only, nMiss) {
     return (0)
   }
 }
-get.jitt <- function (jitt) {
-  ## Convert jitt option into native code parameter.
+## Convert jitt option into native code parameter.
+get.jitt.bits <- function (jitt) {
   if (!is.null(jitt)) {
     if (jitt == TRUE) {
       jitt <- 2^23
@@ -361,7 +385,7 @@ get.jitt <- function (jitt) {
   }
   return (jitt)
 }
-get.membership <- function (membership) {
+get.membership.bits <- function (membership) {
   ## Convert option into native code parameter.
   bits <- 0
   if (!is.null(membership)) {
@@ -377,7 +401,7 @@ get.membership <- function (membership) {
   }
   return (bits)
 }
-get.na.action <- function (na.action) {
+get.na.action.bits <- function (na.action) {
   if (na.action == "na.omit") {
     ## This is the high byte!
     na.action <- 0
@@ -395,7 +419,7 @@ get.na.action <- function (na.action) {
   }
   return (na.action)
 }
-get.outcome <- function (outcome) {
+get.outcome.bits <- function (outcome) {
   ## Convert outcome option into native code parameter.
   if (outcome == "train") {
     outcome <- 0
@@ -408,7 +432,7 @@ get.outcome <- function (outcome) {
   }
   return (outcome)
 }
-get.presort.xvar <- function (presort.xvar) {
+get.presort.xvar.bits <- function (presort.xvar) {
   ## Convert trace into native code parameter.
   if (!is.logical(presort.xvar)) {
     ## Leave it as is.
@@ -461,7 +485,7 @@ get.perf.bits <- function (perf) {
     return (0)
   }
 }
-get.proximity <- function (grow.equivalent, proximity) {
+get.proximity.bits <- function (grow.equivalent, proximity) {
   ## Convert proximity option into native code parameter.
   if (!is.null(proximity)) {
     if (proximity == FALSE) {
@@ -528,7 +552,7 @@ get.rf.cores <- function () {
   return (getOption("rf.cores", -1L))
 }
 ## convert samptype option into native code parameter.
-get.samptype <- function (samptype) {
+get.samptype.bits <- function (samptype) {
   if (samptype == "swr") {
     bits <- 0
   }
@@ -547,7 +571,7 @@ get.seed <- function (seed) {
   seed <- -round(abs(seed))
   return (seed)
 }
-get.split.cust <- function (split.cust) {
+get.split.cust.bits <- function (split.cust) {
   ## Convert split.cust option into native code parameter.
   if (!is.null(split.cust)) {
     if ((split.cust >= 1) && (split.cust <= 16)) {
@@ -563,7 +587,7 @@ get.split.cust <- function (split.cust) {
   }
   return (split.cust)
 }
-get.split.depth <- function (split.depth) {
+get.split.depth.bits <- function (split.depth) {
   ## Convert split.depth option into native code parameter.
   if (!is.null(split.depth)) {
     if (split.depth == "all.trees") {
@@ -584,7 +608,7 @@ get.split.depth <- function (split.depth) {
   }
   return (split.depth)
 }
-get.split.null <- function (split.null) {
+get.split.null.bits <- function (split.null) {
   ## Convert split.null option into native code parameter.
   if (!is.null(split.null)) {
     if (split.null == TRUE) {
@@ -602,7 +626,7 @@ get.split.null <- function (split.null) {
   }
   return (split.null)
 }
-get.statistics <- function (statistics) {
+get.statistics.bits <- function (statistics) {
   ## Convert statistics option into native code parameter.
   if (!is.null(statistics)) {
     if (statistics == TRUE) {
@@ -651,7 +675,7 @@ get.tdc.rule.bits <- function (tdc.rule) {
   }
   return (result)
 }
-get.terminal.qualts <- function(terminal.qualts) {
+get.terminal.qualts.bits <- function(terminal.qualts) {
   bits <- 0
   if (!is.null(terminal.qualts)) {
     if (terminal.qualts == TRUE) {
@@ -666,7 +690,7 @@ get.terminal.qualts <- function(terminal.qualts) {
   }
   return(bits)
 }
-get.terminal.qualts.predict <- function(incoming.flag) {
+get.terminal.qualts.predict.bits <- function(incoming.flag) {
   bits <- 2^16
   if (!is.null(incoming.flag)) {
     if (incoming.flag == TRUE) {
@@ -678,7 +702,7 @@ get.terminal.qualts.predict <- function(incoming.flag) {
   }
   return(bits)
 }
-get.terminal.quants <- function(terminal.quants) {
+get.terminal.quants.bits <- function(terminal.quants) {
   bits <- 0
   if (!is.null(terminal.quants)) {
     if (terminal.quants == TRUE) {
@@ -693,7 +717,7 @@ get.terminal.quants <- function(terminal.quants) {
   }
   return(bits)
 }
-get.terminal.quants.predict <- function(incoming.flag) {
+get.terminal.quants.predict.bits <- function(incoming.flag) {
   bits <- 2^18
   if (!is.null(incoming.flag)) {
     if (incoming.flag == TRUE) {
@@ -705,7 +729,7 @@ get.terminal.quants.predict <- function(incoming.flag) {
   }
   return(bits)
 }
-get.trace <- function (do.trace) {
+get.trace.bits <- function (do.trace) {
   ## Convert trace into native code parameter.
   if (!is.logical(do.trace)) {
     if (do.trace >= 1) {
@@ -783,7 +807,7 @@ get.tree.index <- function(get.tree, ntree) {
     }
   }
 }
-get.var.used <- function (var.used) {
+get.var.used.bits <- function (var.used) {
   ## Convert var.used option into native code parameter.
   if (!is.null(var.used)) {
     if (var.used == "all.trees") {
@@ -804,7 +828,7 @@ get.var.used <- function (var.used) {
   }
   return (var.used)
 }
-get.vimp.only <-  function (vimp.only) {
+get.vimp.only.bits <-  function (vimp.only) {
   ## Convert vimp.only option into native code parameter.
   if (!is.null(vimp.only)) {
     if (vimp.only) {
@@ -858,6 +882,14 @@ is.hidden.base.learner <-  function(user.option) {
     }
   }
   return (base.learner)
+}
+is.hidden.case.depth <-  function(user.option) {
+  if (is.null(user.option$case.depth)) {
+    FALSE
+  }
+  else {
+    as.logical(as.character(user.option$case.depth))
+  }
 }
 is.hidden.cse <-  function(user.option) {
   if (is.null(user.option$cse)) {

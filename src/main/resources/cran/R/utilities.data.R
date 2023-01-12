@@ -75,18 +75,6 @@ amatrix.remove.names <- function(x) {
     x
   }
 }
-assign.impute.mean <- function(data, impute.mean) {
-  d <- data.frame(mclapply(colnames(data), function(xnms) {
-    x <- data[, xnms]
-    is.na.x <- is.na(x)
-    if (any(is.na.x)) {
-      x[is.na.x] <- impute.mean[[xnms]]
-    }
-    x
-  }), stringsAsFactors = TRUE)
-  colnames(d) <- colnames(data)
-  d
-}
 atmatrix <- function(x, d, names, keep.names = FALSE) {
   x <- t(matrix(x, ncol = d, dimnames = names))
   if (ncol(x) > 1) {
@@ -124,8 +112,7 @@ avector <- function(x, name = FALSE) {
     x
   }
 }
-available <- function (package, lib.loc = NULL, quietly = TRUE)
-{
+available <- function (package, lib.loc = NULL, quietly = TRUE) {
   package <- as.character(substitute(package))
   installed <- package %in% installed.packages()
   if (installed) {
@@ -563,9 +550,9 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
     if (splitrule.idx == 4) {
       nsplit <- 1
     }
-    ## fast families
+    ## fast families -- revert back to 10 due to factors
     else if (splitrule.idx %in% c(5, 6)) {
-      nsplit <- 0
+      nsplit <- 10
     }
     ## sg families
     else if (splitrule.idx %in% c(17, 18, 19)) {
@@ -599,24 +586,6 @@ get.importance.xvar <- function(importance.xvar, importance, object) {
       importance.xvar <- NULL
     }
   return (importance.xvar)
-}
-get.impute.mean <- function(data) {
-  imean <- mclapply(data, function(x) {
-    if (all(is.na(x))) {
-      NA
-    }
-    else {
-      if (is.factor(x)) {
-        x.table <- table(x)
-        names(x.table)[which.max(x.table)]
-      }
-      else {
-        mean(x, na.rm = TRUE)
-      }
-    }
-  })
-  names(imean) <- colnames(data)
-  imean
 }
  
 get.nmiss <- function(xvar, yvar = NULL) {
@@ -918,113 +887,113 @@ parseFormula <- function(f, data, ytry = NULL, coerce.factor = NULL) {
   }
   ## survival forests
   if (fmly == "Surv") {
-      ## Survival and competing risk will have 2 slots, namely time and censoring.
-      ## Time dependent covariates will have 4 slots, namely id, start, stop, and event.
-      ## If TDC is in effect, we remove the id from the yvars, and tag is an the subject identifier.
-      if ((sum(is.element(yvar.names, names(data))) != 2) &&
-          (sum(is.element(yvar.names, names(data))) != 4)) {
-          stop("Survival formula incorrectly specified.")
+    ## Survival and competing risk will have 2 slots, namely time and censoring.
+    ## Time dependent covariates will have 4 slots, namely id, start, stop, and event.
+    ## If TDC is in effect, we remove the id from the yvars, and tag is an the subject identifier.
+    if ((sum(is.element(yvar.names, names(data))) != 2) &&
+        (sum(is.element(yvar.names, names(data))) != 4)) {
+      stop("Survival formula incorrectly specified.")
+    }
+    else {
+      if (sum(is.element(yvar.names, names(data))) == 4) {
+        ## Time dependent covariates is in effect.
+        subj.names <- yvar.names[1]
+        yvar.names <- yvar.names[-1]
       }
-      else {
-          if (sum(is.element(yvar.names, names(data))) == 4) {
-              ## Time dependent covariates is in effect.
-              subj.names <- yvar.names[1]
-              yvar.names <- yvar.names[-1]
-          }
-      }
-      family <- "surv"
-      ytry <- 0
+    }
+    family <- "surv"
+    ytry <- 0
   }
   ## multivariate forests
-    else if ((fmly == "Multivar" || fmly == "cbind")  && length(yvar.names) > 1) {
-      if (sum(is.element(yvar.names, names(data))) < length(yvar.names)) {
-        stop("Multivariate formula incorrectly specified: y's listed in formula are not in data.")
-      }
-      ## determine the family: now handles mixed outcomes
-      Y <- data[, yvar.names, drop = FALSE]
-      ## Convert to 0/1 real (bug reported by John Ehrlinger)
-      logical.names <- unlist(lapply(Y, is.logical))
-      if (sum(logical.names) > 0) {
-        Y[, logical.names] <- 1 * Y[, logical.names, drop = FALSE]
-      }
-      ## are all the responses factors?
-      ## caution: ordered factors are factors!
-      if ((sum(unlist(lapply(Y, is.factor))) + 
-          length(coerce.factor$yvar.names)) == length(yvar.names)) {
-        family <- "class+"
-      }
-      ## are all the responses continuous?
-      ## caution: ordered factors are factors!
-      else if ((sum(unlist(lapply(Y, is.factor))) + 
-          length(coerce.factor$yvar.names)) == 0) {
-        family <- "regr+"
-      }
-      ## are the responses a combination of factors and continuous?
-      ## caution: ordered factors are factors!
-      else if (((sum(unlist(lapply(Y, is.factor))) +
-                 length(coerce.factor$yvar.names)) > 0) && 
-               ((sum(unlist(lapply(Y, is.factor))) +
-                 length(coerce.factor$yvar.names)) < length(yvar.names))) {
-        family <- "mix+"
-      }
-      ## failure
-        else {
-          stop("y-outcomes must be either real or factors in multivariate forests.")
-        }
-      if (!is.null(ytry)) {
-        ## Check that incoming ytry is consistent.
-        if ((ytry < 1) || (ytry > length(yvar.names))) {
-          stop("invalid value for ytry:  ", ytry)
-        }
-      }
-        else {
-          ytry <- length(yvar.names)
-        }
+  else if ((fmly == "Multivar" || fmly == "cbind")  && length(yvar.names) > 1) {
+    if (sum(is.element(yvar.names, names(data))) < length(yvar.names)) {
+      stop("Multivariate formula incorrectly specified: y's listed in formula are not in data.")
     }
-  ## unsupervised forests
-      else if (fmly == "Unsupervised") {
-        ## unsupervised forests
-        if (length(yvar.names) != 0) {
-          stop("Unsupervised forests require no y-responses")
-        }
-        family <- "unsupv"
-        yvar.names <- NULL
-        ## Strip away the family from the formula, leaving ytry.
-        temp <- gsub(fmly, "", as.character(f)[2])
-        temp <- gsub("\\(|\\)", "", temp)
-        ytry <- as.integer(temp)
-        if (is.na(ytry)) {
-          ytry <- 1
-        }
-          else {
-            if (ytry <= 0) {
-              stop("Unsupervised forests require positive ytry value")
-            }
-          }
+    ## determine the family: now handles mixed outcomes
+    Y <- data[, yvar.names, drop = FALSE]
+    ## convert logical to 0/1 real (bug reported by John Ehrlinger)
+    logical.names <- unlist(lapply(Y, is.logical))
+    if (sum(logical.names) > 0) {
+      Y[, logical.names] <- 1 * Y[, logical.names, drop = FALSE]
+    }
+    ## are all the responses factors?
+    ## caution: ordered factors are factors!
+    if ((sum(unlist(lapply(Y, is.factor))) + 
+         length(coerce.factor$yvar.names)) == length(yvar.names)) {
+      family <- "class+"
+    }
+    ## are all the responses continuous?
+    ## caution: ordered factors are factors!
+    else if ((sum(unlist(lapply(Y, is.factor))) + 
+              length(coerce.factor$yvar.names)) == 0) {
+      family <- "regr+"
+    }
+    ## are the responses a combination of factors and continuous?
+    ## caution: ordered factors are factors!
+    else if (((sum(unlist(lapply(Y, is.factor))) +
+               length(coerce.factor$yvar.names)) > 0) && 
+             ((sum(unlist(lapply(Y, is.factor))) +
+               length(coerce.factor$yvar.names)) < length(yvar.names))) {
+      family <- "mix+"
+    }
+    ## failure
+    else {
+      stop("y-outcomes must be either real or factors in multivariate forests.")
+    }
+    if (!is.null(ytry)) {
+      ## Check that incoming ytry is consistent.
+      if ((ytry < 1) || (ytry > length(yvar.names))) {
+        stop("invalid value for ytry:  ", ytry)
       }
+    }
+    else {
+      ytry <- length(yvar.names)
+    }
+  }
+  ## unsupervised forests
+  else if (fmly == "Unsupervised") {
+    ## unsupervised forests
+    if (length(yvar.names) != 0) {
+      stop("Unsupervised forests require no y-responses")
+    }
+    family <- "unsupv"
+    yvar.names <- NULL
+    ## Strip away the family from the formula, leaving ytry.
+    temp <- gsub(fmly, "", as.character(f)[2])
+    temp <- gsub("\\(|\\)", "", temp)
+    ytry <- as.integer(temp)
+    if (is.na(ytry)) {
+      ytry <- 1
+    }
+    else {
+      if (ytry <= 0) {
+        stop("Unsupervised forests require positive ytry value")
+      }
+    }
+  }
   ## univariate forests (regression or classification)
-        else {
-          ## must be a (univariate) regresssion or classification
-          if (sum(is.element(yvar.names, names(data))) != 1) {
-            stop("formula is incorrectly specified.")
-          }
-          Y <- data[, yvar.names]
-          ## logicals are treated as 0/1 real (bug reported by John Ehrlinger)
-          if (is.logical(Y)) {
-            Y <- as.numeric(Y)
-          }
-          ## check whether we have a factor or a continuous variable
-          if (!(is.factor(Y) | is.numeric(Y))) {
-            stop("the y-outcome must be either real or a factor.")
-          }
-          if (is.factor(Y) || length(coerce.factor$yvar.names) == 1) {
-            family <- "class"
-          }
-            else {
-              family <- "regr"
-            }
-          ytry <- 1
-        }
+  else {
+    ## must be a (univariate) regresssion or classification
+    if (sum(is.element(yvar.names, names(data))) != 1) {
+      stop("formula is incorrectly specified.")
+    }
+    Y <- data[, yvar.names]
+    ## logicals are treated as 0/1 real (bug reported by John Ehrlinger)
+    if (is.logical(Y)) {
+      Y <- as.numeric(Y)
+    }
+    ## check whether we have a factor or a continuous variable
+    if (!(is.factor(Y) | is.numeric(Y))) {
+      stop("the y-outcome must be either real or a factor.")
+    }
+    if (is.factor(Y) || length(coerce.factor$yvar.names) == 1) {
+      family <- "class"
+    }
+    else {
+      family <- "regr"
+    }
+    ytry <- 1
+  }
   ## done: return the goodies
   return (list(all.names=all.names, family=family, subj.names=subj.names, yvar.names=yvar.names, ytry=ytry,
                coerce.factor = coerce.factor))
@@ -1068,8 +1037,7 @@ resample <- function(x, size, ...) {
     }
 }
 ## determine rows and columns missing from dat
-row.col.deleted <- function(dat, r.n, c.n)
-{
+row.col.deleted <- function(dat, r.n, c.n) {
   which.r <- setdiff(r.n, rownames(dat))
   if (length(which.r) > 0) {
     which.r <- match(which.r, r.n)

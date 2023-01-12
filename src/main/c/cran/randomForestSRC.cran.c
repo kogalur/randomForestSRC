@@ -6,7 +6,7 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
                  SEXP sexp_denom) {
   uint    traceFlag   = INTEGER(sexp_traceFlag)[0];
   setUserTraceFlag(traceFlag);
-  setNativeGlobalEnv();
+  setNativeGlobalEnv(&RF_nativeIndex, &RF_stackCount);
   uint    size        = (uint) INTEGER(sexp_size)[0];
   double *time        = REAL(sexp_time); time--;
   double *censoring   = REAL(sexp_censoring); censoring--;
@@ -34,8 +34,44 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
   return RF_sexpVector[RF_OUTP_ID];
 }
+SEXP rfsrcCIndexNew(SEXP sexp_traceFlag,
+                    SEXP sexp_size,
+                    SEXP sexp_time,
+                    SEXP sexp_censoring,
+                    SEXP sexp_predicted,
+                    SEXP sexp_denom) {
+  uint    traceFlag   = INTEGER(sexp_traceFlag)[0];
+  setUserTraceFlag(traceFlag);
+  setNativeGlobalEnv(&RF_nativeIndex, &RF_stackCount);
+  uint    size        = (uint) INTEGER(sexp_size)[0];
+  double *time        = REAL(sexp_time); time--;
+  double *censoring   = REAL(sexp_censoring); censoring--;
+  double *predicted   = REAL(sexp_predicted); predicted--;
+  double *denom       = REAL(sexp_denom); denom--;
+  double *v;
+  char  *sexpString[3] = {
+    "",              
+    "",              
+    "err"            
+  };
+  RF_stackCount = 1;
+  initProtect(RF_stackCount);
+  stackAuxiliaryInfoList(&RF_snpAuxiliaryInfoList, RF_stackCount);
+  v = (double*) stackAndProtect(RF_GROW, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, 2, 1, 0, sexpString[2], NULL, 1, 1);
+  *v = getConcordanceIndexNew( 1,
+                               size,
+                               time,
+                               censoring,
+                               predicted,
+                               denom);
+  unstackAuxiliaryInfoAndList(FALSE, RF_snpAuxiliaryInfoList, RF_stackCount);
+  memoryCheck();
+  R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
+  R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
+  return RF_sexpVector[RF_OUTP_ID];
+}
 SEXP rfsrcTestSEXP(SEXP sexp_size) {
-  setNativeGlobalEnv();
+  setNativeGlobalEnv(&RF_nativeIndex, &RF_stackCount);
   ulong size = (ulong) REAL(sexp_size)[0];
   char *v;
   char  *sexpString[3] = {
@@ -65,7 +101,7 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
                    SEXP sexp_traceFlag) {
   uint    traceFlag   = INTEGER(sexp_traceFlag)[0];
   setUserTraceFlag(traceFlag);
-  setNativeGlobalEnv();
+  setNativeGlobalEnv(&RF_nativeIndex, &RF_stackCount);
   uint    metricType  = INTEGER(sexp_metricType)[0];
   uint    n           = INTEGER(sexp_n)[0];
   uint    p           = INTEGER(sexp_p)[0];
@@ -201,7 +237,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP numThreads) {
   clock_t cpuTimeStart = clock();
   setUserTraceFlag(INTEGER(traceFlag)[0]);
-  setNativeGlobalEnv();
+  setNativeGlobalEnv(&RF_nativeIndex, &RF_stackCount);
   int seedValue           = INTEGER(seedPtr)[0];
   RF_opt                  = INTEGER(optLow)[0];
   RF_optHigh              = INTEGER(optHigh)[0];
@@ -489,7 +525,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
   uint i;
 clock_t cpuTimeStart = clock();
   setUserTraceFlag(INTEGER(traceFlag)[0]);
-  setNativeGlobalEnv();
+  setNativeGlobalEnv(&RF_nativeIndex, &RF_stackCount);
   int seedValue           = INTEGER(seedPtr)[0];
   RF_opt                  = INTEGER(optLow)[0];
   RF_optHigh              = INTEGER(optHigh)[0];
@@ -569,7 +605,7 @@ clock_t cpuTimeStart = clock();
   RF_stType = NULL;
   RF_xLevelsSEXP = xLevels;
   RF_xLevels = NULL;
-  if (RF_xSize > 0) {
+  if (xData != R_NilValue) {
     RF_observationIn      = (double **) copy2DObject(xData, NATIVE_TYPE_NUMERIC, TRUE, RF_xSize, RF_observationSize);
   }
   else {
@@ -803,7 +839,7 @@ clock_t cpuTimeStart = clock();
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
   return RF_sexpVector[RF_OUTP_ID];
 }
-void exit2R() {
+void exit2R(void) {
   error("\nRF-SRC:  The application will now exit.\n");
 }
 void printR(char *format, ...) {
@@ -811,13 +847,14 @@ void printR(char *format, ...) {
   va_list aptr;
   buffer = (char *) malloc(sizeof(char) * 1023);
   va_start(aptr, format);
-  vsprintf(buffer, format, aptr);
+  vsnprintf(buffer, sizeof(char) * 1023, format, aptr);
   va_end(aptr);
   Rprintf(buffer);
   free((char *) buffer);
 }
-void setNativeGlobalEnv() {
-  RF_nativeIndex = RF_stackCount = 0;
+void setNativeGlobalEnv(uint *nativeIndex, uint *stackCount) {
+  *nativeIndex = 0;
+  *stackCount  = 0;
 }
 void *copy1DObject(SEXP arr, char type, uint size, char actual) {
   void   *buffer;
@@ -992,6 +1029,6 @@ void *stackAndProtect(char   mode,
 void setUserTraceFlag (uint traceFlag) {
   RF_userTraceFlag = traceFlag;
 }
-uint getUserTraceFlag () {
+uint getUserTraceFlag (void) {
   return RF_userTraceFlag;
 }

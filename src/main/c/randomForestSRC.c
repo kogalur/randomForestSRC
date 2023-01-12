@@ -133,6 +133,7 @@ char  *RF_sexpString[RF_SEXP_CNT] = {
   "brnodeID",          
   "fsrecID",           
   "nodeSZ",            
+  "caseDepth",         
   "optLoGrow",         
   "optHiGrow",         
   "cTimeInternal"      
@@ -206,6 +207,7 @@ double   *RF_splitDepth_;
 uint     *RF_MEMB_ID_;
 uint     *RF_BOOT_CT_;
 uint     *RF_PRUN_ID_;
+uint     *RF_CASE_DPTH_;
 uint     *RF_RMBR_ID_;
 uint     *RF_AMBR_ID_;
 uint     *RF_TN_RCNT_;
@@ -444,6 +446,7 @@ double **RF_sImputeDataPtr;
 uint  **RF_MEMB_ID_ptr;
 uint  **RF_BOOT_CT_ptr;
 uint  **RF_PRUN_ID_ptr;
+uint  **RF_CASE_DPTH_ptr;
 uint     **RF_treeID_ptr;
 uint     **RF_nodeID_ptr;
 uint     **RF_nodeSZ_ptr;
@@ -600,7 +603,7 @@ uint   **RF_mwcpPtr;
 uint    *RF_pLeafCount;
 uint    *RF_maxDepth;
 Node    **RF_root;
-Node   ***RF_nodeMembership;
+Node   ***RF_nodeMembership;  
 Node   ***RF_fnodeMembership;
 Node   ***RF_pNodeMembership;
 Node   ***RF_pNodeList;
@@ -673,6 +676,9 @@ char (*getPreSplitResult) (uint, Node*, char, char);
 DistributionObj *(*stackRandomCovariates) (uint, Node*);
 void (*unstackRandomCovariates) (uint, DistributionObj*);
 char (*selectRandomCovariates) (uint, Node*, DistributionObj*, char*, uint*, uint*);
+DistributionObj *(*stackRandomResponses) (uint, Node*);
+void (*unstackRandomResponses) (uint, DistributionObj*);
+char (*selectRandomResponses) (uint, Node*, DistributionObj*, uint*, uint*);
 uint (*virtuallySplitNode) (uint, Node*, char, uint, double*, uint*, void*, uint, char*, uint*, uint, uint*);
 uint (*stackAndConstructSplitVector) (uint treeID, Node *parent, uint covariate);
 char (*updateMaximumSplit) (uint    treeID,
@@ -776,7 +782,7 @@ pthread_mutex_t   *RF_lockDENfensPosix;
 pthread_mutex_t   *RF_lockQNToensPosix;
 pthread_mutex_t   *RF_lockQNTfensPosix;
 pthread_mutex_t    RF_lockPerfPosix;
-pthread_mutex_t    RF_lockEnsbUpdtCountPosix;
+pthread_mutex_t    RF_lockEnspbUpdtCountPosix;
 #endif
 uint               RF_ensbUpdtCount;
 customFunction customFunctionArray[4][16];
@@ -3092,13 +3098,13 @@ void printTreeInfo(uint treeID, Node *parent) {
     printTreeInfo(treeID, parent -> right);
   }
 }
-void initTimer() {
+void initTimer(void) {
 }
-void printTimer() {
+void printTimer(void) {
 }
 void printParameters(char mode) {
 }
-void processDefaultGrow() {
+void processDefaultGrow(void) {
   RF_optHigh = RF_optHigh & (~OPT_MEMB_PRUN);
   RF_ptnCount             = 0;
   RF_optHigh = RF_optHigh & (~OPT_PART_PLOT);
@@ -3199,7 +3205,7 @@ void processDefaultGrow() {
     RF_nImpute = 1;
   }
 }
-void processDefaultPredict() {
+void processDefaultPredict(void) {
   char mode;
   RF_opt = RF_opt & (~OPT_IMPU_ONLY);
   RF_opt = RF_opt & (~OPT_TREE);
@@ -3258,6 +3264,7 @@ void processDefaultPredict() {
     if (RF_baseLearnDepthSYTH > 1) {
       RF_optHigh = RF_optHigh & (~OPT_MEMB_INCG);
     }
+    RF_opt = RF_opt & (~OPT_SPLDPTH_1) & (~OPT_SPLDPTH_2);
     RF_opt = RF_opt & (~OPT_EMPR_RISK);
     if (RF_opt & OPT_FENS) {
     }
@@ -6487,7 +6494,7 @@ char xferMissingness(char mode, Node *source, Terminal *destination) {
   }
   return xferFlag;
 }
-LeafLinkedObj *makeLeafLinkedObj() {
+LeafLinkedObj *makeLeafLinkedObj(void) {
   LeafLinkedObj *obj = (LeafLinkedObj*) gblock((size_t) sizeof(LeafLinkedObj));
   obj -> fwdLink = NULL;
   obj -> bakLink = NULL;
@@ -6499,7 +6506,7 @@ LeafLinkedObj *makeLeafLinkedObj() {
   obj -> allMembrCount = 0;
   return obj;
 }
-LeafLinkedObjSimple *makeLeafLinkedObjSimple() {
+LeafLinkedObjSimple *makeLeafLinkedObjSimple(void) {
   LeafLinkedObjSimple *obj = (LeafLinkedObjSimple*) gblock((size_t) sizeof(LeafLinkedObjSimple));
   obj -> fwdLink = NULL;
   obj -> bakLink = NULL;
@@ -7701,7 +7708,7 @@ void nrCopyVector(char *new, char *old, unsigned int ncol) {
     new[j] = old[j];
   }
 }
-void testEndianness() {
+void testEndianness(void) {
   unsigned int     test = 0x12345678;
   unsigned int *testPtr = & test;
   RF_nativePrint("\nTest of Endianness:  ");
@@ -8643,6 +8650,9 @@ void processEnsembleInSitu(char mode, char multImpFlag, uint b) {
     if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {
       updateSplitDepth(b, RF_root[b], RF_maxDepth[b]);
     }
+    if (RF_opt & OPT_CASE_DPTH) {
+      updateCaseDepth(mode, b);
+    }
     if (RF_opt & (OPT_VARUSED_F | OPT_VARUSED_T)) {
       getVariablesUsed(b, RF_root[b], RF_varUsedPtr[b]);
     }
@@ -8796,6 +8806,17 @@ void processEnsemblePost(char mode) {
       uint b = RF_getTreeIndex[bb];
       if (RF_tLeafCount[b] > 0) {
         updateSplitDepth(b, RF_root[b], RF_maxDepth[b]);
+      }
+    }
+  }
+  if (RF_opt & OPT_CASE_DPTH) {
+#ifdef _OPENMP
+#pragma omp parallel for num_threads(RF_numThreads)
+#endif
+    for (bb = 1; bb <= RF_getTreeCount; bb++) {
+      uint b = RF_getTreeIndex[bb];
+      if (RF_tLeafCount[b] > 0) {
+        updateCaseDepth(mode, b);
       }
     }
   }
@@ -9295,7 +9316,7 @@ void makeLookUpTree(LookUpInfo *infoObj, QuantileObj *qObj, uint size, uint dept
   else {
   }
 }
-LookUpInfo *makeLookUpInfo() {
+LookUpInfo *makeLookUpInfo(void) {
   LookUpInfo *obj = (LookUpInfo*) gblock((size_t) sizeof(LookUpInfo));
   obj -> qPtr    = NULL;
   obj -> rootPtr = NULL;
@@ -10207,9 +10228,19 @@ void rfsrc(char mode, int seedValue) {
     RF_numThreads = (RF_numThreads < omp_get_max_threads()) ? (RF_numThreads) : (omp_get_max_threads());
   }
 #endif
+#ifdef NOT_HAVE_PTHREAD
+  if (RF_numThreads == 0) {
+    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+    RF_nativeError("\nRF-SRC:  Parameter verification failed.");
+    RF_nativeError("\nRF-SRC:  Number of threads must not be zero:  %10d \n", RF_numThreads);
+    RF_nativeExit();
+  }
+  else {
+  }
+#endif
   stackIncomingArrays(mode);
   stackPreDefinedCommonArrays(mode,
-                              &RF_nodeMembership,
+                              &RF_nodeMembership,  
                               &RF_tTermMembership,
                               &RF_tTermList,
                               &RF_root);
@@ -10242,9 +10273,12 @@ void rfsrc(char mode, int seedValue) {
   case RF_GROW:
     stackForestObjectsPtrOnly(mode);
     getPreSplitResult = & getPreSplitResultGeneric;
-    stackRandomCovariates = & stackRandomCovariatesGeneric;
+    stackRandomCovariates   = & stackRandomCovariatesGeneric;
     unstackRandomCovariates = & unstackRandomCovariatesGeneric;
-    selectRandomCovariates = & selectRandomCovariatesGeneric;
+    selectRandomCovariates  = & selectRandomCovariatesGeneric;
+    stackRandomResponses   = & stackRandomResponsesGeneric;
+    unstackRandomResponses = & unstackRandomResponsesGeneric;
+    selectRandomResponses  = & selectRandomResponsesGenericVector;
     virtuallySplitNode = & virtuallySplitNodeGeneric;
     updateMaximumSplit = & updateMaximumSplitGeneric;
     forkAndUpdate = & forkAndUpdateGeneric;
@@ -10266,6 +10300,11 @@ void rfsrc(char mode, int seedValue) {
       if (RF_hdim != 0) {
         RF_xPreSort = 0;
       }
+    }
+    if (RF_yWeightType == RF_WGHT_UNIFORM){
+      stackRandomResponses   = & stackRandomResponsesSimple;
+      unstackRandomResponses = & unstackRandomResponsesSimple;
+      selectRandomResponses  = & selectRandomResponsesSimpleVector;
     }
     RF_optHigh = RF_optHigh & (~OPT_JIT_TOP);
     RF_opt = RF_opt & (~OPT_ANON);
@@ -10564,7 +10603,9 @@ void rfsrc(char mode, int seedValue) {
   }  
 #ifdef _OPENMP
   stackLocksOpenMP(mode);
-#else
+#endif
+#ifdef NOT_HAVE_PTHREAD
+  stackLocksPosix(mode);
 #endif
   for (r = 1; r <= RF_nImpute; r++) {
     if (getUserTraceFlag()) {
@@ -10871,7 +10912,9 @@ void rfsrc(char mode, int seedValue) {
   randomUnstack(RF_ntree, bnpSize);
 #ifdef _OPENMP
   unstackLocksOpenMP(mode);
-#else
+#endif
+#ifdef NOT_HAVE_PTHREAD
+  unstackLocksPosix(mode);
 #endif
   unstackFactorArrays(mode);
 }
@@ -11636,11 +11679,11 @@ void getVariablesUsed(uint treeID, Node *parent, uint *varUsedVector) {
   }
   return;
 }
-DistributionObj *makeDistributionObjRaw() {
+DistributionObj *makeDistributionObjRaw(void) {
   DistributionObj *obj = (DistributionObj*) gblock((size_t) sizeof(DistributionObj));
   return obj;
 }
-DistributionObj *makeDistributionObjFull() {
+DistributionObj *makeDistributionObjFull(void) {
   DistributionObj *obj = (DistributionObj*) gblock((size_t) sizeof(DistributionObj));
   obj -> permissibleIndex  = NULL;
   obj -> permissible       = NULL;
@@ -11749,31 +11792,22 @@ void initializeCDFNew(uint treeID, DistributionObj *obj) {
     break;
   case RF_WGHT_GENERIC:
     obj -> index = uivector(1, obj -> permissibleSize);
-    obj -> cdf     = dvector(1, obj -> permissibleSize);
-    obj -> cdfSort = uivector(1, obj -> permissibleSize);
+    obj -> cdf     =  dvector(1, obj -> permissibleSize);
     obj -> cdfSize = 0;
     i = 0;
     for (k = 1; k <= obj -> permissibleSize; k++) {
-      kk = obj -> weightSorted[k];
       validElement = TRUE;
       if (obj -> permissible != NULL) {
-        if (obj -> permissible[kk] == FALSE) {
+        if (obj -> permissible[k] == FALSE) {
           validElement = FALSE;
         }
       }
       if (validElement) {
-        if (obj -> weight[kk] > 0) {
-          (obj -> index)[kk] = ++ i;
+        if (obj -> weight[k] > 0) {
+          (obj -> index)[++i] = k;
           (obj -> cdfSize) ++;
-          (obj -> cdfSort)[obj -> cdfSize] = kk;
-          (obj -> cdf)[obj -> cdfSize] = obj -> weight[kk];
+          (obj -> cdf)[obj -> cdfSize] = obj -> weight[k];
         }
-        else {
-          (obj -> index)[kk] = 0;
-        }
-      }
-      else {
-        (obj -> index)[kk] = 0;
       }
     }
     for (k = 2; k <= obj -> cdfSize; k++) {
@@ -11784,6 +11818,8 @@ void initializeCDFNew(uint treeID, DistributionObj *obj) {
 }
 uint sampleFromCDFNew (float (*genericGenerator) (uint), uint treeID, DistributionObj *obj) {
   double randomValue;
+  double midValue;
+  char flag;
   uint low, mid, high, value;
   uint p;
   value = 0;  
@@ -11809,13 +11845,17 @@ uint sampleFromCDFNew (float (*genericGenerator) (uint), uint treeID, Distributi
   case RF_WGHT_GENERIC:
     if (obj -> cdf[obj -> cdfSize] > 0) {
       randomValue = genericGenerator(treeID) * (obj -> cdf)[obj -> cdfSize];
-      low  = 1;
+      low  = mid = 1;
       high = obj -> cdfSize;
       while (low < high) {
         mid  = (low + high) >> 1;
         if (randomValue > obj -> cdf[mid]) {
           if (low == mid) {
             low = high;
+            mid = high;
+            if (obj -> cdf[mid] == 0) {
+              mid ++;
+            }
           }
           else {
             low = mid;
@@ -11824,13 +11864,32 @@ uint sampleFromCDFNew (float (*genericGenerator) (uint), uint treeID, Distributi
         else {
           if (low == mid) {
             low = high;
+            if (obj -> cdf[mid] == 0) {
+              mid ++;
+            }
           }
           else {
             high = mid;
           }
         }
       }
-      value = obj -> slot = obj -> cdfSort[high];
+      midValue = obj -> cdf[mid];
+      flag = TRUE;
+      while (flag) {
+        if (mid > 1) {
+          if (midValue == obj -> cdf[mid-1]) {
+            mid --;
+          }
+          else {
+            flag = FALSE;
+          }
+        }
+        else {
+          flag = FALSE;
+        }
+      }
+      obj -> slot = mid;
+      value = obj -> index[obj -> slot];
     }
     else {
       value = obj -> slot = 0;
@@ -11840,10 +11899,10 @@ uint sampleFromCDFNew (float (*genericGenerator) (uint), uint treeID, Distributi
   return value;
 }
 void updateCDFNew(uint    treeID, DistributionObj *obj) {
-  double stepValue;
   uint sourcePt;
   uint stepIndex;
   uint currCov, nextCov;
+  double oldStepValue, newStepValue;
   uint   i, j, k;
   switch (obj -> weightType) {
   case RF_WGHT_UNIFORM:
@@ -11892,13 +11951,18 @@ void updateCDFNew(uint    treeID, DistributionObj *obj) {
     }
     break;
   case RF_WGHT_GENERIC:
-    stepIndex = obj -> index[obj -> slot];
-    stepValue = obj -> cdf[stepIndex];
-    if (stepIndex > 1) {
-      stepValue -= (obj -> cdf)[stepIndex-1];
+    stepIndex = obj -> slot;
+    if (stepIndex == 1) {
+      newStepValue = 0;
     }
-    for (k = stepIndex; k <= obj -> cdfSize; k++) {
-      (obj -> cdf)[k] = (obj -> cdf)[k] - stepValue;
+    else {
+      newStepValue = obj -> cdf[stepIndex - 1];
+    }
+    oldStepValue = obj -> cdf[stepIndex];
+    k = stepIndex;
+    while ((obj -> cdf)[k] == oldStepValue) {
+      (obj -> cdf)[k] = newStepValue;
+      k ++;
     }
     break;
   }
@@ -11922,7 +11986,6 @@ void discardCDFNew(uint treeID, DistributionObj *obj) {
   case RF_WGHT_GENERIC:
     free_uivector(obj -> index, 1, obj -> permissibleSize);
     free_dvector(obj -> cdf, 1, obj -> permissibleSize);
-    free_uivector(obj -> cdfSort, 1, obj -> permissibleSize);
     break;
   }
 }
@@ -11939,6 +12002,105 @@ uint sampleUniformlyFromVector (uint    treeID,
     result = 0;
   }
   return result;
+}
+SortedLinkedObj *makeSortedLinkedObj(void) {
+  SortedLinkedObj *obj = (SortedLinkedObj*) gblock((size_t) sizeof(SortedLinkedObj));
+  obj -> fwdLink = NULL;
+  obj -> bakLink = NULL;
+  obj -> rank = 0;
+  obj -> indx = 0;
+  return obj;
+}
+void makeAndSpliceSortedLinkedObj(uint treeID,
+                                  SortedLinkedObj **headPtr,
+                                  SortedLinkedObj **tailPtr,
+                                  uint *listLength,
+                                  uint rank, uint indx) {
+  char flag;
+  uint lowIndx, highIndx, halfIndx;
+  SortedLinkedObj *objIterator;
+  uint i;
+  SortedLinkedObj *head = headPtr[treeID];
+  SortedLinkedObj *tail = tailPtr[treeID];
+  SortedLinkedObj *obj = makeSortedLinkedObj();
+  obj -> rank = rank;
+  obj -> indx = indx;
+  obj -> fwdLink = obj -> bakLink = NULL;
+  flag = TRUE;
+  if (*listLength == 0) {
+    head = tail = obj;
+    flag = FALSE;
+  }
+  else if (rank >= tail -> rank) {
+    tail -> fwdLink = obj;
+    obj -> bakLink = tail;
+    tail = obj;
+    flag = FALSE;
+  }
+  else if (rank <= head -> rank) {
+    head -> bakLink = obj;
+    obj -> fwdLink = head;
+    head = obj;
+    flag = FALSE;
+  }
+  else {
+    lowIndx  = 1;
+    highIndx = *listLength;
+    while (flag) {
+      halfIndx = (uint) ((double) (highIndx + lowIndx) / 2.0); 
+      objIterator = head;
+      for (i = lowIndx; i < halfIndx; i++) {
+        objIterator = objIterator -> fwdLink;
+      }
+      if (rank == head -> rank) {
+        obj -> fwdLink = head;
+        obj -> bakLink = (head -> bakLink);
+        (head -> bakLink) -> fwdLink = obj;
+        head -> bakLink = obj;
+        flag = FALSE;
+      }
+      else if (rank == tail -> rank) {
+        obj -> fwdLink = tail;
+        obj -> bakLink = (tail -> bakLink);
+        (tail -> bakLink) -> fwdLink = obj;
+        tail -> bakLink = obj;
+        flag = FALSE;
+      }
+      else if (rank == objIterator -> rank) {
+        obj -> fwdLink = objIterator;
+        obj -> bakLink = (objIterator -> bakLink);
+        (objIterator -> bakLink) -> fwdLink = obj;
+        objIterator -> bakLink = obj;
+        flag = FALSE;
+      }
+      else if (halfIndx == lowIndx) {
+        obj -> fwdLink = tail;
+        obj -> bakLink = (tail -> bakLink);
+        (tail -> bakLink) -> fwdLink = obj;
+        tail -> bakLink = obj;
+        flag = FALSE;
+      }
+      else if (rank < objIterator -> rank) {
+        tail = objIterator;
+        highIndx = halfIndx;
+      }
+      else {
+        head = objIterator;
+        lowIndx = halfIndx;
+      }
+    }
+  }
+  (*listLength) ++;
+}
+void freeSortedLinkedObjList(SortedLinkedObj *obj) {
+  if (obj -> fwdLink != NULL) {
+    freeSortedLinkedObjList(obj -> fwdLink);
+  }
+  freeSortedLinkedObj(obj);
+  obj = NULL;
+}
+void freeSortedLinkedObj(SortedLinkedObj *obj) {
+  free_gblock(obj, (size_t) sizeof(SortedLinkedObj));
 }
 #include     "splitCustom.h"
 SplitRuleObj *makeSplitRuleObj(uint rule) {
@@ -11981,13 +12143,13 @@ SplitRuleObj *makeSplitRuleObj(uint rule) {
     obj -> function = &classificationEntropySplit;
     break;
   case MVRG_SPLIT:
-    obj -> function = &multivariateSplit;
+    obj -> function = &multivariateSplitNew;
     break;
   case MVCL_SPLIT:
-    obj -> function = &multivariateSplit;
+    obj -> function = &multivariateSplitNew;
     break;
   case MVMX_SPLIT:
-    obj -> function = &multivariateSplit;
+    obj -> function = &multivariateSplitNew;
     break;
   case USPV_SPLIT:
     obj -> function = &unsupervisedSplit;
@@ -16040,7 +16202,7 @@ char randomSGS (uint       treeID,
   result = summarizeSplitResult(splitInfoMax);
   return result;
 }
-LatOptTreeObj *makeLatOptTreeObj() {
+LatOptTreeObj *makeLatOptTreeObj(void) {
   LatOptTreeObj *lotObj = (LatOptTreeObj*) gblock((size_t) sizeof(LatOptTreeObj));
   lotObj -> risk  = dvector(1, RF_lotLag+1);
   for (uint i = 1; i <= (uint) RF_lotLag; i++) {
@@ -17229,6 +17391,562 @@ char multivariateSplit (uint       treeID,
                   TRUE);  
   result = summarizeSplitResult(splitInfoMax);
   return result;
+}
+char multivariateSplitNew (uint       treeID,
+                           Node      *parent,
+                           SplitInfoMax *splitInfoMax,
+                           GreedyObj    *greedyMembr,
+                           char       multImpFlag) {
+  uint     covariate;
+  uint     covariateCount;
+  double  *splitVector;
+  uint     splitVectorSize;
+  uint   *indxx;
+  uint priorMembrIter, currentMembrIter;
+  uint leftSize, rghtSize;
+  char *localSplitIndicator;
+  uint splitLength;
+  void *splitVectorPtr;
+  double *observation;
+  char factorFlag;
+  uint mwcpSizeAbsolute;
+  char deterministicSplitFlag;
+  char preliminaryResult, result;
+  double delta;
+  uint   deltaNorm;
+  uint j, k, p, r;
+  localSplitIndicator    = NULL;  
+  splitVector            = NULL;  
+  splitVectorSize        = 0;     
+  preliminaryResult = getPreSplitResult(treeID,
+                                        parent,
+                                        multImpFlag,
+                                        TRUE);
+  if (preliminaryResult) {
+    uint  repMembrSize = parent -> repMembrSize;
+    uint *repMembrIndx = parent -> repMembrIndx;
+    uint  nonMissMembrSize;
+    uint *nonMissMembrIndx;
+    uint ySize;
+    if (RF_ytry == 0) {
+      ySize = RF_ySize;
+    }
+    else {
+      ySize = RF_ytry;
+    }
+    char   *impurity   = cvector(1, ySize);
+    double *mean       = dvector(1, ySize);
+    double *variance   = dvector(1, ySize);
+    DistributionObj *distributionObj = stackRandomResponses(treeID, parent);
+    uint *response = uivector(1, ySize);
+    uint  responseCount = 0;
+    selectRandomResponses(treeID,
+                          parent,
+                          distributionObj,
+                          response,
+                          & responseCount);
+    unstackRandomResponses(treeID, distributionObj);
+    char impuritySummary;
+    if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
+      impuritySummary = FALSE;
+      for (r = 1; r <= ySize; r++)  {
+        impurity[r] = getVariance(repMembrSize,
+                                  repMembrIndx,
+                                  0,
+                                  NULL,
+                                  RF_response[treeID][response[r]],
+                                  &mean[r],
+                                  &variance[r]);
+        impuritySummary = impuritySummary | impurity[r];
+      }
+    }
+    else {
+      impuritySummary = TRUE;
+    }
+    if (impuritySummary) {
+      stackSplitPreliminary(repMembrSize,
+                            & localSplitIndicator,
+                            & splitVector);
+      DistributionObj *distributionObj = stackRandomCovariates(treeID, parent);
+      uint **parentClassProp = (uint **) new_vvector(1, ySize, NRUTIL_UPTR);
+      uint **leftClassProp   = (uint **) new_vvector(1, ySize, NRUTIL_UPTR);
+      uint **rghtClassProp   = (uint **) new_vvector(1, ySize, NRUTIL_UPTR);
+      double *sumLeft         = dvector(1, ySize);
+      double *sumRght         = dvector(1, ySize);
+      double *sumRghtSave     = dvector(1, ySize);
+      char **secondNonMissMembrFlag = (char **) new_vvector(1, ySize, NRUTIL_CPTR);
+      uint  *secondNonMissMembrSize =           uivector(1, ySize);
+      uint  *secondNonMissMembrLeftSize =       uivector(1, ySize);
+      uint  *secondNonMissMembrRghtSize =       uivector(1, ySize);
+      for (r = 1; r <= ySize; r++) {
+        parentClassProp[r] = leftClassProp[r] = rghtClassProp[r] = NULL;
+        if ((RF_rType[response[r]] == 'B') ||
+            (RF_rType[response[r]] == 'I') ||
+            (RF_rType[response[r]] == 'C')) {
+          parentClassProp[r] = uivector(1, RF_classLevelSize[RF_rFactorMap[response[r]]]);
+          leftClassProp[r]   = uivector(1, RF_classLevelSize[RF_rFactorMap[response[r]]]);
+          rghtClassProp[r]   = uivector(1, RF_classLevelSize[RF_rFactorMap[response[r]]]);
+        }
+        else {
+        }
+      }  
+      char  *tempNonMissMembrFlag = 0;
+      uint  *tempNonMissMembrIndx;
+      char   mResponseFlag;
+      char   nonMissImpuritySummary;
+      double partialLeft, partialRght;
+      double deltaMax;
+      uint   indexMax;
+      covariateCount = 0;
+      while (selectRandomCovariates(treeID,
+                                    parent,
+                                    distributionObj,
+                                    & factorFlag,
+                                    & covariate,
+                                    & covariateCount)) {
+        splitVectorSize = stackAndConstructSplitVectorGenericPhase1(treeID,
+                                                                    parent,
+                                                                    covariate,
+                                                                    splitVector,
+                                                                    & indxx,
+                                                                    multImpFlag);
+        if (splitVectorSize >= 2) {
+          splitLength = stackAndConstructSplitVectorGenericPhase2(treeID,
+                                                                  parent,
+                                                                  covariate,
+                                                                  splitVector,
+                                                                  splitVectorSize,
+                                                                  & factorFlag,
+                                                                  & deterministicSplitFlag,
+                                                                  & mwcpSizeAbsolute,
+                                                                  & splitVectorPtr);
+          nonMissMembrIndx = parent -> nonMissMembrIndx;
+          nonMissMembrSize = parent -> nonMissMembrSize;
+          observation = RF_observation[treeID][covariate];
+          if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
+            tempNonMissMembrFlag = cvector(1, nonMissMembrSize);
+            for (k = 1; k <= nonMissMembrSize; k++) {
+              tempNonMissMembrFlag[k] = TRUE;
+            }
+            for (r = 1; r <= ySize; r++) {
+              secondNonMissMembrFlag[r] = tempNonMissMembrFlag;
+              secondNonMissMembrSize[r] = nonMissMembrSize;
+            }
+            nonMissImpuritySummary = TRUE;
+          }
+          else {
+            tempNonMissMembrIndx = uivector(1, nonMissMembrSize);
+            nonMissImpuritySummary = FALSE;
+            for (r = 1; r <= ySize; r++)  {
+              secondNonMissMembrFlag[r] = cvector(1, nonMissMembrSize);
+              j = 0;
+              for (k = 1; k <= nonMissMembrSize; k++) {
+                mResponseFlag = FALSE;
+                if (RF_mRecordMap[ repMembrIndx[nonMissMembrIndx[k]] ] > 0) {
+                  if (RF_mpSign[response[r]][RF_mRecordMap[ repMembrIndx[nonMissMembrIndx[k]] ]] == 1) {
+                    mResponseFlag = TRUE;
+                  }
+                }
+                if (!mResponseFlag) {
+                  j ++;
+                  tempNonMissMembrIndx[j] = nonMissMembrIndx[k];
+                  secondNonMissMembrFlag[r][k] = TRUE;
+                }
+                else {
+                  secondNonMissMembrFlag[r][k] = FALSE;
+                }
+              }  
+              secondNonMissMembrSize[r] = j;
+              impurity[r] = getVariance(repMembrSize,
+                                        repMembrIndx,
+                                        secondNonMissMembrSize[r],
+                                        tempNonMissMembrIndx,
+                                        RF_response[treeID][response[r]],
+                                        &mean[r],
+                                        &variance[r]);
+              nonMissImpuritySummary = nonMissImpuritySummary | impurity[r];
+              secondNonMissMembrLeftSize[r] = secondNonMissMembrRghtSize[r] = 0;
+            }  
+            free_uivector(tempNonMissMembrIndx, 1, nonMissMembrSize);
+          }  
+          if (nonMissImpuritySummary) {
+            for (r = 1; r <= ySize; r++) {
+              if (impurity[r]) {
+                if ((RF_rType[response[r]] == 'B') ||
+                    (RF_rType[response[r]] == 'I') ||
+                    (RF_rType[response[r]] == 'C')) {
+                  for (p = 1; p <= RF_classLevelSize[RF_rFactorMap[response[r]]]; p++) {
+                    parentClassProp[r][p] = 0;
+                  }
+                  for (j = 1; j <= nonMissMembrSize; j++) {
+                    if (secondNonMissMembrFlag[r][j] == TRUE) {
+                      parentClassProp[r][RF_classLevelIndex[RF_rFactorMap[response[r]]][(uint) RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[j]] ]]] ++;
+                    }
+                  }
+                }
+                else {
+                  sumRghtSave[r] = 0.0;
+                  for (j = 1; j <= nonMissMembrSize; j++) {
+                    if (secondNonMissMembrFlag[r][j] == TRUE) {
+                      sumRghtSave[r] += RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[j]] ] - mean[r];
+                    }
+                  }
+                }
+              }  
+            }  
+            leftSize = 0;
+            priorMembrIter = 0;
+            if (factorFlag == FALSE) {
+              for (j = 1; j <= nonMissMembrSize; j++) {
+                localSplitIndicator[ nonMissMembrIndx[j] ] = RIGHT;
+              }
+              for (r = 1; r <= ySize; r++) {
+                if (impurity[r]) {
+                  if ((RF_rType[response[r]] == 'B') ||
+                      (RF_rType[response[r]] == 'I') ||
+                      (RF_rType[response[r]] == 'C')) {
+                    for (p = 1; p <= RF_classLevelSize[RF_rFactorMap[response[r]]]; p++) {
+                      rghtClassProp[r][p] = parentClassProp[r][p];
+                      leftClassProp[r][p] = 0;
+                    }
+                  }
+                  else {
+                    sumRght[r] = sumRghtSave[r];
+                    sumLeft[r] = 0.0;
+                  }
+                  secondNonMissMembrLeftSize[r] = 0;
+                  secondNonMissMembrRghtSize[r] = secondNonMissMembrSize[r];
+                }
+              }
+            }
+            deltaMax =  RF_nativeNaN;
+            indexMax =  0;
+            for (j = 1; j < splitLength; j++) {
+              if (factorFlag == TRUE) {
+                priorMembrIter = 0;
+                leftSize = 0;
+                for (r = 1; r <= ySize; r++) {
+                  secondNonMissMembrLeftSize[r] = 0;
+                  secondNonMissMembrRghtSize[r] = 0;
+                }
+              }
+              virtuallySplitNode(treeID,
+                                 parent,
+                                 factorFlag,
+                                 mwcpSizeAbsolute,
+                                 observation,
+                                 indxx,
+                                 splitVectorPtr,
+                                 j,
+                                 localSplitIndicator,
+                                 & leftSize,
+                                 priorMembrIter,
+                                 & currentMembrIter);
+              rghtSize = nonMissMembrSize - leftSize;
+              if ((leftSize != 0) && (rghtSize != 0)) {
+                delta     = 0.0;
+                deltaNorm = 0;
+                for (r = 1; r <= ySize; r++) {
+                  if (impurity[r]) {
+                    if (factorFlag == TRUE) {
+                      if ((RF_rType[response[r]] == 'B') ||
+                          (RF_rType[response[r]] == 'I') ||
+                          (RF_rType[response[r]] == 'C')) {
+                        for (p=1; p <= RF_classLevelSize[RF_rFactorMap[response[r]]]; p++) {
+                          leftClassProp[r][p] = 0;
+                        }
+                        for (k = 1; k <= nonMissMembrSize; k++) {
+                          if (secondNonMissMembrFlag[r][indxx[k]] == TRUE) {
+                            if (localSplitIndicator[ nonMissMembrIndx[indxx[k]] ] == LEFT) {
+                              leftClassProp[r][RF_classLevelIndex[RF_rFactorMap[response[r]]][(uint) RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] ++;
+                              secondNonMissMembrLeftSize[r] ++;
+                            }
+                            else {
+                            }
+                          }
+                        }
+                        for (p = 1; p <= RF_classLevelSize[RF_rFactorMap[response[r]]]; p++) {
+                          rghtClassProp[r][p] = parentClassProp[r][p] - leftClassProp[r][p];
+                        }
+                      }
+                      else {
+                        sumLeft[r] = sumRght[r] = 0.0;
+                        for (k = 1; k <= nonMissMembrSize; k++) {
+                          if (secondNonMissMembrFlag[r][indxx[k]] == TRUE) {
+                            if (localSplitIndicator[ nonMissMembrIndx[indxx[k]] ] == LEFT) {
+                              sumLeft[r] += RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] - mean[r];
+                              secondNonMissMembrLeftSize[r] ++;
+                            }
+                            else {
+                              sumRght[r] += RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] - mean[r];
+                            }
+                          }
+                        }
+                      }
+                      secondNonMissMembrRghtSize[r] = secondNonMissMembrSize[r] - secondNonMissMembrLeftSize[r];
+                    }
+                    else {
+                      for (k = priorMembrIter + 1; k < currentMembrIter; k++) {
+                        if (secondNonMissMembrFlag[r][indxx[k]] == TRUE) {
+                          if ((RF_rType[response[r]] == 'B') ||
+                              (RF_rType[response[r]] == 'I') ||
+                              (RF_rType[response[r]] == 'C')) {
+                            leftClassProp[r][RF_classLevelIndex[RF_rFactorMap[response[r]]][(uint) RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] ++;
+                            rghtClassProp[r][RF_classLevelIndex[RF_rFactorMap[response[r]]][(uint) RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ]]] --;
+                          }
+                          else {
+                            sumLeft[r] += RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] - mean[r];
+                            sumRght[r] -= RF_response[treeID][response[r]][ repMembrIndx[nonMissMembrIndx[indxx[k]]] ] - mean[r];
+                          }
+                          secondNonMissMembrLeftSize[r] ++;
+                          secondNonMissMembrRghtSize[r] --;
+                        }
+                      }
+                    }  
+                    if ((secondNonMissMembrLeftSize[r] > 0) && (secondNonMissMembrRghtSize[r] > 0)) {
+                      deltaNorm ++;
+                      if ((RF_rType[response[r]] == 'B') ||
+                          (RF_rType[response[r]] == 'I') ||
+                          (RF_rType[response[r]] == 'C')) {
+                        partialLeft = partialRght = 0;
+                        for (p = 1; p <= RF_classLevelSize[RF_rFactorMap[response[r]]]; p++) {
+                          partialLeft += (double) upower(leftClassProp[r][p], 2);
+                          partialRght += (double) upower(rghtClassProp[r][p], 2);
+                        }
+                        partialLeft = partialLeft / secondNonMissMembrLeftSize[r];
+                        partialRght = partialRght / secondNonMissMembrRghtSize[r];
+                      }
+                      else {
+                        partialLeft = pow (sumLeft[r], 2.0) / (secondNonMissMembrLeftSize[r] * variance[r]);
+                        partialRght = pow (sumRght[r], 2.0) / (secondNonMissMembrRghtSize[r] * variance[r]);
+                      }
+                      delta += partialLeft + partialRght;
+                    }
+                  }  
+                }  
+                if (deltaNorm > 0) {
+                  delta = delta / (double) deltaNorm;
+                }
+                else {
+                  delta = RF_nativeNaN;
+                }
+              }
+              else {
+                delta = RF_nativeNaN;
+              }
+              if (!RF_nativeIsNaN(delta)) {
+                if(RF_nativeIsNaN(deltaMax)) {
+                  deltaMax = delta;
+                  indexMax = j;
+                }
+                else {
+                  if ((delta - deltaMax) > EPSILON) {
+                    deltaMax = delta;
+                    indexMax = j;
+                  }
+                }
+              }
+              if (factorFlag == FALSE) {
+                priorMembrIter = currentMembrIter - 1;
+              }
+            }  
+            updateMaximumSplit(treeID,
+                               parent,
+                               deltaMax,
+                               covariate,
+                               indexMax,
+                               factorFlag,
+                               mwcpSizeAbsolute,
+                               repMembrSize,
+                               & localSplitIndicator,
+                               splitVectorPtr,
+                               splitInfoMax);
+          }  
+          if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
+            free_cvector(tempNonMissMembrFlag, 1, nonMissMembrSize);
+          }
+          else {
+            for (r = 1; r <= ySize; r++)  {
+              free_cvector(secondNonMissMembrFlag[r], 1, nonMissMembrSize);
+            }
+          }
+          unstackSplitVector(treeID,
+                                parent,
+                                splitLength,
+                                factorFlag,            
+                                splitVectorSize,
+                                mwcpSizeAbsolute,
+                                deterministicSplitFlag,
+                                splitVectorPtr,
+                                multImpFlag,
+                                indxx);
+        }  
+      }  
+      for (r = 1; r <= ySize; r++) {
+        if ((RF_rType[response[r]] == 'B') ||
+            (RF_rType[response[r]] == 'I') ||
+            (RF_rType[response[r]] == 'C')) {
+          free_uivector (parentClassProp[r], 1, RF_classLevelSize[RF_rFactorMap[response[r]]]);
+          free_uivector (leftClassProp[r], 1, RF_classLevelSize[RF_rFactorMap[response[r]]]);
+          free_uivector (rghtClassProp[r], 1, RF_classLevelSize[RF_rFactorMap[response[r]]]);
+        }
+        else {
+        }
+      }
+      free_new_vvector(parentClassProp, 1, ySize, NRUTIL_UPTR);
+      free_new_vvector(leftClassProp,   1, ySize, NRUTIL_UPTR);
+      free_new_vvector(rghtClassProp,   1, ySize, NRUTIL_UPTR);
+      free_dvector(sumLeft,     1, ySize);
+      free_dvector(sumRght,     1, ySize);
+      free_dvector(sumRghtSave, 1, ySize);
+      free_new_vvector(secondNonMissMembrFlag,  1, ySize, NRUTIL_CPTR);
+      free_uivector(secondNonMissMembrSize,     1, ySize);
+      free_uivector(secondNonMissMembrLeftSize, 1, ySize);
+      free_uivector(secondNonMissMembrRghtSize, 1, ySize);
+      unstackRandomCovariates(treeID, distributionObj);
+      unstackSplitPreliminary(repMembrSize,
+                              localSplitIndicator,
+                              splitVector);
+    }  
+    free_cvector(impurity,   1, ySize);
+    free_dvector(mean,       1, ySize);
+    free_dvector(variance,   1, ySize);
+    free_uivector(response, 1, ySize);
+  }  
+  unstackPreSplit(preliminaryResult,
+                  parent,
+                  multImpFlag,
+                  TRUE);  
+  result = summarizeSplitResult(splitInfoMax);
+  return result;
+}
+DistributionObj *stackRandomResponsesSimple(uint treeID, Node *parent) {
+  DistributionObj *obj = makeDistributionObjRaw();
+  obj -> indexSize = RF_ySize;
+  obj -> index = NULL;
+  obj -> uIndexAllocSize = 0;
+  if (RF_ytry > 1) {
+    if (RF_ytry < obj -> indexSize) {
+      obj -> uIndexAllocSize = obj -> indexSize;
+      obj -> index = uivector(1, obj -> uIndexAllocSize);
+      for (uint p = 1; p <= obj -> uIndexAllocSize; p++) {
+        (obj -> index)[p] = p;
+      }
+    }
+  }
+  return obj;
+}
+void unstackRandomResponsesSimple(uint treeID, DistributionObj *obj) {
+  if (obj -> uIndexAllocSize > 0) {
+    free_uivector(obj -> index, 1, obj -> uIndexAllocSize);
+  }
+  freeDistributionObjRaw(obj);
+}
+char selectRandomResponsesSimpleVector(uint  treeID,
+                                        Node *parent,
+                                       DistributionObj *distributionObj,
+                                       uint *response,
+                                       uint *responseCount) {
+  uint r;
+  char yVarSearch;
+  yVarSearch = TRUE;
+  *responseCount = 0;
+  while (yVarSearch) {
+    if (distributionObj -> indexSize > 0) {
+      if (RF_ytry == 1) {
+        (*responseCount) ++;
+        distributionObj -> slot = (uint) ceil(ran1B(treeID) * ((distributionObj -> indexSize) * 1.0));
+        response[*responseCount] = distributionObj -> slot;
+        yVarSearch = FALSE;
+      }
+      else {
+        if (RF_ytry >= RF_ySize) {
+          for (r = 1; r <= RF_ySize; r++) {
+            (*responseCount) ++;
+            response[*responseCount] = r;
+          }
+          yVarSearch = FALSE;
+        }
+        else {
+          (*responseCount) ++;
+          distributionObj -> slot = (uint) ceil(ran1B(treeID) * ((distributionObj -> indexSize) * 1.0));
+          response[*responseCount] = (distributionObj -> index)[distributionObj -> slot];
+          (distributionObj -> index)[distributionObj -> slot] = (distributionObj -> index)[distributionObj -> indexSize];
+          (distributionObj -> indexSize) --;
+        }
+      }
+      if ((*responseCount) >= RF_ytry) {
+        yVarSearch = FALSE;
+      }
+    }
+    else {
+      yVarSearch = FALSE;
+    }
+  }  
+  return TRUE;
+}
+DistributionObj *stackRandomResponsesGeneric(uint treeID, Node *parent) {
+  uint actualWeightType;
+  DistributionObj *obj = makeDistributionObjRaw();
+  actualWeightType = RF_yWeightType;
+  obj -> permissibleIndex    = NULL;
+  obj -> permissibleSize     = RF_ySize;
+  obj -> permissible         = cvector(1, obj -> permissibleSize);
+  for (uint r = 1; r <= RF_ySize; r++) {
+    obj -> permissible[r] = TRUE;
+  }
+  obj -> weightType          = actualWeightType;
+  obj -> weight              = RF_yWeight;
+  obj -> weightSorted        = RF_yWeightSorted;
+  obj -> densityAllocSize    = RF_yWeightDensitySize;
+  initializeCDFNew(treeID, obj);
+  return obj;
+}
+void unstackRandomResponsesGeneric(uint treeID, DistributionObj *obj) {
+  free_cvector(obj -> permissible, 1, obj -> permissibleSize);
+  discardCDFNew(treeID, obj);
+  freeDistributionObjRaw(obj);
+}
+char selectRandomResponsesGenericVector(uint     treeID,
+                                        Node     *parent,
+                                        DistributionObj *distributionObj,
+                                        uint     *response,
+                                        uint     *responseCount) {
+  uint r;
+  uint selectedValue;
+  char yVarSearch;
+  *responseCount = 0;
+  if (RF_ytry == 1) {
+    selectedValue = sampleFromCDFNew(ran1B, treeID, distributionObj);
+    if (selectedValue != 0) {
+      (*responseCount) ++;
+      response[*responseCount] = selectedValue;
+    }    
+  }
+  else if (RF_ytry >= RF_ySize) {
+    for (r = 1; r <= RF_ySize; r++) {
+      (*responseCount) ++;
+      response[*responseCount] = r;
+    }
+  }
+  else {
+    yVarSearch = TRUE;
+    while (yVarSearch) {
+      selectedValue = sampleFromCDFNew(ran1B, treeID, distributionObj);
+      if (selectedValue != 0) {
+        (*responseCount) ++;
+        response[*responseCount] = selectedValue;
+        updateCDFNew(treeID, distributionObj);
+        if ((*responseCount) >= RF_ytry) {
+          yVarSearch = FALSE;
+        }
+      }
+      else {
+        yVarSearch = FALSE;
+      }
+    }  
+  }
+  return TRUE;
 }
 char locallyAdaptiveQuantileRegrSplit (uint       treeID,
                                        Node      *parent,
@@ -21062,7 +21780,7 @@ void convertRelToAbsBinaryPair(uint    treeID,
     relativePair = relativePair >> 1;
   }
 }
-void initPreSortExtra() {
+void initPreSortExtra(void) {
   RF_observationRank = (uint ***) new_vvector(1, RF_ntree, NRUTIL_UPTR2);
   RF_rankValue = (double ***) new_vvector(1, RF_ntree, NRUTIL_DPTR2);
   RF_observationUniqueSize = (uint **) new_vvector(1, RF_ntree, NRUTIL_UPTR);
@@ -21108,7 +21826,7 @@ void freePreSortIntra(uint treeID) {
   free_new_vvector(RF_rankValue[treeID], 1, RF_xSize, NRUTIL_DPTR);
   free_uivector(RF_observationUniqueSize[treeID], 1, RF_xSize);
 }
-void freePreSortExtra() {
+void freePreSortExtra(void) {
   free_new_vvector(RF_observationUniqueSize, 1, RF_ntree, NRUTIL_UPTR);
   free_new_vvector(RF_rankValue, 1, RF_ntree, NRUTIL_DPTR2);
   free_new_vvector(RF_observationRank, 1, RF_ntree, NRUTIL_UPTR2);
@@ -21119,9 +21837,9 @@ DistributionObj *stackRandomCovariatesSimple(uint treeID, Node *parent) {
   obj -> index = NULL;
   obj -> uIndexAllocSize = 0;
   if (RF_mtry > 1) {
-    if (RF_mtry < parent -> permissibleIndxSize) {
-      obj -> index = uivector(1, parent -> permissibleIndxSize);
-      obj -> uIndexAllocSize = parent -> permissibleIndxSize;
+    if (RF_mtry < obj -> indexSize) {
+      obj -> uIndexAllocSize = obj -> indexSize;
+      obj -> index = uivector(1, obj -> uIndexAllocSize);
       for (uint p = 1; p <= obj -> uIndexAllocSize; p++) {
         (obj -> index)[p] = (parent -> permissibleIndx)[p];
       }
@@ -21211,7 +21929,7 @@ char selectRandomCovariatesSimpleVector(uint  treeID,
           (distributionObj -> indexSize) --;
         }
       }
-      if ((*covariateCount) > RF_mtry) {
+      if ((*covariateCount) >= RF_mtry) {
         xVarSearch = FALSE;
       }
     }
@@ -21493,101 +22211,6 @@ uint stackAndConstructSplitVectorSimple (uint     treeID,
   free_uivector(localRankCount, 1, rankLength);
   free_uivector(localRankIndex, 1, rankLength);
   return vectorSize;
-}
-SortedLinkedObj *makeSortedLinkedObj() {
-  SortedLinkedObj *obj = (SortedLinkedObj*) gblock((size_t) sizeof(SortedLinkedObj));
-  obj -> fwdLink = NULL;
-  obj -> bakLink = NULL;
-  obj -> rank = 0;
-  obj -> indx = 0;
-  return obj;
-}
-void makeAndSpliceSortedLinkedObj(uint treeID, uint *listLength, uint rank, uint indx) {
-  char flag;
-  uint lowIndx, highIndx, halfIndx;
-  SortedLinkedObj *objIterator;
-  uint i;
-  SortedLinkedObj *head = RF_sortedLinkedHead[treeID];
-  SortedLinkedObj *tail = RF_sortedLinkedTail[treeID];
-  SortedLinkedObj *obj = makeSortedLinkedObj();
-  obj -> rank = rank;
-  obj -> indx = indx;
-  obj -> fwdLink = obj -> bakLink = NULL;
-  flag = TRUE;
-  if (*listLength == 0) {
-    RF_sortedLinkedHead[treeID] = RF_sortedLinkedTail[treeID] = obj;
-    flag = FALSE;
-  }
-  else if (rank >= tail -> rank) {
-    tail -> fwdLink = obj;
-    obj -> bakLink = tail;
-    RF_sortedLinkedTail[treeID] = obj;
-    flag = FALSE;
-  }
-  else if (rank <= head -> rank) {
-    head -> bakLink = obj;
-    obj -> fwdLink = head;
-    RF_sortedLinkedHead[treeID] = obj;
-    flag = FALSE;
-  }
-  else {
-    lowIndx  = 1;
-    highIndx = *listLength;
-    while (flag) {
-      halfIndx = (uint) ((double) (highIndx + lowIndx) / 2.0); 
-      objIterator = head;
-      for (i = lowIndx; i < halfIndx; i++) {
-        objIterator = objIterator -> fwdLink;
-      }
-      if (rank == head -> rank) {
-        obj -> fwdLink = head;
-        obj -> bakLink = (head -> bakLink);
-        (head -> bakLink) -> fwdLink = obj;
-        head -> bakLink = obj;
-        flag = FALSE;
-      }
-      else if (rank == tail -> rank) {
-        obj -> fwdLink = tail;
-        obj -> bakLink = (tail -> bakLink);
-        (tail -> bakLink) -> fwdLink = obj;
-        tail -> bakLink = obj;
-        flag = FALSE;
-      }
-      else if (rank == objIterator -> rank) {
-        obj -> fwdLink = objIterator;
-        obj -> bakLink = (objIterator -> bakLink);
-        (objIterator -> bakLink) -> fwdLink = obj;
-        objIterator -> bakLink = obj;
-        flag = FALSE;
-      }
-      else if (halfIndx == lowIndx) {
-        obj -> fwdLink = tail;
-        obj -> bakLink = (tail -> bakLink);
-        (tail -> bakLink) -> fwdLink = obj;
-        tail -> bakLink = obj;
-        flag = FALSE;
-      }
-      else if (rank < objIterator -> rank) {
-        tail = objIterator;
-        highIndx = halfIndx;
-      }
-      else {
-        head = objIterator;
-        lowIndx = halfIndx;
-      }
-    }
-  }
-  (*listLength) ++;
-}
-void freeSortedLinkedObjList(SortedLinkedObj *obj) {
-  if (obj -> fwdLink != NULL) {
-    freeSortedLinkedObjList(obj -> fwdLink);
-  }
-  freeSortedLinkedObj(obj);
-  obj = NULL;
-}
-void freeSortedLinkedObj(SortedLinkedObj *obj) {
-  free_gblock(obj, (size_t) sizeof(SortedLinkedObj));
 }
 char forkNodeSimple(Node *parent, SplitInfo *info) {
   unsigned int i, j;
@@ -24891,466 +25514,6 @@ void unstackClassificationArrays(char mode) {
     }
   }
 }
-#ifdef _OPENMP
-void stackLocksOpenMP(char mode) {
-  uint i, j;
-  omp_init_lock(&RF_lockEnsbUpdtCount);
-  omp_init_lock(&RF_lockPerf);
-  if (RF_optHigh & OPT_PART_PLOT) {
-    RF_lockPartial = ompvector(1, RF_observationSize);
-    for (i = 1; i <= RF_observationSize; i++) {
-      omp_init_lock(&(RF_lockPartial[i]));
-    }
-  }
-  if (RF_optHigh & OPT_WGHT) {
-    uint gMembershipSize;
-    if((RF_optHigh & OPT_WGHT_IBG) && (RF_optHigh & OPT_WGHT_OOB)) {
-      switch (mode) {
-      case RF_PRED:
-        gMembershipSize = RF_fobservationSize;
-        break;
-      default:
-        gMembershipSize = RF_observationSize;
-        break;
-      }
-    }
-    else {
-      gMembershipSize  = RF_observationSize;
-    }
-    RF_lockWeight = (omp_lock_t **) new_vvector(1, gMembershipSize, NRUTIL_OMPLPTR);
-    for (i = 1; i <= gMembershipSize; i++) {
-      RF_lockWeight[i] = ompvector(1, RF_observationSize);
-    }
-    for (i = 1; i <= gMembershipSize; i++) {
-      for (j = 1; j <= RF_observationSize; j++) {
-        omp_init_lock(&(RF_lockWeight[i][j]));
-      }
-    }
-    RF_lockWeightRow = ompvector(1, gMembershipSize);
-    for (i = 1; i <= gMembershipSize; i++) {
-      omp_init_lock(&(RF_lockWeightRow[i]));
-    }
-  }
-  if (RF_opt & OPT_VIMP) {
-      uint obsSize, xVimpSize;
-      if (RF_opt & OPT_VIMP_JOIN) {
-        xVimpSize = 1;
-      }
-      else {
-        xVimpSize = RF_intrPredictorSize;
-      }
-      switch (mode) {
-      case RF_PRED:
-        obsSize = RF_fobservationSize;
-        break;
-      default:
-        obsSize  = RF_observationSize;
-        break;
-      }
-      RF_lockVimp = (omp_lock_t **) new_vvector(1, xVimpSize, NRUTIL_OMPLPTR);
-      for (i = 1; i <= xVimpSize; i++) {
-        RF_lockVimp[i] = ompvector(1, obsSize);
-      }
-      for (i = 1; i <= xVimpSize; i++) {
-        for (j = 1; j <= obsSize; j++) {
-          omp_init_lock(&(RF_lockVimp[i][j]));
-        }
-      }
-      RF_lockVimpRow = ompvector(1, obsSize);
-      for (i = 1; i <= obsSize; i++) {
-        omp_init_lock(&(RF_lockVimpRow[i]));
-      }
-      RF_lockVimpCol = ompvector(1, xVimpSize);
-      for (i = 1; i <= xVimpSize; i++) {
-        omp_init_lock(&(RF_lockVimpCol[i]));
-      }
-  }
-  if ((RF_vtry > 0) && (RF_vtryMode != RF_VTRY_NULL)) {
-    uint xVimpSize;
-    xVimpSize = RF_xSize;
-    RF_lockVimpHoldout = (omp_lock_t **) new_vvector(1, xVimpSize, NRUTIL_OMPLPTR);
-    for (i = 1; i <= xVimpSize; i++) {
-      if (RF_holdBLKptr[i] > 0) {
-        RF_lockVimpHoldout[i] = ompvector(1, RF_holdBLKptr[i]);
-        for (j = 1; j <= RF_holdBLKptr[i]; j++) {
-          omp_init_lock(&(RF_lockVimpHoldout[i][j]));
-        }
-      }
-    }
-  }
-  if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
-    omp_lock_t   **lockDENptr;
-    uint obsSize;  
-    char oobFlag, fullFlag;
-    oobFlag = fullFlag = FALSE;
-    switch (mode) {
-    case RF_PRED:
-      if (RF_opt & OPT_FENS) {
-        fullFlag = TRUE;
-      }
-      break;
-    default:
-      if (RF_opt & OPT_OENS) {
-        oobFlag = TRUE;
-      }
-      if (RF_opt & OPT_FENS) {
-        fullFlag = TRUE;
-      }
-      break;
-    }
-    while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
-      if (oobFlag == TRUE) {
-        lockDENptr = &RF_lockDENoens;
-        obsSize = RF_observationSize;
-      }
-      else {
-        lockDENptr = &RF_lockDENfens;        
-        obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
-      }
-      *lockDENptr = ompvector(1, obsSize);
-      for (i = 1; i <= obsSize; i++) {
-        omp_init_lock(&((*lockDENptr)[i]));
-      }
-      if (oobFlag == TRUE) {
-        oobFlag = FALSE;
-      }
-      else {
-        fullFlag = FALSE;
-      }
-    }
-  }
-  else {
-    char  potentiallyMixedMultivariate = FALSE;
-    if (RF_rTargetFactorCount > 0) {
-      omp_lock_t   **lockDENptr;
-      uint obsSize;  
-      char oobFlag, fullFlag;
-      oobFlag = fullFlag = FALSE;
-      switch (mode) {
-      case RF_PRED:
-        if (RF_opt & OPT_FENS) {
-          fullFlag = TRUE;
-        }
-        break;
-      default:
-        if (RF_opt & OPT_OENS) {
-          oobFlag = TRUE;
-        }
-        if (RF_opt & OPT_FENS) {
-          fullFlag = TRUE;
-        }
-        break;
-      }
-      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
-        if (oobFlag == TRUE) {
-          lockDENptr = &RF_lockDENoens;
-          obsSize = RF_observationSize;
-        }
-        else {
-          lockDENptr = &RF_lockDENfens;
-          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
-        }
-        if (!potentiallyMixedMultivariate) {
-          *lockDENptr = ompvector(1, obsSize);
-          for (i = 1; i <= obsSize; i++) {
-            omp_init_lock(&((*lockDENptr)[i]));
-          }
-        }
-        if (oobFlag == TRUE) {
-          oobFlag = FALSE;
-        }
-        else {
-          fullFlag = FALSE;
-        }
-      }
-      potentiallyMixedMultivariate = TRUE;
-    }
-    if (RF_rTargetNonFactorCount > 0) {
-      omp_lock_t   **lockDENptr;
-      omp_lock_t   **lockQNTptr;
-      uint obsSize;  
-      char oobFlag, fullFlag;
-      oobFlag = fullFlag = FALSE;
-      switch (mode) {
-      case RF_PRED:
-        if (RF_opt & OPT_FENS) {
-          fullFlag = TRUE;
-        }
-        break;
-      default:
-        if (RF_opt & OPT_OENS) {
-          oobFlag = TRUE;
-        }
-        if (RF_opt & OPT_FENS) {
-          fullFlag = TRUE;
-        }
-        break;
-      }
-      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
-        if (oobFlag == TRUE) {
-          lockDENptr = &RF_lockDENoens;
-          lockQNTptr = &RF_lockQNToens;
-          obsSize = RF_observationSize;
-        }
-        else {
-          lockDENptr = &RF_lockDENfens;
-          lockQNTptr = &RF_lockQNTfens;
-          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
-        }
-        if (!potentiallyMixedMultivariate) {
-          *lockDENptr = ompvector(1, obsSize);
-          for (i = 1; i <= obsSize; i++) {
-            omp_init_lock(&((*lockDENptr)[i]));
-          }
-        }
-        *lockQNTptr = ompvector(1, obsSize);        
-        for (i = 1; i <= obsSize; i++) {
-          omp_init_lock(&((*lockQNTptr)[i]));
-        }
-        if (oobFlag == TRUE) {
-          oobFlag = FALSE;
-        }
-        else {
-          fullFlag = FALSE;
-        }
-      }
-      potentiallyMixedMultivariate = TRUE;
-    }
-  }
-}
-#else
-void stackLocksOpenMP(char mode) { }
-#endif
-#ifdef _OPENMP
-void unstackLocksOpenMP(char mode) {
-  uint i, j;
-  omp_destroy_lock(&RF_lockEnsbUpdtCount);
-  omp_destroy_lock(&RF_lockPerf);
-  if (RF_optHigh & OPT_PART_PLOT) {
-    for (i = 1; i <= RF_observationSize; i++) {
-      omp_destroy_lock(&(RF_lockPartial[i]));
-    }
-    free_ompvector(RF_lockPartial, 1, RF_observationSize);
-  }
-  if (RF_optHigh & OPT_WGHT) {
-    uint gMembershipSize;
-    if((RF_optHigh & OPT_WGHT_IBG) && (RF_optHigh & OPT_WGHT_OOB)) {
-      switch (mode) {
-      case RF_PRED:
-        gMembershipSize = RF_fobservationSize;
-        break;
-      default:
-        gMembershipSize = RF_observationSize;
-        break;
-      }
-    }
-    else {
-      gMembershipSize  = RF_observationSize;
-    }
-    for (i = 1; i <= gMembershipSize; i++) {
-      for (j = 1; j <= RF_observationSize; j++) {
-        omp_destroy_lock(&(RF_lockWeight[i][j]));
-      }
-    }
-    for (i = 1; i <= gMembershipSize; i++) {    
-      free_ompvector(RF_lockWeight[i], 1, RF_observationSize);
-    }
-    free_new_vvector(RF_lockWeight, 1, gMembershipSize, NRUTIL_OMPLPTR);
-    for (i = 1; i <= gMembershipSize; i++) {
-      omp_destroy_lock(&(RF_lockWeightRow[i]));
-    }
-    free_ompvector(RF_lockWeightRow, 1, gMembershipSize);
-  }
-  if (RF_opt & OPT_VIMP) {
-      uint obsSize, xVimpSize;
-      if (RF_opt & OPT_VIMP_JOIN) {
-        xVimpSize = 1;
-      }
-      else {
-        xVimpSize = RF_intrPredictorSize;
-      }
-      switch (mode) {
-      case RF_PRED:
-        obsSize = RF_fobservationSize;
-        break;
-      default:
-        obsSize  = RF_observationSize;
-        break;
-      }
-      for (i = 1; i <= xVimpSize; i++) {
-        for (j = 1; j <= obsSize; j++) {
-          omp_destroy_lock(&(RF_lockVimp[i][j]));
-        }
-      }
-      for (i = 1; i <= xVimpSize; i++) {
-        free_ompvector(RF_lockVimp[i], 1, obsSize);
-      }
-      free_new_vvector(RF_lockVimp, 1, xVimpSize, NRUTIL_OMPLPTR);
-      for (i = 1; i <= obsSize; i++) {
-        omp_destroy_lock(&(RF_lockVimpRow[i]));
-      }
-      free_ompvector(RF_lockVimpRow, 1, obsSize);
-      for (i = 1; i <= xVimpSize; i++) {
-        omp_destroy_lock(&(RF_lockVimpCol[i]));
-      }
-      free_ompvector(RF_lockVimpCol, 1, xVimpSize);
-  }
-  if ((RF_vtry > 0) && (RF_vtryMode != RF_VTRY_NULL)) {
-    uint xVimpSize;
-    xVimpSize = RF_xSize;
-    for (i = 1; i <= xVimpSize; i++) {
-      if (RF_holdBLKptr[i] > 0) {
-        for (j = 1; j <= RF_holdBLKptr[i]; j++) {
-          omp_destroy_lock(&(RF_lockVimpHoldout[i][j]));
-        }
-        free_ompvector(RF_lockVimpHoldout[i], 1, RF_holdBLKptr[i]);
-      }
-    }
-    free_new_vvector(RF_lockVimpHoldout, 1, xVimpSize, NRUTIL_OMPLPTR);    
-  }
-  if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
-    omp_lock_t   *lockDENptr;
-    uint obsSize;  
-    char oobFlag, fullFlag;
-    oobFlag = fullFlag = FALSE;
-    switch (mode) {
-    case RF_PRED:
-      if (RF_opt & OPT_FENS) {
-        fullFlag = TRUE;
-      }
-      break;
-    default:
-      if (RF_opt & OPT_OENS) {
-        oobFlag = TRUE;
-      }
-      if (RF_opt & OPT_FENS) {
-        fullFlag = TRUE;
-      }
-      break;
-    }
-    while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
-      if (oobFlag == TRUE) {
-        lockDENptr = RF_lockDENoens;
-        obsSize = RF_observationSize;
-      }
-      else {
-        lockDENptr = RF_lockDENfens;
-        obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
-      }
-      for (i = 1; i <= obsSize; i++) {
-        omp_destroy_lock(&(lockDENptr[i]));
-      }
-      free_ompvector(lockDENptr, 1, obsSize);
-      if (oobFlag == TRUE) {
-        oobFlag = FALSE;
-      }
-      else {
-        fullFlag = FALSE;
-      }
-    }
-  }
-  else {
-    char  potentiallyMixedMultivariate = FALSE;
-    if (RF_rTargetFactorCount > 0) {
-      omp_lock_t   *lockDENptr;
-      uint obsSize;  
-      char oobFlag, fullFlag;
-      oobFlag = fullFlag = FALSE;
-      switch (mode) {
-      case RF_PRED:
-        if (RF_opt & OPT_FENS) {
-          fullFlag = TRUE;
-        }
-        break;
-      default:
-        if (RF_opt & OPT_OENS) {
-          oobFlag = TRUE;
-        }
-        if (RF_opt & OPT_FENS) {
-          fullFlag = TRUE;
-        }
-        break;
-      }
-      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
-        if (oobFlag == TRUE) {
-          lockDENptr = RF_lockDENoens;
-          obsSize = RF_observationSize;
-        }
-        else {
-          lockDENptr = RF_lockDENfens;
-          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
-        }
-        if (!potentiallyMixedMultivariate) {
-          for (i = 1; i <= obsSize; i++) {
-            omp_destroy_lock(&(lockDENptr[i]));
-          }
-          free_ompvector(lockDENptr, 1, obsSize);
-        }
-        if (oobFlag == TRUE) {
-          oobFlag = FALSE;
-        }
-        else {
-          fullFlag = FALSE;
-        }
-      }
-      potentiallyMixedMultivariate = TRUE;
-    }
-    if (RF_rTargetNonFactorCount > 0) {
-      omp_lock_t   *lockDENptr;
-      omp_lock_t   *lockQNTptr;
-      uint obsSize;  
-      char oobFlag, fullFlag;
-      oobFlag = fullFlag = FALSE;
-      switch (mode) {
-      case RF_PRED:
-        if (RF_opt & OPT_FENS) {
-          fullFlag = TRUE;
-        }
-        break;
-      default:
-        if (RF_opt & OPT_OENS) {
-          oobFlag = TRUE;
-        }
-        if (RF_opt & OPT_FENS) {
-          fullFlag = TRUE;
-        }
-        break;
-      }
-      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
-        if (oobFlag == TRUE) {
-          lockDENptr = RF_lockDENoens;
-          lockQNTptr = RF_lockQNToens;
-          obsSize = RF_observationSize;
-        }
-        else {
-          lockDENptr = RF_lockDENfens;
-          lockQNTptr = RF_lockQNTfens;
-          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
-        }
-        if (!potentiallyMixedMultivariate) {
-          for (i = 1; i <= obsSize; i++) {
-            omp_destroy_lock(&(lockDENptr[i]));
-          }
-          free_ompvector(lockDENptr, 1, obsSize);
-        }
-          for (i = 1; i <= obsSize; i++) {
-            omp_destroy_lock(&(lockQNTptr[i]));
-          }
-          free_ompvector(lockQNTptr, 1, obsSize);
-          if (oobFlag == TRUE) {
-          oobFlag = FALSE;
-        }
-        else {
-          fullFlag = FALSE;
-        }
-      }
-      potentiallyMixedMultivariate = TRUE;
-    }
-  }
-}
-#else
-void unstackLocksOpenMP(char mode) { }
-#endif
 void stackDefinedOutputObjects(char      mode,
                                char    **RF_sexpString,
                                Node   ***pRF_root,
@@ -25508,6 +25671,9 @@ void stackDefinedOutputObjects(char      mode,
       RF_stackCount += 1;
     }
     if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {
+      RF_stackCount += 1;
+    }
+    if (RF_opt & OPT_CASE_DPTH) {
       RF_stackCount += 1;
     }
     if (RF_opt & OPT_VIMP) {
@@ -25696,6 +25862,9 @@ void stackDefinedOutputObjects(char      mode,
       RF_stackCount += 1;
     }
     if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {
+      RF_stackCount += 1;
+    }
+    if (RF_opt & OPT_CASE_DPTH) {
       RF_stackCount += 1;
     }
     if (RF_opt & OPT_VIMP) {
@@ -26603,6 +26772,10 @@ void stackDefinedOutputObjects(char      mode,
     localSize = (ulong) dpthDimOne * RF_xSize * RF_observationSize;
     *p_splitDepth = (double*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_DPTH_ID, localSize, 0, RF_sexpString[RF_DPTH_ID], &RF_splitDepthPtr, 3, dpthDimOne, RF_xSize, RF_observationSize);
   }
+  if (RF_opt & OPT_CASE_DPTH) {
+    localSize = (ulong) RF_ntree * obsSize;
+    RF_CASE_DPTH_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_CASE_DEPTH, localSize, 0, RF_sexpString[RF_CASE_DEPTH], &RF_CASE_DPTH_ptr, 2, RF_ntree, obsSize);
+  }
   if (RF_optHigh & OPT_MEMB_PRUN) {
     localSize = (ulong) RF_ntree * obsSize;
     RF_PRUN_ID_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_PRUN_ID, localSize, 0, RF_sexpString[RF_PRUN_ID], &RF_PRUN_ID_ptr, 2, RF_ntree, obsSize);
@@ -27068,6 +27241,8 @@ void unstackDefinedOutputObjects(char mode) {
   if (RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2)) {
   }
   if (RF_optHigh & OPT_MEMB_PRUN) {
+  }
+  if (RF_opt & OPT_CASE_DPTH) {
   }
   if (RF_optHigh & OPT_MEMB_USER) {
     if ((RF_timeIndex > 0) && (RF_startTimeIndex > 0) && (RF_statusIndex > 0)) {
@@ -28714,7 +28889,7 @@ void writeTNQuantitativeForestObjectsOutput(char mode) {
     }
   }
 }
-void verifyAndRegisterCustomSplitRules() {
+void verifyAndRegisterCustomSplitRules(void) {
   uint familyConstant;
   uint i, j;
   familyConstant = 0;  
@@ -29031,7 +29206,7 @@ void unstackAuxiliaryInfoAndList(char targetFlag, SNPAuxiliaryInfo **list, uint 
    }
   free_new_vvector(list, 0, count, NRUTIL_XPTR);
 }
-void memoryCheck() {
+void memoryCheck(void) {
   if (RF_nativeIndex != RF_stackCount) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Stack imbalance in PROTECT/UNPROTECT:  %10d + 1 versus %10d  ", RF_nativeIndex, RF_stackCount);
@@ -29039,6 +29214,926 @@ void memoryCheck() {
     RF_nativeExit();
   }
 }
+#ifdef _OPENMP
+void stackLocksOpenMP(char mode) {
+  uint i, j;
+  omp_init_lock(&RF_lockEnsbUpdtCount);
+  omp_init_lock(&RF_lockPerf);
+  if (RF_optHigh & OPT_PART_PLOT) {
+    RF_lockPartial = ompvector(1, RF_observationSize);
+    for (i = 1; i <= RF_observationSize; i++) {
+      omp_init_lock(&(RF_lockPartial[i]));
+    }
+  }
+  if (RF_optHigh & OPT_WGHT) {
+    uint gMembershipSize;
+    if((RF_optHigh & OPT_WGHT_IBG) && (RF_optHigh & OPT_WGHT_OOB)) {
+      switch (mode) {
+      case RF_PRED:
+        gMembershipSize = RF_fobservationSize;
+        break;
+      default:
+        gMembershipSize = RF_observationSize;
+        break;
+      }
+    }
+    else {
+      gMembershipSize  = RF_observationSize;
+    }
+    RF_lockWeight = (omp_lock_t **) new_vvector(1, gMembershipSize, NRUTIL_OMPLPTR);
+    for (i = 1; i <= gMembershipSize; i++) {
+      RF_lockWeight[i] = ompvector(1, RF_observationSize);
+    }
+    for (i = 1; i <= gMembershipSize; i++) {
+      for (j = 1; j <= RF_observationSize; j++) {
+        omp_init_lock(&(RF_lockWeight[i][j]));
+      }
+    }
+    RF_lockWeightRow = ompvector(1, gMembershipSize);
+    for (i = 1; i <= gMembershipSize; i++) {
+      omp_init_lock(&(RF_lockWeightRow[i]));
+    }
+  }
+  if (RF_opt & OPT_VIMP) {
+      uint obsSize, xVimpSize;
+      if (RF_opt & OPT_VIMP_JOIN) {
+        xVimpSize = 1;
+      }
+      else {
+        xVimpSize = RF_intrPredictorSize;
+      }
+      switch (mode) {
+      case RF_PRED:
+        obsSize = RF_fobservationSize;
+        break;
+      default:
+        obsSize  = RF_observationSize;
+        break;
+      }
+      RF_lockVimp = (omp_lock_t **) new_vvector(1, xVimpSize, NRUTIL_OMPLPTR);
+      for (i = 1; i <= xVimpSize; i++) {
+        RF_lockVimp[i] = ompvector(1, obsSize);
+      }
+      for (i = 1; i <= xVimpSize; i++) {
+        for (j = 1; j <= obsSize; j++) {
+          omp_init_lock(&(RF_lockVimp[i][j]));
+        }
+      }
+      RF_lockVimpRow = ompvector(1, obsSize);
+      for (i = 1; i <= obsSize; i++) {
+        omp_init_lock(&(RF_lockVimpRow[i]));
+      }
+      RF_lockVimpCol = ompvector(1, xVimpSize);
+      for (i = 1; i <= xVimpSize; i++) {
+        omp_init_lock(&(RF_lockVimpCol[i]));
+      }
+  }
+  if ((RF_vtry > 0) && (RF_vtryMode != RF_VTRY_NULL)) {
+    uint xVimpSize;
+    xVimpSize = RF_xSize;
+    RF_lockVimpHoldout = (omp_lock_t **) new_vvector(1, xVimpSize, NRUTIL_OMPLPTR);
+    for (i = 1; i <= xVimpSize; i++) {
+      if (RF_holdBLKptr[i] > 0) {
+        RF_lockVimpHoldout[i] = ompvector(1, RF_holdBLKptr[i]);
+        for (j = 1; j <= RF_holdBLKptr[i]; j++) {
+          omp_init_lock(&(RF_lockVimpHoldout[i][j]));
+        }
+      }
+    }
+  }
+  if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
+    omp_lock_t   **lockDENptr;
+    uint obsSize;  
+    char oobFlag, fullFlag;
+    oobFlag = fullFlag = FALSE;
+    switch (mode) {
+    case RF_PRED:
+      if (RF_opt & OPT_FENS) {
+        fullFlag = TRUE;
+      }
+      break;
+    default:
+      if (RF_opt & OPT_OENS) {
+        oobFlag = TRUE;
+      }
+      if (RF_opt & OPT_FENS) {
+        fullFlag = TRUE;
+      }
+      break;
+    }
+    while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+      if (oobFlag == TRUE) {
+        lockDENptr = &RF_lockDENoens;
+        obsSize = RF_observationSize;
+      }
+      else {
+        lockDENptr = &RF_lockDENfens;        
+        obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+      }
+      *lockDENptr = ompvector(1, obsSize);
+      for (i = 1; i <= obsSize; i++) {
+        omp_init_lock(&((*lockDENptr)[i]));
+      }
+      if (oobFlag == TRUE) {
+        oobFlag = FALSE;
+      }
+      else {
+        fullFlag = FALSE;
+      }
+    }
+  }
+  else {
+    char  potentiallyMixedMultivariate = FALSE;
+    if (RF_rTargetFactorCount > 0) {
+      omp_lock_t   **lockDENptr;
+      uint obsSize;  
+      char oobFlag, fullFlag;
+      oobFlag = fullFlag = FALSE;
+      switch (mode) {
+      case RF_PRED:
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      default:
+        if (RF_opt & OPT_OENS) {
+          oobFlag = TRUE;
+        }
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      }
+      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+        if (oobFlag == TRUE) {
+          lockDENptr = &RF_lockDENoens;
+          obsSize = RF_observationSize;
+        }
+        else {
+          lockDENptr = &RF_lockDENfens;
+          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+        }
+        if (!potentiallyMixedMultivariate) {
+          *lockDENptr = ompvector(1, obsSize);
+          for (i = 1; i <= obsSize; i++) {
+            omp_init_lock(&((*lockDENptr)[i]));
+          }
+        }
+        if (oobFlag == TRUE) {
+          oobFlag = FALSE;
+        }
+        else {
+          fullFlag = FALSE;
+        }
+      }
+      potentiallyMixedMultivariate = TRUE;
+    }
+    if (RF_rTargetNonFactorCount > 0) {
+      omp_lock_t   **lockDENptr;
+      omp_lock_t   **lockQNTptr;
+      uint obsSize;  
+      char oobFlag, fullFlag;
+      oobFlag = fullFlag = FALSE;
+      switch (mode) {
+      case RF_PRED:
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      default:
+        if (RF_opt & OPT_OENS) {
+          oobFlag = TRUE;
+        }
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      }
+      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+        if (oobFlag == TRUE) {
+          lockDENptr = &RF_lockDENoens;
+          lockQNTptr = &RF_lockQNToens;
+          obsSize = RF_observationSize;
+        }
+        else {
+          lockDENptr = &RF_lockDENfens;
+          lockQNTptr = &RF_lockQNTfens;
+          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+        }
+        if (!potentiallyMixedMultivariate) {
+          *lockDENptr = ompvector(1, obsSize);
+          for (i = 1; i <= obsSize; i++) {
+            omp_init_lock(&((*lockDENptr)[i]));
+          }
+        }
+        *lockQNTptr = ompvector(1, obsSize);        
+        for (i = 1; i <= obsSize; i++) {
+          omp_init_lock(&((*lockQNTptr)[i]));
+        }
+        if (oobFlag == TRUE) {
+          oobFlag = FALSE;
+        }
+        else {
+          fullFlag = FALSE;
+        }
+      }
+      potentiallyMixedMultivariate = TRUE;
+    }
+  }
+}
+#else
+void stackLocksOpenMP(char mode) { }
+#endif
+#ifdef _OPENMP
+void unstackLocksOpenMP(char mode) {
+  uint i, j;
+  omp_destroy_lock(&RF_lockEnsbUpdtCount);
+  omp_destroy_lock(&RF_lockPerf);
+  if (RF_optHigh & OPT_PART_PLOT) {
+    for (i = 1; i <= RF_observationSize; i++) {
+      omp_destroy_lock(&(RF_lockPartial[i]));
+    }
+    free_ompvector(RF_lockPartial, 1, RF_observationSize);
+  }
+  if (RF_optHigh & OPT_WGHT) {
+    uint gMembershipSize;
+    if((RF_optHigh & OPT_WGHT_IBG) && (RF_optHigh & OPT_WGHT_OOB)) {
+      switch (mode) {
+      case RF_PRED:
+        gMembershipSize = RF_fobservationSize;
+        break;
+      default:
+        gMembershipSize = RF_observationSize;
+        break;
+      }
+    }
+    else {
+      gMembershipSize  = RF_observationSize;
+    }
+    for (i = 1; i <= gMembershipSize; i++) {
+      for (j = 1; j <= RF_observationSize; j++) {
+        omp_destroy_lock(&(RF_lockWeight[i][j]));
+      }
+    }
+    for (i = 1; i <= gMembershipSize; i++) {    
+      free_ompvector(RF_lockWeight[i], 1, RF_observationSize);
+    }
+    free_new_vvector(RF_lockWeight, 1, gMembershipSize, NRUTIL_OMPLPTR);
+    for (i = 1; i <= gMembershipSize; i++) {
+      omp_destroy_lock(&(RF_lockWeightRow[i]));
+    }
+    free_ompvector(RF_lockWeightRow, 1, gMembershipSize);
+  }
+  if (RF_opt & OPT_VIMP) {
+      uint obsSize, xVimpSize;
+      if (RF_opt & OPT_VIMP_JOIN) {
+        xVimpSize = 1;
+      }
+      else {
+        xVimpSize = RF_intrPredictorSize;
+      }
+      switch (mode) {
+      case RF_PRED:
+        obsSize = RF_fobservationSize;
+        break;
+      default:
+        obsSize  = RF_observationSize;
+        break;
+      }
+      for (i = 1; i <= xVimpSize; i++) {
+        for (j = 1; j <= obsSize; j++) {
+          omp_destroy_lock(&(RF_lockVimp[i][j]));
+        }
+      }
+      for (i = 1; i <= xVimpSize; i++) {
+        free_ompvector(RF_lockVimp[i], 1, obsSize);
+      }
+      free_new_vvector(RF_lockVimp, 1, xVimpSize, NRUTIL_OMPLPTR);
+      for (i = 1; i <= obsSize; i++) {
+        omp_destroy_lock(&(RF_lockVimpRow[i]));
+      }
+      free_ompvector(RF_lockVimpRow, 1, obsSize);
+      for (i = 1; i <= xVimpSize; i++) {
+        omp_destroy_lock(&(RF_lockVimpCol[i]));
+      }
+      free_ompvector(RF_lockVimpCol, 1, xVimpSize);
+  }
+  if ((RF_vtry > 0) && (RF_vtryMode != RF_VTRY_NULL)) {
+    uint xVimpSize;
+    xVimpSize = RF_xSize;
+    for (i = 1; i <= xVimpSize; i++) {
+      if (RF_holdBLKptr[i] > 0) {
+        for (j = 1; j <= RF_holdBLKptr[i]; j++) {
+          omp_destroy_lock(&(RF_lockVimpHoldout[i][j]));
+        }
+        free_ompvector(RF_lockVimpHoldout[i], 1, RF_holdBLKptr[i]);
+      }
+    }
+    free_new_vvector(RF_lockVimpHoldout, 1, xVimpSize, NRUTIL_OMPLPTR);    
+  }
+  if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
+    omp_lock_t   *lockDENptr;
+    uint obsSize;  
+    char oobFlag, fullFlag;
+    oobFlag = fullFlag = FALSE;
+    switch (mode) {
+    case RF_PRED:
+      if (RF_opt & OPT_FENS) {
+        fullFlag = TRUE;
+      }
+      break;
+    default:
+      if (RF_opt & OPT_OENS) {
+        oobFlag = TRUE;
+      }
+      if (RF_opt & OPT_FENS) {
+        fullFlag = TRUE;
+      }
+      break;
+    }
+    while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+      if (oobFlag == TRUE) {
+        lockDENptr = RF_lockDENoens;
+        obsSize = RF_observationSize;
+      }
+      else {
+        lockDENptr = RF_lockDENfens;
+        obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+      }
+      for (i = 1; i <= obsSize; i++) {
+        omp_destroy_lock(&(lockDENptr[i]));
+      }
+      free_ompvector(lockDENptr, 1, obsSize);
+      if (oobFlag == TRUE) {
+        oobFlag = FALSE;
+      }
+      else {
+        fullFlag = FALSE;
+      }
+    }
+  }
+  else {
+    char  potentiallyMixedMultivariate = FALSE;
+    if (RF_rTargetFactorCount > 0) {
+      omp_lock_t   *lockDENptr;
+      uint obsSize;  
+      char oobFlag, fullFlag;
+      oobFlag = fullFlag = FALSE;
+      switch (mode) {
+      case RF_PRED:
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      default:
+        if (RF_opt & OPT_OENS) {
+          oobFlag = TRUE;
+        }
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      }
+      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+        if (oobFlag == TRUE) {
+          lockDENptr = RF_lockDENoens;
+          obsSize = RF_observationSize;
+        }
+        else {
+          lockDENptr = RF_lockDENfens;
+          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+        }
+        if (!potentiallyMixedMultivariate) {
+          for (i = 1; i <= obsSize; i++) {
+            omp_destroy_lock(&(lockDENptr[i]));
+          }
+          free_ompvector(lockDENptr, 1, obsSize);
+        }
+        if (oobFlag == TRUE) {
+          oobFlag = FALSE;
+        }
+        else {
+          fullFlag = FALSE;
+        }
+      }
+      potentiallyMixedMultivariate = TRUE;
+    }
+    if (RF_rTargetNonFactorCount > 0) {
+      omp_lock_t   *lockDENptr;
+      omp_lock_t   *lockQNTptr;
+      uint obsSize;  
+      char oobFlag, fullFlag;
+      oobFlag = fullFlag = FALSE;
+      switch (mode) {
+      case RF_PRED:
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      default:
+        if (RF_opt & OPT_OENS) {
+          oobFlag = TRUE;
+        }
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      }
+      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+        if (oobFlag == TRUE) {
+          lockDENptr = RF_lockDENoens;
+          lockQNTptr = RF_lockQNToens;
+          obsSize = RF_observationSize;
+        }
+        else {
+          lockDENptr = RF_lockDENfens;
+          lockQNTptr = RF_lockQNTfens;
+          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+        }
+        if (!potentiallyMixedMultivariate) {
+          for (i = 1; i <= obsSize; i++) {
+            omp_destroy_lock(&(lockDENptr[i]));
+          }
+          free_ompvector(lockDENptr, 1, obsSize);
+        }
+          for (i = 1; i <= obsSize; i++) {
+            omp_destroy_lock(&(lockQNTptr[i]));
+          }
+          free_ompvector(lockQNTptr, 1, obsSize);
+          if (oobFlag == TRUE) {
+          oobFlag = FALSE;
+        }
+        else {
+          fullFlag = FALSE;
+        }
+      }
+      potentiallyMixedMultivariate = TRUE;
+    }
+  }
+}
+#else
+void unstackLocksOpenMP(char mode) { }
+#endif
+#ifdef NOT_HAVE_PTHREAD
+void stackLocksPosix(char mode) {
+  uint i, j;
+  pthread_mutex_init(&RF_lockEnsbUpdtCountPosix, NULL);
+  pthread_mutex_init(&RF_lockPerfPosix, NULL);
+  if (RF_optHigh & OPT_PART_PLOT) {
+    RF_lockPartialPosix = ptmvector(1, RF_observationSize);
+    for (i = 1; i <= RF_observationSize; i++) {
+      pthread_mutex_init(&(RF_lockPartialPosix[i]), NULL);
+    }
+  }
+  if (RF_optHigh & OPT_WGHT) {
+    uint gMembershipSize;
+    if((RF_optHigh & OPT_WGHT_IBG) && (RF_optHigh & OPT_WGHT_OOB)) {
+      switch (mode) {
+      case RF_PRED:
+        gMembershipSize = RF_fobservationSize;
+        break;
+      default:
+        gMembershipSize = RF_observationSize;
+        break;
+      }
+    }
+    else {
+      gMembershipSize  = RF_observationSize;
+    }
+    RF_lockWeightPosix = (pthread_mutex_t **) new_vvector(1, gMembershipSize, NRUTIL_PTMLPTR);
+    for (i = 1; i <= gMembershipSize; i++) {
+      RF_lockWeightPosix[i] = ptmvector(1, RF_observationSize);
+    }
+    for (i = 1; i <= gMembershipSize; i++) {
+      for (j = 1; j <= RF_observationSize; j++) {
+        pthread_mutex_init(&(RF_lockWeightPosix[i][j]), NULL);
+      }
+    }
+    RF_lockWeightRowPosix = ptmvector(1, gMembershipSize);
+    for (i = 1; i <= gMembershipSize; i++) {
+      pthread_mutex_init(&(RF_lockWeightRowPosix[i]), NULL);
+    }
+  }
+  if (RF_opt & OPT_VIMP) {
+      uint obsSize, xVimpSize;
+      if (RF_opt & OPT_VIMP_JOIN) {
+        xVimpSize = 1;
+      }
+      else {
+        xVimpSize = RF_intrPredictorSize;
+      }
+      switch (mode) {
+      case RF_PRED:
+        obsSize = RF_fobservationSize;
+        break;
+      default:
+        obsSize  = RF_observationSize;
+        break;
+      }
+      RF_lockVimpPosix = (pthread_mutex_t **) new_vvector(1, xVimpSize, NRUTIL_PTMLPTR);
+      for (i = 1; i <= xVimpSize; i++) {
+        RF_lockVimpPosix[i] = ptmvector(1, obsSize);
+      }
+      for (i = 1; i <= xVimpSize; i++) {
+        for (j = 1; j <= obsSize; j++) {
+          pthread_mutex_init(&(RF_lockVimpPosix[i][j]), NULL);
+        }
+      }
+      RF_lockVimpRowPosix = ptmvector(1, obsSize);
+      for (i = 1; i <= obsSize; i++) {
+        pthread_mutex_init(&(RF_lockVimpRowPosix[i]), NULL);
+      }
+      RF_lockVimpColPosix = ptmvector(1, xVimpSize);
+      for (i = 1; i <= xVimpSize; i++) {
+        pthread_mutex_init(&(RF_lockVimpColPosix[i]), NULL);
+      }
+  }
+  if ((RF_vtry > 0) && (RF_vtryMode != RF_VTRY_NULL)) {
+    uint xVimpSize;
+    xVimpSize = RF_xSize;
+    RF_lockVimpHoldoutPosix = (pthread_mutex_t **) new_vvector(1, xVimpSize, NRUTIL_PTMLPTR);
+    for (i = 1; i <= xVimpSize; i++) {
+      if (RF_holdBLKptr[i] > 0) {
+        RF_lockVimpHoldoutPosix[i] = ptmvector(1, RF_holdBLKptr[i]);
+        for (j = 1; j <= RF_holdBLKptr[i]; j++) {
+          pthread_mutex_init(&(RF_lockVimpHoldoutPosix[i][j]), NULL);
+        }
+      }
+    }
+  }
+  if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
+    pthread_mutex_t   **lockDENptr;
+    uint obsSize;  
+    char oobFlag, fullFlag;
+    oobFlag = fullFlag = FALSE;
+    switch (mode) {
+    case RF_PRED:
+      if (RF_opt & OPT_FENS) {
+        fullFlag = TRUE;
+      }
+      break;
+    default:
+      if (RF_opt & OPT_OENS) {
+        oobFlag = TRUE;
+      }
+      if (RF_opt & OPT_FENS) {
+        fullFlag = TRUE;
+      }
+      break;
+    }
+    while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+      if (oobFlag == TRUE) {
+        lockDENptr = &RF_lockDENoensPosix;
+        obsSize = RF_observationSize;
+      }
+      else {
+        lockDENptr = &RF_lockDENfensPosix;        
+        obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+      }
+      *lockDENptr = ptmvector(1, obsSize);
+      for (i = 1; i <= obsSize; i++) {
+        pthread_mutex_init(&((*lockDENptr)[i]), NULL);
+      }
+      if (oobFlag == TRUE) {
+        oobFlag = FALSE;
+      }
+      else {
+        fullFlag = FALSE;
+      }
+    }
+  }
+  else {
+    char  potentiallyMixedMultivariate = FALSE;
+    if (RF_rTargetFactorCount > 0) {
+      pthread_mutex_t   **lockDENptr;
+      uint obsSize;  
+      char oobFlag, fullFlag;
+      oobFlag = fullFlag = FALSE;
+      switch (mode) {
+      case RF_PRED:
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      default:
+        if (RF_opt & OPT_OENS) {
+          oobFlag = TRUE;
+        }
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      }
+      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+        if (oobFlag == TRUE) {
+          lockDENptr = &RF_lockDENoensPosix;
+          obsSize = RF_observationSize;
+        }
+        else {
+          lockDENptr = &RF_lockDENfensPosix;
+          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+        }
+        if (!potentiallyMixedMultivariate) {
+          *lockDENptr = ptmvector(1, obsSize);
+          for (i = 1; i <= obsSize; i++) {
+            pthread_mutex_init(&((*lockDENptr)[i]), NULL);
+          }
+        }
+        if (oobFlag == TRUE) {
+          oobFlag = FALSE;
+        }
+        else {
+          fullFlag = FALSE;
+        }
+      }
+      potentiallyMixedMultivariate = TRUE;
+    }
+    if (RF_rTargetNonFactorCount > 0) {
+      pthread_mutex_t   **lockDENptr;
+      pthread_mutex_t   **lockQNTptr;
+      uint obsSize;  
+      char oobFlag, fullFlag;
+      oobFlag = fullFlag = FALSE;
+      switch (mode) {
+      case RF_PRED:
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      default:
+        if (RF_opt & OPT_OENS) {
+          oobFlag = TRUE;
+        }
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      }
+      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+        if (oobFlag == TRUE) {
+          lockDENptr = &RF_lockDENoensPosix;
+          lockQNTptr = &RF_lockQNToensPosix;
+          obsSize = RF_observationSize;
+        }
+        else {
+          lockDENptr = &RF_lockDENfensPosix;
+          lockQNTptr = &RF_lockQNTfensPosix;
+          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+        }
+        if (!potentiallyMixedMultivariate) {
+          *lockDENptr = ptmvector(1, obsSize);
+          for (i = 1; i <= obsSize; i++) {
+            pthread_mutex_init(&((*lockDENptr)[i]), NULL);
+          }
+        }
+        *lockQNTptr = ptmvector(1, obsSize);        
+        for (i = 1; i <= obsSize; i++) {
+          pthread_mutex_init(&((*lockQNTptr)[i]), NULL);
+        }
+        if (oobFlag == TRUE) {
+          oobFlag = FALSE;
+        }
+        else {
+          fullFlag = FALSE;
+        }
+      }
+      potentiallyMixedMultivariate = TRUE;
+    }
+  }
+}
+#else
+void stackLocksPosix(char mode) { }
+#endif
+#ifdef NOT_HAVE_PTHREAD
+void unstackLocksPosix(char mode) {
+  uint i, j;
+  pthread_mutex_destroy(&RF_lockEnsbUpdtCountPosix);
+  pthread_mutex_destroy(&RF_lockPerfPosix);
+  if (RF_optHigh & OPT_PART_PLOT) {
+    for (i = 1; i <= RF_observationSize; i++) {
+      pthread_mutex_destroy(&(RF_lockPartialPosix[i]));
+    }
+    free_ptmvector(RF_lockPartialPosix, 1, RF_observationSize);
+  }
+  if (RF_optHigh & OPT_WGHT) {
+    uint gMembershipSize;
+    if((RF_optHigh & OPT_WGHT_IBG) && (RF_optHigh & OPT_WGHT_OOB)) {
+      switch (mode) {
+      case RF_PRED:
+        gMembershipSize = RF_fobservationSize;
+        break;
+      default:
+        gMembershipSize = RF_observationSize;
+        break;
+      }
+    }
+    else {
+      gMembershipSize  = RF_observationSize;
+    }
+    for (i = 1; i <= gMembershipSize; i++) {
+      for (j = 1; j <= RF_observationSize; j++) {
+        pthread_mutex_destroy(&(RF_lockWeightPosix[i][j]));
+      }
+    }
+    for (i = 1; i <= gMembershipSize; i++) {    
+      free_ptmvector(RF_lockWeightPosix[i], 1, RF_observationSize);
+    }
+    free_new_vvector(RF_lockWeightPosix, 1, gMembershipSize, NRUTIL_PTMLPTR);
+    for (i = 1; i <= gMembershipSize; i++) {
+      pthread_mutex_destroy(&(RF_lockWeightRowPosix[i]));
+    }
+    free_ptmvector(RF_lockWeightRowPosix, 1, gMembershipSize);
+  }
+  if (RF_opt & OPT_VIMP) {
+      uint obsSize, xVimpSize;
+      if (RF_opt & OPT_VIMP_JOIN) {
+        xVimpSize = 1;
+      }
+      else {
+        xVimpSize = RF_intrPredictorSize;
+      }
+      switch (mode) {
+      case RF_PRED:
+        obsSize = RF_fobservationSize;
+        break;
+      default:
+        obsSize  = RF_observationSize;
+        break;
+      }
+      for (i = 1; i <= xVimpSize; i++) {
+        for (j = 1; j <= obsSize; j++) {
+          pthread_mutex_destroy(&(RF_lockVimpPosix[i][j]));
+        }
+      }
+      for (i = 1; i <= xVimpSize; i++) {
+        free_ptmvector(RF_lockVimpPosix[i], 1, obsSize);
+      }
+      free_new_vvector(RF_lockVimpPosix, 1, xVimpSize, NRUTIL_PTMLPTR);
+      for (i = 1; i <= obsSize; i++) {
+        pthread_mutex_destroy(&(RF_lockVimpRowPosix[i]));
+      }
+      free_ptmvector(RF_lockVimpRowPosix, 1, obsSize);
+      for (i = 1; i <= xVimpSize; i++) {
+        pthread_mutex_destroy(&(RF_lockVimpColPosix[i]));
+      }
+      free_ptmvector(RF_lockVimpColPosix, 1, xVimpSize);
+  }
+  if ((RF_vtry > 0) && (RF_vtryMode != RF_VTRY_NULL)) {
+    uint xVimpSize;
+    xVimpSize = RF_xSize;
+    for (i = 1; i <= xVimpSize; i++) {
+      if (RF_holdBLKptr[i] > 0) {
+        for (j = 1; j <= RF_holdBLKptr[i]; j++) {
+          pthread_mutex_destroy(&(RF_lockVimpHoldoutPosix[i][j]));
+        }
+        free_ptmvector(RF_lockVimpHoldoutPosix[i], 1, RF_holdBLKptr[i]);
+      }
+    }
+    free_new_vvector(RF_lockVimpHoldoutPosix, 1, xVimpSize, NRUTIL_PTMLPTR);    
+  }
+  if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
+    pthread_mutex_t   *lockDENptr;
+    uint obsSize;  
+    char oobFlag, fullFlag;
+    oobFlag = fullFlag = FALSE;
+    switch (mode) {
+    case RF_PRED:
+      if (RF_opt & OPT_FENS) {
+        fullFlag = TRUE;
+      }
+      break;
+    default:
+      if (RF_opt & OPT_OENS) {
+        oobFlag = TRUE;
+      }
+      if (RF_opt & OPT_FENS) {
+        fullFlag = TRUE;
+      }
+      break;
+    }
+    while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+      if (oobFlag == TRUE) {
+        lockDENptr = RF_lockDENoensPosix;
+        obsSize = RF_observationSize;
+      }
+      else {
+        lockDENptr = RF_lockDENfensPosix;
+        obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+      }
+      for (i = 1; i <= obsSize; i++) {
+        pthread_mutex_destroy(&(lockDENptr[i]));
+      }
+      free_ptmvector(lockDENptr, 1, obsSize);
+      if (oobFlag == TRUE) {
+        oobFlag = FALSE;
+      }
+      else {
+        fullFlag = FALSE;
+      }
+    }
+  }
+  else {
+    char  potentiallyMixedMultivariate = FALSE;
+    if (RF_rTargetFactorCount > 0) {
+      pthread_mutex_t   *lockDENptr;
+      uint obsSize;  
+      char oobFlag, fullFlag;
+      oobFlag = fullFlag = FALSE;
+      switch (mode) {
+      case RF_PRED:
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      default:
+        if (RF_opt & OPT_OENS) {
+          oobFlag = TRUE;
+        }
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      }
+      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+        if (oobFlag == TRUE) {
+          lockDENptr = RF_lockDENoensPosix;
+          obsSize = RF_observationSize;
+        }
+        else {
+          lockDENptr = RF_lockDENfensPosix;
+          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+        }
+        if (!potentiallyMixedMultivariate) {
+          for (i = 1; i <= obsSize; i++) {
+            pthread_mutex_destroy(&(lockDENptr[i]));
+          }
+          free_ptmvector(lockDENptr, 1, obsSize);
+        }
+        if (oobFlag == TRUE) {
+          oobFlag = FALSE;
+        }
+        else {
+          fullFlag = FALSE;
+        }
+      }
+      potentiallyMixedMultivariate = TRUE;
+    }
+    if (RF_rTargetNonFactorCount > 0) {
+      pthread_mutex_t   *lockDENptr;
+      pthread_mutex_t   *lockQNTptr;
+      uint obsSize;  
+      char oobFlag, fullFlag;
+      oobFlag = fullFlag = FALSE;
+      switch (mode) {
+      case RF_PRED:
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      default:
+        if (RF_opt & OPT_OENS) {
+          oobFlag = TRUE;
+        }
+        if (RF_opt & OPT_FENS) {
+          fullFlag = TRUE;
+        }
+        break;
+      }
+      while ((oobFlag == TRUE) || (fullFlag == TRUE)) {
+        if (oobFlag == TRUE) {
+          lockDENptr = RF_lockDENoensPosix;
+          lockQNTptr = RF_lockQNToensPosix;
+          obsSize = RF_observationSize;
+        }
+        else {
+          lockDENptr = RF_lockDENfensPosix;
+          lockQNTptr = RF_lockQNTfensPosix;
+          obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+        }
+        if (!potentiallyMixedMultivariate) {
+          for (i = 1; i <= obsSize; i++) {
+            pthread_mutex_destroy(&(lockDENptr[i]));
+          }
+          free_ptmvector(lockDENptr, 1, obsSize);
+        }
+        for (i = 1; i <= obsSize; i++) {
+          pthread_mutex_destroy(&(lockQNTptr[i]));
+        }
+        free_ptmvector(lockQNTptr, 1, obsSize);
+        if (oobFlag == TRUE) {
+          oobFlag = FALSE;
+        }
+        else {
+          fullFlag = FALSE;
+        }
+      }
+      potentiallyMixedMultivariate = TRUE;
+    }
+  }
+}
+#else
+void unstackLocksPosix(char mode) { }
+#endif
 void stackIncomingResponseArrays(char mode) {
   uint i, j;
   RF_startTimeIndex = RF_timeIndex = RF_statusIndex = 0;
@@ -29188,7 +30283,7 @@ void stackIncomingArrays(char mode) {
         RF_nativeExit();
       }
     }
-    if (RF_splitRule != USPV_SPLIT) {
+    if ((RF_splitRule != USPV_SPLIT) && (RF_splitRule != RAND_SPLIT)) {
       if ((RF_timeIndex != 0) && (RF_statusIndex != 0)) {
       }
       else {
@@ -29481,7 +30576,7 @@ void unstackPreDefinedCommonArrays(char         mode,
   }
   free_uivector(RF_getTreeIndex, 1, RF_ntree);
 }
-void stackPreDefinedGrowthArrays() {
+void stackPreDefinedGrowthArrays(void) {
   uint i;
   if (RF_opt & OPT_VIMP) {
     RF_intrPredictorSize = RF_xSize;
@@ -29528,7 +30623,7 @@ void stackPreDefinedGrowthArrays() {
     }
   }
 }
-void unstackPreDefinedGrowthArrays() {
+void unstackPreDefinedGrowthArrays(void) {
   if (RF_opt & OPT_VIMP) {
     free_uivector(RF_intrPredictor, 1, RF_intrPredictorSize);
     free_cvector(RF_importanceFlag, 1, RF_xSize);
@@ -29547,7 +30642,7 @@ void unstackPreDefinedGrowthArrays() {
                    RF_yWeightSorted); 
   }
 }
-void stackPreDefinedRestoreArrays() {
+void stackPreDefinedRestoreArrays(void) {
   uint i;
   if (RF_opt & OPT_VIMP) {
     checkInteraction();
@@ -29560,12 +30655,12 @@ void stackPreDefinedRestoreArrays() {
     }
   }
 }
-void unstackPreDefinedRestoreArrays() {
+void unstackPreDefinedRestoreArrays(void) {
   if (RF_opt & OPT_VIMP) {
     free_cvector(RF_importanceFlag, 1, RF_xSize);
   }
 }
-void stackPreDefinedPredictArrays() {
+void stackPreDefinedPredictArrays(void) {
   uint i;
   RF_fnodeMembership = (Node ***)     new_vvector(1, RF_ntree, NRUTIL_NPTR2);
   RF_ftTermMembership = (Terminal ***) new_vvector(1, RF_ntree, NRUTIL_TPTR2);
@@ -29588,7 +30683,7 @@ void stackPreDefinedPredictArrays() {
     }
   }
 }
-void unstackPreDefinedPredictArrays() {
+void unstackPreDefinedPredictArrays(void) {
   free_new_vvector(RF_fnodeMembership, 1, RF_ntree, NRUTIL_NPTR2);
   free_new_vvector(RF_ftTermMembership, 1, RF_ntree, NRUTIL_TPTR2);
   free_uivector(RF_fidentityMembershipIndex, 1, RF_fobservationSize);
@@ -29597,7 +30692,7 @@ void unstackPreDefinedPredictArrays() {
     free_cvector(RF_importanceFlag, 1, RF_xSize);
   }
 }
-void checkInteraction() {
+void checkInteraction(void) {
   uint leadingIndex, i;
   if((RF_intrPredictorSize <= 0) || (RF_intrPredictorSize > RF_xSize)) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
@@ -30485,7 +31580,7 @@ double getConcordanceIndex(int     polarity,
           if (predictedOutcome[j] - predictedOutcome[i] > EPSILON) {
             concordanceWorseCount += 2;
           }
-          else if (fabs(predictedOutcome[j] - predictedOutcome[i]) < EPSILON) {
+          else if (fabs(predictedOutcome[j] - predictedOutcome[i]) <= EPSILON) {
             concordanceWorseCount += 1;
           }
         }
@@ -30495,7 +31590,7 @@ double getConcordanceIndex(int     polarity,
           if ( predictedOutcome[i] - predictedOutcome[j] > EPSILON ) {
             concordanceWorseCount += 2;
           }
-          else if (fabs(predictedOutcome[i] - predictedOutcome[j]) < EPSILON) {
+          else if (fabs(predictedOutcome[i] - predictedOutcome[j]) <= EPSILON) {
             concordanceWorseCount += 1;
           }
         }
@@ -30517,6 +31612,67 @@ double getConcordanceIndex(int     polarity,
   else {
     result = 1.0 - ((double) concordanceWorseCount / (double) concordancePairSize);
   }
+  return result;
+}
+double getConcordanceIndexNew(int     polarity,
+                              uint    size,
+                              double *timePtr,
+                              double *statusPtr,
+                              double *predicted,
+                              double *denCount) {
+  uint i,j;
+  long long concordancePairSize;
+  long long concordanceWorseCount;
+  long long concordanceBetterCount;
+  double result;
+  uint *timePtrIndxx = uivector(1, size);
+  indexx(size, timePtr, timePtrIndxx);
+  uint *riskSetSize = uivector(1, size);
+  double *predictedOrdByTime = dvector(1, size);
+  double *statusOrdByTime    = dvector(1, size);
+  double *denCountOrdByTime  = dvector(1, size);
+  for (i = 1; i <= size; i++) {
+    riskSetSize[i] = size - i;
+    predictedOrdByTime[i] = predicted[timePtrIndxx[i]];
+    statusOrdByTime[i]    = statusPtr[timePtrIndxx[i]];
+    denCountOrdByTime[i]  = denCount[timePtrIndxx[i]];
+  }
+  uint *predictedIndxx = uivector(1, size);
+  indexx(size, predictedOrdByTime, predictedIndxx);
+  uint *predictedRank = uivector(1, size);
+  for (i = 1; i <= size; i++) {
+    predictedRank[predictedIndxx[i]] = size - i;
+  }
+  concordancePairSize = concordanceBetterCount = 0;
+  for (i = 1; i <= size; i++) {
+    if (statusOrdByTime[i] > 0) {
+      for (j = i+1; j <= size; j++) {
+        if (denCountOrdByTime[i] != 0  && denCountOrdByTime[j] != 0) {
+          if (predictedRank[i] > predictedRank[j]) {
+            concordanceBetterCount += 1;
+          }
+          else {
+          }
+        }
+        else {
+        }
+      }
+      concordancePairSize += riskSetSize[i];
+    }
+  }
+  if (concordancePairSize == 0) {
+    result = RF_nativeNaN;
+  }
+  else {
+    result = ((double) concordanceBetterCount / (double) concordancePairSize);
+  }
+  free_uivector(predictedRank, 1, size);
+  free_uivector(predictedIndxx, 1, size);
+  free_uivector(timePtrIndxx, 1, size);
+  free_dvector(predictedOrdByTime, 1, size);
+  free_dvector(statusOrdByTime,    1, size);
+  free_dvector(denCountOrdByTime,  1, size);
+  free_uivector(riskSetSize, 1, size);
   return result;
 }
 void getCRPerformance (char     mode,
@@ -31179,7 +32335,7 @@ double pythag(double a, double b) {
   else
     return (absb == 0.0 ? 0.0 : absb * sqrt(1.0 + ((absa/absb) * (absa/absb))));
 }
-void harness() {
+void harness(void) {
   uint M, N;
   M = 3;
   N = 4;
@@ -31242,7 +32398,7 @@ void harness() {
   free_dmatrix(aplus, 1, N, 1, M);  
   free_svdcmp(a, M, N, u, w, v);
 }
-Terminal *makeTerminal() {
+Terminal *makeTerminal(void) {
   Terminal *parent = (Terminal*) gblock((size_t) sizeof(Terminal));
   parent -> lmiIndex      = NULL;
   parent -> lmiValue      = NULL;
@@ -34175,6 +35331,26 @@ void updatePruning(char mode, uint treeID) {
     RF_pLeafCount[treeID] = pruneTree(obsSize, treeID, RF_ptnCount);
     for (i=1; i <= obsSize; i++) {
       RF_PRUN_ID_ptr[treeID][i] = RF_pNodeMembership[treeID][i] -> nodeID;
+    }
+  }
+}
+void updateCaseDepth(char mode, uint treeID) {
+  Terminal ***gTermMembership;
+  uint        obsSize;
+  uint i;
+  if (RF_opt & OPT_CASE_DPTH) {
+    switch (mode) {
+    case RF_PRED:
+      obsSize = RF_fobservationSize;
+      gTermMembership = RF_ftTermMembership;
+      break;
+    default:
+      obsSize = RF_observationSize;
+      gTermMembership = RF_tTermMembership;
+      break;
+    }
+    for (i = 1; i <= obsSize; i++) {
+      RF_CASE_DPTH_ptr[treeID][i] = gTermMembership[treeID][i] -> mate -> depth;
     }
   }
 }

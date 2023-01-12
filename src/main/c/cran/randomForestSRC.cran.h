@@ -4,6 +4,12 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
                  SEXP sexp_censoring,
                  SEXP sexp_predicted,
                  SEXP sexp_denom);
+SEXP rfsrcCIndexNew(SEXP sexp_traceFlag,
+                    SEXP sexp_size,
+                    SEXP sexp_time,
+                    SEXP sexp_censoring,
+                    SEXP sexp_predicted,
+                    SEXP sexp_denom);
 SEXP rfsrcTestSEXP(SEXP sexp_size);
 SEXP rfsrcDistance(SEXP sexp_metric,
                    SEXP sexp_n,
@@ -115,9 +121,9 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP quantileInfo,
                   SEXP getTree,
                   SEXP numThreads);
-void exit2R();
+void exit2R(void);
 void printR(char *format, ...);
-void setNativeGlobalEnv();
+void setNativeGlobalEnv(uint *nativeIndex, uint *stackCount);
 void *copy1DObject(SEXP arr, char type, uint size, char actual);
 void *copy2DObject(SEXP arr, char type, char flag, uint row, uint col);
 void free_1DObject(void *arr, char type, uint size);
@@ -134,4 +140,4 @@ void *stackAndProtect(char   mode,
                       uint   auxiliaryDimSize,
                       ...);
 void setUserTraceFlag (uint traceFlag);
-uint getUserTraceFlag ();
+uint getUserTraceFlag (void);

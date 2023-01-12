@@ -178,18 +178,10 @@ get.grow.event.info <- function(yvar, fmly, need.deaths = TRUE, ntime = NULL) {
 }
 ## ---------------------------------------------------------------------
 ##
-## brier score
+## rmst 
 ##
 ## ---------------------------------------------------------------------
-## trapezoidal rule
-trapz <- function (x, y) {
-  idx = 2:length(x)
-  return(as.double((x[idx] - x[idx - 1]) %*% (y[idx] + y[idx - 1]))/2)
-}
-## returns an index of positions for evaluating a step function at selected times
-sIndex <- function(x,y) {sapply(1:length(y), function(j) {sum(x <= y[j])})}
-## main brier function
-get.brier.survival <- function(o, subset, cens.model = c("km", "rfsrc"), papply = lapply) {
+get.rmst <- function(o, tau.horizon = NULL, q = .95) {
   ## incoming parameter checks
   if (is.null(o)) {
     return(NULL)
@@ -200,6 +192,83 @@ get.brier.survival <- function(o, subset, cens.model = c("km", "rfsrc"), papply 
   if (sum(inherits(o, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2 &
       sum(inherits(o, c("rfsrc", "predict"), TRUE) == c(1, 2)) != 2) {
     stop("This function only works for objects of class `(rfsrc, grow)' or '(rfsrc, predict)'")
+  }
+  ## extract time, survival (use OOB values if available)
+  time <- o$time.interest
+  if (is.null(o$survival.oob)) {
+    surv <- o$survival.oob
+  }
+  else {
+    surv <- o$survival
+  }
+  ## set the time horizon
+  if (is.null(tau.horizon)) {
+    ## can replace this with maximum
+    ## tau.horizon <- max(time, na.rm = TRUE)
+    tau.horizon <- quantile(time, probs = q, na.rm = TRUE)
+  }
+  ## adjustment for when time doesn't include tau.horizon
+  etime <- sort(unique(c(time, tau.horizon)))
+  surv <- cbind(1, surv)[, 1 + sIndex(time, etime)]
+  time <- etime
+  ## restrict time to tau horizon
+  time.pt <- time <= tau.horizon
+  ## calculate rmst for the restricted time
+  c(surv[, time.pt, drop = FALSE] %*% diff(c(0, time[time.pt])))
+}
+## ---------------------------------------------------------------------
+##
+## brier score
+##
+## ---------------------------------------------------------------------
+## trapezoidal rule
+trapz <- function (x, y) {
+  idx = 2:length(x)
+  return(as.double((x[idx] - x[idx - 1]) %*% (y[idx] + y[idx - 1]))/2)
+}
+## returns an index of positions for evaluating a step function at selected times
+sIndex <- function(x,y) {sapply(1:length(y), function(j) {sum(x <= y[j])})}
+## set nodesize
+set.nodesize <- function(n, p, nodesize = NULL) {
+  if (is.null(nodesize)) {
+    if (n <= 300 & p > n) {
+      nodesize <- 2
+    }
+    else if (n <= 300 & p <= n) {
+      nodesize <- 5
+    }
+    else if (n > 300 & n <= 2000) {
+      nodesize <- 10
+    }
+    else {
+      nodesize <- n / 200
+    }
+  }
+  nodesize
+}
+## main brier function
+get.brier.survival <- function(o, subset, cens.model = c("km", "rfsrc"), papply = lapply) {
+  ## incoming parameter checks
+  if (is.null(o)) {
+    return(NULL)
+  }
+  if (o$family != "surv") {
+    stop("this function only supports right-censored survival settings")
+  }
+  if (sum(inherits(o, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2 &      
+      sum(inherits(o, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2 &
+      sum(inherits(o, c("rfsrc", "predict"), TRUE) == c(1, 2)) != 2) {
+    stop("This function only works for objects of class `(rfsrc, grow)', '(rfsrc, forest)' or '(rfsrc, predict)'")
+  }
+  ## special handling if object is a forest
+  if (sum(inherits(o, c("rfsrc", "forest"), TRUE) == c(1, 2)) == 2) {
+    predO <- predict(o, perf.type = "none")
+    o$predicted <- predO$predicted
+    o$predicted.oob <- predO$predicted.oob
+    o$survival.oob <- predO$survival.oob
+    o$forest <- list()
+    o$forest$yvar <- o$yvar
+    o$forest$xvar <- o$xvar
   }
   ## use imputed missing time or censoring indicators
   if (!is.null(o$yvar) && !is.null(o$imputed.indv)) {
@@ -221,7 +290,8 @@ get.brier.survival <- function(o, subset, cens.model = c("km", "rfsrc"), papply 
   }
   ## yvar is used for building the training (grow) censoring distribution
   ## however, there is no guarantee that yvar will exist in predict mode
-  ## the forest however always contains the yvar in play and so we use that
+  ## the forest however always contains yvar, so we use that
+  ## also see above for special handling of forest
   pred.no.y <- is.null(o$yvar)
   yvar <- o$forest$yvar
   o$yvar <- yvar
@@ -285,12 +355,18 @@ get.brier.survival <- function(o, subset, cens.model = c("km", "rfsrc"), papply 
     }
     ## rfsrc censoring distribution estimator
     else {
-      cens.dta <- data.frame(tm = o$forest$yvar[, 1],
-                             cens = 1 * (o$yvar[, 2] == 0),
-                             o$forest$xvar[,, drop = FALSE])
-      cens.o <- rfsrc(Surv(tm, cens) ~ ., cens.dta,
-                      ntree = 100, nsplit = 1)
-      cens.dist <- cens.o$survival.oob
+      cens.dta <- data.frame(time = o$forest$yvar[, 1],
+                             cens = 1 * (o$forest$yvar[, 2] == 0),
+                             o$forest$xvar)
+      cens.o <- rfsrc(Surv(time, cens) ~ ., cens.dta,                      
+                      ntree = 50,
+                      nsplit = 1,
+                      nodesize = set.nodesize(nrow(cens.dta), ncol(o$forest$xvar)),
+                      perf.type = "none")
+      if (!is.null(o$imputed.indv)) {
+        o$xvar[o$imputed.indv, ] <- o$imputed.data[, -(1:2)]
+      }
+      cens.dist <- predict(cens.o, o$xvar[subset,, drop = FALSE])$survival
       censTime.pt <- c(sIndex(cens.o$time.interest, event.info$time.interest))
       cens.dist <- t(cbind(1, cens.dist)[, 1 + censTime.pt])
     }

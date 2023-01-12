@@ -8,7 +8,7 @@
 }
 \usage{\method{plot.subsample}{rfsrc}(x, alpha = .01, xvar.names,
  standardize = TRUE, normal = TRUE, jknife = TRUE,
- target, m.target = NULL, pmax = 75, main = "", ...)}
+ target, m.target = NULL, pmax = 75, main = "", sorted = TRUE, ...)}
 \arguments{
 
   \item{x}{An object obtained from calling \command{subample}.}
@@ -41,6 +41,8 @@
   \item{pmax}{Trims the data to this number of variables (sorted by VIMP).}
 
   \item{main}{Title used for plot.}
+  
+  \item{sorted}{Should variables be sorted by importance values?}
 
   \item{...}{Further arguments that can be passed to \command{bxp}.}
   

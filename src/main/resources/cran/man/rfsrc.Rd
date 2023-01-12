@@ -138,8 +138,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \item{nsplit}{Non-negative integer specifying number of random splits
     for splitting a variable.  When zero, all split values are
     used (deterministic splitting), which can be slower.  By default 
-    10 is used except for regression and classification which uses zero
-    (for deterministic splitting).}
+    10 is used.}
 
  \item{importance}{Method for computing variable importance (VIMP); see
     below.  Default action is \code{importance="none"} but VIMP can
@@ -834,8 +833,6 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \item{chf.oob}{OOB CSCHF.}
   \item{cif}{In-bag cumulative incidence function (CIF) for each event.}
   \item{cif.oob}{OOB CIF.}
-  \item{time.interest}{Ordered unique event times.}
-  \item{ndead}{Number of events.}
 }
 \note{
 
@@ -1056,6 +1053,30 @@ matplot(v.obj$time.interest, 100 * t(v.obj$survival.oob[1:10, ]),
 plot.survival(v.obj, subset = 1:10)
 
 \donttest{
+## obtain Brier score using KM and RSF censoring distribution estimators
+bs.km <- get.brier.survival(v.obj, cens.model = "km")$brier.score
+bs.rsf <- get.brier.survival(v.obj, cens.model = "rfsrc")$brier.score
+
+## plot the brier score
+plot(bs.km, type = "s", col = 2)
+lines(bs.rsf, type ="s", col = 4)
+legend("topright", legend = c("cens.model = km", "cens.model = rfsrc"), fill = c(2,4))
+
+## plot CRPS (continuous rank probability score) as function of time
+## here's how to calculate the CRPS for every time point
+trapz <- _PROJECT_PACKAGE_NAME_:::trapz
+time <- v.obj$time.interest
+crps.km <- sapply(1:length(time), function(j) {
+  trapz(time[1:j], bs.km[1:j, 2] / diff(range(time[1:j])))
+})
+crps.rsf <- sapply(1:length(time), function(j) {
+  trapz(time[1:j], bs.rsf[1:j, 2] / diff(range(time[1:j])))
+})
+plot(time, crps.km, ylab = "CRPS", type = "s", col = 2)
+lines(time, crps.rsf, type ="s", col = 4)
+legend("bottomright", legend=c("cens.model = km", "cens.model = rfsrc"), fill=c(2,4))
+
+
 ## fast nodesize optimization for veteran data
 ## optimal nodesize in survival is larger than other families
 ## see the function "tune" for more examples
@@ -1135,8 +1156,7 @@ print(holdout.vimp(Ozone ~ ., data = airquality)$importance)
 ##------------------------------------------------------------
 
 data(pbc, package = "_PROJECT_PACKAGE_NAME_")
-pbc.obj2 <- rfsrc(Surv(days, status) ~ ., pbc,
-           nsplit = 10, na.action = "na.impute")
+pbc.obj2 <- rfsrc(Surv(days, status) ~ ., pbc, na.action = "na.impute")
 
 ## same as above but iterate the missing data algorithm
 pbc.obj3 <- rfsrc(Surv(days, status) ~ ., pbc,

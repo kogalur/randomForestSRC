@@ -2,6 +2,7 @@ sidClustering.rfsrc <- function(data,
                                 method = "sid",
                                 k = NULL,
                                 reduce = TRUE,
+                                ntree = 500,
                                 ntree.reduce = function(p, vtry){100 * p / vtry},
                                 fast = FALSE,
                                 x.no.sid = NULL,
@@ -92,7 +93,7 @@ sidClustering.rfsrc <- function(data,
     ## ... there needs to be enough unique values always 
     ## run the supervised classifier and acquire VIMP
     dots.sv <- dots
-    dots.sv$mtry <- dots.sv$ntree <- NULL
+    dots.sv$mtry <- NULL
     o <- do.call(holdout.vimp, c(list(formula = sv.f, data = make.sh(data, 1), ntree = ntree.reduce),
                      dots.sv[names(dots.sv) %in% rfnames]))
     ## identify significant variables
@@ -170,7 +171,8 @@ sidClustering.rfsrc <- function(data,
     rfnames <- names(formals(rfsrc))
     ## mvRF call - in extreme cases (n=1,2 sample size) this can fail
     rf <- tryCatch({do.call(rfsrc.grow,
-       c(list(formula = mv.f, data = rf.dat), dots[names(dots) %in% rfnames]))}, error=function(ex){NULL})
+            c(list(formula = mv.f, data = rf.dat, ntree = ntree),
+             dots[names(dots) %in% rfnames]))}, error=function(ex){NULL})
     if (is.null(rf)) {## call failed
       rO <- list(clustering = rep(1, nrow(rf.dat)), rf = NULL, dist = NULL, sid = NULL, outcome.names = NULL)
       class(rO) <- c("rfsrc-failed", "sidClustering", method)
@@ -213,7 +215,8 @@ sidClustering.rfsrc <- function(data,
     }
     rfnames <- names(formals(rfsrc))
     ## run the supervised classifier and extract the proximity distance
-    rf <- do.call(rfsrc.grow, c(list(formula = sv.f, data = hv.dat), dots[names(dots) %in% rfnames]))
+    rf <- do.call(rfsrc.grow, c(list(formula = sv.f, data = hv.dat, ntree = ntree),
+            dots[names(dots) %in% rfnames]))
     d <- 1 - rf$proximity[rf$yvar == 1, rf$yvar == 1]
     ## OOB proximity may contain NA's - set these to 1
     d[is.na(d)] <- 1
@@ -246,7 +249,7 @@ sidClustering.rfsrc <- function(data,
     rfnames <- names(formals(rfsrc))
     ## mvRF call - in extreme cases (n=1,2 sample size) this can fail
     rf <- tryCatch({do.call(rfsrc.grow,
-                            c(list(formula = mv.f, data = rf.data), 
+                            c(list(formula = mv.f, data = rf.data, ntree = ntree), 
                               dots[names(dots) %in% rfnames]))}, error=function(ex){NULL})
     if (is.null(rf)) {## call failed
       rO <- list(clustering = rep(1, nrow(rf.data)), rf = NULL, dist = NULL)

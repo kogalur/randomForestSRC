@@ -63,7 +63,7 @@ generic.predict.rfsrc <-
   distance <- match.arg(as.character(distance), c(FALSE, TRUE, "inbag", "oob", "all"))
   ## set restore.mode and the ensemble option
   ## newdata missing --> restore.mode = TRUE
-  ## outcome = "test" --> restore.mode = FALSE for R-processing but switched later for .Call
+  ## outcome = "test" --> restore.mode = FALSE for R-processing but switched later for C-code function call
   if (missing(newdata)) {
     restore.mode <- TRUE
     outcome <- "train"
@@ -103,6 +103,8 @@ generic.predict.rfsrc <-
   prob.epsilon <- is.hidden.prob.epsilon(user.option)
   ## vimp
   vimp.threshold  <- is.hidden.vimp.threshold(user.option)
+  ## case.depth
+  case.depth  <- is.hidden.case.depth(user.option)
   ## set the family
   family <- object$family
   ## pull the x-variable and y-outcome names from the grow object
@@ -116,6 +118,8 @@ generic.predict.rfsrc <-
   if (var.used == "FALSE") var.used <- FALSE
   split.depth <- match.arg(as.character(split.depth),  c("FALSE", "all.trees", "by.tree"))
   if (split.depth == "FALSE") split.depth <- FALSE
+  ## Currently we do not support split.depth for test data. TBD2
+  split.depth = FALSE
   ## initialize the seed
   seed <- get.seed(seed)
   ## REDUCES THE OBJECT TO THE FOREST -- REDUCTION STARTS HERE
@@ -301,10 +305,11 @@ generic.predict.rfsrc <-
         #}
       }
     }
-    ## One final (possibly redundant) check confirming coherence of train/test xvars
-    #if (length(xvar.names) != sum(is.element(xvar.names, names(newdata)))) {
-    #  stop("x-variables in test data do not match original training data")
-    #}
+    ## one final (possibly redundant) check confirming coherence of train/test xvars
+    ## previously commented out: but put we this back because error message is helpful
+    if (length(xvar.names) != sum(is.element(xvar.names, names(newdata)))) {
+      stop("x-variables in test data do not match original training data")
+    }
     ## coherence of train/test yvars (assuming test yvars are available)
     yvar.present <- sum(is.element(yvar.names, names(newdata))) > 0
     if (yvar.present && length(yvar.names) != sum(is.element(yvar.names, names(newdata)))) {
@@ -459,44 +464,45 @@ generic.predict.rfsrc <-
   rfq <- get.rfq(rfq)
   rfq.bits <- get.rfq.bits(rfq, family)
   gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
-  statistics.bits <- get.statistics(statistics)
-  bootstrap.bits <- get.bootstrap(object$bootstrap)
+  statistics.bits <- get.statistics.bits(statistics)
+  bootstrap.bits <- get.bootstrap.bits(object$bootstrap)
   ## initialize the low bits
-  ensemble.bits <- get.ensemble(ensemble)
-  importance.bits <- get.importance(importance, perf.type)
-  proximity.bits <- get.proximity(restore.mode, proximity)
-  distance.bits <- get.distance(restore.mode, distance)
-  split.depth.bits <- get.split.depth(split.depth)
-  var.used.bits <- get.var.used(var.used)
-  outcome.bits <- get.outcome(outcome)
+  ensemble.bits <- get.ensemble.bits(ensemble)
+  importance.bits <- get.importance.bits(importance, perf.type)
+  proximity.bits <- get.proximity.bits(restore.mode, proximity)
+  distance.bits <- get.distance.bits(restore.mode, distance)
+  split.depth.bits <- get.split.depth.bits(split.depth)
+  var.used.bits <- get.var.used.bits(var.used)
+  outcome.bits <- get.outcome.bits(outcome)
+  case.depth.bits  <- get.case.depth.bits(case.depth)
   ## Initalize the high bits
-  samptype.bits <- get.samptype(object$samptype)
+  samptype.bits <- get.samptype.bits(object$samptype)
   ## forest weights
-  forest.wt.bits <- get.forest.wt(restore.mode, object$bootstrap, forest.wt)
-  membership.bits <-  get.membership(membership)
-  terminal.qualts.bits <- get.terminal.qualts.predict(object$terminal.qualts)
-  terminal.quants.bits <- get.terminal.quants.predict(object$terminal.quants)
-  cse.bits = get.cse(cse)
-  csv.bits = get.csv(csv)
-  jitt.bits <- get.jitt(jitt)
+  forest.wt.bits <- get.forest.wt.bits(restore.mode, object$bootstrap, forest.wt)
+  membership.bits <-  get.membership.bits(membership)
+  terminal.qualts.bits <- get.terminal.qualts.predict.bits(object$terminal.qualts)
+  terminal.quants.bits <- get.terminal.quants.predict.bits(object$terminal.quants)
+  cse.bits = get.cse.bits(cse)
+  csv.bits = get.csv.bits(csv)
+  jitt.bits <- get.jitt.bits(jitt)
   ## set the data.pass flags: we do this here because the restore.mode flag is now finalized
   ## training data.pass acquires the grow data.pass flag 
-  data.pass.bits <- get.data.pass(object$data.pass)
+  data.pass.bits <- get.data.pass.bits(object$data.pass)
   ## testing data.pass is na.action AND restore.mode dependent
   if (restore.mode == FALSE) {
     if (na.action == "na.omit") {
-      data.pass.predict.bits  <- get.data.pass.predict(TRUE)
+      data.pass.predict.bits  <- get.data.pass.predict.bits(TRUE)
     }
     else {
-      data.pass.predict.bits  <- get.data.pass.predict(FALSE)
+      data.pass.predict.bits  <- get.data.pass.predict.bits(FALSE)
     }
   }
   else {
     ## we are in restore mode -> we are safe and the test data.pass flag irrelevant
-    data.pass.predict.bits  <- get.data.pass.predict(FALSE)
+    data.pass.predict.bits  <- get.data.pass.predict.bits(FALSE)
   }
   ## We over-ride block-size in the case that get.tree is user specified
-  block.size <- min(get.block.size(block.size, ntree), sum(get.tree))
+  block.size <- min(get.block.size.bits(block.size, ntree), sum(get.tree))
   ## Turn off partial option.
   partial.bits <- get.partial.bits(0)
   ## na.action bit
@@ -504,8 +510,8 @@ generic.predict.rfsrc <-
   if (restore.mode) {
     na.action = object$na.action
   }
-  na.action.bits <- get.na.action(na.action)
-  do.trace <- get.trace(do.trace)
+  na.action.bits <- get.na.action.bits(na.action)
+  do.trace <- get.trace.bits(do.trace)
   ## Check that hdim is initialized.  If not, set it zero.
   ## This is necessary for backwards compatibility with 2.3.0
   if (is.null(object$hdim)) {
@@ -547,7 +553,8 @@ generic.predict.rfsrc <-
                                              cr.bits +
                                              gk.quantile.bits +
                                              statistics.bits +
-                                             anonymize.bits),
+                                             anonymize.bits +
+                                             case.depth.bits),
                                   as.integer(forest.wt.bits +
                                              distance.bits +
                                              samptype.bits +
@@ -592,7 +599,7 @@ generic.predict.rfsrc <-
                                       lapply(1:length(xvar.numeric.levels),
                                              function(nn) {as.integer(xvar.numeric.levels[[nn]])})
                                   },
-                                  as.double(as.vector(xvar)),
+                                  if (is.null(xvar)) NULL else as.double(as.vector(xvar)),
                                   list(as.integer(length(case.wt)),
                                        if (is.null(case.wt)) NULL else as.double(case.wt),
                                        as.integer(sampsize),
@@ -797,6 +804,20 @@ generic.predict.rfsrc <-
     else {
       forest.wt.out <- NULL
     }
+  ## forest case.depth
+  if (case.depth != FALSE) {
+    if (restore.mode) {
+      case.depth.out <- matrix(nativeOutput$caseDepth, c(ntree, n), byrow = TRUE)
+      nativeOutput$caseDepth <- NULL
+    }
+    else {
+      case.depth.out <- matrix(nativeOutput$caseDepth, c(ntree, n.newdata), byrow = TRUE)
+    }
+    nativeOutput$caseDepth <- NULL
+  }
+  else {
+    case.depth.out <- NULL
+  }
   n.observed = if (restore.mode) n else n.newdata
   ## membership
   if (membership) {
@@ -874,6 +895,7 @@ generic.predict.rfsrc <-
     proximity = proximity.out,
     forest = object,
     forest.wt = forest.wt.out,
+    case.depth = case.depth.out,
     distance = distance.out,
     ptn.membership = ptn.membership.out,
     membership = membership.out,
@@ -894,6 +916,7 @@ generic.predict.rfsrc <-
   remove(object)
   remove(proximity.out)
   remove(forest.wt.out)
+  remove(case.depth.out)
   remove(distance.out)
   remove(ptn.membership.out)
   remove(membership.out)

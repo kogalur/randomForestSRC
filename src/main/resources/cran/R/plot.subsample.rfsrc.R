@@ -1,6 +1,7 @@
 plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
                           standardize = TRUE, normal = TRUE, jknife = TRUE,
-                          target, m.target = NULL, pmax = 75, main = "", 
+                          target, m.target = NULL, pmax = 75, main = "",
+                          sorted = TRUE,
                           ...)
 {
   ##--------------------------------------------------------------
@@ -44,15 +45,18 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   else {
     xlab <- "vimp"
   }
-  ## extract vimp column names - be careful if this is multivariate
+  ## extract vimp and vimp column names - depends on family and univariate/multivariate
   if (is.null(m.target)) {  
+    vmp <- x$vmp[[1]]
     vmp.col.names <- colnames(x$vmp[[1]])
   }
   else {
+    vmp <- x$vmp[[m.target]]
     vmp.col.names <- colnames(x$vmp[[m.target]])
   }
   if (fmly == "regr" || fmly == "surv") {
     target <- 0
+    vmp <- c(vmp)
     xlab <- paste(xlab, " (", vmp.col.names, ")", sep = "")
   }
   else if (fmly == "class") {
@@ -70,6 +74,7 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
         }
       }
     }
+    vmp <- c(vmp[, 1 + target])
     xlab <- paste(xlab, " (", vmp.col.names[1 + target], ")", sep = "")
   }
   else if (fmly == "surv-CR") {    
@@ -83,6 +88,7 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
       }
       target <- target - 1
     }
+    vmp <- c(vmp[, 1 + target])
     xlab <- paste(xlab, " (", vmp.col.names[1 + target], ")", sep = "")
   }
   ##--------------------------------------------------------------
@@ -119,22 +125,34 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   }
   ##--------------------------------------------------------------
   ##
-  ## trim the data (a) if user has requested fewer variables (b) if too many variables
+  ## final processing
   ##
   ##--------------------------------------------------------------
-  p <- ncol(boxplot.dta)
-  o.pt <- 1:p
+  ## (a) user has provided a list of target variables
   if (!missing(xvar.names)) {
-    trim.pt <- colnames(boxplot.dta) %in% xvar.names 
+    trim.pt <- colnames(boxplot.dta) %in% xvar.names
     if (sum(trim.pt) > 0) {
-      o.pt <- which(trim.pt)
+      boxplot.dta <- boxplot.dta[, trim.pt, drop = FALSE]
+      ci <- ci[, trim.pt, drop = FALSE]
+      vmp <- vmp[trim.pt]
+    }
+    else {
+      stop("user supplied variable names do not match any of the variables from analysis")
     }
   }
-  else {  
-    if (p > pmax) {
-      o.pt <- order(ci[1, ], decreasing = TRUE)[1:pmax]
-    }
+  ## (b) sort by vimp?
+  p <- ncol(boxplot.dta)
+  if (sorted || p > pmax) {
+    o.pt <- order(vmp, decreasing = TRUE)
   }
+  else {
+    o.pt <- 1:p
+  }
+  ## (c) trim if too many variables
+  if (p > pmax) {
+    o.pt <- o.pt[1:pmax]
+  }
+  ## redefine the data to match the processing
   boxplot.dta <- boxplot.dta[, o.pt, drop = FALSE]
   ci <- ci[, o.pt, drop = FALSE]
   ##--------------------------------------------------------------

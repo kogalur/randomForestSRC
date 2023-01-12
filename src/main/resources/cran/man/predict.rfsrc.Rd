@@ -223,9 +223,7 @@
     for each event.}
   \item{chf.oob}{OOB CSCHF for each event (\code{NULL} unless \option{outcome="test"}).}
   \item{cif}{Cumulative incidence function (CIF) for each event.}
-  \item{cif.oob}{OOB CIF for each event (\code{NULL} unless \option{outcome="test"}).}
-  \item{time.interest}{Ordered unique event times.}
-  \item{ndead}{Number of events.}
+  \item{cif.oob}{OOB CIF (\code{NULL} unless \option{outcome="test"}).}
 }
 \note{
 

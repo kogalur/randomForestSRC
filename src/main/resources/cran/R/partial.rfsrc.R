@@ -118,21 +118,21 @@ partial.rfsrc <- function(
   ## Process the get.tree vector that specifies which trees we want
   get.tree <- get.tree.index(get.tree, ntree)
   ## Initialize the low bits.
-  ensemble.bits <- get.ensemble(ensemble)
-  bootstrap.bits <- get.bootstrap(object$bootstrap)
-  na.action.bits <- get.na.action(na.action)
+  ensemble.bits <- get.ensemble.bits(ensemble)
+  bootstrap.bits <- get.bootstrap.bits(object$bootstrap)
+  na.action.bits <- get.na.action.bits(na.action)
   ## Initalize the high bits
-  samptype.bits <- get.samptype(object$samptype)
+  samptype.bits <- get.samptype.bits(object$samptype)
   partial.bits <- get.partial.bits(length(partial.values))
-  terminal.qualts.bits <- get.terminal.qualts.predict(object$terminal.qualts)
-  terminal.quants.bits <- get.terminal.quants.predict(object$terminal.quants)
-  data.pass.bits <- get.data.pass(data.pass)
+  terminal.qualts.bits <- get.terminal.qualts.predict.bits(object$terminal.qualts)
+  terminal.quants.bits <- get.terminal.quants.predict.bits(object$terminal.quants)
+  data.pass.bits <- get.data.pass.bits(data.pass)
   ## Just in Time Tree Topology Restoration.  Note that we do not
   ## support augmented data, SGT, TDC, here, but we do no checks for
   ## these. We defer to the user option for JITT.
-  jitt.bits <- get.jitt(jitt)
+  jitt.bits <- get.jitt.bits(jitt)
   seed <- get.seed(seed)
-  do.trace <- get.trace(do.trace)
+  do.trace <- get.trace.bits(do.trace)
   ## Check that hdim is initialized.  If not, set it zero.
   ## This is necessary for backwards compatibility with 2.3.0
   if (is.null(object$hdim)) {

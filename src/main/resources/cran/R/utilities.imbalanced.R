@@ -11,8 +11,6 @@ get.imbalanced.performance <- function(obj,
                                        confusion = FALSE,
                                        robust = FALSE)
 {
-  ## default setting for brier and auc
-  brier <- auc <- NULL
   ## determine if a forest object is provided or two vectors (yvar, prob)
   if (is.null(prob)) {
     if (class(obj)[1] != "rfsrc") {
@@ -59,7 +57,7 @@ get.imbalanced.performance.workhorse <- function (yvar, prob,
   if (!is.factor(yvar) || length(levels(yvar)) != 2) {
     return(NULL)
   }
-  ## process y - this implicitly assumes we are dealing with 0/1 class data
+  ## transform y so that class labels are {0,1}
   ## y=0 --> majority
   ## y=1 --> minority
   y.frq <- table(yvar)

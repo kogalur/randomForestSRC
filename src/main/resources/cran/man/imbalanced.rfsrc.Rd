@@ -15,8 +15,8 @@
   using the G-mean, but misclassification error can be requested.
 }
 \usage{\method{imbalanced}{rfsrc}(formula, data, ntree = 3000, 
-  method = c("rfq", "brf", "standard"),
-  block.size = NULL, perf.type = NULL, fast = FALSE,
+  method = c("rfq", "brf", "standard"), splitrule = "auc",
+  perf.type = NULL, block.size = NULL, fast = FALSE,
   ratio = NULL, ...)
 }
 \arguments{
@@ -35,16 +35,20 @@
     cardinality matches that of the minority class.  The method
     \code{standard} implements a standard random forest analysis.}
 
+  \item{splitrule}{Default is AUC splitting which maximizes gmean
+    performance.  Other choices are "gini" and "entropy".}
+
   \item{perf.type}{Measure used for assessing performance (and all
     downstream calculations based on it such as variable importance).
     The default for \code{rfq} and \code{brf} is to use the G-mean
     (Kubat et al., 1997).  For standard random forests, the default is
-    misclassification error.  Users can over-ride the default performance
-    measure by manually selecting either \code{gmean} for the G-mean,
-    \code{misclass} for misclassification error, or \code{brier} for the
-    normalized Brier score. See the examples below.}
+    misclassification error.  Users can over-ride the default
+    performance measure by manually selecting either \code{gmean} for
+    the G-mean, \code{misclass} for misclassification error, or
+    \code{brier} for the normalized Brier score. See the examples
+    below.}
 
-    \item{block.size}{Should the cumulative error rate be calculated on
+  \item{block.size}{Should the cumulative error rate be calculated on
     every tree?  When \code{NULL}, it will only be calculated on the
     last tree. If importance is requested, VIMP is calculated in
     "blocks" of size equal to \code{block.size}.  If not specified, uses
@@ -140,7 +144,8 @@ o.rfq <- imbalanced(f, breast)
 print(o.rfq)
 
 ## equivalent to:
-## rfsrc(f, breast, rfq =  TRUE, ntree = 3000, perf.type = "gmean") 
+## rfsrc(f, breast, rfq =  TRUE, ntree = 3000,
+##       perf.type = "gmean", splitrule = "auc") 
 
 ##----------------------------------------------------------------
 ## detailed output using customized performance function
@@ -148,27 +153,20 @@ print(o.rfq)
 
 print(get.imbalanced.performance(o.rfq))
 
-##----------------------------------------------------------------
-## RFQ with AUC splitting
-##----------------------------------------------------------------
-
-print(o.rfq <- imbalanced(f, breast, splitrule = "auc"))
-print(get.imbalanced.performance(o.rfq))
-
 ##-----------------------------------------------------------------
-## standard RF (uses misclassification)
+## RF using misclassification error with gini splitting
 ## ------------------------------------------------------------
 
-o.std <- imbalanced(f, breast, method = "stand")
+o.std <- imbalanced(f, breast, method = "stand", splitrule = "gini")
 
 ##-----------------------------------------------------------------
-## standard RF using G-mean performance
+## RF using G-mean performance with AUC splitting
 ## ------------------------------------------------------------
 
 o.std <- imbalanced(f, breast, method = "stand", perf.type = "gmean")
 
 ## equivalent to:
-## rfsrc(f, breast, ntree = 3000, perf.type = "gmean")
+## rfsrc(f, breast, ntree = 3000, perf.type = "gmean", splitrule = "auc")
 
 ##----------------------------------------------------------------
 ## default BRF call 
@@ -291,7 +289,7 @@ if (library("caret", logical.return = TRUE) &
 
 ##----------------------------------------------------------------
 ##
-## illustrates effectiveness of blocked VIMP
+## illustrates effectiveness of blocked VIMP 
 ##
 ##----------------------------------------------------------------
 
@@ -310,14 +308,14 @@ if (library("caret", logical.return = TRUE)) {
   idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
   d <- d[c(idx.0,idx.1),, drop = FALSE]
 
-  ## VIMP for BRF with and without blocking
+  ## permutation VIMP for BRF with and without blocking
   ## blocked VIMP is a hybrid of Breiman-Cutler/Ishwaran-Kogalur VIMP
-  brf <- imbalanced(f, d, method = "brf", importance = TRUE, block.size = 1)
-  brfB <- imbalanced(f, d, method = "brf", importance = TRUE, block.size = 10)
+  brf <- imbalanced(f, d, method = "brf", importance = "permute", block.size = 1)
+  brfB <- imbalanced(f, d, method = "brf", importance = "permute", block.size = 10)
 
-  ## VIMP for RFQ with and without blocking
-  rfq <- imbalanced(f, d, importance = TRUE, block.size = 1)
-  rfqB <- imbalanced(f, d, importance = TRUE, block.size = 10)
+  ## permutation VIMP for RFQ with and without blocking
+  rfq <- imbalanced(f, d, importance = "permute", block.size = 1)
+  rfqB <- imbalanced(f, d, importance = "permute", block.size = 10)
 
   ## compare VIMP values
   imp <- 100 * cbind(brf$importance[, 1], brfB$importance[, 1],
@@ -337,7 +335,7 @@ if (library("caret", logical.return = TRUE)) {
 
 ##----------------------------------------------------------------
 ##
-## confidence intervals for G-mean VIMP using subsampling
+## confidence intervals for G-mean permutation VIMP using subsampling
 ##
 ##----------------------------------------------------------------
 
@@ -356,13 +354,12 @@ if (library("caret", logical.return = TRUE)) {
   idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
   d <- d[c(idx.0,idx.1),, drop = FALSE]
 
-  ## q-classifier
-  oq <- imbalanced(Class ~ ., d, splitrule = "auc",
-              importance = TRUE, block.size = 10)
+  ## RFQ
+  o <- imbalanced(Class ~ ., d, importance = "permute", block.size = 10)
 
-  ## subsample the q-classifier
-  smp.oq <- subsample(oq, B = 100)
-  plot(smp.oq, cex.axis = .7)
+  ## subsample RFQ
+  smp.o <- subsample(o, B = 100)
+  plot(smp.o, cex.axis = .7)
 
 }
 

@@ -6,7 +6,7 @@
 \title{Tune Random Forest for the optimal mtry and nodesize parameters}
 \description{
   Finds the optimal mtry and nodesize tuning parameter for a random
-  forest using out-of-bag (OOB) error.  Applies to all families. 
+  forest using out-of-sample error.  Applies to all families. 
 }
 \usage{
 
@@ -34,7 +34,7 @@
   \item{nsplit}{Number of random splits used for splitting.}
   \item{stepFactor}{At each iteration, mtry is inflated (or deflated) by
     this value.}
-  \item{improve}{The (relative) improvement in OOB error must be by this
+  \item{improve}{The (relative) improvement in out-of-sample error must be by this
     much for the search to continue.}
   \item{strikeout}{The search is discontinued when the relative
     improvement in OOB error is negative.  However \code{strikeout}
@@ -50,10 +50,10 @@
 \details{
   \code{tune} returns a matrix whose first and second
   columns contain the nodesize and mtry values searched and whose third
-  column is the corresponding OOB error.  Uses standardized OOB error
+  column is the corresponding out-of-sample error.  Uses standardized error
   and in the case of multivariate forests it is the averaged
-  standardized OOB error over the outcomes and for competing risks it is
-  the averaged standardized OOB error over the event types.
+  standardized rror over the outcomes and for competing risks it is
+  the averaged standardized error over the event types.
 
   If \code{doBest=TRUE}, also returns a forest object fit using the
   optimal \code{mtry} and \code{nodesize} values.
@@ -65,9 +65,9 @@
   tweak various options to improve accuracy.  Increasing the default
   \code{sampsize} will definitely help. Increasing \code{ntreeTry}
   (which is set to 100 for speed) may also help.  It is also useful to
-  look at contour plots of the OOB error as a function of \code{mtry}
-  and \code{nodesize} (see example below) to identify regions of the
-  parameter space where error rate is small.
+  look at contour plots of the out-of-sample error as a function of
+  \code{mtry} and \code{nodesize} (see example below) to identify
+  regions of the parameter space where error rate is small.
 
   \code{tune.nodesize} returns the optimal nodesize where optimization is
   over \code{nodesize} only.  
@@ -89,14 +89,14 @@
 data(wine, package = "_PROJECT_PACKAGE_NAME_")
 wine$quality <- factor(wine$quality)
 
-## default tuning call
-o <- tune(quality ~ ., wine, doBest = TRUE)
+## set the sample size manually
+o <- tune(quality ~ ., wine, sampsize = 100)
 
 ## here is the optimized forest 
 print(o$rf)
 
 ## visualize the nodesize/mtry OOB surface
-if (library("akima", logical.return = TRUE)) {
+if (library("interp", logical.return = TRUE)) {
 
   ## nice little wrapper for plotting results
   plot.tune <- function(o, linear = TRUE) {

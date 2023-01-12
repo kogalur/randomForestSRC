@@ -11,6 +11,7 @@
 \usage{\method{subsample}{rfsrc}(obj,
   B = 100,
   block.size = 1,
+  importance,
   subratio = NULL,
   stratify = TRUE,
   performance = FALSE,
@@ -27,9 +28,16 @@
 
   \item{block.size}{Specifies number of trees in a block when calculating
     VIMP.  This is over-ridden if VIMP is present in the original grow
-    call in which case the grow value is used.} 
+    call in which case the grow value is used.}
 
-  \item{subratio}{Ratio of subsample size to original sample size.  The
+  \item{importance}{Optional: specifies the type of importance to be used,
+    selected from one of "anti", "permute", "random".  If not specified
+    reverts to default importance used by the package.  Also,
+    this is over-ridden if the original grow object contains importance,
+    in which case importance used in the original grow
+    call is used.}
+
+   \item{subratio}{Ratio of subsample size to original sample size.  The
     default is the inverse square root of the sample size.}
 
   \item{stratify}{Use stratified subsampling?  See details below.}
@@ -54,20 +62,27 @@
   Using a previously trained forest, subsamples the data and constructs
   subsampled forests to estimate standard errors and confidence
   intervals for VIMP (Ishwaran and Lu, 2019).  If bootstrapping is
-  requested, a double bootstrap is applied in place of subsampling.
-  Additionally, \code{performance="TRUE"} constructs standard errors and
-  confidence regions for the error rate (OOB performance) of the
-  trained forest.
+  requested, a double bootstrap is applied in place of subsampling.  The
+  option \code{performance="TRUE"} constructs standard errors and
+  confidence regions for the error rate (OOB performance) of the trained
+  forest.  Options \code{joint} and \code{xvar.names} can be used to
+  obtain joint VIMP for all or some variables.
 
-  If the trained forest does not have VIMP values, the algorithm will
-  first need to calculate VIMP.  Therefore, if the user plans to make
+  If the trained forest does not have VIMP values, the algorithm first
+  needs to calculate VIMP.  Therefore, if the user plans to make
   repeated calls to \code{subsample}, it is advisable to include VIMP in
-  the original grow call.  Subsampled forests are calculated using the
-  same tuning parameters as the original forest.  While a sophisticated
-  algorithm is utilized to acquire as many of these parameters as
-  possible, keep in mind there are some conditions where this will fail:
-  for example there are certain settings where the user has specified
-  non-standard sampling in the grow forest.
+  the original grow call.  Also, by calling VIMP in the original call,
+  the type of importance used and other related parameters are set by
+  values used in the original call which can eliminate confusion about
+  what parameters are being used in the subsampled forests.  Thus, it is
+  generally advised to call VIMP in the original call.
+
+  Subsampled forests are calculated using the same tuning parameters as
+  the original forest.  While a sophisticated algorithm is utilized to
+  acquire as many of these parameters as possible, keep in mind there
+  are some conditions where this will fail: for example there are
+  certain settings where the user has specified non-standard sampling in
+  the grow forest.
   
   Delete-d jackknife estimators of the variance (Shao and Wu, 1989) are
   returned alongside subsampled variance estimators (Politis and Romano,
@@ -189,8 +204,7 @@ if (library("caret", logical.return = TRUE)) {
 }
 
 ## ------------------------------------------------------------
-## class-imbalanced data
-## uses RFQ classifier with G-mean VIMP
+## class-imbalanced data using RFQ classifier with G-mean VIMP
 ## ------------------------------------------------------------
 
 if (library("caret", logical.return = TRUE)) {
@@ -208,11 +222,10 @@ if (library("caret", logical.return = TRUE)) {
   idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
   d <- d[c(idx.0,idx.1),, drop = FALSE]
 
-  ## q-classifier
-  oq <- imbalanced(Class ~ ., d, splitrule = "auc",
-              importance = TRUE, block.size = 10)
+  ## RFQ classifier
+  oq <- imbalanced(Class ~ ., d, importance = TRUE, block.size = 10)
 
-  ## subsample the q-classifier
+  ## subsample the RFQ-classifier
   smp.oq <- subsample(oq, B = 100)
   plot(smp.oq, cex.axis = .7)
 

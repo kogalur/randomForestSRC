@@ -3,25 +3,51 @@ tune.nodesize.rfsrc <- function(formula, data,
                             sampsize = function(x){min(x * .632, max(150, x ^ (4/5)))},
                             nsplit = 1, trace = TRUE, ...) 
 {
-  ## restrict nodesize to values less than or equal to sampsize / 2
-  if (is.function(sampsize)) {
-    n <- sampsize(nrow(data)) / 2
+  ## re-define the original data in case there are missing values
+  stump <- rfsrc(formula, data, nodedepth = 0, perf.type = "none", save.memory = TRUE, ntree = 1, splitrule = "random")
+  n <- stump$n
+  yvar.names <- stump$yvar.names
+  data <- data.frame(stump$yvar, stump$xvar)
+  colnames(data)[1:length(yvar.names)] <- yvar.names
+  rm(stump)
+  if (is.function(sampsize)) {##user has specified a function
+    ssize <- sampsize(n)
   }
   else {
-    n <- sampsize / 2
+    ssize <- sampsize
   }
-  n <- max(n, 10)
-  nodesizeTry <- nodesizeTry[nodesizeTry <= n]
+  ## now hold out a test data set equal to the tree sample size (if possible)
+  if ((2 * ssize)  < n)  {
+    tst <- sample(1:n, size = ssize, replace = FALSE)
+    trn <- setdiff(1:n, tst)
+    newdata <- data[tst,, drop = FALSE]
+  }
+  else {
+    trn <- 1:n
+    newdata <- NULL
+  }
+  ## restrict nodesize to values less than or equal to sampsize / 2
+  nodesizeTry <- nodesizeTry[nodesizeTry <= max(10, ssize / 2)]
   ## loop over nodesize acquiring the error rate
   err <- sapply(nodesizeTry, function(nsz) {
     ## pull the error rate for each candidate nodesize value
-    err.nsz <- tryCatch({mean(get.mv.error(rfsrc.fast(formula, data,
+    if (is.null(newdata)) {
+      err.nsz <- tryCatch({mean(get.mv.error(rfsrc.fast(formula, data,
             ntree = ntreeTry, nodesize = nsz,
             sampsize = sampsize, nsplit = nsplit, ...), TRUE), na.rm = TRUE)}, 
             error=function(ex){NA})
+    }
+    else {
+     err.nsz <- tryCatch({mean(get.mv.error(predict(rfsrc.fast(formula, data[trn,, drop = FALSE],
+            ntree = ntreeTry, nodesize = nsz,
+            sampsize = sampsize, nsplit = nsplit, forest = TRUE,
+            perf.type="none", save.memory = FALSE, ...), newdata, perf.type = "default"), TRUE), na.rm = TRUE)}, 
+            error=function(ex){NA})
+    }
+    ## verbose output
     if (trace) {
       cat("nodesize = ", nsz,
-          " OOB error =", paste(100 * round(err.nsz, 4), "%", sep = ""), "\n")
+          "   error =", paste(100 * round(err.nsz, 4), "%", sep = ""), "\n")
     }
     err.nsz 
   })

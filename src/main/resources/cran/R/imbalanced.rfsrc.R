@@ -1,7 +1,7 @@
 imbalanced.rfsrc <- function(formula, data, ntree = 3000,
-                 method = c("rfq", "brf", "standard"),
-                 block.size = NULL, perf.type = NULL, fast = FALSE,
-                 ratio = NULL,  ...)
+                             method = c("rfq", "brf", "standard"), splitrule = "auc",
+                             perf.type = NULL, block.size = NULL, fast = FALSE,
+                             ratio = NULL,  ...)
 {
   ## preliminary checks: all are fatal
   ## parse the formula to ensure this is a two-class problem
@@ -48,7 +48,8 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
     yvar <- data[, formulaPrelim$yvar.names]
     ## for legacy reasons we maintain swr here
     ## TBD2 consider swor
-    o <- rfsrc(formula, data, ntree = ntree, 
+    o <- rfsrc(formula, data, ntree = ntree,
+               splitrule = splitrule,
                perf.type = perf.type,
                block.size = block.size,
                case.wt = make.wt(yvar),
@@ -82,8 +83,9 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
       samp <- make.imbalanced.sample(ntree = ntree, ratio = ratio, y = yvar)
       dots$bootstrap <- dots$samp <- NULL
       o <- do.call(rfsrc.grow, c(list(formula = formula, data = data, ntree = ntree,
-                                 rfq = rfq.flag, perf.type = perf.type, block.size = block.size,
-                                 samp = samp, bootstrap = "by.user"), dots))
+                                      rfq = rfq.flag, splitrule = splitrule,
+                                      perf.type = perf.type, block.size = block.size,
+                                      samp = samp, bootstrap = "by.user"), dots))
     }
     ##-----------------------------------------------------------
     ## proceed to standard and rfq analysis without undersampling
@@ -92,7 +94,8 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
     ##-----------------------------------------------------------
     else {
       o <- do.call(rfsrc.grow, c(list(formula = formula, data = data, ntree = ntree,
-                                 rfq = rfq.flag, perf.type = perf.type, block.size = block.size), dots))    
+                                      rfq = rfq.flag, splitrule = splitrule,
+                                      perf.type = perf.type, block.size = block.size), dots))    
     }
   }
   ## return the object
