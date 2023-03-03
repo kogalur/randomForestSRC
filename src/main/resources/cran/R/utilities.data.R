@@ -354,23 +354,27 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
                        "logrankCR",            ##  3
                        "random",               ##  4
                        "mse",                  ##  5
-                       "gini",                 ##  6
-                       "unsupv",               ##  7
-                       "mv.mse",               ##  8 --  reg/class/mix
-                       "mv.gini",              ##  9 --  reg/class/mix
-                       "mv.mix",               ## 10 --  reg/class/mix
-                       "custom",               ## 11
-                       "quantile.regr",        ## 12
-                       "la.quantile.regr",     ## 13
-                       "bs.gradient",          ## 14
-                       "auc",                  ## 15
-                       "entropy",              ## 16
-                       "sg.regr",              ## 17
-                       "sg.class",             ## 18
-                       "sg.surv",              ## 19
-                       "tdc.gradient",         ## 20
-                       "mahalanobis",          ## 21
-                       "logrankCRGeneral")     ## 22
+                       "mse.unwt",             ##  6
+                       "mse.hvwt",             ##  7
+                       "gini",                 ##  8
+                       "gini.unwt",            ##  9
+                       "gini.hvwt",            ## 10
+                       "unsupv",               ## 11
+                       "mv.mse",               ## 12
+                       "mv.gini",              ## 13
+                       "mv.mix",               ## 14
+                       "custom",               ## 15
+                       "quantile.regr",        ## 16
+                       "la.quantile.regr",     ## 17
+                       "bs.gradient",          ## 18
+                       "auc",                  ## 19
+                       "entropy",              ## 20
+                       "sg.regr",              ## 21
+                       "sg.class",             ## 22
+                       "sg.surv",              ## 23
+                       "tdc.gradient",         ## 24
+                       "mahalanobis",          ## 25
+                       "logrankCRGeneral")     ## 26
   ## set the family
   fmly <- formula.detail$family
   ## initialization
@@ -452,9 +456,11 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
       }
       else {
         ## User specified split rule.
-        if ((splitrule != "auc") &
+        if ((splitrule != "gini") &
+            (splitrule != "gini.unwt") &
+            (splitrule != "gini.hvwt") &
+            (splitrule != "auc") &
             (splitrule != "entropy") &
-            (splitrule != "gini") &
             (splitrule != "sg.class")) {
           stop("Invalid split rule specified for classification:  ", splitrule)
         }
@@ -471,6 +477,8 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
       else {
         ## User specified split rule.
         if ((splitrule != "mse") &
+            (splitrule != "mse.unwt") &
+            (splitrule != "mse.hvwt") &
             (splitrule != "sg.regr") &
             (splitrule != "la.quantile.regr") &
             (splitrule != "quantile.regr")) {
@@ -547,15 +555,16 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
   }
   else {
     ## pure random
-    if (splitrule.idx == 4) {
+    if (splitrule == "random") {
       nsplit <- 1
     }
     ## fast families -- revert back to 10 due to factors
-    else if (splitrule.idx %in% c(5, 6)) {
+    else if ((splitrule == "mse")  | (splitrule == "mse.unwt")  | (splitrule == "mse.hvwt") |
+             (splitrule == "gini") | (splitrule == "gini.unwt") | (splitrule == "gini.hvwt")) {  
       nsplit <- 10
     }
     ## sg families
-    else if (splitrule.idx %in% c(17, 18, 19)) {
+    else if ((splitrule == "sg.regr") | (splitrule == "sg.class") | (splitrule == "sg.surv")) {
       nsplit <- 10 ## can change this as needed later
     }
     else {

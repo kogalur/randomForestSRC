@@ -22,6 +22,8 @@ var.select.rfsrc <-
            nstep = 1,         
            prefit =  list(action = (method != "md"), ntree = 100, mtry = 500, nodesize = 3, nsplit = 1),
            verbose = TRUE,
+           block.size = 10,
+           seed = NULL,
            ...
            )
 {
@@ -44,17 +46,19 @@ var.select.rfsrc <-
     ## filtered forest
     ## over-ride user mtry setting: use an aggressive value
     rfsrc.filter.obj  <- rfsrc(rfsrc.all.f,
-                               data=(if (LENGTH(var.pt, drop.var.pt)) data[train.id, -drop.var.pt]
+                               data=(if (get.varselect.length(var.pt, drop.var.pt)) data[train.id, -drop.var.pt]
                                        else data[train.id, ]),
                                ntree = ntree,
                                splitrule = splitrule,
                                nsplit = nsplit,
-                               mtry = Mtry(var.columns, drop.var.pt),
+                               mtry = get.varselect.mtry(var.columns, drop.var.pt),
                                nodesize = nodesize,
                                cause = cause,
                                na.action = na.action,
-                               importance=TRUE,
-                               block.size = block.size, perf.type = perf.type)
+                               importance = TRUE,
+                               block.size = block.size,
+                               perf.type = perf.type,
+                               seed = seed)
     ## set the target dimension for CR families
     if (rfsrc.filter.obj$family == "surv-CR") {
       target.dim <- max(1, min(cause, max(get.event.info(rfsrc.filter.obj)$event.type)), na.rm = TRUE)
@@ -117,8 +121,12 @@ var.select.rfsrc <-
         sig.vars <- sig.vars.old
         break
       }
-      imp <- coerce.multivariate(vimp(rfsrc.filter.obj, sig.vars, m.target = m.target,
-                                      joint = TRUE), m.target)$importance[target.dim]
+      imp <- coerce.multivariate(vimp(rfsrc.filter.obj,
+                                      xvar.names = sig.vars,
+                                      m.target = m.target,
+                                      joint = TRUE,
+                                      block.size = block.size,
+                                      seed = seed), m.target)$importance[target.dim]
       ## verbose output
       if (verbose) cat("\t iteration: ", b,
                        "  # vars:",     length(sig.vars),
@@ -141,14 +149,15 @@ var.select.rfsrc <-
     var.pt <- var.columns[match(sig.vars, xvar.names)]
     drop.var.pt <- setdiff(var.columns, var.pt)
     rfsrc.obj  <- rfsrc(rfsrc.all.f,
-                        data=(if (LENGTH(var.pt, drop.var.pt)) data[train.id, -drop.var.pt]
+                        data=(if (get.varselect.length(var.pt, drop.var.pt)) data[train.id, -drop.var.pt]
                                 else data[train.id, ]),
                         ntree = ntree,
                         splitrule = splitrule,
                         nsplit = nsplit,
                         cause = cause,
                         na.action = na.action,
-                        perf.type = perf.type)
+                        perf.type = perf.type,
+                        seed = seed)
     return(list(rfsrc.obj=rfsrc.obj, sig.vars=rfsrc.obj$xvar.names, forest.depth=forest.depth, m.depth=m.depth))
   }
   ## --------------------------------------------------------------
@@ -207,28 +216,27 @@ var.select.rfsrc <-
         method <- "md"
     }
     dots <- list(...)
-    block.size <- dots$block.size
     perf.type <- is.hidden.perf.type(dots)
   }
+  else {
+    ## parse the object
+    family <- object$family
+    xvar.names <- object$xvar.names
+    if (family != "unsupv") {
+      yvar.names <- object$yvar.names
+      data <- data.frame(object$yvar, object$xvar)
+      colnames(data) <- c(yvar.names, xvar.names)
+      yvar <- data[, yvar.names]
+      yvar.dim <- ncol(cbind(yvar))
+    }
     else {
-      ## parse the object
-      family <- object$family
-      xvar.names <- object$xvar.names
-      if (family != "unsupv") {
-        yvar.names <- object$yvar.names
-        data <- data.frame(object$yvar, object$xvar)
-        colnames(data) <- c(yvar.names, xvar.names)
-        yvar <- data[, yvar.names]
-        yvar.dim <- ncol(cbind(yvar))
-      }
-        else {
-          data <- object$xvar
-          yvar.dim <- 0
-          method <- "md"
-      }
+      data <- object$xvar
+      yvar.dim <- 0
+      method <- "md"
+    }
     block.size <- object$block.size
     perf.type <- object$forest$perf.type
-    }
+  }
   ## specify the default event type for CR
   if (missing(cause)) {
     cause <- 1
@@ -303,7 +311,9 @@ var.select.rfsrc <-
                                  cause = cause,
                                  na.action = na.action,
                                  importance = TRUE,
-                                 block.size = block.size, perf.type = perf.type)
+                                 block.size = block.size,
+                                 perf.type = perf.type,
+                                 seed = seed)
       ## set the target dimension for CR families
       if (rfsrc.prefit.obj$family == "surv-CR") {
         target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
@@ -353,7 +363,9 @@ var.select.rfsrc <-
                            na.action = na.action,
                            xvar.wt = xvar.wt,
                            importance = TRUE,
-                           block.size = block.size, perf.type = perf.type)
+                           block.size = block.size,
+                           perf.type = perf.type,
+                           seed = seed)
         ## set the target dimension for CR families
         if (rfsrc.obj$family == "surv-CR") {
           target.dim <- max(1, min(cause, max(get.event.info(rfsrc.obj)$event.type)), na.rm = TRUE)
@@ -389,12 +401,13 @@ var.select.rfsrc <-
       var.pt <- unique(c(var.pt, always.use.pt))
       drop.var.pt <- setdiff(var.columns, var.pt)
       rfsrc.refit.obj  <- rfsrc(rfsrc.all.f,
-                                data=(if (LENGTH(var.pt, drop.var.pt)) data[, -drop.var.pt, drop = FALSE] else data),
+                                data=(if (get.varselect.length(var.pt, drop.var.pt)) data[, -drop.var.pt, drop = FALSE] else data),
                                 ntree = ntree,
                                 splitrule = splitrule,
                                 nsplit = nsplit,
                                 na.action = na.action,
-                                perf.type = perf.type)
+                                perf.type = perf.type,
+                                seed = seed)
       ## for multivariate families we must manually extract the importance and error rate
       rfsrc.refit.obj <- coerce.multivariate(rfsrc.refit.obj, m.target)
     }
@@ -466,7 +479,8 @@ var.select.rfsrc <-
                                cause = cause,
                                splitrule = splitrule,
                                na.action = na.action,
-                               perf.type = perf.type)
+                               perf.type = perf.type,
+                               seed = seed)
     ## set the target dimension for CR families
     if (rfsrc.prefit.obj$family == "surv-CR") {
       target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
@@ -512,7 +526,9 @@ var.select.rfsrc <-
                                    splitrule = splitrule,
                                    na.action = na.action,
                                    importance = TRUE,
-                                   block.size = block.size, perf.type = perf.type)
+                                   block.size = block.size,
+                                   perf.type = perf.type,
+                                   seed = seed)
         ## set the target dimension for CR families
         if (rfsrc.prefit.obj$family == "surv-CR") {
           target.dim <- max(1, min(cause, max(get.event.info(rfsrc.prefit.obj)$event.type)), na.rm = TRUE)
@@ -588,7 +604,7 @@ var.select.rfsrc <-
     var.pt <- var.columns[match(rownames(varselect)[1:modelsize], xvar.names)]
     drop.var.pt <- setdiff(var.columns, var.pt)
     rfsrc.refit.obj  <- rfsrc(rfsrc.all.f,
-                              data = (if (LENGTH(var.pt, drop.var.pt)) data[, -drop.var.pt]
+                              data = (if (get.varselect.length(var.pt, drop.var.pt)) data[, -drop.var.pt]
                                         else data),
                               na.action = na.action,
                               ntree = ntree,
@@ -596,7 +612,9 @@ var.select.rfsrc <-
                               nsplit = nsplit,
                               cause = cause,
                               splitrule = splitrule,
-                              block.size = block.size, perf.type = perf.type)
+                              block.size = block.size,
+                              perf.type = perf.type,
+                              seed = seed)
   }
     else {
       rfsrc.refit.obj <- NULL
@@ -625,12 +643,12 @@ var.select.rfsrc <-
     if (method == "vh") {
       cat("depth ratio        :", round(mean(mvars/(2^forest.depth)), 4), "\n")
     }
-    cat("model size         :", round(mean(dim.results), 4), "+/-", round(SD(dim.results), 4), "\n")
+    cat("model size         :", round(mean(dim.results), 4), "+/-", round(get.varselect.sd(dim.results), 4), "\n")
     if (outside.loop) {
-      cat("PE (K-fold, biased):", round(mean(pred.results), 4), "+/-", round(SD(pred.results), 4), "\n")
+      cat("PE (K-fold, biased):", round(mean(pred.results), 4), "+/-", round(get.varselect.sd(pred.results), 4), "\n")
     }
       else {
-        cat("PE (K-fold)        :", round(mean(pred.results), 4), "+/-", round(SD(pred.results), 4), "\n")
+        cat("PE (K-fold)        :", round(mean(pred.results), 4), "+/-", round(get.varselect.sd(pred.results), 4), "\n")
       }
     cat("\n\n")
     cat("Top variables:\n")
@@ -645,100 +663,5 @@ var.select.rfsrc <-
                         rfsrc.refit.obj=rfsrc.refit.obj,
                         md.obj=NULL
                         )))
-}
-## --------------------------------------------------------------
-##  
-## internal functions
-##
-## --------------------------------------------------------------
-get.varselect.imp <- function(f.o, target.dim) {
-  if (!is.null(f.o$importance)) {
-    c(cbind(f.o$importance)[, target.dim])
-  }
-    else {
-      rep(NA, length(f.o$xvar.names))
-    }
-}
-get.varselect.imp.all <- function(f.o) {
-  if (!is.null(f.o$importance)) {
-    imp.all <- cbind(f.o$importance)
-    if (ncol(imp.all) == 1) {
-      colnames(imp.all) <- "vimp"
-    }
-      else {
-        colnames(imp.all) <- paste("vimp.", colnames(imp.all), sep = "")
-      }
-    imp.all
-  }
-    else {
-      rep(NA, length(f.o$xvar.names))
-    }
-}
-get.varselect.err <- function(f.o) {
-  if (!is.null(f.o$err.rate)) {
-    if (grepl("surv", f.o$family)) {
-      err <- 100 * cbind(f.o$err.rate)[f.o$ntree, ]
-    }
-      else {
-        err <- cbind(f.o$err.rate)[f.o$ntree, ]
-      }
-  }
-    else {
-      err = NA
-    }
-  err
-}
-SD <- function(x) {
-  if (all(is.na(x))) {
-    NA
-  }
-    else {
-      sd(x, na.rm = TRUE)
-    }
-}
-LENGTH <- function(x, y) {
-  (length(x) > 0 & length(y) > 0)
-}
-Mtry <- function(x, y) {
-  mtry <- round((length(x) - length(y))/3)
-  if (mtry == 0) {
-    round(length(x)/3)
-  }
-    else {
-      mtry
-    }
-}
-permute.rows <-function(x) {
-  n <- nrow(x)
-  p <- ncol(x)
-  mm <- runif(length(x)) + rep(seq(n) * 10, rep(p, n))
-  matrix(t(x)[order(mm)], n, p, byrow = TRUE)
-}
-balanced.folds <- function(y, nfolds = min(min(table(y)), 10)) {
-  y[is.na(y)] <- resample(y[!is.na(y)], size = sum(is.na(y)), replace = TRUE)
-  totals <- table(y)
-  if (length(totals) < 2) {
-    return(cv.folds(length(y), nfolds))
-  }
-    else {
-      fmax <- max(totals)
-      nfolds <- min(nfolds, fmax)     
-      nfolds <- max(nfolds, 2)
-      folds <- as.list(seq(nfolds))
-      yids <- split(seq(y), y) 
-      bigmat <- matrix(NA, ceiling(fmax/nfolds) * nfolds, length(totals))
-      for(i in seq(totals)) {
-        if(length(yids[[i]])>1){bigmat[seq(totals[i]), i] <- sample(yids[[i]])}
-        if(length(yids[[i]])==1){bigmat[seq(totals[i]), i] <- yids[[i]]}
-      }
-      smallmat <- matrix(bigmat, nrow = nfolds)
-      smallmat <- permute.rows(t(smallmat)) 
-      res <- vector("list", nfolds)
-      for(j in 1:nfolds) {
-        jj <- !is.na(smallmat[, j])
-        res[[j]] <- smallmat[jj, j]
-      }
-      return(res)
-    }
 }
 var.select <- var.select.rfsrc

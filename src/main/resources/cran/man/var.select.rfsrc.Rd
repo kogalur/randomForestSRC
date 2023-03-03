@@ -21,7 +21,7 @@
   always.use = NULL, nrep = 50, K = 5, nstep = 1,
   prefit =  list(action = (method != "md"), ntree = 100,
   mtry = 500, nodesize = 3, nsplit = 1),
-  verbose = TRUE, ...)
+  verbose = TRUE, block.size = 10, seed = NULL,...)
 }
 \arguments{
   \item{formula}{A symbolic description of the model to be fit. 
@@ -94,6 +94,8 @@
     }
   }  
   \item{verbose}{Set to \code{TRUE} for verbose output.}
+  \item{block.size}{VIMP is calculated in "blocks" of trees of this size.}
+  \item{seed}{Negative integer specifying seed for the random number generator.}
   \item{...}{Further arguments passed to forest grow call.}
 }
 \details{

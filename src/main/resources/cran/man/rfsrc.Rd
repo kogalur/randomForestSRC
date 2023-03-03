@@ -1010,8 +1010,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \command{\link{quantreg.rfsrc}},
 
   \command{\link{rfsrc}},
+  \command{\link{rfsrc.anonymous}},
   \command{\link{rfsrc.cart}},
   \command{\link{rfsrc.fast}},
+
   
   \command{\link{sidClustering.rfsrc}},
 

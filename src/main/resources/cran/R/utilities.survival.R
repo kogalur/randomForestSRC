@@ -353,7 +353,7 @@ get.brier.survival <- function(o, subset, cens.model = c("km", "rfsrc"), papply 
       r <- d / (Y + 1 * (Y == 0))
       cens.dist <- c(1, exp(-cumsum(r)))[1 + censTime.pt]
     }
-    ## rfsrc censoring distribution estimator
+    ## rfsrc censoring distribution estimator using random splitting
     else {
       cens.dta <- data.frame(time = o$forest$yvar[, 1],
                              cens = 1 * (o$forest$yvar[, 2] == 0),
@@ -361,6 +361,7 @@ get.brier.survival <- function(o, subset, cens.model = c("km", "rfsrc"), papply 
       cens.o <- rfsrc(Surv(time, cens) ~ ., cens.dta,                      
                       ntree = 50,
                       nsplit = 1,
+                      splitrule = "random",
                       nodesize = set.nodesize(nrow(cens.dta), ncol(o$forest$xvar)),
                       perf.type = "none")
       if (!is.null(o$imputed.indv)) {
