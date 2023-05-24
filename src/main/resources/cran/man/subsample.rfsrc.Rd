@@ -1,8 +1,12 @@
 \name{subsample.rfsrc}
-\alias{subsample.rfsrc}
 \alias{subsample}
+\alias{subsample.rfsrc}
 \alias{extract.subsample}
 \alias{extract.bootsample}
+\alias{print.subsample}
+\alias{print.subsample.rfsrc}
+\alias{print.bootsample}
+\alias{print.bootsample.rfsrc}
 \title{Subsample Forests for VIMP Confidence Intervals}
 \description{
   Use subsampling to calculate confidence intervals and standard
@@ -15,6 +19,7 @@
   subratio = NULL,
   stratify = TRUE,
   performance = FALSE,
+  performance.only = FALSE,
   joint = FALSE,
   xvar.names = NULL,
   bootstrap = FALSE,
@@ -37,13 +42,17 @@
     in which case importance used in the original grow
     call is used.}
 
-   \item{subratio}{Ratio of subsample size to original sample size.  The
-    default is the inverse square root of the sample size.}
+  \item{subratio}{Ratio of subsample size to original sample size.  The
+    default is approximately equal to the inverse square root of the
+    sample size.}
 
   \item{stratify}{Use stratified subsampling?  See details below.}
 
-  \item{performance}{Error rate of forest?  Used to obtain
-    standard error and confidence region for the ensemble out-of-sample performance.}
+  \item{performance}{Generalization error?  User can also request
+    standard error and confidence regions for generalization error.}
+
+  \item{performance.only}{Only calculate standard error and confidence
+    region for the generalization error (no VIMP).}
 
   \item{joint}{Joint VIMP for all variables? Users can also request joint
     VIMP for specific variables using \code{xvar.names}.}
@@ -86,14 +95,9 @@
   
   Delete-d jackknife estimators of the variance (Shao and Wu, 1989) are
   returned alongside subsampled variance estimators (Politis and Romano,
-  1994).  While these methods are closely related, estimated standard
-  error for VIMP from delete-d estimators are generally larger, which is
-  a form of bias correction, and which occurs primarily for variables
-  with true signal.  Confidence interval coverage is generally better
-  under delete-d estimators, but undercoverage for strong variables and
-  overcoverage for noise variables is exhibited by both estimators.
-  This can be considered beneficial if the goal is variable selection
-  (Ishwaran and Lu, 2019).
+  1994).  While these methods are closely related, the jackknife
+  estimator generally gives *larger* standard errors, which is a form of
+  bias correction, and which occurs primarily for the signal variables.
 
   By default, stratified subsampling is used for classification,
   survival, and competing risk families.  For classification,
@@ -109,20 +113,22 @@
   rates here.
 
   The function \command{extract.subsample} can be used to extract
-  information from the subsampled object.  It returns summary
-  information (used for plotting confidence intervals) as well as VIMP
-  from the original forest and VIMP from the subsampled forests.  Keep in
-  mind this subsampled VIMP is "raw" in the sense it equals VIMP
-  from a forest constructed with a much smaller sample size. No
-  processing of the subsampled VIMP to the original sample size is done.
-  Also, the returned VIMP is "standardized" (this means for regression
-  families, VIMP is standardized by dividing by the variance of Y and
-  multiplying by 100.  For all other families, VIMP is scaled by 100).
-  Use \code{standardize=FALSE} if you want unstandardized VIMP.
+  information from the subsampled object.  Returned values for VIMP
+  are "standardized" (this means for regression families, VIMP is
+  standardized by dividing by the variance of Y and multiplying by 100;
+  for all other families, VIMP is scaled by 100).  Use
+  \code{standardize}="FALSE" if you want unstandardized VIMP.  Setting
+  the option \code{raw}="TRUE" returns a more complete set of
+  information that is used by the function \link{plot.subsample.rfsrc}
+  for plotting confidence intervals.  Keep in mind some of this
+  information will be subsampled VIMP that is "raw" in the sense it
+  equals VIMP from a forest constructed with a much smaller sample
+  size.  This option is for experts only.
   
   When printing or plotting results, the default is to standardize
-  VIMP. This can be turned off using the option \code{standardize} in
-  those wrappers.
+  VIMP which can be turned off using the option \code{standardize}.
+  Also these wrappers preset the "alpha" value used for confidence
+  intervals; users can change this using option \code{alpha}.
   
 }
 \value{
@@ -162,7 +168,7 @@
 ## regression
 ## ------------------------------------------------------------
 
-## traing the forest
+## training the forest
 reg.o <- rfsrc(Ozone ~ ., airquality)
 
 ## default subsample call
@@ -174,15 +180,19 @@ plot.subsample(reg.smp.o)
 ## summary of results
 print(reg.smp.o)
 
-## subsample call with joint vimp and confidence region for error rate
+## joint vimp and confidence region for generalization error
 reg.smp.o2 <- subsample(reg.o, performance = TRUE,
            joint = TRUE, xvar.names = c("Day", "Month"))
 plot.subsample(reg.smp.o2)
 
-## now try the double bootstrap (slow!!)
+## now try the double bootstrap (slower)
 reg.dbs.o <- subsample(reg.o, B = 25, bootstrap = TRUE)
 print(reg.dbs.o)
 plot.subsample(reg.dbs.o)
+
+## standard error and confidence region for generalization error only
+gerror <- subsample(reg.o, performance.only = TRUE)
+plot.subsample(gerror)
 
 ## ------------------------------------------------------------
 ## classification
@@ -227,7 +237,7 @@ if (library("caret", logical.return = TRUE)) {
 
   ## subsample the RFQ-classifier
   smp.oq <- subsample(oq, B = 100)
-  plot(smp.oq, cex.axis = .7)
+  plot.subsample(smp.oq, cex.axis = .7)
 
 }
 
@@ -264,8 +274,12 @@ if (library("mlbench", logical.return = TRUE)) {
   bh$rm <- factor(round(bh$rm))
   o <- rfsrc(cbind(medv, rm) ~ ., bh)
   so <- subsample(o)
-  plot(so)
-  plot(so, m.target = "rm")
+  plot.subsample(so)
+  plot.subsample(so, m.target = "rm")
+  ##generalization error
+  gerror <- subsample(o, performance.only = TRUE)
+  plot.subsample(gerror, m.target = "medv")
+  plot.subsample(gerror, m.target = "rm")
 }
 
 ## ------------------------------------------------------------
@@ -277,7 +291,7 @@ if (library("caret", logical.return = TRUE)) {
   d <- twoClassSim(1000, linearVars = 15, noiseVars = 5)
 
   ## use a subsampled forest with Brier score performance
-  ## remember to request forests in rfsrc.fast
+  ## remember to set forest=TRUE for rfsrc.fast
   o <- rfsrc.fast(Class ~ ., d, ntree = 100,
            forest = TRUE, perf.type = "brier")
   so <- subsample(o, B = 100)

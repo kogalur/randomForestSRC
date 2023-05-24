@@ -7,7 +7,7 @@
   subsampling a forest.
 }
 \usage{\method{plot.subsample}{rfsrc}(x, alpha = .01, xvar.names,
- standardize = TRUE, normal = TRUE, jknife = TRUE,
+ standardize = TRUE, normal = TRUE, jknife = FALSE,
  target, m.target = NULL, pmax = 75, main = "", sorted = TRUE, ...)}
 \arguments{
 
@@ -27,12 +27,12 @@
 
   \item{jknife}{Use the delete-d jackknife variance estimator?}
 
-  \item{target}{For classification families, an integer or
-    character value specifying the class VIMP will be conditioned on
-    (default is to use unconditional VIMP).
-    For competing risk families, an integer value between
-    1 and \code{J} indicating the event VIMP is requested, where \code{J} is
-    the number of event types.  The default is to use the first event.}
+  \item{target}{For classification families, an integer or character
+    value specifying the class VIMP will be conditioned on (default is
+    to use unconditional VIMP).  For competing risk families, an integer
+    value between 1 and \code{J} indicating the event VIMP is requested,
+    where \code{J} is the number of event types.  The default is to use
+    the first event.}
 
   \item{m.target}{Character value for multivariate families
     specifying the target outcome to be used.  If left unspecified, the

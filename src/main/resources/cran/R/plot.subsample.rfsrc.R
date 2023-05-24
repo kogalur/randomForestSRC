@@ -1,5 +1,5 @@
 plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
-                          standardize = TRUE, normal = TRUE, jknife = TRUE,
+                          standardize = TRUE, normal = TRUE, jknife = FALSE,
                           target, m.target = NULL, pmax = 75, main = "",
                           sorted = TRUE,
                           ...)
@@ -45,14 +45,29 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   else {
     xlab <- "vimp"
   }
+  ## over-ride x label when only generalization error is requested
+  if (x$performance.only) {
+    xlab <- "generalization error"
+  }
   ## extract vimp and vimp column names - depends on family and univariate/multivariate
+  ## special mod needed for generalization error
   if (is.null(m.target)) {  
     vmp <- x$vmp[[1]]
-    vmp.col.names <- colnames(x$vmp[[1]])
+    if (!x$performance.only) {
+      vmp.col.names <- colnames(x$vmp[[1]])
+    }
+    else {
+      vmp.col.names <- names(x$vmp)
+    }
   }
   else {
     vmp <- x$vmp[[m.target]]
-    vmp.col.names <- colnames(x$vmp[[m.target]])
+    if (!x$performance.only) {
+      vmp.col.names <- colnames(x$vmp[[m.target]])
+    }
+    else {
+      vmp.col.names <- m.target
+    }
   }
   if (fmly == "regr" || fmly == "surv") {
     target <- 0
@@ -105,11 +120,13 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   ##
   ##--------------------------------------------------------------
   if (subsample) {
-    oo <- extract.subsample(x, alpha = alpha, target = target, m.target = m.target, standardize = standardize)
+    oo <- extract.subsample(x, alpha = alpha, target = target, m.target = m.target,
+                            standardize = standardize, raw = TRUE)
     boxplot.dta <- oo$boxplot.dta
   }
   else {
-    oo <- extract.bootsample(x, alpha = alpha, target = target, m.target = m.target, standardize = standardize)
+    oo <- extract.bootsample(x, alpha = alpha, target = target, m.target = m.target,
+                             standardize = standardize, raw = TRUE)
     boxplot.dta <- oo[[1]]
   }
   if (normal) {
@@ -196,6 +213,10 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   ## overlay names
   if (!is.null(dots$names)) {
     bp$names <- dots$names[o.pt]
+  }
+  ## special mod needed for generalization error
+  if (x$performance.only) {
+    bp$names <- ""
   }
   ##--------------------------------------------------------------
   ##

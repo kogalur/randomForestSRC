@@ -72,7 +72,7 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
     if (x$ntree > 1 && !all(is.na(x$err.rate))) {
       err <- cbind(x$err.rate)      
       par(mfrow = c(1,1))
-      plot.err(err, plot.yvar.names)
+      plot_err(err, plot.yvar.names)
     }
   }
     else {
@@ -102,16 +102,16 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
           par(mfrow = c(1,1))
         }
       if (x$ntree > 1 & !all(is.na(x$err.rate))) {
-        plot.err(err, plot.yvar.names)
+        plot_err(err, plot.yvar.names)
       }
       ## CR/classification scenarios
       if (ncol(imp) > 1) {
         imp.out <- imp[rev(pred.order),, drop = FALSE]
-        dotChart(imp[pred.order,, drop = FALSE], plot.yvar.names, dotchart.labels, cex = cex)
+        dot_chart(imp[pred.order,, drop = FALSE], plot.yvar.names, dotchart.labels, cex = cex)
       }
       ## other scenarios
       if (ncol(imp) == 1) {
-        dotChart(imp[pred.order, ], plot.yvar.names, dotchart.labels, cex = cex)
+        dot_chart(imp[pred.order, ], plot.yvar.names, dotchart.labels, cex = cex)
         if (!is.null(x$xvar.wt) & length(unique(x$xvar.wt)) > 1 ) {
           if (length(unique(x$xvar.wt)) == 1) x$xvar.wt <- 1
           imp.out <- as.data.frame(cbind(imp, imp/max(abs(imp), na.rm = TRUE), x$xvar.wt),
@@ -141,7 +141,7 @@ plot.rfsrc <- function (x, m.target = NULL, plots.one.page = TRUE, sorted = TRUE
   }
 }
 ## error rate plot
-plot.err <- function(err, yname = NULL) {
+plot_err <- function(err, yname = NULL) {
   matplot(1:nrow(err), err,
           xlab = "Number of Trees",
           ylab = paste("Error rate", yname),
@@ -152,7 +152,7 @@ plot.err <- function(err, yname = NULL) {
   }
 }
 ## pretty dotchart
-dotChart <- function(x, yname = NULL, labels = NULL, cex = cex) {
+dot_chart <- function(x, yname = NULL, labels = NULL, cex = cex) {
   if (!is.null(dim(x))) {
     ncol  <- ncol(x)
     x.dot <- NULL
@@ -163,14 +163,14 @@ dotChart <- function(x, yname = NULL, labels = NULL, cex = cex) {
       x.dot <- x
       gcolor <- par("fg")
     }
-  y.dot <- dot.chart.main(x, labels = labels, xlab = paste("Variable Importance", yname),
+  y.dot <- dot_chart_main(x, labels = labels, xlab = paste("Variable Importance", yname),
                           cex = cex, pch="", lwd = 2, lcolor = "white", gcolor = gcolor)
   segments(rep(max(0, min(x.dot, na.rm = TRUE)) - 1e-6, length(y.dot)),
            y.dot, x.dot, y.dot, col=c(2,4)[1 + 1 * (x.dot > 0)], lwd = 4)
   if (min(x.dot, na.rm = TRUE) < 0) abline(v=0, lwd = 2, lty = 2, col = 1)
 }
 ## workhorse for dotchart
-dot.chart.main <- function (x, labels = NULL, groups = NULL, gdata = NULL, cex = NULL,
+dot_chart_main <- function (x, labels = NULL, groups = NULL, gdata = NULL, cex = NULL,
                             pch = 21, gpch = 21, bg = par("bg"), color = par("fg"), gcolor = par("fg"), 
                             lcolor = "gray", xlim = range(x[is.finite(x)]), main = NULL, 
                             xlab = NULL, ylab = NULL, ...) 

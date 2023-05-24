@@ -932,25 +932,13 @@ is.hidden.empirical.risk <-  function(user.option) {
   }
 }
 is.hidden.experimental <-  function(user.option) {
-  if (is.null(user.option$experimental1)) {
-    e1  <- FALSE
+  if (is.null(user.option$experimental)) {
+    e <- FALSE
   }
   else {
-    e1  <- as.logical(as.character(user.option$experimental1))
+    e  <- as.logical(as.character(user.option$experimental))
   }
-  if (is.null(user.option$experimental2)) {
-    e2  <- FALSE
-  }
-  else {
-    e2  <- as.logical(as.character(user.option$experimental2))
-  }
-  if (is.null(user.option$experimental3)) {
-    e3  <- FALSE
-  }
-  else {
-    e3  <- as.logical(as.character(user.option$experimental3))
-  }
-  return (c(e1, e2, e3))
+  return (e)
 }
 is.hidden.gk.quantile <-  function(user.option) {
   if (is.null(user.option$gk.quantile)) {

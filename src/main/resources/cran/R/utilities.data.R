@@ -360,21 +360,23 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
                        "gini.unwt",            ##  9
                        "gini.hvwt",            ## 10
                        "unsupv",               ## 11
-                       "mv.mse",               ## 12
-                       "mv.gini",              ## 13
-                       "mv.mix",               ## 14
-                       "custom",               ## 15
-                       "quantile.regr",        ## 16
-                       "la.quantile.regr",     ## 17
-                       "bs.gradient",          ## 18
-                       "auc",                  ## 19
-                       "entropy",              ## 20
-                       "sg.regr",              ## 21
-                       "sg.class",             ## 22
-                       "sg.surv",              ## 23
-                       "tdc.gradient",         ## 24
-                       "mahalanobis",          ## 25
-                       "logrankCRGeneral")     ## 26
+                       "unsupv.unwt",          ## 12
+                       "unsupv.hvwt",          ## 13
+                       "mv",                   ## 14
+                       "mv.unwt",              ## 15
+                       "mv.hvwt",              ## 16
+                       "custom",               ## 17
+                       "quantile.regr",        ## 18
+                       "la.quantile.regr",     ## 19
+                       "bs.gradient",          ## 20
+                       "auc",                  ## 21
+                       "entropy",              ## 22
+                       "sg.regr",              ## 23
+                       "sg.class",             ## 24
+                       "sg.surv",              ## 25
+                       "tdc.gradient",         ## 26
+                       "mahalanobis",          ## 27
+                       "logrankCRGeneral")     ## 28
   ## set the family
   fmly <- formula.detail$family
   ## initialization
@@ -491,12 +493,12 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
     if (fmly == "regr+") {
       if (is.null(splitrule)) {
         ## No split rule specified, use default
-        splitrule.idx <- which(splitrule.names == "mv.mse")
+        splitrule.idx <- which(splitrule.names == "mv")
         splitrule <- splitrule.names[splitrule.idx]
       }
       else {
         ## User specified split rule
-        if ((splitrule != "mv.mse") & (splitrule != "mahalanobis")) {
+        if ((splitrule != "mv") & (splitrule != "mv.unwt") & (splitrule != "mv.hvwt") & (splitrule != "mahalanobis")) {
           stop("Invalid split rule specified for multivariate regression:  ", splitrule)
         }
         splitrule.idx <- which(splitrule.names == splitrule)
@@ -505,12 +507,12 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
     if (fmly == "class+") {
       if (is.null(splitrule)) {
         ## No split rule specified, use default
-        splitrule.idx <- which(splitrule.names == "mv.gini")
+        splitrule.idx <- which(splitrule.names == "mv")
         splitrule <- splitrule.names[splitrule.idx]
       }
       else {
         ## User specified split rule.
-        if ((splitrule != "mv.gini")) {
+        if ((splitrule != "mv") & (splitrule != "mv.unwt") & (splitrule != "mv.hvwt")) {
           stop("Invalid split rule specified for multivariate classsification:  ", splitrule)
         }
         splitrule.idx <- which(splitrule.names == splitrule)
@@ -519,12 +521,12 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
     if (fmly == "mix+") {
       if (is.null(splitrule)) {
         ## No split rule specified, use default.
-        splitrule.idx <- which(splitrule.names == "mv.mse")
-        splitrule <- "mv.mix"
+        splitrule.idx <- which(splitrule.names == "mv")
+        splitrule <- splitrule.names[splitrule.idx]
       }
       else {
         ## User specified split rule.
-        if ((splitrule != "mv.mix")) {
+        if ((splitrule != "mv") & (splitrule != "mv.unwt") & (splitrule != "mv.hvwt")) {
           stop("Invalid split rule specified for mixed multivariate regression:  ", splitrule)
         }
         splitrule.idx <- which(splitrule.names == splitrule)
@@ -539,7 +541,7 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
       }
       else {
         ## User specified split rule.
-        if ((splitrule != "unsupv")) {
+        if ((splitrule != "unsupv") & (splitrule != "unsupv.unwt") & (splitrule != "unsupv.hvwt")) {
           stop("Invalid split rule specified:  ", splitrule)
         }
         splitrule.idx <- which(splitrule.names == splitrule)

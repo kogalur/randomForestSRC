@@ -5,6 +5,7 @@ subsample.rfsrc <- function(obj,
                             subratio = NULL,
                             stratify = TRUE,
                             performance = FALSE,
+                            performance.only = FALSE,
                             joint = FALSE,
                             xvar.names = NULL,
                             bootstrap = FALSE,
@@ -43,8 +44,8 @@ subsample.rfsrc <- function(obj,
   ##
   ##--------------------------------------------------------------
   n <- obj$n
-  if (!bootstrap && is.null(subratio)) {
-    subratio <- 1 / sqrt(n)
+  if (is.null(subratio)) {
+    subratio <- get.subsample.subratio(n)
   }
   if (!bootstrap && (subratio < 0 || subratio > 1)) {
     stop("subratio must be between 0 and 1:", subratio)
@@ -120,17 +121,30 @@ subsample.rfsrc <- function(obj,
   }
   ##--------------------------------------------------------------
   ##
+  ## performance only?  (user is requesting generalization error only)
+  ##
+  ##--------------------------------------------------------------
+  if (performance.only) {
+    performance <- TRUE
+    importance <- "none"
+    vmp <- NULL
+  }
+  ##--------------------------------------------------------------
+  ##
   ## call the bootstrap subroutine if double bootstrap was requested
   ##
   ##--------------------------------------------------------------
   if (bootstrap) {
-    if (missing(importance)) {
+    if (missing(importance) && !performance.only) {
       importance <- TRUE
     }
     bootO <- bootsample(obj, rf.prms, B = B, block.size = block.size,
                         joint = joint, xvar.names = xvar.names,
-                        importance = importance, performance = performance, verbose = verbose)
-    rO <- list(rf = bootO$rf, vmp = bootO$vmp, vmpB = bootO$vmpB, subratio = NULL)
+                        importance = importance,
+                        performance = performance, performance.only = performance.only,
+                        verbose = verbose)
+    rO <- list(rf = bootO$rf, vmp = bootO$vmp, vmpB = bootO$vmpB,
+               subratio = NULL, performance.only = performance.only)
     class(rO) <- c(class(obj), "bootsample")
     return(rO)
   }
@@ -147,28 +161,30 @@ subsample.rfsrc <- function(obj,
   ## call vimp to extract importance if not available in original object
   ##
   ##--------------------------------------------------------------
-  vmp <- get.mv.vimp(obj, FALSE, FALSE)
-  if (is.null(vmp)) {
-    if (verbose) cat("no importance found: calculating it now ...\n")
-    if (missing(importance)) {
-      importance <- TRUE
-    }
-    obj <- vimp(obj, perf.type = rf.prms$perf.type, block.size = block.size, importance = importance)
+  if (!performance.only) {
     vmp <- get.mv.vimp(obj, FALSE, FALSE)
-    rf.prms$block.size <- block.size
-    if (verbose) cat("done\n")
-  }
-  else {
-    importance <- obj$forest$importance
+    if (is.null(vmp)) {
+      if (verbose) cat("no importance found: calculating it now ...\n")
+      if (missing(importance)) {
+        importance <- TRUE
+      }
+      obj <- vimp(obj, perf.type = rf.prms$perf.type, block.size = block.size, importance = importance)
+      vmp <- get.mv.vimp(obj, FALSE, FALSE)
+      rf.prms$block.size <- block.size
+      if (verbose) cat("done\n")
+    }
+    else {
+      importance <- obj$forest$importance
+    }
   }
   ##--------------------------------------------------------------
   ##
   ## call joint vimp - reference vimp value for pure noise settings
   ##
   ##--------------------------------------------------------------
-  if (joint) {
-    vmp.joint <- get.mv.vimp(get.joint.vimp(obj, rf.prms, xvar.names), FALSE, FALSE)
-    vmp <- vimp.combine(vmp, vmp.joint, "joint")
+  if (joint && !performance.only) {
+    vmp.joint <- get.mv.vimp(get.subsample.joint.vimp(obj, rf.prms, xvar.names), FALSE, FALSE)
+    vmp <- vimp.subsample.combine(vmp, vmp.joint, "joint")
   }
   ##--------------------------------------------------------------
   ##
@@ -177,7 +193,7 @@ subsample.rfsrc <- function(obj,
   ##--------------------------------------------------------------
   if (performance) {
     err <- get.mv.error(obj, FALSE, FALSE)
-    vmp <- vimp.combine(vmp, err, "err")
+    vmp <- vimp.subsample.combine(vmp, err, "err")
   }
   ##----------------------------------------------------------
   ##
@@ -214,13 +230,13 @@ subsample.rfsrc <- function(obj,
     rf.b <-  do.call("rfsrc",
                      c(list(data = dta[pt,, drop = FALSE], importance = importance), rf.prms))
     vmp.b <- get.mv.vimp(rf.b, FALSE, FALSE)
-    if (joint) {
-      vmp.b.joint <- get.mv.vimp(get.joint.vimp(rf.b, rf.prms, xvar.names), FALSE, FALSE)
-      vmp.b <- vimp.combine(vmp.b, vmp.b.joint, "joint")
+    if (joint && !performance.only) {
+      vmp.b.joint <- get.mv.vimp(get.subsample.joint.vimp(rf.b, rf.prms, xvar.names), FALSE, FALSE)
+      vmp.b <- vimp.subsample.combine(vmp.b, vmp.b.joint, "joint")
     }
     if (performance) {
       err.b <- get.mv.error(rf.b, FALSE, FALSE)
-      vmp.b <- vimp.combine(vmp.b, err.b, "err")
+      vmp.b <- vimp.subsample.combine(vmp.b, err.b, "err")
     }
     ## combine
     rO.b <- lapply(1:length(vmp), function(j) {
@@ -243,7 +259,7 @@ subsample.rfsrc <- function(obj,
   ## return the goodies
   ##
   ##------------------------------------------------------------------
-  rO <- list(rf = obj, vmp = vmp, vmpS = vmpS, subratio = subratio)
+  rO <- list(rf = obj, vmp = vmp, vmpS = vmpS, subratio = subratio, performance.only = performance.only)
   class(rO) <- c(class(obj), "subsample")
   rO
 }

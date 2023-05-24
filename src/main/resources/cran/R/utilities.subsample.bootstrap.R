@@ -3,7 +3,8 @@
 ## core bootstrap function
 ##
 ###################################################################
-bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names, importance, performance, verbose) {
+bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names,
+                       importance, performance, performance.only, verbose) {
   ##--------------------------------------------------------------
   ##
   ## extract data from the previously grown forest
@@ -19,24 +20,26 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names, importanc
   ##
   ##--------------------------------------------------------------
   vmp <- get.mv.vimp(obj, FALSE, FALSE)
-  if (is.null(vmp)) {
-    if (verbose) cat("no importance found: calculating it now ...\n")
-    obj <- vimp(obj, perf.type = rf.prms$perf.type, block.size = block.size, importance = importance)
-    vmp <- get.mv.vimp(obj, FALSE, FALSE)
-    rf.prms$block.size <- block.size
-    if (verbose) cat("done\n")
-  }
-  else {
-    importance <- obj$forest$importance
+  if (!performance.only) {
+    if (is.null(vmp)) {
+      if (verbose) cat("no importance found: calculating it now ...\n")
+      obj <- vimp(obj, perf.type = rf.prms$perf.type, block.size = block.size, importance = importance)
+      vmp <- get.mv.vimp(obj, FALSE, FALSE)
+      rf.prms$block.size <- block.size
+      if (verbose) cat("done\n")
+    }
+    else {
+      importance <- obj$forest$importance
+    }
   }
   ##--------------------------------------------------------------
   ##
   ## call joint vimp - reference vimp value for pure noise settings
   ##
   ##--------------------------------------------------------------
-  if (joint) {
-    vmp.joint <- get.mv.vimp(get.joint.vimp(obj, rf.prms, xvar.names), FALSE, FALSE)
-    vmp <- vimp.combine(vmp, vmp.joint)
+  if (joint && !performance.only) {
+    vmp.joint <- get.mv.vimp(get.subsample.joint.vimp(obj, rf.prms, xvar.names), FALSE, FALSE)
+    vmp <- vimp.subsample.combine(vmp, vmp.joint)
   }
   ##--------------------------------------------------------------
   ##
@@ -45,7 +48,7 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names, importanc
   ##--------------------------------------------------------------
   if (performance) {
     err <- get.mv.error(obj, FALSE, FALSE)
-    vmp <- vimp.combine(vmp, err, "err")
+    vmp <- vimp.subsample.combine(vmp, err, "err")
   }
   ##----------------------------------------------------------
   ##
@@ -76,13 +79,13 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names, importanc
                     c(list(data = dta[smp.unq,, drop = FALSE], importance = importance,
                            bootstrap = "by.user", samp = dbl.smp), rf.prms))
     vmp.b <- get.mv.vimp(rf.b, FALSE, FALSE)
-    if (joint) {
-      vmp.b.joint <- get.mv.vimp(get.joint.vimp(rf.b, rf.prms, xvar.names), FALSE, FALSE)
-      vmp.b <- vimp.combine(vmp.b, vmp.b.joint)
+    if (joint && !performance.only) {
+      vmp.b.joint <- get.mv.vimp(get.subsample.joint.vimp(rf.b, rf.prms, xvar.names), FALSE, FALSE)
+      vmp.b <- vimp.subsample.combine(vmp.b, vmp.b.joint)
     }
     if (performance) {
       err.b <- get.mv.error(rf.b, FALSE, FALSE)
-      vmp.b <- vimp.combine(vmp.b, err.b, "err")
+      vmp.b <- vimp.subsample.combine(vmp.b, err.b, "err")
     }
     ## combine
     rO.b <- lapply(1:length(vmp), function(j) {
@@ -109,7 +112,7 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names, importanc
 ## extract confidence interval + other goodies from bootstrap object
 ##
 ###################################################################
-extract.bootsample <- function(obj, alpha = .05, target = 0, m.target = NULL, standardize = TRUE)
+extract.bootsample <- function(obj, alpha = .05, target = 0, m.target = NULL, standardize = TRUE, raw = FALSE)
 {
   ## confirm this is the right kind of object
   if (!sum(c(grepl("rfsrc", class(obj))), grepl("bootsample", class(obj))) == 2) {
@@ -128,7 +131,7 @@ extract.bootsample <- function(obj, alpha = .05, target = 0, m.target = NULL, st
     })
   }  
   ## extract vimp
-  theta.boot <- get.standardize.vimp(obj$rf, rbind(sapply(obj$vmpB, "[[", 1 + target)), standardize)
+  theta.boot <- get.subsample.standardize.vimp(obj$rf, rbind(sapply(obj$vmpB, "[[", 1 + target)), standardize)
   rownames(theta.boot) <- rownames(obj$vmp[[1]][, 1 + target, drop = FALSE])
   ## bootstrap VIMP
   vmp.boot <- rowMeans(theta.boot, na.rm = TRUE)
@@ -166,20 +169,27 @@ extract.bootsample <- function(obj, alpha = .05, target = 0, m.target = NULL, st
                                pvalue = pnorm(vmp.boot, 0, se.boot, FALSE),
                                signif =  ci.boot.Z[1, ] > 0)
   rownames(var.sel.boot.Z) <- names(vmp.boot)
-  list(ci = ci.boot,
-       ci.Z = ci.boot.Z,
-       vmp <- vmp.boot,
-       vmpS = theta.boot,
-       se = se.boot,
-       var.sel = var.sel.boot,
-       var.sel.Z = var.sel.boot.Z)
+  if (raw) {
+    list(ci = ci.boot,
+         ci.Z = ci.boot.Z,
+         vmp = vmp.boot,
+         vmpS = theta.boot,
+         se = se.boot,
+         var.sel = var.sel.boot,
+         var.sel.Z = var.sel.boot.Z)
+  }
+  else {
+    list(se = se.boot,
+         var.sel = var.sel.boot,
+         var.sel.Z = var.sel.boot.Z)
+  }
 }
 ###################################################################
 ##
 ## print function from bootstrap ci
 ##
 ###################################################################
-print.bootsample.rfsrc <- function(x, alpha = .05, standardize = TRUE) {
+print.bootsample.rfsrc <- function(x, alpha = .05, standardize = TRUE, ...) {
   vmp <- x$vmp
   nullO <- lapply(1:length(vmp), function(j) {
     m.target <- names(vmp)[j]
@@ -190,7 +200,7 @@ print.bootsample.rfsrc <- function(x, alpha = .05, standardize = TRUE) {
     }
     lapply(1:p.vmp, function(k) {
       oo <- extract.bootsample(x, alpha = alpha, target = k - 1,
-                   m.target = m.target, standardize = standardize)
+                   m.target = m.target, standardize = standardize, raw = TRUE)
       cat("===== VIMP confidence regions for", vmp.col.names[k], " =====\n")
       cat("nonparametric:\n")
       print(round(oo$ci, 3))

@@ -72,6 +72,10 @@ export(extract.bootsample,
        plot.variable.rfsrc,       
        predict.rfsrc,
        print.rfsrc,
+       print.bootsample,
+       print.bootsample.rfsrc,
+       print.subsample,
+       print.subsample.rfsrc,
        quantreg,
        quantreg.rfsrc,
        rfsrc,
@@ -117,6 +121,10 @@ S3method(plot, variable.rfsrc)
 S3method(predict, rfsrc)
 
 S3method(print, rfsrc)
+S3method(print, bootsample)
+S3method(print, bootsample.rfsrc)
+S3method(print, subsample)
+S3method(print, subsample.rfsrc)
 
 
 

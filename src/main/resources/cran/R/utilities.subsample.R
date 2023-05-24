@@ -3,7 +3,7 @@
 ## extract confidence interval + other goodies from subsampled object
 ##
 ###################################################################
-extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, standardize = TRUE)
+extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, standardize = TRUE, raw = FALSE)
 {
   ## in case a user applies this to a bootsample object
   if (sum(c(grepl("rfsrc", class(obj))), grepl("subsample", class(obj))) == 2) {
@@ -17,7 +17,7 @@ extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, sta
   }
   if (!subsample) {
     return(extract.bootsample(obj, alpha = alpha,
-              target = target, m.target = m.target, standardize = standardize))    
+              target = target, m.target = m.target, standardize = standardize, raw = raw))    
   }
   ## coerce the (potentially) multivariate rf object
   m.target <- get.univariate.target(obj$rf, m.target)
@@ -39,8 +39,8 @@ extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, sta
     })
   }  
   ## extract necessary objects
-  theta.hat <- get.standardize.vimp(obj$rf, vmp, standardize)[, 1]
-  theta.star <- get.standardize.vimp(obj$rf, rbind(sapply(obj$vmpS, "[[", 1 + target)), standardize)
+  theta.hat <- get.subsample.standardize.vimp(obj$rf, vmp, standardize)[, 1]
+  theta.star <- get.subsample.standardize.vimp(obj$rf, rbind(sapply(obj$vmpS, "[[", 1 + target)), standardize)
   rownames(theta.star) <- xvar.names <- rownames(vmp)
   ## sample sizes
   n <- obj$rf$n
@@ -106,24 +106,46 @@ extract.subsample <- function(obj, alpha = .05, target = 0, m.target = NULL, sta
                           pvalue = pnorm(theta.hat, 0, se.jk.Z, FALSE),
                           signif =  ci.jk.Z[1, ] > 0)
   rownames(var.jk.sel.Z) <- xvar.names
-  list(boxplot.dta = boxplot.dta,
-       ci = ci,
-       ci.Z = ci.Z,
-       ci.jk.Z = ci.jk.Z,
-       vmp = theta.hat,
-       vmpS = theta.star,
-       se.Z = se.Z,
-       se.jk.Z = se.jk.Z,
-       var.sel = var.sel,
-       var.sel.Z = var.sel.Z,
-       var.jk.sel.Z = var.jk.sel.Z)
+  if (raw) {
+    list(boxplot.dta = boxplot.dta,
+         ci = ci,
+         ci.Z = ci.Z,
+         ci.jk.Z = ci.jk.Z,
+         vmp = theta.hat,
+         vmpS = theta.star,
+         se.Z = se.Z,
+         se.jk.Z = se.jk.Z,
+         var.sel = var.sel,
+         var.sel.Z = var.sel.Z,
+         var.jk.sel.Z = var.jk.sel.Z)
+  }
+  else {
+    list(se.Z = se.Z,
+         se.jk.Z = se.jk.Z,
+         var.sel = var.sel,
+         var.sel.Z = var.sel.Z,
+         var.jk.sel.Z = var.jk.sel.Z)
+  }
+}
+###################################################################
+##
+## set the subratio value
+##
+###################################################################
+get.subsample.subratio <- function(n, base.n = 1000, base.r = exp(-1)) {
+  if (n < base.n) {
+    subratio <- base.r
+  }
+  else {
+    subratio <- base.r * sqrt(base.n) / sqrt(n)
+  }
 }
 ###################################################################
 ##
 ## get joint vimp from a forest object
 ##
 ###################################################################
-get.joint.vimp <- function(o, rf.prms = NULL, xvar.names) {
+get.subsample.joint.vimp <- function(o, rf.prms = NULL, xvar.names) {
   class(o)[2] <- "grow"  ##fake the class to trick vimp()
   if (is.null(rf.prms)) {
     return(vimp(o, joint = TRUE, xvar.names = xvar.names))
@@ -138,13 +160,9 @@ get.joint.vimp <- function(o, rf.prms = NULL, xvar.names) {
 ## get standarized vimp from a matrix (p x B) of subsampled vimp
 ##
 ###################################################################
-get.standardize.vimp <- function(obj, vmp, standardize = FALSE) {
-  ## nothing to do - standardization not rquested
-  if (!standardize) {
-    return(vmp)
-  }
-  else {
-    do.call(cbind, lapply(1:ncol(vmp), function(j) {
+get.subsample.standardize.vimp <- function(obj, vmp, standardize = FALSE) {
+  if (standardize && !is.null(obj)) {
+    vmp <- do.call(cbind, lapply(1:ncol(vmp), function(j) {
       v <- vmp[, j]
       if (obj$family != "regr") {
         100 * v 
@@ -154,6 +172,7 @@ get.standardize.vimp <- function(obj, vmp, standardize = FALSE) {
       }
     }))
   }
+  vmp
 }
 ###################################################################
 ##
@@ -195,7 +214,7 @@ make.strat.sample <- function(y, subratio) {
 ## print function for subsampled ci
 ##
 ###################################################################
-print.subsample.rfsrc <- function(x, alpha = .05, standardize = TRUE) {
+print.subsample.rfsrc <- function(x, alpha = .05, standardize = TRUE, ...) {
   vmp <- x$vmp
   nullO <- lapply(1:length(vmp), function(j) {
     m.target <- names(vmp)[j]
@@ -206,8 +225,8 @@ print.subsample.rfsrc <- function(x, alpha = .05, standardize = TRUE) {
     }
     lapply(1:p.vmp, function(k) {
       oo <- extract.subsample(x, alpha = alpha, target = k - 1,
-                  m.target = m.target, standardize = standardize)
-      cat("===== VIMP confidence regions for", vmp.col.names[k], " =====\n")
+                  m.target = m.target, standardize = standardize, raw = TRUE)
+      cat("===== VIMP/error confidence regions for", vmp.col.names[k], " =====\n")
       cat("nonparametric:\n")
       print(round(oo$ci, 3))
       cat("parametric:\n")
@@ -224,14 +243,26 @@ print.subsample <- print.subsample.rfsrc
 ## combine two lists of vimp: o1 is master, o2 is appended
 ##
 ###################################################################
-vimp.combine <- function(o1, o2, o2.name = NULL) {
-  rO <- lapply(1:length(o1), function(j) {
-    rO.j <- rbind(o1[[j]], o2[[j]])
-    if (!is.null(o2.name)) {
-      rownames(rO.j)[nrow(rO.j)] <- o2.name
-    }
-    rO.j
-  })
-  names(rO) <- names(o1)
+vimp.subsample.combine <- function(o1, o2, o2.name = NULL) {
+  if (is.null(o1)) {
+    rO <- lapply(1:length(o2), function(j) {
+      rO.j <- rbind(NULL, o2[[j]])
+      if (!is.null(o2.name)) {
+        rownames(rO.j)[nrow(rO.j)] <- o2.name
+      }
+      rO.j
+    })
+    names(rO) <- names(o2)
+  }
+  else {  
+    rO <- lapply(1:length(o1), function(j) {
+      rO.j <- rbind(o1[[j]], o2[[j]])
+      if (!is.null(o2.name)) {
+        rownames(rO.j)[nrow(rO.j)] <- o2.name
+      }
+      rO.j
+    })
+    names(rO) <- names(o1)
+  }
   rO
 }

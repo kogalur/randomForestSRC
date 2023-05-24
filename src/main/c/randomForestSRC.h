@@ -233,6 +233,7 @@ typedef unsigned long ulong;
 #define OPT_CSV       0x20000000 
 #define OPT_EXPERMNT1 0x00000001 
 #define OPT_EXPERMNT2 0x00000002 
+#define OPT_EXPERMNT3 0x00000004 
 #define RF_PART_MORT 1
 #define RF_PART_NLSN 2
 #define RF_PART_SURV 3
@@ -260,23 +261,25 @@ typedef unsigned long ulong;
 #define CLAS_NRM     8 
 #define CLAS_WT_OFF  9 
 #define CLAS_WT_HVY 10 
-#define USPV_SPLIT  11
-#define MVRG_SPLIT  12 
-#define MVCL_SPLIT  13 
-#define MVMX_SPLIT  14 
-#define CUST_SPLIT  15
-#define REGR_QUANT  16
-#define LARG_QUANT  17
-#define SURV_BSG1   18
-#define CLAS_AU_ROC 19
-#define CLAS_ENTROP 20
-#define REGR_SGS    21
-#define CLAS_SGS    22
-#define SURV_SGS    23
-#define SURV_TDC    24
-#define MAHALANOBIS 25
-#define SURV_CR_GEN 26
-#define MAXM_SPLIT  27 
+#define USPV_NRM    11 
+#define USPV_WT_OFF 12 
+#define USPV_WT_HVY 13 
+#define MV_NRM      14 
+#define MV_WT_OFF   15 
+#define MV_WT_HVY   16 
+#define CUST_SPLIT  17
+#define REGR_QUANT  18
+#define LARG_QUANT  19
+#define SURV_BSG1   20
+#define CLAS_AU_ROC 21
+#define CLAS_ENTROP 22
+#define REGR_SGS    23
+#define CLAS_SGS    24
+#define SURV_SGS    25
+#define SURV_TDC    26
+#define MAHALANOBIS 27
+#define SURV_CR_GEN 28
+#define MAXM_SPLIT  29 
 #define AUGT_INTR_NONE      0
 #define AUGT_INTR_MULT      1
 #define AUGT_INTR_DIVS      2
@@ -1254,7 +1257,6 @@ void regCustomFunctionRegression (customFunction func, uint i);
 void regCustomFunctionSurvival (customFunction func, uint i);
 void regCustomFunctionCompetingRisk (customFunction func, uint i);
 void registerThis (customFunction func, unsigned int family, unsigned int slot);
-char classificationXwghtSplitBak (uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
 char classificationXwghtSplitCur (uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
 char classificationAreaUnderROCSplit (uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
 char classificationEntropySplit      (uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
@@ -1377,17 +1379,27 @@ char mahalanobis (uint       treeID,
                   SplitInfoMax *splitInfoMax,
                   GreedyObj    *greedyMembr,
                   char       multImpFlag);
-char unsupervisedSplit(uint       treeID,
-                       Node      *parent,
-                       SplitInfoMax *splitInfoMax,
-                       GreedyObj    *greedyMembr,
-                       char       multImpFlag);
-char multivariateSplit (uint       treeID,
-                        Node      *parent,
-                        SplitInfoMax *splitInfoMax,
-                        GreedyObj    *greedyMembr,
-                        char       multImpFlag);
+char unsupervisedSplitMiss(uint       treeID,
+                           Node      *parent,
+                           SplitInfoMax *splitInfoMax,
+                           GreedyObj    *greedyMembr,
+                           char       multImpFlag);
+char unsupervisedSplitNew(uint       treeID,
+                          Node      *parent,
+                          SplitInfoMax *splitInfoMax,
+                          GreedyObj    *greedyMembr,
+                          char       multImpFlag);
+char multivariateSplitOld (uint       treeID,
+                           Node      *parent,
+                           SplitInfoMax *splitInfoMax,
+                           GreedyObj    *greedyMembr,
+                           char       multImpFlag);
 char multivariateSplitNew (uint       treeID,
+                           Node      *parent,
+                           SplitInfoMax *splitInfoMax,
+                           GreedyObj    *greedyMembr,
+                           char       multImpFlag);
+char multivariateSplitNew3 (uint       treeID,
                            Node      *parent,
                            SplitInfoMax *splitInfoMax,
                            GreedyObj    *greedyMembr,
@@ -1417,7 +1429,6 @@ char quantileRegrSplit (uint       treeID,
                         GreedyObj    *greedyMembr,
                         char       multImpFlag);
 double quantile7 (double *r, uint s, double p);
-char regressionXwghtSplitBak (uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
 char regressionXwghtSplitCur (uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
 char regressionXwghtSplitOpt (uint treeID, Node *parent, SplitInfoMax *splitInfoMax, GreedyObj *greedyMembr, char multImpFlag);
 char logRankNCR(uint       treeID,

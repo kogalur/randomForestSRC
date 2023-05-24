@@ -89,8 +89,7 @@ imp <- data.frame(mahalanobis  = rowMeans(get.mv.vimp(obj,  standardize = TRUE))
                   mahalanobis2 = rowMeans(get.mv.vimp(obj2, standardize = TRUE)),
                   default      = rowMeans(get.mv.vimp(obj3, standardize = TRUE)))
 
-print(head(100 * imp[order(imp["mahalanobis"], decreasing = TRUE), ], 15))
-
+print(head(100 * imp[order(imp$mahalanobis, decreasing = TRUE), ], 15))
 
 }}
 \keyword{datasets}
