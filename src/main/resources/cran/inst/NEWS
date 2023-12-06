@@ -10,13 +10,18 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Fix to insecure string warnings on Linux.
+
+---------------------------------------------------------------------------------
+RELEASE 3.2.2
+---------------------------------------------------------------------------------
 Improved the subsampling function.  Now users can obtain standard
 errors and confidence regions for the generalization error of the
 forest.  Addition of heavy weighted, and unweighted split rules for
 mse, gini, unsupv, and mv cases.
 
 ---------------------------------------------------------------------------------
-RELEASE 3.2.1
+
 ---------------------------------------------------------------------------------
 Fix to catestrophic cancellation and buffer overrun in updateCDF(),
 when xvar.wt is active with real weights, and mostly when they are

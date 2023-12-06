@@ -266,10 +266,11 @@
 ## ------------------------------------------------------------
 ## typical train/testing scenario
 ## ------------------------------------------------------------
+options(rf.cores=2, mc.cores=2)
 
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 train <- sample(1:nrow(veteran), round(nrow(veteran) * 0.80))
-veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ], ntree = 100) 
+veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ], ntree = 10) 
 veteran.pred <- predict(veteran.grow, veteran[-train, ])
 print(veteran.grow)
 print(veteran.pred)

@@ -10584,6 +10584,8 @@ void rfsrc(char mode, int seedValue) {
     for (b = 1; b <= RF_ntree; b++) {
       randomSetChain(b , RF_seed_[b]);
     }
+    seedValueLC = abs(seedValue);
+    lcgenerator(&seedValueLC, TRUE);
     for (b = 1; b <= RF_ntree; b++) {
       lcgenerator(&seedValueLC, FALSE);
       lcgenerator(&seedValueLC, FALSE);
@@ -19557,7 +19559,11 @@ char regressionXwghtSplitCur (uint       treeID,
                 deltaMax = delta;
                 indexMax = j;
               }
+              else {
+              }
             }
+          }
+          else {
           }
           if (factorFlag == FALSE) {
             priorMembrIter = currentMembrIter - 1;
@@ -19771,7 +19777,11 @@ char regressionXwghtSplitOpt (uint       treeID,
                 deltaMax = delta;
                 indexMax = j;
               }
+              else {
+              }
             }
+          }
+          else {
           }
           if (factorFlag == FALSE) {
             priorMembrIter = currentMembrIter - 1;
@@ -31262,7 +31272,6 @@ void stackIncomingArrays(char mode) {
         if (RF_ySizeProxy == 0) {
           RF_nativeError("\nRF-SRC:  *** ERROR *** ");
           RF_nativeError("\nRF-SRC:  No non-[S] and non-[C] responses found.");
-          RF_nativeError("\nRF-SRC:  The application will now exit.\n");
           RF_nativeExit();
         }
         if (RF_ytry > RF_ySizeProxy) {

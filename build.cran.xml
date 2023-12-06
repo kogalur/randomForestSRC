@@ -236,6 +236,7 @@
 
     <exec dir="target/cran/staged" executable="R" failonerror="TRUE">
       <arg line="CMD check"/>
+      <arg line="--timings"/>      
       <!--arg line="- -as-cran"/ -->
       <arg line="${project.pkg.name}"/>
     </exec>
@@ -297,19 +298,10 @@
 
   <!--
     ========================================================================
-      CHECK-CRAN-xxx target, Entry Point
+      CHECK-AS-CRAN-xxx target, Entry Point
     ========================================================================
   -->
-  <target name="check-cran" depends="os-prep, source-cran, check-cran-generic"/>
-
-  
-  <!--
-    ========================================================================
-      Internal target, check-cran-generic
-    ========================================================================
-  -->
-
-  <target name="check-cran-generic">
+  <target name="check-as-cran" depends="os-prep, source-cran">
 
     <delete dir="target/cran/staged"/>
     <mkdir dir="target/cran/staged"/>
@@ -327,9 +319,31 @@
       <arg line="${project.pkg.name}"/>
     </exec>
 
-    <delete dir="target/cran/staged"/>
-    
   </target>
 
+  <!--
+    ========================================================================
+      CHECK-TIMINGS-CRAN-xxx target, Entry Point
+    ========================================================================
+  -->
+  <target name="check-timings-cran" depends="os-prep, source-cran">
 
+    <delete dir="target/cran/staged"/>
+    <mkdir dir="target/cran/staged"/>
+
+    <copy todir="target/cran/staged/${project.pkg.name}">
+      <fileset dir="target/cran/${project.pkg.name}"/> 
+    </copy>
+
+    <chmod file="target/cran/staged/${project.pkg.name}/cleanup" perm="ugo+x"/>
+    <chmod file="target/cran/staged/${project.pkg.name}/configure" perm="ugo+x" os="Linux,Mac OS X"/>
+
+    <exec dir="target/cran/staged" executable="R" failonerror="TRUE">
+      <arg line="CMD check"/>
+      <arg line="--timings"/>
+      <arg line="${project.pkg.name}"/>
+    </exec>
+
+  </target>
+  
 </project>

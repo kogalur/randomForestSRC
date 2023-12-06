@@ -647,7 +647,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
     The default value of \code{ytry} is 1 but can be increased.  As
     illustration, the following equivalent unsupervised calls set
-    \code{mtry=10} and \code{ytry}=5:
+    \code{mtry=10} and \code{ytry=5}:
 
     rfsrc(data = my.data, ytry = 5, mtry = 10)
     
@@ -679,7 +679,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
       \itemize{
         \item Censoring must be coded as a non-negative integer, where 0
         indicates right-censoring, and non-zero values indicate different
-        event types.  While {0,1,2,..,J} is standard, and recommended,
+        event types.  While \code{0,1,2,..,J} is standard, and recommended,
         events can be coded non-sequentially, although 0 must always be used
         for censoring.
         
@@ -1030,12 +1030,13 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 ##------------------------------------------------------------
 ## survival analysis
 ##------------------------------------------------------------
+options(rf.cores=2, mc.cores=2)
 
 ## veteran data
 ## randomized trial of two treatment regimens for lung cancer
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 v.obj <- rfsrc(Surv(time, status) ~ ., data = veteran, 
-                   ntree = 100, block.size = 1)
+                   ntree = 10, block.size = 1)
 
 ## plot tree number 3
 plot(get.tree(v.obj, 3))
@@ -1339,14 +1340,14 @@ print(o)
 ## imbalanced classification data
 ## see the "imbalanced" function for further details
 ##
-## a) use balanced random forests with undersampling of the majority class
+## (a) use balanced random forests with undersampling of the majority class
 ## Specifically let n0, n1 be sample sizes for majority, minority
 ## cases.  We sample 2 x n1 cases with majority, minority cases chosen
 ## with probabilities n1/n, n0/n where n=n0+n1
 ##
-## b) balanced random forests using "imbalanced"
+## (b) balanced random forests using "imbalanced"
 ##
-## c) q-classifier (RFQ) using "imbalanced" 
+## (c) q-classifier (RFQ) using "imbalanced" 
 ##
 ## ------------------------------------------------------------
 

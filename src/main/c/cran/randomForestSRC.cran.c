@@ -523,7 +523,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP numThreads) {
   char mode;
   uint i;
-clock_t cpuTimeStart = clock();
+  clock_t cpuTimeStart = clock();
   setUserTraceFlag(INTEGER(traceFlag)[0]);
   setNativeGlobalEnv(&RF_nativeIndex, &RF_stackCount);
   int seedValue           = INTEGER(seedPtr)[0];
@@ -839,8 +839,10 @@ clock_t cpuTimeStart = clock();
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
   return RF_sexpVector[RF_OUTP_ID];
 }
+const char vomit[] = "\nRF-SRC:  The application will now exit.\n";
 void exit2R(void) {
-  error("\nRF-SRC:  The application will now exit.\n");
+  Rprintf("%s", vomit);
+  error(NULL);
 }
 void printR(char *format, ...) {
   char *buffer;
@@ -849,7 +851,7 @@ void printR(char *format, ...) {
   va_start(aptr, format);
   vsnprintf(buffer, sizeof(char) * 1023, format, aptr);
   va_end(aptr);
-  Rprintf(buffer);
+  Rprintf("%s", buffer);
   free((char *) buffer);
 }
 void setNativeGlobalEnv(uint *nativeIndex, uint *stackCount) {
