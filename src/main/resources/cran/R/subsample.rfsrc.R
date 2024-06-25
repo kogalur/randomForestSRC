@@ -48,7 +48,7 @@ subsample.rfsrc <- function(obj,
     subratio <- get.subsample.subratio(n)
   }
   if (!bootstrap && (subratio < 0 || subratio > 1)) {
-    stop("subratio must be between 0 and 1:", subratio)
+    stop("subratio must be between 0 and 1")
   }
   ##--------------------------------------------------------------
   ##
@@ -200,14 +200,10 @@ subsample.rfsrc <- function(obj,
   ## subsampling loop for calculating VIMP confidence regions
   ##
   ##----------------------------------------------------------
-  if (verbose) pb <- txtProgressBar(min = 0, max = B, style = 3)
   vmpS <- lapply(1:B, function(b) {
     ## progress bar
     if (verbose && B > 1) {
-      setTxtProgressBar(pb, b)
-    }
-    if (verbose && b == B) {
-      cat("\n")
+      custom.progress.bar(b, B)
     }
     ## draw the subsample
     ## use stratified sampling for classification/CR if requested (default)

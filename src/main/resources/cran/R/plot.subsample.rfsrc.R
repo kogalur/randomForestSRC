@@ -1,7 +1,7 @@
 plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
                           standardize = TRUE, normal = TRUE, jknife = FALSE,
                           target, m.target = NULL, pmax = 75, main = "",
-                          sorted = TRUE,
+                          sorted = TRUE, show.plots = TRUE,
                           ...)
 {
   ##--------------------------------------------------------------
@@ -39,7 +39,7 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
       xlab <- "standardized vimp"
     }
     else {
-      xlab <- "100 x vimp"
+      xlab <- "vimp"
     }
   }
   else {
@@ -223,18 +223,20 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   ## draw the core bxp plot
   ##
   ##--------------------------------------------------------------
-  do.call("bxp", c(list(z = bp, main = main, xlab = xlab, 
-                        boxfill = colr, xaxt = "n", yaxt = "n",
-                        outline = FALSE, horizontal = TRUE),
-                   dots[names(dots) %in% bxp.names]))
-  do.call("axis", c(list(side = 1, at = pretty(c(bp$stats)), tick = .02), dots[names(dots) %in% axis.names]))
-  do.call("axis", c(list(side = 2, at = 1:length(bp$names), labels = bp$names,
-                las = 2, tick = FALSE), dots[names(dots) %in% axis.names]))
-  abline(h = 1:length(bp$names), col = gray(.9), lty = 1)
-  abline(v = 0, lty = 1, lwd = 1.5, col = gray(.8))
-  bxp(bp, boxfill=colr,xaxt="n",yaxt="n",
-      outline=FALSE,horizontal=TRUE,add=TRUE,
-      whisklty=1,whisklwd=2)
+  if (show.plots) {
+    do.call("bxp", c(list(z = bp, main = main, xlab = xlab, 
+                          boxfill = colr, xaxt = "n", yaxt = "n",
+                          outline = FALSE, horizontal = TRUE),
+                     dots[names(dots) %in% bxp.names]))
+    do.call("axis", c(list(side = 1, at = pretty(c(bp$stats)), tick = .02), dots[names(dots) %in% axis.names]))
+    do.call("axis", c(list(side = 2, at = 1:length(bp$names), labels = bp$names,
+                           las = 2, tick = FALSE), dots[names(dots) %in% axis.names]))
+    abline(h = 1:length(bp$names), col = gray(.9), lty = 1)
+    abline(v = 0, lty = 1, lwd = 1.5, col = gray(.8))
+    bxp(bp, boxfill=colr,xaxt="n",yaxt="n",
+        outline=FALSE,horizontal=TRUE,add=TRUE,
+        whisklty=1,whisklwd=2)
+  }
   ##--------------------------------------------------------------
   ##
   ## return the invisible boxplot data

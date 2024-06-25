@@ -263,19 +263,19 @@
   \command{\link{vimp.rfsrc}}
 }
 \examples{
+\donttest{
 ## ------------------------------------------------------------
 ## typical train/testing scenario
 ## ------------------------------------------------------------
-options(rf.cores=2, mc.cores=2)
 
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
 train <- sample(1:nrow(veteran), round(nrow(veteran) * 0.80))
-veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ], ntree = 10) 
+veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ]) 
 veteran.pred <- predict(veteran.grow, veteran[-train, ])
 print(veteran.grow)
 print(veteran.pred)
 
-\donttest{
+
 ## ------------------------------------------------------------
 ## restore mode
 ## - if predict is called without specifying the test data
@@ -509,7 +509,7 @@ rsf.pred <- rsf.obj$predicted.oob
 mix.pred <- mix.obj$regrOutput$days$predicted.oob
 plot(rsf.pred, mix.pred)
 
-## compare C-index error rate
+## compare C-error rate
 rsf.err <- get.cindex(yvar$days, yvar$status, rsf.pred)
 mix.err <- 1 - get.cindex(yvar$days, yvar$status, mix.pred)
 cat("RSF                :", rsf.err, "\n")

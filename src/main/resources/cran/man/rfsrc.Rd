@@ -34,16 +34,18 @@
   and Ishwaran 2017).
   
 
-  New items to be aware of:
+  Highlighted new items:
   \enumerate{
+
 
     \item For computational speed, the default VIMP is no longer
     "permute" (Breiman-Cutler permutation importance) and has been
     switched to "anti" (\code{importance="anti"},
-    \code{importance=TRUE}; see below for details).  Be aware in some
+    \code{importance=TRUE}; see below for details). Be aware in some
     situations, such as highly imbalanced classification, that
-    permutation VIMP may perform better.  Permutation VIMP is 
+    permutation VIMP may perform better. Permutation VIMP is
     obtained using \code{importance="permute"}.
+
 
     \item \code{save.memory} can be used for big data to save memory;
     especially useful for survival and competing risks.
@@ -54,21 +56,6 @@
 
     \item Visualize trees on your Safari or Google Chrome
     browser (works for all families).  See \command{\link{get.tree}}.
-
-    %\item Fast hold out VIMP (see \command{\link{holdout.vimp}}).
-    %Can be conservative but has good false discovery properties
-    %unlike Breiman-Cutler VIMP (see \command{\link{vimp}}).
-    %\item VIMP confidence intervals using subsampling (see
-    %\command{\link{subsample}}).
-    %\item q-classifier for class imbalanced data, including G-mean
-    %VIMP which is superior to Breiman-Cutler
-    %(see \command{\link{imbalanced}}).
-    %\item Fast imputation using on the fly imputation,
-    %missForest and multivariate missForest (see
-    %\command{\link{impute}}).
-    %\item Fast random forests using subsampling (see \command{\link{rfsrc.fast}}).
-    %\item sidClustering (see \command{\link{sidClustering}}) for
-    %unsupervised data analysis.
 
   }
   
@@ -145,21 +132,19 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     be recovered later using \command{vimp} or \command{predict}.}
 
   \item{block.size}{Determines how cumulative error rate is calculated.
-    When \code{NULL}, only done once for entire forest; thus plot of the
-    cumulative error rate will result in a flat line.  To view the
-    cumulative error rate on every nth tree, set the value to an integer
-    between \code{1} and \code{ntree}.  As an intended side effect, if
-    importance is requested, VIMP is calculated in "blocks" of size
-    equal to \code{block.size}, thus resulting in a compromise between
-    ensemble and tree VIMP. The default action in that case is to use 10
-    trees.}
-
-  \item{bootstrap}{Bootstrap protocol.  Default is \code{by.root} which
-    bootstraps the data by sampling with or without replacement (without
-    replacement is the default; see the option \code{samptype} below).
-    If \code{none}, the data is not bootstrapped (it is not possible to
-    return OOB ensembles or prediction error in this case).  If
-    \code{by.user}, the bootstrap specified by \code{samp} is used.}
+    When \code{NULL}, it is calculated once for the entire forest,
+    resulting in a flat cumulative error rate plot. To view the
+    cumulative error rate for every nth tree, set \code{block.size} to
+    an integer between \code{1} and \code{ntree}. If importance is
+    requested, VIMP is calculated in blocks of size \code{block.size},
+    balancing between ensemble and tree VIMP. The default is 10 trees.}
+  
+  \item{bootstrap}{Bootstrap protocol. Default is \code{by.root}, which
+    bootstraps the data by sampling with or without replacement (default
+    is without replacement; see \code{samptype} below).  If \code{none},
+    the data is not bootstrapped (OOB ensembles or prediction error
+    cannot be returned).  If \code{by.user}, the bootstrap specified by
+    \code{samp} is used.}
 
   \item{samptype}{Type of bootstrap used when \code{by.root} is in
     effect.  Choices are \code{swor} (sampling without replacement; 
@@ -172,50 +157,51 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \item{membership}{Should terminal node membership and inbag
     information be returned?}
 
-  \item{sampsize}{Function specifying bootstrap size when \code{by.root}
-    is in effect.  For sampling without replacement, it is the requested
-    size of the sample, which by default is .632 times the sample size.
-    For sampling with replacement, it is the sample size.  Can also be
-    specified using a number.}
 
-  \item{na.action}{Action taken if the data contains \code{NA}'s.
-    Possible values are \code{na.omit} or \code{na.impute}.  The default
-    \code{na.omit} removes the entire record if any entry is
-    \code{NA}. Selecting \code{na.impute} imputes the data (see below
-    for details).  Also see the function \command{impute} for fast
-    imputation.}
+  \item{sampsize}{Specifies bootstrap size when \code{by.root} is in
+    effect. For sampling without replacement, it is the requested size
+    of the sample, defaulting to .632 times the sample size. For
+    sampling with replacement, it is the sample size. Can also be
+    specified as a number.}
+
+  \item{na.action}{Action taken if the data contains
+    \code{NA}s. Possible values are \code{na.omit} or
+    \code{na.impute}. The default, \code{na.omit}, removes the entire
+    record if any entry is \code{NA}. Selecting \code{na.impute} imputes
+    the data (see below for details). Also see the function
+    \command{impute} for fast imputation.}
 
   \item{nimpute}{Number of iterations of the missing data algorithm.
     Performance measures such as out-of-bag (OOB) error rates are
     optimistic if \code{nimpute} is greater than 1.}
-  
-  \item{ntime}{Integer value used for survival to constrain ensemble
+
+
+
+  \item{ntime}{Integer value for survival to constrain ensemble
     calculations to an \code{ntime} grid of time points over the
-    observed event times.  Alternatively if a vector of values of length
-    greater than one is supplied, it is assumed these are the time
-    points to be used (these will be adjusted to match closest observed
-    event times).  Setting \code{ntime} to zero (or NULL) uses all
-    observed event times.}
+    observed event times. If a vector of values with length greater than
+    one is supplied, it is assumed these are the time points to be used
+    (adjusted to match closest observed event times). Setting
+    \code{ntime} to zero (or NULL) uses all observed event times.}
 
   \item{cause}{Integer value between 1 and \code{J} indicating the event
     of interest for splitting a node for competing risks, where \code{J}
-    is the number of event types. If not specified, the default is to
-    use a composite splitting rule that averages over all event types.
-    Can also be a vector of non-negative weights of length \code{J}
-    specifying weights for each event (for example, a vector of ones
-    reverts to the default composite split statistic).  Regardless of
-    how \code{cause} is specified, estimates for all event types are
-    returned.}
+    is the number of event types. If not specified, the default is a
+    composite splitting rule averaging over all event types.  Can also
+    be a vector of non-negative weights of length \code{J} specifying
+    weights for each event (a vector of ones reverts to the default
+    composite split statistic). Estimates for all event types are
+    returned regardless of how \code{cause} is specified.}
 
-  \item{perf.type}{Optional character value specifying metric used
-    for predicted value, variable importance (VIMP), and error rate.
-    Reverts to the family default metric if not specified.
-    \code{perf.type="none"} turns off performance entirely which is a
-    useful way to turn off C-index calculations for big survival data
-    (which can be expensive).  Values allowed for
-    univariate/multivariate classification are:
-    \code{perf.type="misclass"} (default), \code{perf.type="brier"} and
-    \code{perf.type="gmean"}.}
+  \item{perf.type}{Optional character value specifying the metric used for
+    predicted value, variable importance (VIMP), and error rate.
+    Defaults to the family metric if not specified.
+    \code{perf.type="none"} turns off performance entirely, useful for
+    turning off C-error rate calculations for large survival data (which can
+    be expensive). Values allowed for univariate/multivariate
+    classification are: \code{perf.type="misclass"} (default),
+    \code{perf.type="brier"}, and \code{perf.type="gmean"}.}
+
   
   \item{proximity}{Proximity of cases as measured by the frequency of
     sharing the same terminal node.  This is an \code{n}x\code{n}
@@ -245,8 +231,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     splitting.  Default is uniform weights.}
 
   
-  \item{yvar.wt}{Used for sending in features with custom splitting.
-    For expert use only.}
+  \item{yvar.wt}{Vector of non-negative weights (does not have to sum
+   to 1) representing the probability of selecting a response variable
+   in multivariate regression.  Used when the number of responses are
+   high-dimensional.  See the example below.}
 
   \item{split.wt}{Vector of non-negative weights used for multiplying
     the split statistic for a variable. A large value encourages the
@@ -483,7 +471,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
 
 	\item \emph{Turn off performace}
 
-	The C-index error rate calculation can be very expensive for big
+	The C-error rate calculation can be very expensive for big
 	survival data.  Set \code{perf.type="none"} to turn this off and
 	all other performance calculations (then consider using the
 	function \code{get.brier.survival} as a fast way to get survival
@@ -545,12 +533,12 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     also available, see the function \command{imbalanced} for more
     details.
     
-    For survival, prediction error is measured by 1-C, where C is
-    Harrell's (Harrell et al., 1982) concordance index.  Prediction error
-    is between 0 and 1, and measures how well the predictor correctly
-    ranks (classifies) two random individuals in terms of survival.  A
-    value of 0.5 is no better than random guessing. A value of 0 is
-    perfect.
+    For survival, prediction error is measured by the C-error rate
+    defined as 1-C, where C is Harrell's (Harrell et al., 1982)
+    concordance index.  The C-error is between 0 and 1, and measures
+    error in ranking (classifying) two random individuals in terms of
+    survival.  A value of 0.5 is no better than random guessing. A value
+    of 0 is perfect.
     
     When bootstrapping is by \code{none}, a coherent OOB subset is not
     available to assess prediction error.  Thus, all outputs dependent
@@ -1027,16 +1015,15 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \command{\link{vimp.rfsrc}}
 }
 \examples{
+\donttest{
 ##------------------------------------------------------------
 ## survival analysis
 ##------------------------------------------------------------
-options(rf.cores=2, mc.cores=2)
 
 ## veteran data
 ## randomized trial of two treatment regimens for lung cancer
 data(veteran, package = "_PROJECT_PACKAGE_NAME_")
-v.obj <- rfsrc(Surv(time, status) ~ ., data = veteran, 
-                   ntree = 10, block.size = 1)
+v.obj <- rfsrc(Surv(time, status) ~ ., data = veteran, block.size = 1)
 
 ## plot tree number 3
 plot(get.tree(v.obj, 3))
@@ -1055,7 +1042,6 @@ matplot(v.obj$time.interest, 100 * t(v.obj$survival.oob[1:10, ]),
 ## using function "plot.survival" 
 plot.survival(v.obj, subset = 1:10)
 
-\donttest{
 ## obtain Brier score using KM and RSF censoring distribution estimators
 bs.km <- get.brier.survival(v.obj, cens.model = "km")$brier.score
 bs.rsf <- get.brier.survival(v.obj, cens.model = "rfsrc")$brier.score
@@ -1171,7 +1157,7 @@ pbc.imp <- impute(Surv(days, status) ~ ., pbc, splitrule = "random")
 
 ##------------------------------------------------------------
 ## compare RF-SRC to Cox regression
-## Illustrates C-index and Brier score measures of performance
+## Illustrates C-error and Brier score measures of performance
 ## assumes "pec" and "survival" libraries are loaded
 ##------------------------------------------------------------
 
@@ -1209,7 +1195,7 @@ if (library("survival", logical.return = TRUE)
   print(prederror.pbc)
   plot(prederror.pbc)
 
-  ## compute out-of-bag C-index for cox regression and compare to rfsrc
+  ## compute out-of-bag C-error for cox regression and compare to rfsrc
   rfsrc.obj <- rfsrc(surv.f, pbc.na)
   cat("out-of-bag Cox Analysis ...", "\n")
   cox.err <- sapply(1:100, function(b) {
@@ -1456,6 +1442,42 @@ boxplot(t(svimp), col = "bisque", cex.axis = .7, las = 2,
         ylab = "standardized VIMP",
         main = "diet/genotype/lipid VIMP for each gene")
 	
+
+## ------------------------------------------------------------
+## illustrates yvar.wt which sets the probability of selecting 
+## the response variables in multivariate regression
+## ------------------------------------------------------------
+
+## use mtcars: add fake responses
+mult.mtcars  <- cbind(mtcars, mtcars$mpg, mtcars$mpg)
+names(mult.mtcars) = c(names(mtcars), "mpg2", "mpg3")
+
+## noise up the fake responses
+mult.mtcars$mpg2 <- sample(mtcars$mpg)
+mult.mtcars$mpg3 <- sample(mtcars$mpg)
+
+formula = as.formula(Multivar(mpg, mpg2, mpg3)  ~ .)
+
+## select 2 of the 3 responses randomly at each split with an associated weight vector.
+## choose the noisy y responses which should degrade performance
+yvar.wt = c(0.000001, 0.5, 0.5)
+ytry = 2
+
+mult.grow <- rfsrc(formula = formula, data = mult.mtcars, ytry = ytry, yvar.wt = yvar.wt)
+
+print(mult.grow)
+print(get.mv.error(mult.grow))
+
+## Also, compare the following two results, as they should be similar:
+yvar.wt = c(1.0, 00000.1, 00000.1)
+ytry = 1
+
+result1 = rfsrc(formula = formula, data = mult.mtcars, ytry = ytry, yvar.wt = yvar.wt)
+result2 = rfsrc(mpg ~ ., mtcars)
+
+print(get.mv.error(result1))
+print(get.mv.error(result2))
+
 ## ------------------------------------------------------------
 ## custom splitting using the pre-coded examples
 ## ------------------------------------------------------------

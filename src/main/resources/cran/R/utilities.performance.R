@@ -223,3 +223,23 @@ get.misclass.error <- function(y, yhat) {
   }
   err
 }
+## cross-entropy, log-loss
+get.logloss <- function(y, prob, robust = TRUE) {
+  lgl <- lapply(levels(y), function(yn) {
+    phat <- prob[, yn]
+    pt <- y == yn
+    if (sum(pt) > 0) {
+      -log(phat[pt])
+    }
+    else {
+      0
+    }
+  })
+  if (robust) {
+    lgl <- unlist(lgl[lengths(lgl) != 0])
+    mean(lgl[!is.infinite(lgl)], na.rm = TRUE)
+  }
+  else {
+    mean(unlist(lgl[lengths(lgl) != 0]), na.rm = TRUE)
+  }
+}                          

@@ -11,12 +11,16 @@ plot.competing.risk.rfsrc <- function (x, plots.one.page = FALSE, ...) {
     stop("this function only supports competing risk settings")
   }
   ## work-horse plotting function
-  matPlot <- function(matx, ylab = "", legend = "", pos = 1) {
+  comprplot <- function(matx, ylab = "", legend = "", pos = 2) {
     m <- dim(cbind(matx))[2]
     if (m > 1) legend <- paste(legend, 1:m, "  ")
     matplot(x$time.interest, matx, xlab = "Time", ylab = ylab, type = "l",
             col = (1:m), lty = 1, lwd = 3)
-    legend(c("topright", "bottomright")[pos], legend = legend, col = (1:m), lty = 1, lwd = 3)
+    legend(c("bottomleft", "topleft", "topright", "bottomright")[pos],
+           legend = legend,
+           col = (1:m),
+           lty = 1,
+           lwd = 3)
   }
   ## save par settings
   opar <- par(no.readonly = TRUE)
@@ -35,8 +39,8 @@ plot.competing.risk.rfsrc <- function (x, plots.one.page = FALSE, ...) {
     cif[, j] / (1 - rowSums(cif[, -j, drop = FALSE]))
   }))
   ## plot the results 
-  matPlot(cschf, "Cause-Specific CHF", "CSCHF", pos = 2)
-  matPlot(100 * cif, "Probability (%)", "CIF", 2)
-  matPlot(100 * cpc, "Probability (%)", "CPC", 2)
+  comprplot(cschf, "Cause-Specific CHF", "CSCHF", 2)
+  comprplot(100 * cif, "Probability (%)", "CIF", 2)
+  comprplot(100 * cpc, "Probability (%)", "CPC", 2)
 }
 plot.competing.risk <- plot.competing.risk.rfsrc

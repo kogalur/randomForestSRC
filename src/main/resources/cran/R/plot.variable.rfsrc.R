@@ -210,8 +210,8 @@ plot.variable.rfsrc <- function(
       xvar.names <- xvar.names[1:min(length(xvar.names), nvar)]
     }
     nvar <- length(xvar.names)
+    ## Marginal plot setup
     if (!partial) {
-      ## Marginal plot setup only.
       yhat <- extract.pred(predict(object, m.target = m.target),
                            pred.type,
                            subset,
@@ -220,76 +220,75 @@ plot.variable.rfsrc <- function(
                            target,
                            oob = oob)
     }
-      else {
-        ## Partial plot set up only.
-        if (npts < 1) npts <- 1 else npts <- round(npts)
-        ## Loop over all x-variables.
-        prtl <- lapply(1:nvar, function(k) {
-          ## We now allow subsetting of the x-values in the partial mode call.
-          ## x <- na.omit(object$xvar[, object$xvar.names == xvar.names[k]])
-          ## Bug reported by Amol Pande 16/11/2017
-          x <- na.omit(xvar[, object$xvar.names == xvar.names[k]])
-          if (is.factor(x)) x <- factor(x, exclude = NULL)          
-          n.x <- length(unique(x))
-          if (!is.factor(x) & n.x > npts) {
-            x.uniq <- sort(unique(x))[unique(as.integer(seq(1, n.x, length = min(npts, n.x))))]
+    ## Partial plot setup
+    else {
+      if (npts < 1) npts <- 1 else npts <- round(npts)
+      ## Loop over all x-variables.
+      prtl <- lapply(1:nvar, function(k) {
+        ## We now allow subsetting of the x-values in the partial mode call.
+        ## x <- na.omit(object$xvar[, object$xvar.names == xvar.names[k]])
+        ## Bug reported by Amol Pande 16/11/2017
+        x <- na.omit(xvar[, object$xvar.names == xvar.names[k]])
+        if (is.factor(x)) x <- factor(x, exclude = NULL)          
+        n.x <- length(unique(x))
+        if (!is.factor(x) & n.x > npts) {
+          x.uniq <- sort(unique(x))[unique(as.integer(seq(1, n.x, length = min(npts, n.x))))]
+        }
+        else {
+          if (is.factor(x)) {
+            x.uniq <- 1:length(unique(x))##partial.rfsrc requires factors as integers
           }
           else {
-            if (is.factor(x)) {
-              x.uniq <- 1:length(unique(x))##partial.rfsrc requires factors as integers
-            }
-            else {
-              x.uniq <- sort(unique(x))
-            }
+            x.uniq <- sort(unique(x))
           }
-          n.x <- length(x.uniq)
-          yhat <- yhat.se <- NULL
-          factor.x <- is.factor(x) | (n.x <= granule)
-          pred.temp <- extract.partial.pred(partial.rfsrc(object$forest,
-                                                          m.target = m.target,
-                                                          partial.type = pred.type,
-                                                          partial.xvar = xvar.names[k],
-                                                          partial.values = x.uniq,
-                                                          partial.time = time,
-                                                          oob = oob),
-                                            pred.type,
-                                            ## 1:n,
-                                            subset,##we now allow subsetting
-                                            m.target,
-                                            target)
-          ## Results in the mean along an x-value over n.
+        }
+        n.x <- length(x.uniq)
+        yhat <- yhat.se <- NULL
+        factor.x <- is.factor(x) | (n.x <= granule)
+        pred.temp <- extract.partial.pred(partial.rfsrc(object$forest,
+                                                        m.target = m.target,
+                                                        partial.type = pred.type,
+                                                        partial.xvar = xvar.names[k],
+                                                        partial.values = x.uniq,
+                                                        partial.time = time,
+                                                        oob = oob),
+                                          pred.type,
+                                          subset,##we now allow subsetting
+                                          m.target,
+                                          target)
+        ## Results in the mean along an x-value over n.
+        if (!is.null(dim(pred.temp))) {
+          mean.temp <- colMeans(pred.temp, na.rm = TRUE)
+        }
+        else {
+          mean.temp <- mean(pred.temp, na.rm = TRUE)
+        }
+        if (!factor.x) {
+          yhat <- mean.temp
+          if (coerce.multivariate(object, m.target)$family == "class") {
+            yhat.se <- mean.temp * (1 - mean.temp) / sqrt(n)
+          }
+          else {
+            sd.temp <- apply(pred.temp, 2, sd, na.rm = TRUE)
+            yhat.se <- sd.temp / sqrt(n)                
+          }
+        }
+        else {
           if (!is.null(dim(pred.temp))) {
-            mean.temp <- colMeans(pred.temp, na.rm = TRUE)
+            pred.temp <- t(apply(pred.temp, 1, function(yhat) {
+              se <- (yhat - mean.temp) / sqrt(n)
+              mean.temp + sign(se) * abs(se)
+            }))
           }
           else {
-            mean.temp <- mean(pred.temp, na.rm = TRUE)
+            pred.temp <- mean.temp + (pred.temp - mean.temp) / sqrt(n)
           }
-          if (!factor.x) {
-            yhat <- mean.temp
-            if (coerce.multivariate(object, m.target)$family == "class") {
-              yhat.se <- mean.temp * (1 - mean.temp) / sqrt(n)
-            }
-            else {
-              sd.temp <- apply(pred.temp, 2, sd, na.rm = TRUE)
-              yhat.se <- sd.temp / sqrt(n)                
-            }
-          }
-          else {
-            if (!is.null(dim(pred.temp))) {
-              #pred.temp <- t(mean.temp + (t(pred.temp) - mean.temp) / sqrt(n))
-              pred.temp <- t(apply(pred.temp, 1, function(yhat) {
-                se <- (yhat - mean.temp) / sqrt(n)
-                mean.temp + sign(se) * abs(se)
-              }))
-            }
-            else {
-              pred.temp <- mean.temp + (pred.temp - mean.temp) / sqrt(n)
-            }
-            yhat <- c(yhat, pred.temp)
-            x.uniq <- sort(unique(x))##map factor back to original labels
-          }
-          list(xvar.names = xvar.names[k], yhat = yhat, yhat.se = yhat.se, n.x = n.x, x.uniq = x.uniq, x = x)
-        })
+          yhat <- c(yhat, pred.temp)
+          x.uniq <- sort(unique(x))##map factor back to original labels
+        }
+        list(xvar.names = xvar.names[k], yhat = yhat, yhat.se = yhat.se, n.x = n.x, x.uniq = x.uniq, x = x)
+      })
+      names(prtl) <- xvar.names
     }
     plots.per.page <- max(round(min(plots.per.page,nvar)), 1)
     granule <- max(round(granule), 1)
@@ -307,43 +306,56 @@ plot.variable.rfsrc <- function(
                               smooth.lines = smooth.lines)
     if (partial) {
       plot.variable.obj$pData <- prtl
+      #06/15/24: provide this object for convenience of custom user plots
+      plot.variable.obj$plotthis <- lapply(prtl, function(pp) {
+        if (length(pp$x.uniq) == length(pp$yhat)) {
+          data.frame(x=pp$x.uniq, yhat=pp$yhat)
+        }
+        else {
+          data.frame(x=rep(pp$x.uniq, rep(n, pp$n.x)), yhat=pp$yhat)
+        }
+      })
     }
-      else {
-        plot.variable.obj$yhat <- yhat
-        plot.variable.obj$xvar <- xvar
-      }
+    else {
+      plot.variable.obj$yhat <- yhat
+      plot.variable.obj$xvar <- xvar
+    }
     ## assign the class
     class(plot.variable.obj) <- c("rfsrc", "plot.variable", family)
   }
-  ## ---------------------------------------------------------------------------------
-  ## TBD2 Currently, the plot.variable family is not implemented!
-  ## Just pull the precomputed variables ...
-    else {
-      plot.variable.obj <- object
-      remove(object)
-      family <- plot.variable.obj$family
-      partial <- plot.variable.obj$partial
-      event.info <- plot.variable.obj$event.info
-      target <- plot.variable.obj$target
-      ylabel <- plot.variable.obj$ylabel
-      n <- plot.variable.obj$n
+  ## --------------------------------------------------------------------------------------------
+  ## do the following if the class IS "plot.variable" 
+  else {
+    plot.variable.obj <- object
+    remove(object)
+    family <- plot.variable.obj$family
+    partial <- plot.variable.obj$partial
+    event.info <- plot.variable.obj$event.info
+    target <- plot.variable.obj$target
+    ylabel <- plot.variable.obj$ylabel
+    n <- plot.variable.obj$n
+    if (missing(xvar.names)) {
       xvar.names <- plot.variable.obj$xvar.names
-      nvar <- plot.variable.obj$nvar 
-      plots.per.page <- plot.variable.obj$plots.per.page
-      granule <- plot.variable.obj$granule
-      smooth.lines <- plot.variable.obj$smooth.lines
-      if (partial) {
-        prtl <- plot.variable.obj$pData
-      }
-        else {
-          yhat <- plot.variable.obj$yhat
-          xvar <- plot.variable.obj$xvar
-        }
-      if (!is.null(event.info)){
-        cens <- event.info$cens
-        event.type <- event.info$event.type
-      }
     }
+    else {
+      xvar.names <- intersect(xvar.names, plot.variable.obj$xvar.names)
+    }
+    nvar <- length(xvar.names)
+    plots.per.page <- min(plot.variable.obj$plots.per.page, nvar)
+    granule <- plot.variable.obj$granule
+    smooth.lines <- plot.variable.obj$smooth.lines
+    if (partial) {
+      prtl <- plot.variable.obj$pData[xvar.names]
+    }
+    else {
+      yhat <- plot.variable.obj$yhat
+      xvar <- plot.variable.obj$xvar[, xvar.names, drop = FALSE]
+    }
+    if (!is.null(event.info)){
+      cens <- event.info$cens
+      event.type <- event.info$event.type
+    }
+  }
   ## save par settings
   if (show.plots) {
     old.par <- par(no.readonly = TRUE)

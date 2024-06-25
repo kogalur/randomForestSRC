@@ -136,6 +136,12 @@ pdta <- get.partial.plot.data(partial.obj)
 plot(pdta$x, pdta$yhat, type = "b", pch = 16,
       xlab = "wind", ylab = "partial effect of wind")
 
+
+## example where we display all the partial effects
+## instead of averaging - use the granule=TRUE option
+pdta <- get.partial.plot.data(partial.obj, granule = TRUE)
+boxplot(pdta$yhat ~ pdta$x, xlab = "Wind", ylab = "partial effect")
+
 ## ------------------------------------------------------------
 ##
 ## regression: partial effects for two variables simultaneously
@@ -245,6 +251,17 @@ pdta <- get.partial.plot.data(partial.obj)
 plot(lowess(pdta$x, pdta$yhat, f = 1/3),
    type = "l", xlab = "age", ylab = "adjusted mortality")
 
+## example where x is discrete - partial effect of age on mortality
+## we use the granule=TRUE option
+partial.obj <- partial(v.obj,
+       partial.type = "mort",
+       partial.xvar = "trt",
+       partial.values = v.obj$xvar$trt,
+       partial.time = v.obj$time.interest)
+pdta <- get.partial.plot.data(partial.obj, granule = TRUE)
+boxplot(pdta$yhat ~ pdta$x, xlab = "treatment", ylab = "partial effect")
+
+
 ## partial effects of karnofsky score on survival
 karno <- quantile(v.obj$xvar$karno)
 partial.obj <- partial(v.obj,
@@ -282,7 +299,6 @@ plot(lowess(pdta1$x, pdta1$yhat),
    type = "l", xlab = "age", ylab = "adjusted years lost relapse")
 plot(lowess(pdta2$x, pdta2$yhat),
    type = "l", xlab = "age", ylab = "adjusted years lost death")
-
 
 ## partial effect of age on cif
 partial.obj <- partial(follic.obj,

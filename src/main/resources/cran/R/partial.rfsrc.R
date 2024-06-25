@@ -554,7 +554,7 @@ partial <- partial.rfsrc
 ##
 ##
 ##################################################################
-get.partial.plot.data <- function(o, target, m.target = NULL) {
+get.partial.plot.data <- function(o, target, m.target = NULL, granule = FALSE) {
   ##--------------------------------------------------------------
   ##
   ## coherency checks
@@ -570,6 +570,7 @@ get.partial.plot.data <- function(o, target, m.target = NULL) {
   ##--------------------------------------------------------------
   family <- class(o)[3]
   yvar.names <- o$yvar.names
+  x <-  o$partial.values
   ## multivariate families
   if (family == "regr+" | family == "class+" | family == "mix+") {
     ## determine the y-outcome to be used
@@ -593,19 +594,19 @@ get.partial.plot.data <- function(o, target, m.target = NULL) {
       }
       pdta <- pdta[, 1 + target, ]
       pdta[is.infinite(pdta)] <- NA
-      yhat <- colMeans(pdta, na.rm = TRUE)    
+      yhat <- partialhat(pdta, x, granule)
     }
     ## regression
     else {
       pdta[is.infinite(pdta)] <- NA
-      yhat <- colMeans(pdta, na.rm = TRUE)
+      yhat <- partialhat(pdta, x, granule)
     }
   }
   ## regression
   else if (family == "regr") {
     pdta <- o$regrOutput[[1]]
     pdta[is.infinite(pdta)] <- NA
-    yhat <- colMeans(pdta, na.rm = TRUE)    
+    yhat <- partialhat(pdta, x, granule)    
   }
   ## classification
   else if (family == "class") {
@@ -619,7 +620,7 @@ get.partial.plot.data <- function(o, target, m.target = NULL) {
     }
     pdta <- pdta[, 1 + target, ]
     pdta[is.infinite(pdta)] <- NA
-    yhat <- colMeans(pdta, na.rm = TRUE)    
+    yhat <- partialhat(pdta, x, granule)    
   }
   ## survival
   else if (family == "surv") {
@@ -628,12 +629,12 @@ get.partial.plot.data <- function(o, target, m.target = NULL) {
     ## surv, chf
     if (length(dim(pdta)) > 2) {
       yhat <- do.call(cbind, lapply(1:dim(pdta)[2], function(k) {
-        colMeans(pdta[, k, ], na.rm = TRUE)
+        partialhat(pdta[, k, ], x, granule)
       }))
     }
     ## mortality
     else {
-      yhat <- colMeans(pdta, na.rm = TRUE)
+      yhat <- partialhat(pdta, x, granule)
     }
   }
   ## competing risk
@@ -650,12 +651,12 @@ get.partial.plot.data <- function(o, target, m.target = NULL) {
     ## cif, chf
     if (length(dim(pdta)) > 3) {
       yhat <- do.call(cbind, lapply(1:dim(pdta)[2], function(k) {
-        colMeans(pdta[, k, target, ], na.rm = TRUE)
+        partialhat(pdta[, k, target, ], x, granule)
       }))
     }
     ## years-lost
     else {
-      yhat <- colMeans(pdta[, target, ], na.rm = TRUE)
+      yhat <- partialhat(pdta[, target, ], x, granule)
     }
   }
   else {
@@ -666,7 +667,15 @@ get.partial.plot.data <- function(o, target, m.target = NULL) {
   ## return the goodies
   ##
   ##--------------------------------------------------------------
-  list(x = o$partial.values, yhat = yhat, partial.time = o$partial.time)
+  if (granule) {
+    x.unq <- sort(unique(x))
+    n <- dim(pdta)[1]
+    n.x <- length(x.unq)
+    list(x = rep(x.unq, rep(n, n.x)), yhat = yhat, partial.time = o$partial.time)
+  }
+  else {
+    list(x = x, yhat = yhat, partial.time = o$partial.time)
+  }
 }
 ##################################################################
 ##
@@ -675,6 +684,14 @@ get.partial.plot.data <- function(o, target, m.target = NULL) {
 ##
 ##
 ##################################################################
+partialhat <- function(pdta, x, granule = FALSE) {
+  if (granule) {
+    c(pdta)
+  }
+  else {
+    colMeans(pdta, na.rm = TRUE)
+  }
+}
 get.partial.bits <- function (partial.length) {
   ## Convert partial option into native code parameter.
   if (!is.null(partial.length)) {

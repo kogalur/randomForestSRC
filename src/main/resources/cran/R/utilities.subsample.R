@@ -160,15 +160,15 @@ get.subsample.joint.vimp <- function(o, rf.prms = NULL, xvar.names) {
 ## get standarized vimp from a matrix (p x B) of subsampled vimp
 ##
 ###################################################################
-get.subsample.standardize.vimp <- function(obj, vmp, standardize = FALSE) {
+get.subsample.standardize.vimp <- function(obj, vmp, standardize = FALSE, sc = 1) {
   if (standardize && !is.null(obj)) {
     vmp <- do.call(cbind, lapply(1:ncol(vmp), function(j) {
       v <- vmp[, j]
       if (obj$family != "regr") {
-        100 * v 
+        sc * v 
       }
       else {
-        100 * v / var(obj$yvar, na.rm = TRUE)
+        sc * v / var(obj$yvar, na.rm = TRUE)
       }
     }))
   }
@@ -266,3 +266,33 @@ vimp.subsample.combine <- function(o1, o2, o2.name = NULL) {
   }
   rO
 }
+###################################################################
+##
+## custom progress bar
+##
+###################################################################
+custom_progress_bar <- function(iteration, total, width = 50) {
+  # Calculate the percentage of completion
+  percent <- iteration / total
+  # Calculate the number of characters to display
+  progress <- round(width * percent)
+  # ANSI color codes for green
+  green_start <- "\033[32m"
+  color_end <- "\033[0m"
+  # Unicode block character (escaped)
+  block_char <- "\u2588"
+  # Create the progress bar string with color and blocks
+  bar <- paste0("[", green_start, paste(rep(block_char, progress), collapse = ""), 
+                color_end, paste(rep(" ", width - progress), collapse = ""), "]")
+  # Create the percentage string
+  percent_string <- sprintf(" %3d%%", round(100 * percent))
+  # Print the progress bar to the console
+  cat("\r", bar, percent_string, sep = "")
+  # Flush the console output to ensure it is displayed immediately
+  flush.console()
+  # Clear the progress bar when complete
+  if (iteration == total) {
+    cat("\r", paste(rep(" ", width + 10), collapse = ""), "\r", sep = "")
+  }
+}
+custom.progress.bar  <- custom_progress_bar

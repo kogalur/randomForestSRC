@@ -172,7 +172,7 @@ print(get.quantile(o, c(.25, .50, .75)))
 ## extract conditional mean and standard deviation
 print(get.quantile.stat(o))
 
-## continuous rank probabiliy score (crps) performance
+## standardized continuous rank probabiliy score (crps) performance
 plot(get.quantile.crps(o), type = "l")
 
 
@@ -199,7 +199,7 @@ if (library("mlbench", logical.return = TRUE)) {
   data(BostonHousing)
   o <- quantreg(medv ~ ., BostonHousing, method = "forest", nodesize = 1)
 
-  ## continuous rank probabiliy score (crps) 
+  ## standardized continuous rank probabiliy score (crps) 
   plot(get.quantile.crps(o), type = "l")
 
   ## quantile regression plot

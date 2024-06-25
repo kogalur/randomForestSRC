@@ -1,4 +1,4 @@
-check.factor <- function(test, gfactor) {
+check.factor <- function(test, gfactor, ignore = TRUE) {
   if (!is.null(gfactor)) {
     if (length(gfactor$factor) > 0) {
       test[, match(gfactor$factor, colnames(test))] <- data.frame(
@@ -6,7 +6,9 @@ check.factor <- function(test, gfactor) {
                  function(k) {
                    fk.test <- as.character(test[ , colnames(test) == gfactor$factor[k]])
                    if (!all(is.element(unique(na.omit(fk.test)), gfactor$levels[[k]]))) {
-                     #stop("levels of factors in test data do not match those in training data\n")
+                     if (!ignore) {
+                       stop("levels of factors in test data do not match those in training data\n")
+                     }
                      fake.level.k <- paste0(tail(gfactor$levels[[k]], 1), "+")
                      fk.test[!is.element(fk.test, gfactor$levels[[k]])] <- fake.level.k
                      factor(fk.test, levels = c(gfactor$levels[[k]], fake.level.k), exclude = NULL)
@@ -22,7 +24,9 @@ check.factor <- function(test, gfactor) {
                  function(k) {
                    fk.test <- as.character(test[ , colnames(test) == gfactor$order[k]])
                    if (!all(is.element(unique(na.omit(fk.test)), gfactor$order.levels[[k]]))) {
-                     #stop("levels of ordered factors in test data do not match those in training data\n")
+                     if (!ignore) {
+                       stop("levels of ordered factors in test data do not match those in training data\n")
+                     }
                      fake.order.level.k <- paste0(tail(gfactor$order.levels[[k]], 1), "+")
                      fk.test[!is.element(fk.test, gfactor$order.levels[[k]])] <- fake.order.level.k
                      factor(fk.test, levels = c(gfactor$order.levels[[k]], fake.order.level.k), ordered = TRUE)
@@ -148,11 +152,11 @@ rm.na.levels <- function(dat, xvar.names=NULL) {
     if (any(levels.na.pt)) {
       factor.names <- factor.names[levels.na.pt]
       dat[, match(factor.names, names(dat))] <- data.frame(mclapply(1:length(factor.names),
-                                                                    function(k) {
-                                                                      x <- dat[ , names(dat) == factor.names[k]]
-                                                                      levels(x)[levels(x) == "NA"]  <- NA
-                                                                      x
-                                                                    }))
+                                     function(k) {
+                                       x <- dat[ , names(dat) == factor.names[k]]
+                                       levels(x)[levels(x) == "NA"]  <- NA
+                                       x
+                                     }))
     }
   }
   dat

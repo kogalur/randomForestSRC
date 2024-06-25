@@ -21,7 +21,8 @@
  \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc,
     synthetic)}, or \code{(rfsrc, plot.variable)}.}
 
- \item{xvar.names}{Names of the x-variables to be used.}
+ \item{xvar.names}{Names of the x-variables to be used.  If not supplied
+   all variables will be used.}
 
  \item{target}{For classification, an integer or
     character value specifying the class to focus on (defaults to the
@@ -195,6 +196,13 @@ plot.variable(p.v)
 p.v$plots.per.page <- 1
 p.v$smooth.lines <- FALSE
 plot.variable(p.v)
+
+## example using a pre-processed plot.variable to define custom plots
+p.v <- plot.variable(v.obj, surv.type = "surv", partial = TRUE, show.plots = FALSE)
+plotthis <- p.v$plotthis
+plot(plotthis[["age"]], xlab = "age", ylab = "partial effect", type = "b")
+boxplot(yhat ~ x, plotthis[["trt"]], xlab = "treatment", ylab = "partial effect")
+
 
 ## competing risks
 data(follic, package = "_PROJECT_PACKAGE_NAME_")

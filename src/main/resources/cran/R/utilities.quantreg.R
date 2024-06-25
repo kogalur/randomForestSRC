@@ -46,7 +46,7 @@ get.quantile <- function(o, target.prob = NULL, pretty = TRUE) {
   rO
 }
 ## extract crps
-get.quantile.crps <- function(o, pretty = TRUE, subset = NULL) {
+get.quantile.crps <- function(o, pretty = TRUE, subset = NULL, standardize = TRUE) {
   ## extract the quantile object
   qO <- extract.quantile(o)
   ## does not apply to predict objects without y
@@ -82,7 +82,12 @@ get.quantile.crps <- function(o, pretty = TRUE, subset = NULL) {
     })), na.rm = TRUE)
     ## crps
     crps <- unlist(lapply(1:length(q$yunq), function(j) {
-      trapz(q$yunq[1:j], brS[1:j]) / diff(range(q$yunq[1:j]))
+      if (standardize) {
+        trapz(q$yunq[1:j], brS[1:j]) / diff(range(q$yunq[1:j]))
+      }
+      else {
+        trapz(q$yunq[1:j], brS[1:j])
+      }
     }))
     data.frame(y = q$yunq, crps = crps)
   })

@@ -323,7 +323,9 @@ generic.predict.rfsrc <-
     ## If the outcomes contain factors we need to check factor coherence.
     if (any.outcome.factor) {
       if (yvar.present) {
-        newdata <- check.factor(newdata, yfactor)
+        ### COMMENT THIS OUT IF YOU WANT TO ELIMINATE BAD Y-TEST OUTCOME LABELS
+        ### newdata <- check.factor(newdata, yfactor, ignore = FALSE)
+        newdata <- check.factor(newdata, yfactor, ignore = TRUE)
       }
     }
     ## Extract test yvar names (if any) and xvar names.
@@ -536,6 +538,8 @@ generic.predict.rfsrc <-
       chunk = 0
   }
    
+  ## set the maximum class levels
+  max.class.levels <- 0
   ## Start the C external timer.
   ctime.external.start  <- proc.time()
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
@@ -573,8 +577,10 @@ generic.predict.rfsrc <-
                                   as.integer(n),
                                   list(as.integer(length(yvar.types)),
                                        if (is.null(yvar.types)) NULL else as.character(yvar.types),
-                                       if (is.null(yvar.types)) NULL else as.integer(yvar.nlevels),
-                                       if (is.null(yvar.numeric.levels)) NULL else sapply(1:length(yvar.numeric.levels), function(nn) {as.integer(length(yvar.numeric.levels[[nn]]))}),
+                                       if (is.null(yvar.types)) NULL else as.integer (sapply(1:length(yvar.nlevels), function(nn) {
+                                         if(yvar.nlevels[nn] > 0) max(max.class.levels, yvar.nlevels[nn]) else 0})),
+                                       if (is.null(yvar.numeric.levels)) NULL else sapply(1:length(yvar.numeric.levels), function(nn) {
+                                         as.integer(length(yvar.numeric.levels[[nn]]))}),
                                        if (is.null(subj)) NULL else as.integer(subj),
                                        if (is.null(event.type)) NULL else as.integer(length(event.type)),
                                        if (is.null(event.type)) NULL else as.integer(event.type)),

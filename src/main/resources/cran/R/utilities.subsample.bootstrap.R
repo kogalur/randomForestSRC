@@ -55,14 +55,10 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names,
   ## bootstrap loop for calculating VIMP confidence regions
   ##
   ##----------------------------------------------------------
-  if (verbose) pb <- txtProgressBar(min = 0, max = B, style = 3)
   vmpB <- lapply(1:B, function(b) {
     ## progress bar
     if (verbose && B > 1) {
-      setTxtProgressBar(pb, b)
-    }
-    if (verbose && b == B) {
-      cat("\n")
+      custom.progress.bar(b, B)
     }
     ##---------------------------------------------------
     ##

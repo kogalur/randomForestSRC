@@ -286,6 +286,7 @@
       <arg line="--clean"/>
       <arg line="--preclean"/>
       <arg line="--build"/>
+      <arg line="--no-clean-on-error"/>
       <arg line="${project.pkg.name}"/>
     </exec>
 

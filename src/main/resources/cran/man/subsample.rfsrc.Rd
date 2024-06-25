@@ -83,8 +83,9 @@
   the original grow call.  Also, by calling VIMP in the original call,
   the type of importance used and other related parameters are set by
   values used in the original call which can eliminate confusion about
-  what parameters are being used in the subsampled forests.  Thus, it is
-  generally advised to call VIMP in the original call.
+  what parameters are being used in the subsampled forests.  For
+  example, the default importance used is not permutation importance.
+  Thus, it is generally advised to call VIMP in the original call.
 
   Subsampled forests are calculated using the same tuning parameters as
   the original forest.  While a sophisticated algorithm is utilized to
@@ -99,37 +100,39 @@
   estimator generally gives *larger* standard errors, which is a form of
   bias correction, and which occurs primarily for the signal variables.
 
+
   By default, stratified subsampling is used for classification,
-  survival, and competing risk families.  For classification,
+  survival, and competing risk families. For classification,
   stratification is on the class label, while for survival and competing
-  risk, stratification is on the event type and censoring.  Users are
+  risk, stratification is on the event type and censoring. Users are
   discouraged from over-riding this option, especially in small sample
   settings, as this could lead to error due to subsampled data not
-  having full representation of class labels in classification settings,
-  and in survival settings, subsampled data may be devoid of deaths
-  and/or have reduced number of competing risks.  Note also that
-  stratified sampling is not available for multivariate families --
-  users should especially exercise caution when selecting subsampling
-  rates here.
+  having full representation of class labels in classification
+  settings. In survival settings, subsampled data may be devoid of
+  deaths and/or have reduced number of competing risks. Note also that
+  stratified sampling is not available for multivariate families--users
+  should especially exercise caution when selecting subsampling rates
+  here.
+  
 
   The function \command{extract.subsample} can be used to extract
-  information from the subsampled object.  Returned values for VIMP
-  are "standardized" (this means for regression families, VIMP is
-  standardized by dividing by the variance of Y and multiplying by 100;
-  for all other families, VIMP is scaled by 100).  Use
-  \code{standardize}="FALSE" if you want unstandardized VIMP.  Setting
-  the option \code{raw}="TRUE" returns a more complete set of
-  information that is used by the function \link{plot.subsample.rfsrc}
-  for plotting confidence intervals.  Keep in mind some of this
-  information will be subsampled VIMP that is "raw" in the sense it
-  equals VIMP from a forest constructed with a much smaller sample
-  size.  This option is for experts only.
-  
-  When printing or plotting results, the default is to standardize
-  VIMP which can be turned off using the option \code{standardize}.
-  Also these wrappers preset the "alpha" value used for confidence
-  intervals; users can change this using option \code{alpha}.
-  
+  information from the subsampled object. Returned values for VIMP are
+  "standardized" (this means for regression families, VIMP is
+  standardized by dividing by the variance of Y; for all other
+  families, VIMP is unaltered). Use \code{standardize}="FALSE" if you
+  want unstandardized VIMP. Setting the option \code{raw}="TRUE" returns
+  a more complete set of information that is used by the function
+  \link{plot.subsample.rfsrc} for plotting confidence intervals. Keep in
+  mind some of this information will be subsampled VIMP that is "raw" in
+  the sense it equals VIMP from a forest constructed with a much smaller
+  sample size. This option is for experts only.
+
+
+  When printing or plotting results, the default is to standardize VIMP
+  which can be turned off using the option \code{standardize}. Also
+  these wrappers preset the "alpha" value used for confidence intervals;
+  users can change this using option \code{alpha}.
+
 }
 \value{
   A list with the following key components:

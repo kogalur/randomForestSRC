@@ -977,13 +977,13 @@ void *stackAndProtect(char   mode,
   va_end(list);
   switch(sexpType) {
   case NATIVE_TYPE_NUMERIC:
-    PROTECT(thisVector = NEW_NUMERIC(size));
+    thisVector = PROTECT(allocVector(REALSXP, size));
     break;
   case NATIVE_TYPE_INTEGER:
-    PROTECT(thisVector = NEW_INTEGER(size));
+    thisVector = PROTECT(allocVector(INTSXP, size));
     break;
   case NATIVE_TYPE_CHARACTER:
-    PROTECT(thisVector = NEW_CHARACTER(size));
+    thisVector = PROTECT(allocVector(STRSXP, size));
     break;
   default:
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
@@ -997,19 +997,19 @@ void *stackAndProtect(char   mode,
   UNPROTECT(1);
   switch(sexpType) {
   case NATIVE_TYPE_NUMERIC:
-    v = (double*) NUMERIC_POINTER(thisVector);
+    v = (double*) REAL(thisVector);
     for (ulong i = 0; i < size; i++) {
       ((double*) v)[i] = value;
     }
     break;
   case NATIVE_TYPE_INTEGER:
-    v = (uint*) INTEGER_POINTER(thisVector);
+    v = (uint*) INTEGER(thisVector);
     for (ulong i = 0; i < size; i++) {
       ((uint*) v)[i] = 0;
     }
     break;
   case NATIVE_TYPE_CHARACTER:
-    v = (char*) CHARACTER_POINTER(thisVector);
+    v = (char*) CHAR(thisVector);
     for (ulong i = 0; i < size; i++) {
       ((char*) v)[i] = 0;
     }

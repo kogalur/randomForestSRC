@@ -7,8 +7,8 @@
   subsampling a forest.
 }
 \usage{\method{plot.subsample}{rfsrc}(x, alpha = .01, xvar.names,
- standardize = TRUE, normal = TRUE, jknife = FALSE,
- target, m.target = NULL, pmax = 75, main = "", sorted = TRUE, ...)}
+ standardize = TRUE, normal = TRUE, jknife = FALSE, target, m.target = NULL,
+ pmax = 75, main = "", sorted = TRUE, show.plots = TRUE, ...)}
 \arguments{
 
   \item{x}{An object obtained from calling \command{subample}.}
@@ -19,8 +19,8 @@
   specified all variables used.}
   
   \item{standardize}{Standardize VIMP?  For regression families, VIMP is
-    standardized by dividing by the variance and then multipled by 100.
-    For all other families, VIMP is scaled by 100.}
+    standardized by dividing by the variance.  For all other families,
+    VIMP is unaltered.}
 
   \item{normal}{Use parametric normal confidence regions or
     nonparametric regions?  Generally, parametric regions perform better.}
@@ -43,6 +43,9 @@
   \item{main}{Title used for plot.}
   
   \item{sorted}{Should variables be sorted by importance values?}
+
+  \item{show.plots}{Should plots be displayed?  Allows users to produce
+    their own custom plots.}
 
   \item{...}{Further arguments that can be passed to \command{bxp}.}
   

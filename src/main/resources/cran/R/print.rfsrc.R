@@ -61,7 +61,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   ## coerce the (potentially) multivariate object if necessary.
   outcome.target <- get.univariate.target(x, outcome.target)
   x <- coerce.multivariate(x, outcome.target)
-  ## classification: outcome frequency/confusion matrix/brier/auc/gmean
+  ## classification: outcome frequency/confusion matrix/brier/auc/gmean/logloss
   rfq.flag <- FALSE
   if (x$family == "class") {
     if (!is.null(x$yvar)) {
@@ -83,7 +83,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         brier.norm.err <- get.brier.error(x$yvar,
              if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
         auc.err <- get.auc(x$yvar,
-             if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
+                      if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
+        logloss.err <- get.logloss(x$yvar,
+                      if(!is.null(x$predicted.oob) && !all(is.na(x$predicted.oob))) x$predicted.oob else x$predicted)
         iratio <- pr.auc.err <- gmean.err <- NULL
       }
       ## performance for two-class setting (returns NULL otherwise)
@@ -102,6 +104,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         brier.err <- perO$brier
         brier.norm.err <- perO$brier.norm
         auc.err <- perO$auc
+        logloss.err <- perO$logloss
         pr.auc.err <- perO$pr.auc
         gmean.err <- perO$gmean
         #if (x$forest$rfq) {
@@ -117,10 +120,11 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   ## survival, CR: CRPS and event frequencies
   if (grepl("surv", x$family)) {
     if (!is.null(x$err.rate) &x$family == "surv") {
-      crps.err  <- get.brier.survival(x)$crps.std
+      crps.err  <- get.brier.survival(x)$crps
+      crps.std.err  <- get.brier.survival(x)$crps.std
     }
     else {
-      crps.err <- NULL
+      crps.err <- crps.std.err <- NULL
     }
     event <- x$event.info$event
     n.event <- 1
@@ -137,9 +141,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   ## error rates 
   if (!is.null(x$err.rate)) {
     err.rate <- cbind(x$err.rate)
-    allcol.na <- apply(err.rate, 2, function(x) {all(is.na(x))})
-    err.rate <- na.omit(err.rate[, !allcol.na, drop = FALSE])
-    attributes(err.rate)$na.action <- NULL
+    #allcol.na <- apply(err.rate, 2, function(x) {all(is.na(x))})
+    #err.rate <- na.omit(err.rate[, !allcol.na, drop = FALSE])
+    #attributes(err.rate)$na.action <- NULL
     if (grepl("surv", x$family)) {
       err.rate <- digits.pretty(err.rate[nrow(err.rate), ], 8)
     }
@@ -231,6 +235,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       if (x$family == "class" && !is.null(auc.err)) {
         cat("                           (OOB) AUC: ", digits.pretty(auc.err, 8),        "\n", sep="")
       }
+      if (x$family == "class" && !is.null(logloss.err)) {
+        cat("                      (OOB) Log-loss: ", digits.pretty(logloss.err, 8),        "\n", sep="")
+      }
       if (x$family == "class" && !is.null(pr.auc.err)) {
         cat("                        (OOB) PR-AUC: ", digits.pretty(pr.auc.err, 8),     "\n", sep="")
       }
@@ -240,7 +247,10 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       if (x$family == "surv" && !is.null(crps.err)) {
         cat("                          (OOB) CRPS: ", digits.pretty(crps.err, 8),      "\n", sep="")
       }
-           cat("   (OOB) Requested performance error: ", err.rate,                      "\n\n", sep="")
+      if (x$family == "surv" && !is.null(crps.std.err)) {
+        cat("                   (OOB) stand. CRPS: ", digits.pretty(crps.std.err, 8),      "\n", sep="")
+      }
+        cat("   (OOB) Requested performance error: ", err.rate,                      "\n\n", sep="")
     }
     if (x$family == "class" && !is.null(conf.matx)) {
       if (!is.null(x$predicted.oob) && any(is.na(x$predicted.oob))) {
@@ -301,6 +311,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       if (x$family == "class" && !is.null(auc.err)) {
         cat("                                 AUC: ", digits.pretty(auc.err, 8),          "\n", sep="")
       }
+      if (x$family == "class" && !is.null(logloss.err)) {
+        cat("                            Log-loss: ", digits.pretty(logloss.err, 8),          "\n", sep="")
+      }
       if (x$family == "class" && !is.null(pr.auc.err)) {
         cat("                              PR-AUC: ", digits.pretty(pr.auc.err, 8),       "\n", sep="")
       }
@@ -309,6 +322,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       }
       if (x$family == "surv" && !is.null(crps.err)) {
         cat("                                CRPS: ", digits.pretty(crps.err, 8),      "\n", sep="")
+      }
+      if (x$family == "surv" && !is.null(crps.std.err)) {
+        cat("                         stand. CRPS: ", digits.pretty(crps.std.err, 8),      "\n", sep="")
       }
         cat("         Requested performance error: ", err.rate,                         "\n\n", sep="")
     }

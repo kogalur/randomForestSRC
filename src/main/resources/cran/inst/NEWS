@@ -10,6 +10,14 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Resolved an issue with classification where there is a discrepancy
+between training and unseen test set class labels.  Minor fixes to
+subsampling and improved the plot function for subsampling to allow
+users to retrieve the plot information for developing custom figures.
+
+---------------------------------------------------------------------------------
+RELEASE 3.2.3
+---------------------------------------------------------------------------------
 Fix to insecure string warnings on Linux.
 
 ---------------------------------------------------------------------------------
@@ -65,7 +73,7 @@ primary vimp.threshold.
 ---------------------------------------------------------------------------------
 RELEASE 3.0.2
 ---------------------------------------------------------------------------------
-Miner changes to donttest examples that caused issues.  Continued
+Minor changes to donttest examples that caused issues.  Continued
 improvements to overall speed of the package.
 
 ---------------------------------------------------------------------------------
