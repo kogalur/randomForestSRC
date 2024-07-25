@@ -883,14 +883,6 @@ is.hidden.base.learner <-  function(user.option) {
   }
   return (base.learner)
 }
-is.hidden.case.depth <-  function(user.option) {
-  if (is.null(user.option$case.depth)) {
-    FALSE
-  }
-  else {
-    as.logical(as.character(user.option$case.depth))
-  }
-}
 is.hidden.cse <-  function(user.option) {
   if (is.null(user.option$cse)) {
     FALSE

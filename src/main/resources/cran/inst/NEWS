@@ -10,6 +10,12 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 CHANGES TO RELEASE @PROJECT_VERSION@
 ---------------------------------------------------------------------------------
+Fix to longstanding bug in conditional classification Brier Score.  We were not
+normalizing conditional values.  Addition of case.depth option.
+
+---------------------------------------------------------------------------------
+RELEASE 3.3.0
+---------------------------------------------------------------------------------
 Resolved an issue with classification where there is a discrepancy
 between training and unseen test set class labels.  Minor fixes to
 subsampling and improved the plot function for subsampling to allow
@@ -29,7 +35,7 @@ forest.  Addition of heavy weighted, and unweighted split rules for
 mse, gini, unsupv, and mv cases.
 
 ---------------------------------------------------------------------------------
-
+RELEASE 3.2.1
 ---------------------------------------------------------------------------------
 Fix to catestrophic cancellation and buffer overrun in updateCDF(),
 when xvar.wt is active with real weights, and mostly when they are

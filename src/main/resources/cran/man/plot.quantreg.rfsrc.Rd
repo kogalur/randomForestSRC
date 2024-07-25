@@ -8,7 +8,7 @@
   useful diagnostic of accuracy.
 }
 \usage{\method{plot.quantreg}{rfsrc}(x, prbL = .25, prbU = .75,
-   m.target = NULL, crps = TRUE, subset = NULL, ...)
+   m.target = NULL, crps = TRUE, subset = NULL, xlab = NULL, ylab = NULL, ...)
 }
 \arguments{
   \item{x}{A quantile regression object obtained from calling \command{quantreg}.}
@@ -20,6 +20,8 @@
   \item{crps}{Calculate crps and inset it?}
   \item{subset}{Restricts plotted values to a subset of the data.
     Default is to use the entire data.}
+  \item{xlab}{Horizontal axis label.}
+  \item{ylab}{Vertical axis label.}
   \item{...}{Further arguments passed to or from other methods.}
 }
 \author{

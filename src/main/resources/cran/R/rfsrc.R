@@ -11,7 +11,7 @@ rfsrc <- function(formula, data, ntree = 500,
                   ntime = 150, cause,
                   perf.type = NULL,
                   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
-                  xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt = NULL, 
+                  xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt = NULL, case.depth = FALSE, 
                   forest = TRUE,
                   save.memory = FALSE,
                   var.used = c(FALSE, "all.trees", "by.tree"),
@@ -62,8 +62,6 @@ rfsrc <- function(formula, data, ntree = 500,
   empirical.risk <- is.hidden.empirical.risk(user.option)
   tdc.rule <- is.hidden.tdc.rule(user.option)
   vimp.threshold  <- is.hidden.vimp.threshold(user.option)
-  ## case.depth
-  case.depth  <- is.hidden.case.depth(user.option)
   ## verify key options
   ensemble <- "all"##remove option to select between "all", "oob", "inbag"
   bootstrap <- match.arg(bootstrap, c("by.root", "none", "by.user"))

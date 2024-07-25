@@ -1,5 +1,6 @@
 plot.quantreg.rfsrc <- function(x, prbL = .25, prbU = .75,
-                    m.target = NULL, crps = TRUE, subset = NULL, ...) {
+                                m.target = NULL, crps = TRUE, subset = NULL,
+                                xlab = NULL, ylab = NULL, ...) {
   ##--------------------------------------------------------------
   ##
   ## prelimary checks
@@ -70,9 +71,15 @@ plot.quantreg.rfsrc <- function(x, prbL = .25, prbU = .75,
   ## quantile regression plot
   ##
   ##--------------------------------------------------------------
+  if (is.null(xlab)) {
+    xlab <- y.names
+  }
+  if (is.null(ylab)) {
+    ylab <- "Target Quantiles"
+  }
   jitter.y <- jitter(y, 10)
   rng <- range(c(y, quant.dat, jitter.y))
-  plot(rng, rng, xlab = y.names, ylab = "Target Quantiles", type = "n")
+  plot(rng, rng, xlab = xlab, ylab = ylab, type = "n")
   points(jitter.y, quant.dat[, 2], pch = 15, col = 4, cex = 0.75)
   segments(jitter.y, quant.dat[, 2], jitter.y, quant.dat[, 1], col = "grey")
   segments(jitter.y, quant.dat[, 2], jitter.y, quant.dat[, 3], col = "grey")

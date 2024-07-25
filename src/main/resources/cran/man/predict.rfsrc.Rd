@@ -20,7 +20,9 @@
   ptn.count = 0,
   distance = FALSE,
   var.used = c(FALSE, "all.trees", "by.tree"),
-  split.depth = c(FALSE, "all.trees", "by.tree"), seed = NULL,
+  split.depth = c(FALSE, "all.trees", "by.tree"),
+  case.depth = FALSE,
+  seed = NULL,
   do.trace = FALSE, membership = FALSE, statistics = FALSE,
    
   ...)
@@ -104,6 +106,9 @@
   
   \item{split.depth}{Return minimal depth for each variable for each case?}
 
+  \item{case.depth}{Return a matrix recording the depth at which a case
+    first splits in a tree. Default is \code{FALSE}.}
+  
   \item{seed}{Negative integer specifying seed for the random number
     generator.} 
 

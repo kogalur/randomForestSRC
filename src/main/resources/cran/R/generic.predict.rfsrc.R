@@ -15,6 +15,7 @@ generic.predict.rfsrc <-
            distance = FALSE,
            var.used = c(FALSE, "all.trees", "by.tree"),
            split.depth = c(FALSE, "all.trees", "by.tree"),
+           case.depth = FALSE,
            seed = NULL,
            do.trace = FALSE,
            membership = FALSE,
@@ -103,8 +104,6 @@ generic.predict.rfsrc <-
   prob.epsilon <- is.hidden.prob.epsilon(user.option)
   ## vimp
   vimp.threshold  <- is.hidden.vimp.threshold(user.option)
-  ## case.depth
-  case.depth  <- is.hidden.case.depth(user.option)
   ## set the family
   family <- object$family
   ## pull the x-variable and y-outcome names from the grow object

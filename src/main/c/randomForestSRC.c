@@ -2716,6 +2716,9 @@ double getBrierScore(uint     obsSize,
   else {
     result = result  * RF_rFactorSize[RF_rFactorMap[rTarget]] / (RF_rFactorSize[RF_rFactorMap[rTarget]] - 1);
   }
+  for (against = 1; against <= RF_rFactorSize[RF_rFactorMap[rTarget]]; against++) {
+    cpv[against] = cpv[against] * RF_rFactorSize[RF_rFactorMap[rTarget]] / (RF_rFactorSize[RF_rFactorMap[rTarget]] - 1);
+  }
   free_uivector(oaaResponse, 1, obsSize);
   return result;
 }

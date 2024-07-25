@@ -6,6 +6,7 @@
 \alias{get.brier.error}
 \alias{get.cindex}
 \alias{get.confusion}
+\alias{get.logloss}
 \alias{get.misclass.error}
 \alias{get.mv.cserror}
 \alias{get.mv.csvimp}
@@ -80,6 +81,7 @@ rfsrc(formula, data, ntree = 500,
   perf.type = NULL,
   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
   xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt  = NULL,
+  case.depth = FALSE,
   forest = TRUE,
   save.memory = FALSE,
   var.used = c(FALSE, "all.trees", "by.tree"),
@@ -248,6 +250,9 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
     integers. See the breast data example below illustrating its use
     for class imbalanced data.}
   
+  \item{case.depth}{Return a matrix recording the depth at which a case
+    first splits in a tree. Default is \code{FALSE}.}
+
   \item{forest}{Save key forest values?  Used for prediction on new data
     and required by many of the package functions. Turn this off if you
     are only interested in training a forest.}
