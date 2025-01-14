@@ -284,8 +284,11 @@ SEXP rfsrcGrow(SEXP traceFlag,
   RF_ytry                 = INTEGER(ytry)[0];
   RF_nodeSize             = INTEGER(nodeSize)[0];
   RF_nodeDepth            = INTEGER(nodeDepth)[0];
+  RF_crWeight             = NULL;
   RF_crWeightSize         = INTEGER(crWeightSize)[0];
-  RF_crWeight             = REAL(crWeight); RF_crWeight--;
+  if (RF_crWeightSize > 0) {
+    RF_crWeight             = REAL(crWeight); RF_crWeight--;
+  }
   RF_vimpThreshold        = REAL(vimpThreshold)[0];
   RF_ntree                = INTEGER(ntree)[0];
   RF_observationSize      = INTEGER(observationSize)[0];
@@ -975,6 +978,12 @@ void *stackAndProtect(char   mode,
     auxiliaryDim[i] = va_arg(list, int);
   }
   va_end(list);
+  if (!(size > 0)) {
+    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+    RF_nativeError("\nRF-SRC:  SEXP vector element is of size zero (0) and of aux dimensionality:  %20d", auxiliaryDimSize);
+    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+    RF_nativeExit();
+  }
   switch(sexpType) {
   case NATIVE_TYPE_NUMERIC:
     thisVector = PROTECT(allocVector(REALSXP, size));

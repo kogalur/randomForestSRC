@@ -115,6 +115,8 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
                                                                        jobject      baseLearn,
                                                                        jintArray    treeID,
                                                                        jintArray    nodeID,
+                                                                       jintArray    nodeSZ,
+                                                                       jintArray    brnodeID,
                                                                        jobject      hc_zero,
                                                                        jobject      hc_oneAugIntr,
                                                                        jobject      hc_oneAugSyth,
@@ -123,6 +125,7 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
                                                                        jobject      hc_contPT,
                                                                        jobject      hc_contPTR,
                                                                        jobject      hc_mwcpSZ,
+                                                                       jobject      hc_fsrecID,
                                                                        jobject      hc_mwcpPT,
                                                                        jobject      hc_augmXone,
                                                                        jobject      hc_augmXtwo,
@@ -183,9 +186,10 @@ JNIEXPORT jobject JNICALL Java_com_kogalur_randomforest_Native_predict(JNIEnv   
   populateSeedObject(seedInfo);
   RF_hdim                 = (uint) hdim;
   populateBaseLearnObject(baseLearn);
-  RF_treeID_              = (uint *)   copy1DObject(treeID, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
-  RF_nodeID_              = (uint *)   copy1DObject(nodeID, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
-  RF_nodeSZ_              = (uint *)   copy1DObject(nodeSZ, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
+  RF_treeID_              = (uint *)   copy1DObject(treeID,   NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
+  RF_nodeID_              = (uint *)   copy1DObject(nodeID,   NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
+  RF_nodeSZ_              = (uint *)   copy1DObject(nodeSZ,   NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
+  RF_brnodeID_            = (uint *)   copy1DObject(brnodeID, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
   RF_RMBR_ID_             = (uint *)   copy1DObject(tnRMBR, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
   RF_AMBR_ID_             = (uint *)   copy1DObject(tnAMBR, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
   RF_TN_RCNT_             = (uint *)   copy1DObject(tnRCNT, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
@@ -897,6 +901,16 @@ void populateHyperZeroObject(jobject obj) {
     }
     else {
       RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/HCzero : mwcpSZ \n");
+      RF_nativeError("\nRF-SRC:  The application will now exit.\n");
+      RF_nativeExit();
+    }
+    objFieldID = (*RF_java_env) -> GetFieldID(RF_java_env, objClass, "fsrecID", "[I");
+    if (objFieldID != NULL) {
+      jobject arr = (*RF_java_env) -> GetObjectField(RF_java_env, obj, objFieldID);
+      RF_fsrecID_[1] = (uint *) copy1DObject(arr, NATIVE_TYPE_INTEGER, &RF_nat1DInfoListSize, FALSE);
+    }
+    else {
+      RF_nativeError("\nRF-SRC:  Unable to access field in class com/kogalur/randomforest/HCzero : fsrecID \n");
       RF_nativeError("\nRF-SRC:  The application will now exit.\n");
       RF_nativeExit();
     }

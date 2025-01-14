@@ -2,7 +2,9 @@ Package: _PROJECT_PACKAGE_NAME_
 Version: @PROJECT_VERSION@
 Date: _PROJECT_DSTAMP_
 Title: Fast Unified Random Forests for Survival, Regression, and Classification (RF-SRC)
-Author: Hemant Ishwaran <hemant.ishwaran@gmail.com>, Udaya B. Kogalur <ubk@kogalur.com>
+Authors@R: c(person("Hemant", "Ishwaran", email = "hemant.ishwaran@gmail.com", role = "aut"),
+    person("Udaya B.", "Kogalur", email = "ubk@kogalur.com", role = c("aut", "cre")))
+Author: Hemant Ishwaran [aut], Udaya B. Kogalur [aut, cre]
 Maintainer: Udaya B. Kogalur <ubk@kogalur.com>
 BugReports: https://github.com/kogalur/randomForestSRC/issues/
 Depends: R (>= 4.3.0),

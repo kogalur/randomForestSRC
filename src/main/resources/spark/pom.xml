@@ -43,7 +43,7 @@
       </dependency>
 
 
-      <!--      
+
       <dependency>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
@@ -52,7 +52,7 @@
         <version>@PROJECT_VERSION@</version>
         <scope>test</scope>
       </dependency>
-      -->
+
       
     </dependencies>
  
@@ -173,7 +173,7 @@
           </configuration>
         </plugin>
 
-        <!--
+
         <plugin>
           <groupId>org.apache.maven.plugins</groupId>
           <artifactId>maven-jar-plugin</artifactId>
@@ -186,7 +186,7 @@
             </execution>
           </executions>
         </plugin>
-        -->
+
         
         <plugin>
           <groupId>org.codehaus.mojo</groupId>
