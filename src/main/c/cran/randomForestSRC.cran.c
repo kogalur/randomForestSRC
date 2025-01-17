@@ -719,20 +719,20 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_partialType          = INTEGER(VECTOR_ELT(partial, 0))[0];
   RF_partialXvar          = INTEGER(VECTOR_ELT(partial, 1))[0];
   RF_partialLength        = INTEGER(VECTOR_ELT(partial, 2))[0];
-  if (VECTOR_ELT(partial, 3) != R_NilValue) {
+  if (RF_partialLength > 0) {
     RF_partialValue         = REAL(VECTOR_ELT(partial, 3)); RF_partialValue --;
   }
   else {
     RF_partialValue = NULL;
   }
   RF_partialLength2       = INTEGER(VECTOR_ELT(partial, 4))[0];
-  if (VECTOR_ELT(partial, 5) != R_NilValue) {
+  if (RF_partialLength2 > 0) {
     RF_partialXvar2         = (uint *) INTEGER(VECTOR_ELT(partial, 5)); RF_partialXvar2 --;
   }
   else {
     RF_partialXvar2 = NULL;
   }
-  if (VECTOR_ELT(partial, 6) != R_NilValue) {
+  if (RF_partialLength2 > 0) {
     RF_partialValue2        = REAL(VECTOR_ELT(partial, 6)); RF_partialValue2 --;
   }
   else {
@@ -757,7 +757,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_contPT_[1]              =             REAL(VECTOR_ELT(hc_zero, 1));  RF_contPT_[1]  --;
   RF_mwcpSZ_[1]              = (uint *) INTEGER(VECTOR_ELT(hc_zero, 2));  RF_mwcpSZ_[1]  --;
   RF_fsrecID_[1]             = (uint *) INTEGER(VECTOR_ELT(hc_zero, 3));  RF_fsrecID_[1] --;
-  if (VECTOR_ELT(hc_zero, 2) != R_NilValue) {
+  if (VECTOR_ELT(hc_zero, 4) != R_NilValue) {
     RF_mwcpPT_[1]            = (uint *) INTEGER(VECTOR_ELT(hc_zero, 4));  RF_mwcpPT_[1]  --;
   }
   else {
@@ -796,13 +796,25 @@ SEXP rfsrcPredict(SEXP traceFlag,
       RF_contPTR_[i]           =          REAL(VECTOR_ELT(hc_contPTR, i-2));    RF_contPTR_[i] --;
       RF_mwcpSZ_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_mwcpSZ, i-2));  RF_mwcpSZ_[i] --;
       RF_fsrecID_[i]           = (uint *) INTEGER(VECTOR_ELT(hc_fsrecID, i-2)); RF_fsrecID_[i] --;
-      RF_mwcpPT_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_mwcpPT, i-2));  RF_mwcpPT_[i] --;
+      if(VECTOR_ELT(hc_mwcpPT, i-2) != R_NilValue) {
+        RF_mwcpPT_[i]            = (uint *) INTEGER(VECTOR_ELT(hc_mwcpPT, i-2));  RF_mwcpPT_[i] --;
+      }
+      else {
+        RF_mwcpPT_[i] = NULL;
+      }
       if (RF_baseLearnDepthINTR > 1) {      
         RF_augmX1_[i]            = (int *) INTEGER(VECTOR_ELT(hc_augmXone, i-2));  RF_augmX1_[i] --;
         RF_augmX2_[i]            = (int *) INTEGER(VECTOR_ELT(hc_augmXtwo, i-2));  RF_augmX2_[i] --;
       }
+      else {
+        RF_augmX1_[i] = NULL;
+        RF_augmX2_[i] = NULL;
+      }
       if (RF_baseLearnDepthSYTH > 1) {
         RF_augmXS_[i]            = (int *) INTEGER(VECTOR_ELT(hc_augmXS, i-2));  RF_augmXS_[i] --;
+      }
+      else {
+        RF_augmXS_[i] = NULL;
       }
     }
   }
@@ -818,7 +830,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
         RF_syth_contPT_[1]  =           REAL(VECTOR_ELT(hc_augmSythTop, 5));     RF_syth_contPT_[1]  --;
         RF_syth_contPTR_[1] =           REAL(VECTOR_ELT(hc_augmSythTop, 6));     RF_syth_contPTR_[1] --;
         RF_syth_mwcpSZ_[1]  = (uint *)  INTEGER(VECTOR_ELT(hc_augmSythTop, 7));  RF_syth_mwcpSZ_[1]  --;
-        if (VECTOR_ELT(hc_augmSythTop, 8) != R_NilValue) {
+        if (VECTOR_ELT(hc_augmSythTop, 8) != R_NilValue) {        
           RF_syth_mwcpPT_[1] = (uint *) INTEGER(VECTOR_ELT(hc_augmSythTop, 8)); RF_syth_mwcpPT_[1]  --;
         }
         else {

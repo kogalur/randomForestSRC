@@ -240,7 +240,7 @@ partial.rfsrc <- function(
                                   as.double((object$nativeArray)$contPT),
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeArray)$fsrecID),
-                                  as.integer((object$nativeFactorArray)$mwcpPT)),
+                                  if (is.null((object$nativeFactorArray)$mwcpPT)) NULL else as.integer((object$nativeFactorArray)$mwcpPT)),
                                   ## This slot is hc_one_augm_intr.  This slot can be NULL.
                                   if (!is.null(object$base.learner)) {
                                       if (object$base.learner$interact.depth > 1) {
