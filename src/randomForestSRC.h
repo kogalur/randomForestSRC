@@ -164,9 +164,12 @@ typedef unsigned long ulong;
 #define RF_OPT_HI_GROW   102  
 #define RF_CPU_TIME      103  
 #define RF_TN_OCNT       104  
-#define RF_OMBR_ID       105 
-#define RF_OOB_SZ        106 
-#define RF_SEXP_CNT      107  
+#define RF_TN_ICNT       105  
+#define RF_OMBR_ID       106 
+#define RF_IMBR_ID       107 
+#define RF_OOB_SZ        108 
+#define RF_IBG_SZ        109 
+#define RF_SEXP_CNT      110  
 #define RF_SEXP_ASCII_SIZE 16
 #define OPT_FENS      0x00000001 
 #define OPT_OENS      0x00000002 
@@ -398,14 +401,13 @@ struct terminal {
   double weight;
   unsigned int membrCount;
   unsigned int *membrStream;
-  unsigned int *membrIndx;
   unsigned int inbagProxy;
   double timeCutLeft;
   double timeCutRight;
   double *localEmpiricalHazard;
-  uint oobMembrSizeAlloc;
-  uint oobMembrSize;
-  uint *oobMembrIndx;
+  uint repMembrSizeAlloc, oobMembrSizeAlloc, ibgMembrSizeAlloc;
+  uint repMembrSize, oobMembrSize, ibgMembrSize;
+  uint *repMembrIndx, *oobMembrIndx, *ibgMembrIndx;
 };
 typedef struct leafLinkedObj LeafLinkedObj;
 struct leafLinkedObj {
@@ -1923,11 +1925,13 @@ void stackTNQualitativeObjectsKnown(char     mode,
                                     uint   **pRF_AMBR_ID_,
                                     uint   **pRF_TN_RCNT_,
                                     uint   **pRF_TN_ACNT_,
-                                    uint   **pRF_OOB_SZ_);
+                                    uint   **pRF_OOB_SZ_,
+                                    uint   **pRF_IBG_SZ_);
 void stackTNQualitativeObjectsUnknown(char     mode,
                                       uint   **pRF_TN_RCNT_,
                                       uint   **pRF_TN_ACNT_,
-                                      uint   **pRF_TN_OCNT_);
+                                      uint   **pRF_TN_OCNT_,
+                                      uint   **pRF_TN_ICNT_);
 void stackTNQuantitativeForestObjectsPtrOnly(char mode);
 void unstackTNQuantitativeForestObjectsPtrOnly(char mode);
 void stackTNQuantitativeTreeObjectsPtrOnly(uint treeID);
@@ -1935,7 +1939,7 @@ void unstackTNQuantitativeTreeObjectsPtrOnly(uint treeID);
 void saveTNQuantitativeTreeObjects(uint treeID);
 void stackTNQuantitativeForestObjectsOutput(char mode);
 void writeTNQuantitativeForestObjectsOutput(char mode);
-void stackTNQualitativeObjectsUnknownMembership(char   mode, uint **pRF_OMDR_ID_);
+void stackTNQualitativeObjectsUnknownMembership(char   mode, uint **pRF_OMBR_ID_, uint **pRF_IMBR_ID_);
 void stackLocksOpenMP(char mode);
 void unstackLocksOpenMP(char mode);
 void stackLocksPosix(char mode);

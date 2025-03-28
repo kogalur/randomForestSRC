@@ -116,8 +116,11 @@ char  *RF_sexpString[RF_SEXP_CNT] = {
   "optHiGrow",         
   "cTimeInternal",     
   "tnOCNT",            
+  "tnICNT",            
   "ombrMembership",    
-  "oobSZ"              
+  "imbrMembership",    
+  "oobSZ",             
+  "ibgSZ"              
 };
 double   *RF_cpuTime_;
 uint     *RF_treeID_;
@@ -192,10 +195,13 @@ uint     *RF_CASE_DPTH_;
 uint     *RF_RMBR_ID_;
 uint     *RF_AMBR_ID_;
 uint     *RF_OMBR_ID_;
+uint     *RF_IMBR_ID_;
 uint     *RF_TN_RCNT_;
 uint     *RF_TN_ACNT_;
 uint     *RF_TN_OCNT_;
+uint     *RF_TN_ICNT_;
 uint     *RF_OOB_SZ_;
+uint     *RF_IBG_SZ_;
 double   *RF_perfMRT_;
 double   *RF_perfCLS_;
 double   *RF_perfRGR_;
@@ -466,9 +472,11 @@ uint     **RF_dpthST_ptr;
 uint  **RF_RMBR_ID_ptr;
 uint  **RF_AMBR_ID_ptr;
 uint  **RF_OMBR_ID_ptr;
+uint  **RF_IMBR_ID_ptr;
 uint  **RF_TN_RCNT_ptr;
 uint  **RF_TN_ACNT_ptr;
 uint  **RF_TN_OCNT_ptr;
+uint  **RF_TN_ICNT_ptr;
 LeafLinkedObj **RF_leafLinkedObjHead;
 LeafLinkedObj **RF_leafLinkedObjTail;
 double **RF_proximityPtr;
@@ -10636,7 +10644,8 @@ void rfsrc(char mode, int seedValue) {
                                  & RF_AMBR_ID_,
                                  & RF_TN_RCNT_,
                                  & RF_TN_ACNT_,
-                                 & RF_OOB_SZ_);
+                                 & RF_OOB_SZ_,
+                                 & RF_IBG_SZ_);
   stackTNQuantitativeForestObjectsPtrOnly(mode);
   uint bnpSize;
   bnpSize = getVimpRecoverySeedDimension(mode, RF_opt);
@@ -10807,13 +10816,15 @@ void rfsrc(char mode, int seedValue) {
       stackTNQualitativeObjectsUnknown(mode,
                                        & RF_TN_RCNT_,
                                        & RF_TN_ACNT_,
-                                       & RF_TN_OCNT_);
+                                       & RF_TN_OCNT_,
+                                       & RF_TN_ICNT_);
       if (RF_optHigh & OPT_MEMB_OUTG) {
         for (b = 1; b <= RF_ntree; b++) {
           RF_OOB_SZ_[b] = RF_oobSize[b];
+          RF_IBG_SZ_[b] = RF_ibgSize[b];
         }
       }
-      stackTNQualitativeObjectsUnknownMembership(mode, & RF_OMBR_ID_);
+      stackTNQualitativeObjectsUnknownMembership(mode, & RF_OMBR_ID_, & RF_IMBR_ID_);
     }  
     if (RF_opt & OPT_MISS_OUT) {
       switch (mode) {
@@ -27002,7 +27013,7 @@ void stackDefinedOutputObjects(char      mode,
       }
     }
     if (RF_optHigh & OPT_MEMB_OUTG) {
-      RF_stackCount += 7;
+      RF_stackCount += 10;
     }
     if (RF_optHigh & OPT_TERM_OUTG) {
       if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
@@ -29684,7 +29695,8 @@ void stackTNQualitativeObjectsKnown(char     mode,
                                     uint   **pRF_AMBR_ID_,
                                     uint   **pRF_TN_RCNT_,
                                     uint   **pRF_TN_ACNT_,
-                                    uint   **pRF_OOB_SZ_) {
+                                    uint   **pRF_OOB_SZ_,
+                                    uint   **pRF_IBG_SZ_) {
   ulong localSize;
   if (RF_optHigh & OPT_MEMB_OUTG) {
     localSize = (ulong) RF_ntree * RF_bootstrapSize;
@@ -29693,6 +29705,8 @@ void stackTNQualitativeObjectsKnown(char     mode,
     *pRF_AMBR_ID_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_AMBR_ID, localSize, 0, RF_sexpString[RF_AMBR_ID], &RF_AMBR_ID_ptr, 2, RF_ntree, RF_observationSize);
     *pRF_OOB_SZ_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_OOB_SZ, RF_ntree, 0, RF_sexpString[RF_OOB_SZ], NULL, 1, RF_ntree);
     (*pRF_OOB_SZ_) --;
+    *pRF_IBG_SZ_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_IBG_SZ, RF_ntree, 0, RF_sexpString[RF_IBG_SZ], NULL, 1, RF_ntree);
+    (*pRF_IBG_SZ_) --;
   }
   else if (RF_optHigh & OPT_MEMB_INCG) {
     int *dim = ivector(1, 2);
@@ -29748,7 +29762,8 @@ void stackTNQualitativeObjectsKnown(char     mode,
 void stackTNQualitativeObjectsUnknown(char     mode,
                                       uint   **pRF_TN_RCNT_,
                                       uint   **pRF_TN_ACNT_,
-                                      uint   **pRF_TN_OCNT_) {
+                                      uint   **pRF_TN_OCNT_,
+                                      uint   **pRF_TN_ICNT_) {
   LeafLinkedObj *leafLinkedPtr;
   ulong localSize, localSize2;
   uint i, j, k, m;
@@ -29757,12 +29772,14 @@ void stackTNQualitativeObjectsUnknown(char     mode,
     *pRF_TN_RCNT_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_TN_RCNT, localSize, 0, RF_sexpString[RF_TN_RCNT], &RF_TN_RCNT_ptr, 2, RF_ntree, -2);
     *pRF_TN_ACNT_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_TN_ACNT, localSize, 0, RF_sexpString[RF_TN_ACNT], &RF_TN_ACNT_ptr, 2, RF_ntree, -2);
     *pRF_TN_OCNT_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_TN_OCNT, localSize, 0, RF_sexpString[RF_TN_OCNT], &RF_TN_OCNT_ptr, 2, RF_ntree, -2);
+    *pRF_TN_ICNT_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_TN_ICNT, localSize, 0, RF_sexpString[RF_TN_ICNT], &RF_TN_ICNT_ptr, 2, RF_ntree, -2);
     for (i = 1; i <= RF_ntree; i++) {
       leafLinkedPtr = RF_leafLinkedObjHead[i] -> fwdLink;
       while (leafLinkedPtr != NULL) {
         RF_TN_RCNT_ptr[i][(leafLinkedPtr -> termPtr) -> nodeID] = leafLinkedPtr -> ibgMembrCount;
         RF_TN_ACNT_ptr[i][(leafLinkedPtr -> termPtr) -> nodeID] = leafLinkedPtr -> allMembrCount;
         RF_TN_OCNT_ptr[i][(leafLinkedPtr -> termPtr) -> nodeID] = leafLinkedPtr -> oobMembrCount = leafLinkedPtr -> termPtr -> oobMembrSize;
+        RF_TN_ICNT_ptr[i][(leafLinkedPtr -> termPtr) -> nodeID] = leafLinkedPtr -> ibgMembrCount = leafLinkedPtr -> termPtr -> ibgMembrSize;        
         leafLinkedPtr = leafLinkedPtr -> fwdLink;
       }
     }
@@ -30315,7 +30332,7 @@ void writeTNQuantitativeForestObjectsOutput(char mode) {
     }
   }
 }
-void stackTNQualitativeObjectsUnknownMembership(char   mode, uint **pRF_OMBR_ID_) {
+void stackTNQualitativeObjectsUnknownMembership(char   mode, uint **pRF_OMBR_ID_, uint **pRF_IMBR_ID_) {
   Terminal *termPtr;
   ulong localSize;
   uint  treeID;
@@ -30346,7 +30363,22 @@ void stackTNQualitativeObjectsUnknownMembership(char   mode, uint **pRF_OMBR_ID_
       }
       RF_OMBR_ID_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_OMBR_ID, localSize, 0, RF_sexpString[RF_OMBR_ID], NULL, 1, localSize);      
     }
-  }
+    localSize = 0;
+    for (uint treeID = 1; treeID <= RF_ntree; treeID++) {
+      localSize += RF_ibgSize[treeID];
+    }
+    RF_IMBR_ID_ = (uint*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_INTEGER, RF_IMBR_ID, localSize, 0, RF_sexpString[RF_IMBR_ID], NULL, 1, localSize);
+    RF_IMBR_ID_ --;
+    iter = 0;
+    for (treeID = 1; treeID <= RF_ntree; treeID++) {
+      for (i = 1; i <= RF_tLeafCount[treeID]; i++) {
+        termPtr = RF_tTermList[treeID][i];
+        for (j = 1; j <= termPtr -> ibgMembrSize; j ++) {
+          RF_IMBR_ID_[++iter] = termPtr -> ibgMembrIndx[j];
+        }
+      }
+    }
+  }  
 }
 #ifdef _OPENMP
 void stackLocksOpenMP(char mode) {
@@ -33567,8 +33599,6 @@ Terminal *makeTerminal(void) {
   parent -> rnfCount             = 0;
   parent -> meanResponse         = NULL;
   parent -> weight               = 0.0;
-  parent -> membrCount           = 0;
-  parent -> membrIndx            = NULL;
   parent -> inbagProxy           = 0;
   parent -> membrStream       = NULL;
   parent -> timeCutLeft  = RF_nativeNaN;
@@ -33577,6 +33607,9 @@ Terminal *makeTerminal(void) {
   parent -> oobMembrSizeAlloc = 0;
   parent -> oobMembrSize      = 0;
   parent -> oobMembrIndx      = NULL;
+  parent -> ibgMembrSizeAlloc = 0;
+  parent -> ibgMembrSize      = 0;
+  parent -> ibgMembrIndx      = NULL;
   return parent;
 }
 void freeTerminal(Terminal        *parent) {
@@ -33593,13 +33626,16 @@ void freeTerminal(Terminal        *parent) {
   else {
     freeTerminalNodeNonSurvivalStructures(parent);
   }
-  if (parent -> membrIndx != NULL) {
-    free_uivector(parent -> membrIndx, 1, parent -> membrCount);
-  }
   if (parent -> oobMembrIndx != NULL) {
     if (parent -> oobMembrSizeAlloc > 0) {
       free_uivector(parent -> oobMembrIndx, 1, parent -> oobMembrSizeAlloc);
       parent -> oobMembrSize = parent -> oobMembrSizeAlloc = 0;
+    }
+  }
+  if (parent -> ibgMembrIndx != NULL) {
+    if (parent -> ibgMembrSizeAlloc > 0) {
+      free_uivector(parent -> ibgMembrIndx, 1, parent -> ibgMembrSizeAlloc);
+      parent -> ibgMembrSize = parent -> ibgMembrSizeAlloc = 0;
     }
   }
   free_gblock(parent, (size_t) sizeof(Terminal));
@@ -35730,6 +35766,15 @@ char growTreeRecursive (uint     r,
           }
         }
         termPtr -> oobMembrSize = iter;
+        termPtr -> ibgMembrSizeAlloc = allMembrSize;
+        termPtr -> ibgMembrIndx = uivector(1, termPtr -> ibgMembrSizeAlloc);      
+        iter = 0;
+        for (i = 1; i <= allMembrSize; i++) {
+          if (RF_bootMembershipFlag[treeID][allMembrIndx[i]] == TRUE) {
+            termPtr -> ibgMembrIndx[++iter] = allMembrIndx[i];
+          }
+        }
+        termPtr -> ibgMembrSize = iter;
       }
       updateTerminalNodeOutcomes(RF_GROW,
                                  treeID,

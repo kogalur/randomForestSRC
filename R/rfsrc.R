@@ -791,11 +791,14 @@ rfsrc <- function(formula, data, ntree = 500,
                               nativeOutput$rmbrMembership,
                               nativeOutput$ambrMembership,
                               nativeOutput$ombrMembership,
+                              nativeOutput$imbrMembership,
                               nativeOutput$tnRCNT[valid.mcnt.indices],
                               nativeOutput$tnACNT[valid.mcnt.indices],
                               nativeOutput$tnOCNT[valid.mcnt.indices],
-                              nativeOutput$oobSZ);
-      names(nativeArrayTNDS) <- c("tnSURV","tnMORT","tnNLSN","tnCSHZ","tnCIFN","tnREGR","tnCLAS", "tnRMBR", "tnAMBR", "tnOMBR", "tnRCNT", "tnACNT", "tnOCNT", "oobSZ")
+                              nativeOutput$tnICNT[valid.mcnt.indices],                             
+                              nativeOutput$oobSZ,
+                              nativeOutput$ibgSZ);
+      names(nativeArrayTNDS) <- c("tnSURV","tnMORT","tnNLSN","tnCSHZ","tnCIFN","tnREGR","tnCLAS", "tnRMBR", "tnAMBR", "tnOMBR", "tnIMBR", "tnRCNT", "tnACNT", "tnOCNT", "tnICNT", "oobSZ", "ibgSZ")
     }
     else {
       nativeArrayTNDS <- NULL
@@ -859,7 +862,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        terminal.quants = terminal.quants,
                        importance = importance.value,
                        vimp.threshold = vimp.threshold,
-                       version = "3.3.4")
+                       version = "3.3.5")
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -894,7 +897,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        samptype = samptype,
                        samp = samp,
                        case.wt = case.wt,
-                       version = "3.3.4",
+                       version = "3.3.5",
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,
