@@ -1,12 +1,8 @@
 \name{imbalanced.rfsrc}
 \alias{imbalanced.rfsrc}
 \alias{imbalanced}
-\alias{get.imbalanced.performance}
-\alias{get.imbalanced.optimize}
-\alias{get.pr.auc}
-\alias{get.pr.curve}
-\alias{get.rfq.threshold}
 \title{Imbalanced Two Class Problems}
+
 \description{
   Implements various solutions to the two-class imbalanced problem,
   including the newly proposed quantile-classifier approach of
@@ -14,93 +10,66 @@
   forests undersampling of the majority class.  Performance is assesssed
   using the G-mean, but misclassification error can be requested.
 }
+
 \usage{\method{imbalanced}{rfsrc}(formula, data, ntree = 3000, 
   method = c("rfq", "brf", "standard"), splitrule = "auc",
   perf.type = NULL, block.size = NULL, fast = FALSE,
   ratio = NULL, ...)
 }
+
 \arguments{
+
   \item{formula}{A symbolic description of the model to be fit.}
-  
-  \item{data}{Data frame containing the two-class y-outcome and
-    x-variables.}
 
-  \item{ntree}{Number of trees.}
+  \item{data}{A data frame containing the two-class y-outcome and x-variables.}
 
-  \item{method}{Method used for fitting the classifier.  The default is
-    \code{rfq} which is the random forests quantile-classifer (RFQ)
-    approach of O'Brien and Ishwaran (2017).  The method \code{brf}
-    implements the balanced random forest (BRF) method of Chen et
-    al. (2004) which undersamples the majority class so that its
-    cardinality matches that of the minority class.  The method
-    \code{standard} implements a standard random forest analysis.}
+  \item{ntree}{Number of trees to grow.}
 
-  \item{splitrule}{Default is AUC splitting which maximizes gmean
-    performance.  Other choices are "gini" and "entropy".}
+  \item{method}{Method used to fit the classifier. The default is \code{"rfq"}, which implements the random forest quantile classifier (RFQ) of O'Brien and Ishwaran (2017). The option \code{"brf"} applies the balanced random forest (BRF) approach of Chen et al. (2004), which undersamples the majority class to match the minority class size. The option \code{"standard"} performs a standard random forest analysis.}
 
-  \item{perf.type}{Measure used for assessing performance (and all
-    downstream calculations based on it such as variable importance).
-    The default for \code{rfq} and \code{brf} is to use the G-mean
-    (Kubat et al., 1997).  For standard random forests, the default is
-    misclassification error.  Users can over-ride the default
-    performance measure by manually selecting either \code{gmean} for
-    the G-mean, \code{misclass} for misclassification error, or
-    \code{brier} for the normalized Brier score. See the examples
-    below.}
+  \item{splitrule}{Splitting rule used to grow trees. The default is \code{"auc"}, which optimizes G-mean performance. Other supported options are \code{"gini"} and \code{"entropy"}.}
 
-  \item{block.size}{Should the cumulative error rate be calculated on
-    every tree?  When \code{NULL}, it will only be calculated on the
-    last tree. If importance is requested, VIMP is calculated in
-    "blocks" of size equal to \code{block.size}.  If not specified, uses
-    the default value specified in \code{rfsrc}.}
+  \item{perf.type}{Performance metric used for evaluating the classifier and computing downstream quantities such as VIMP. Defaults depend on the method: \code{"gmean"} for RFQ and BRF; \code{"misclass"} (misclassification error) for standard random forests. Users may override this by specifying \code{"gmean"}, \code{"misclass"}, or \code{"brier"} (normalized Brier score). See examples for usage.}
 
-  \item{fast}{Use fast random forests, \code{rfsrc.fast}, in place of
-    \code{rfsrc}?  Improves speed but is less accurate.  Only applies to
-    RFQ.}
+  \item{block.size}{Controls how the cumulative error rate is computed. If \code{NULL}, it is calculated only once for the final tree. If set to an integer, cumulative error and VIMP are computed in blocks of that size. If unspecified, uses the default in \code{\link{rfsrc}}.}
 
-  \item{ratio}{This is an optional parameter for expert users 
-    and included only for experimental purposes.  Used to specify the
-    ratio (between 0 and 1) for undersampling the majority class.
-    Sampling is without replacement.  Option is ignored for BRF.} 
+  \item{fast}{Logical. If \code{TRUE}, uses the fast random forest implementation via \code{\link{rfsrc.fast}} instead of \code{rfsrc}. Improves speed at the cost of accuracy. Applies only to RFQ.}
 
-  \item{...}{Further arguments to be passed to the \command{rfsrc}
-    function to specify random forest parameters.}
+  \item{ratio}{Optional and experimental. Specifies the proportion (between 0 and 1) of majority class cases to sample during RFQ training. Sampling is without replacement. Ignored for BRF.}
+
+  \item{...}{Additional arguments passed to \code{\link{rfsrc}} to control random forest behavior.}
 
 }
+
 \details{
-  Imbalanced data, or the so-called imbalanced minority class problem,
-  refers to classification settings involving two-classes where the
-  ratio of the majority class to the minority class is much larger than
-  one. Two solutions to the two-class imbalanced problem are provided
-  here, including the newly proposed random forests quantile-classifier
-  (RFQ) of O'Brien and Ishwaran (2017), and the balanced random forests
-  (BRF) undersampling approach of Chen et al. (2004).  The default
-  performance metric is the G-mean (Kubat et al., 1997).
 
-  Currently, missing values cannot be handled for BRF or when the
-  \code{ratio} option is used; in these cases, missing data is removed
-  prior to the analysis.
+Imbalanced data, also known as the minority class problem, refers to two-class classification settings where the majority class significantly outnumbers the minority class. This function supports two approaches to address class imbalance:
 
-  Permutation VIMP is used by default and not anti-VIMP which is the
-  default for all other families and settings.  Our experiments indicate
-  the former performs better in imbalanced settings, especially when
-  imbalanced ratio is high.
+\itemize{
+  \item The random forests quantile classifier (RFQ) proposed by O'Brien and Ishwaran (2017).
+  \item The balanced random forest (BRF) undersampling method of Chen et al. (2004).
+}
 
-  We recommend setting \code{ntree} to a relatively large value when
-  dealing with imbalanced data to ensure convergence of the performance
-  value -- this is especially true for the G-mean.  Consider using 5 times
-  the usual number of trees.
+By default, the performance metric used is the G-mean (Kubat et al., 1997), which balances sensitivity and specificity.
 
-  A new helper function \code{get.imbalanced.performance} has been added
-  for extracting performance metrics.  Metrics are self-titled and their
-  meaning should generally be clear.  Metrics that may be less familiar
-  include: F1, the F-score or the F-measure which measures balance
-  between the precision and the recall.  F1mod, the harmonic mean of
-  sensitivity, specificity, precision and the negative predictive value.
-  F1gmean, the average of F1 and the G-mean.  F1modgmean, the average of
-  F1mod and the G-mean.
-  
-}   
+\strong{Handling of missing values:} Missing data are not supported for BRF or when the \code{ratio} option is specified. In these cases, records with missing values are removed prior to analysis.
+
+\strong{Variable importance:} Permutation-based VIMP is used by default in this setting, in contrast to anti-VIMP which is the default for other families. Empirical results suggest that permutation VIMP is more reliable in highly imbalanced settings.
+
+\strong{Tree count recommendation:} We recommend using a relatively
+large value for \code{ntree} in imbalanced problems to ensure stable
+performance estimation, especially for G-mean. As a general guideline,
+use at least five times the usual number of trees.
+
+\strong{Performance metrics:} A helper function, \code{\link{get.imbalanced.performance}}, is provided for extracting classification performance summaries. The metric names are self-explanatory in most cases. Some key metrics include:
+\itemize{
+  \item \code{F1}: The harmonic mean of precision and recall.
+  \item \code{F1mod}: The harmonic mean of sensitivity, specificity, precision, and negative predictive value.
+  \item \code{F1gmean}: The average of F1 and G-mean.
+  \item \code{F1modgmean}: The average of F1mod and G-mean.
+}
+}
+
 \value{
   A two-class random forest fit under the requested method and
   performance value.

@@ -1,17 +1,13 @@
 \name{subsample.rfsrc}
 \alias{subsample}
 \alias{subsample.rfsrc}
-\alias{extract.subsample}
-\alias{extract.bootsample}
-\alias{print.subsample}
-\alias{print.subsample.rfsrc}
-\alias{print.bootsample}
-\alias{print.bootsample.rfsrc}
 \title{Subsample Forests for VIMP Confidence Intervals}
+
 \description{
   Use subsampling to calculate confidence intervals and standard
   errors for VIMP (variable importance). Applies to all families.
 }
+
 \usage{\method{subsample}{rfsrc}(obj,
   B = 100,
   block.size = 1,
@@ -25,121 +21,65 @@
   bootstrap = FALSE,
   verbose = TRUE)
 }
+
 \arguments{
 
-  \item{obj}{A forest grow object.}
+  \item{obj}{A forest grow object of class \code{(rfsrc, grow)}.}
 
-  \item{B}{Number of subsamples (or number of bootstraps).}
+  \item{B}{Number of subsamples (or bootstrap iterations, if \code{bootstrap = TRUE}).}
 
-  \item{block.size}{Specifies number of trees in a block when calculating
-    VIMP.  This is over-ridden if VIMP is present in the original grow
-    call in which case the grow value is used.}
+  \item{block.size}{Number of trees in each block used when calculating VIMP. If VIMP is already included in the original grow object, that setting is used instead.}
 
-  \item{importance}{Optional: specifies the type of importance to be used,
-    selected from one of "anti", "permute", "random".  If not specified
-    reverts to default importance used by the package.  Also,
-    this is over-ridden if the original grow object contains importance,
-    in which case importance used in the original grow
-    call is used.}
+  \item{importance}{Type of variable importance (VIMP) to compute. Choices are \code{"anti"}, \code{"permute"}, or \code{"random"}. If not specified, the default importance setting from the original grow call is used (if available).}
 
-  \item{subratio}{Ratio of subsample size to original sample size.  The
-    default is approximately equal to the inverse square root of the
-    sample size.}
+  \item{subratio}{Subsample size as a proportion of the original sample size. The default is approximately the inverse square root of the sample size.}
 
-  \item{stratify}{Use stratified subsampling?  See details below.}
+  \item{stratify}{Logical. If \code{TRUE}, uses stratified subsampling to preserve class balance. See \code{Details} for more information.}
 
-  \item{performance}{Generalization error?  User can also request
-    standard error and confidence regions for generalization error.}
+  \item{performance}{Logical. If \code{TRUE}, calculates generalization error along with standard error and confidence intervals.}
 
-  \item{performance.only}{Only calculate standard error and confidence
-    region for the generalization error (no VIMP).}
+  \item{performance.only}{Logical. If \code{TRUE}, only generalization error and its uncertainty are returned; VIMP is not computed.}
 
-  \item{joint}{Joint VIMP for all variables? Users can also request joint
-    VIMP for specific variables using \code{xvar.names}.}
+  \item{joint}{Logical. If \code{TRUE}, joint VIMP is computed for all variables. To calculate joint VIMP for a subset of variables, use \code{xvar.names}.}
 
-  \item{xvar.names}{Specifies variables for calculating joint VIMP.  By
-    default all variables are used.}
+  \item{xvar.names}{Character vector specifying variables to be used for joint VIMP. If omitted, all variables are included.}
 
-  \item{bootstrap}{Use double bootstrap approach in place of
-    subsampling?  Much slower, but potentially more accurate.}
+  \item{bootstrap}{Logical. If \code{TRUE}, uses the double bootstrap instead of subsampling. This is typically slower but may provide more accurate uncertainty estimates.}
 
-  \item{verbose}{Provide verbose output?}
+  \item{verbose}{Logical. If \code{TRUE}, prints progress updates during computation.}
 
 }
+
 \details{
 
-  Using a previously trained forest, subsamples the data and constructs
-  subsampled forests to estimate standard errors and confidence
-  intervals for VIMP (Ishwaran and Lu, 2019).  If bootstrapping is
-  requested, a double bootstrap is applied in place of subsampling.  The
-  option \code{performance="TRUE"} constructs standard errors and
-  confidence regions for the error rate (OOB performance) of the trained
-  forest.  Options \code{joint} and \code{xvar.names} can be used to
-  obtain joint VIMP for all or some variables.
+This function applies subsampling (or optional double bootstrapping) to a previously trained forest to estimate standard errors and construct confidence intervals for variable importance (VIMP), as described in Ishwaran and Lu (2019). It also supports inference for the out-of-bag (OOB) prediction error via the \code{performance = TRUE} option. Joint VIMP for selected or all variables can be obtained using \code{joint} and \code{xvar.names}.
 
-  If the trained forest does not have VIMP values, the algorithm first
-  needs to calculate VIMP.  Therefore, if the user plans to make
-  repeated calls to \code{subsample}, it is advisable to include VIMP in
-  the original grow call.  Also, by calling VIMP in the original call,
-  the type of importance used and other related parameters are set by
-  values used in the original call which can eliminate confusion about
-  what parameters are being used in the subsampled forests.  For
-  example, the default importance used is not permutation importance.
-  Thus, it is generally advised to call VIMP in the original call.
+If the original forest does not include VIMP, it will be computed prior to subsampling. For repeated calls to \code{subsample}, it is recommended that VIMP be requested in the original \code{rfsrc} call. This not only avoids redundant computation, but also ensures consistency of the importance type (e.g., anti, permute, or random) and related parameters, which may otherwise be unclear. Note that permutation importance is \emph{not} the default for most families.
 
-  Subsampled forests are calculated using the same tuning parameters as
-  the original forest.  While a sophisticated algorithm is utilized to
-  acquire as many of these parameters as possible, keep in mind there
-  are some conditions where this will fail: for example there are
-  certain settings where the user has specified non-standard sampling in
-  the grow forest.
-  
-  Delete-d jackknife estimators of the variance (Shao and Wu, 1989) are
-  returned alongside subsampled variance estimators (Politis and Romano,
-  1994).  While these methods are closely related, the jackknife
-  estimator generally gives *larger* standard errors, which is a form of
-  bias correction, and which occurs primarily for the signal variables.
+Subsampled forests are constructed using the same tuning parameters as the original forest. While most settings are automatically recovered, certain advanced configurations (e.g., custom sampling schemes) may not be fully supported.
 
+Both subsampled variance estimates (Politis and Romano, 1994) and delete-\(d\) jackknife variance estimates (Shao and Wu, 1989) are returned. The jackknife estimator tends to produce larger standard errors, offering a conservative bias correction, particularly for signal variables.
 
-  By default, stratified subsampling is used for classification,
-  survival, and competing risk families. For classification,
-  stratification is on the class label, while for survival and competing
-  risk, stratification is on the event type and censoring. Users are
-  discouraged from over-riding this option, especially in small sample
-  settings, as this could lead to error due to subsampled data not
-  having full representation of class labels in classification
-  settings. In survival settings, subsampled data may be devoid of
-  deaths and/or have reduced number of competing risks. Note also that
-  stratified sampling is not available for multivariate families--users
-  should especially exercise caution when selecting subsampling rates
-  here.
-  
-
-  The function \command{extract.subsample} can be used to extract
-  information from the subsampled object. Returned values for VIMP are
-  "standardized" (this means for regression families, VIMP is
-  standardized by dividing by the variance of Y; for all other
-  families, VIMP is unaltered). Use \code{standardize}="FALSE" if you
-  want unstandardized VIMP. Setting the option \code{raw}="TRUE" returns
-  a more complete set of information that is used by the function
-  \link{plot.subsample.rfsrc} for plotting confidence intervals. Keep in
-  mind some of this information will be subsampled VIMP that is "raw" in
-  the sense it equals VIMP from a forest constructed with a much smaller
-  sample size. This option is for experts only.
-
-
-  When printing or plotting results, the default is to standardize VIMP
-  which can be turned off using the option \code{standardize}. Also
-  these wrappers preset the "alpha" value used for confidence intervals;
-  users can change this using option \code{alpha}.
-
+By default, stratified subsampling is used for classification, survival, and competing risk families:
+\itemize{
+  \item For classification, strata correspond to class labels.
+  \item For survival and competing risks, strata include event type and censoring.
 }
+Stratification helps ensure representation of key outcome types and is especially important for small sample sizes. Overriding this behavior is discouraged. Note that stratification is \emph{not} available for multivariate families, and caution should be exercised when subsampling in that context.
+
+The function \code{\link{extract.subsample}} can be used to retrieve detailed information from the subsample object. By default, returned VIMP values are standardized: for regression families, VIMP is divided by the variance of the response; for other families, no transformation is applied. To obtain raw (unstandardized) values, set \code{standardize = FALSE}. For expert users, the option \code{raw = TRUE} returns detailed internal output, including VIMP from each individual subsampled forest (constructed on a smaller sample size), which is used internally by \code{\link{plot.subsample.rfsrc}} to generate confidence intervals.
+
+Printed and plotted outputs also standardize VIMP by default. This behavior can be disabled via \code{standardize}. The \code{alpha} option controls the confidence level and is preset in wrapper functions but can be adjusted by the user.
+}
+
 \value{
+
   A list with the following key components:
   \item{rf}{Original forest grow object.}
   \item{vmp}{Variable importance values for grow forest.}
   \item{vmpS}{Variable importance subsampled values.}
   \item{subratio}{Subratio used.}  
+
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur

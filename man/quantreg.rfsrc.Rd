@@ -1,10 +1,6 @@
 \name{quantreg.rfsrc}
 \alias{quantreg.rfsrc}
 \alias{quantreg}
-\alias{extract.quantile}
-\alias{get.quantile}
-\alias{get.quantile.crps}
-\alias{get.quantile.stat}
 \title{Quantile Regression Forests}
 \description{
   Grows a univariate or multivariate quantile regression forest and returns

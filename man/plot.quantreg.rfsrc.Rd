@@ -11,18 +11,26 @@
    m.target = NULL, crps = TRUE, subset = NULL, xlab = NULL, ylab = NULL, ...)
 }
 \arguments{
-  \item{x}{A quantile regression object obtained from calling \command{quantreg}.}
-  \item{prbL}{Lower quantile (preferably < .5).}
-  \item{prbU}{Upper quantile (preferably > .5).}
-  \item{m.target}{Character value for multivariate families
-    specifying the target outcome to be used.  If left unspecified, the
-    algorithm will choose a default target.}
-  \item{crps}{Calculate crps and inset it?}
-  \item{subset}{Restricts plotted values to a subset of the data.
-    Default is to use the entire data.}
-  \item{xlab}{Horizontal axis label.}
-  \item{ylab}{Vertical axis label.}
-  \item{...}{Further arguments passed to or from other methods.}
+
+  \item{x}{A quantile regression object returned by a call to \command{quantreg}.}
+
+  \item{prbL}{Lower quantile level, typically less than \code{0.5}.}
+
+  \item{prbU}{Upper quantile level, typically greater than \code{0.5}.}
+
+  \item{m.target}{Character string specifying the target outcome for multivariate families. 
+  If not provided, a default target is selected automatically.}
+
+  \item{crps}{Logical. If \code{TRUE}, calculates the continuous ranked probability score (CRPS) and adds it to the plot.}
+
+  \item{subset}{Optional vector specifying a subset of the data to be plotted. 
+  Defaults to plotting all data points.}
+
+  \item{xlab}{Label for the x-axis.}
+
+  \item{ylab}{Label for the y-axis.}
+
+  \item{...}{Additional arguments passed to or from other methods.}
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur

@@ -1,65 +1,54 @@
 \name{rfsrc.anonymous}
 \alias{rfsrc.anonymous}
 \title{Anonymous Random Forests}
+
 \description{
 
-  Anonymous random forests applies random forests but is carefully
-  modified so as not to save the original training data.  This allows
-  users to share their forest with other researchers but without having
-  to share their original data.
+  Anonymous random forests is carefully modified to ensure that the
+  original training data is not retained. This enables users to share
+  the trained forest with others without disclosing the underlying data.
 
 }
-\usage{rfsrc.anonymous(formula, data, forest = TRUE, ...)
-}
+
+\usage{rfsrc.anonymous(formula, data, forest = TRUE, ...)}
+
 \arguments{
-  \item{formula}{A symbolic description of the model to be fit. If
-    missing, unsupervised splitting is implemented.}
-  \item{data}{Data frame containing the y-outcome and x-variables.} 
-  \item{forest}{Should the forest object be returned?  Used for
-    prediction on new data and required by many of the package
-    functions.}
-  \item{...}{Further arguments as in \code{\link{rfsrc}}.  See the
-   \code{rfsrc} help file for details.}
+  \item{formula}{A symbolic description of the model to be fit. If missing, unsupervised splitting is performed.}
+
+  \item{data}{A data frame containing the y-outcome and x-variables.}
+
+  \item{forest}{Logical. Should the forest object be returned? Required for prediction on new data and by many other package functions.}
+
+  \item{...}{Additional arguments passed to \code{\link{rfsrc}}. See the \code{rfsrc} help file for full details.}
 }
+
+
 \details{
 
-  Calls \code{\link{rfsrc}} and returns an object with the training data
-  removed so that users can share their forest while maintaining privacy
-  of their data.
+This function calls \code{\link{rfsrc}} and returns a forest object with the original training data removed. This enables users to share their forest while preserving the privacy of their data.
 
-  In order to predict on test data, it is however necessary for certain
-  minimal information to be saved from the training data.  This includes
-  the names of the original variables, and if factor variables are
-  present, the levels of the factors.  The mean value and maximal class
-  value for real and factor variables in the training data are also
-  stored for the purposes of imputation on test data (see below).  The
-  topology of grow trees is also saved, which includes among other
-  things, the split values used for splitting tree nodes.
-
-  For the most privacy, we recommend that variable names be made
-  non-identifiable and that data be coerced to real values.  If factors
-  are required, the user should consider using non-identifiable factor
-  levels.  However, in all cases, it is the users responsibility to
-  de-identify their data and to check that data privacy holds.  We
-  provide NO GUARANTEES of this.
-
-  Missing data is especially delicate with anonymous forests.  Training
-  data cannot be imputed and the option \code{na.action="na.impute"}
-  simply reverts to \code{na.action="na.omit"}.  Therefore if you have
-  training data with missing values consider using pre-imputing the data
-  using \command{impute}.  It is however possible to impute on test
-  data.  The option \code{na.action="na.impute"} in the prediction call
-  triggers a rough and fast imputation method where the value of missing
-  test data are replaced by the mean (or maximal class) value from the
-  training data.  A second option \code{na.action="na.random"} uses a
-  fast random imputation method.
-  
-  In general, it is important to keep in mind that while anonymous
-  forests tries to play nice with other functions in the package, it
-  only works with calls that do not specifically require training data.
-  
-    
+To enable prediction on new (test) data, certain minimal information from the training data must still be retained. This includes:
+\itemize{
+  \item Names of the original variables.
+  \item For factor variables, the levels of each factor.
+  \item Summary statistics used for imputation: the mean for continuous variables and the most frequent class for factors.
+  \item Tree topology, including split points used to grow the trees.
 }
+
+For maximal privacy, users are strongly encouraged to replace variable names with non-identifiable labels and convert all variables to continuous format when possible. If factor variables are used, their levels should also be anonymized. However, the user is solely responsible for de-identifying the data and verifying that privacy is maintained. \strong{We provide NO GUARANTEES regarding data confidentiality.}
+
+\emph{Missing data handling:} Anonymous forests do not support imputation of training data. The option \code{na.action = "na.impute"} is automatically downgraded to \code{"na.omit"}. If training data contain missing values, we recommend pre-imputing them using \code{\link{impute}}.
+
+Test data, however, \emph{can} be imputed at prediction time:
+\itemize{
+  \item \code{na.action = "na.impute"} performs a fast imputation by replacing missing values with the training mean (for numeric variables) or most frequent class (for factors).
+  \item \code{na.action = "na.random"} uses a fast random draw from training distributions for imputation.
+}
+
+Although anonymous forests are compatible with many package functions, they are only guaranteed to work with functions that do not explicitly require access to the original training data.
+
+}
+
 \value{
   An object of class \code{(rfsrc, grow, anonymous)}.
 }

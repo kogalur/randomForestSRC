@@ -104,7 +104,6 @@
 \seealso{
   \command{\link{holdout.vimp.rfsrc}},
   \command{\link{max.subtree.rfsrc}},
-  \command{\link{var.select.rfsrc}},
   \command{\link{vimp.rfsrc}}
 }
 \examples{

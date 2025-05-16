@@ -153,8 +153,6 @@ uint   **RF_mwcpCT_;
 double   *RF_spltST_;
 uint     *RF_dpthST_;
 ulong     RF_totalNodeCount;
-ulong     RF_totalNodeCount1;
-ulong     RF_totalNodeCount2;
 ulong     RF_totalTerminalCount;
 ulong     RF_totalMWCPCount;
 ulong     RF_totalNodeCountSyth;
@@ -3274,6 +3272,11 @@ void processDefaultGrow(void) {
   }
   else {
     RF_opt = RF_opt & (~OPT_SEED);
+  }
+  if (RF_opt & OPT_TREE) {
+  }
+  else {
+    RF_opt = RF_opt & (~OPT_NODE_STAT);
   }
   if (RF_hdim > 0) { 
     if (RF_lotLag > 0) {
@@ -8763,7 +8766,9 @@ void processEnsembleInSitu(char mode, char multImpFlag, uint b) {
     if (RF_optHigh & OPT_PART_PLOT) {
       getAndUpdatePartialMembership(b, RF_root[b]);
     }
-     
+      if (RF_xMarginalSize > 0) {
+        getMarginalMembership(mode, b);
+      }
     if (RF_optHigh & OPT_WGHT) {
       updateWeight(mode, b);
     }
@@ -8773,7 +8778,9 @@ void processEnsembleInSitu(char mode, char multImpFlag, uint b) {
     if (RF_opt & OPT_PROX) {
       updateProximity(mode, b);
     }
-     
+      if (RF_xMarginalSize > 0) {
+        releaseMarginalMembership(mode, b);
+      }
 }
 void processEnsemblePost(char mode) {
   char perfFlag;
@@ -8949,7 +8956,9 @@ void processEnsemblePost(char mode) {
   for (bb = 1; bb <= RF_getTreeCount; bb++) {
     uint b = RF_getTreeIndex[bb];
     if (RF_tLeafCount[b] > 0) {
-       
+        if (RF_xMarginalSize > 0) {
+          getMarginalMembership(mode, b);
+        }
         if (RF_optHigh & OPT_WGHT) {
           updateWeight(mode, b);
         }
@@ -8959,7 +8968,9 @@ void processEnsemblePost(char mode) {
       if (RF_opt & OPT_PROX) {
         updateProximity(mode, b);
       }
-       
+        if (RF_xMarginalSize > 0) {
+          releaseMarginalMembership(mode, b);
+        }
     }  
   }  
 }
@@ -27050,7 +27061,34 @@ void stackDefinedOutputObjects(char      mode,
     }
     break;
   }  
-   
+  if (RF_xMarginalSize > 0) {
+    if (RF_xMarginalSize <= RF_xSize) {
+      for (uint i = 1; i <= RF_xMarginalSize; i++) {
+        if ((RF_xMarginal[i] < 1) || (RF_xMarginal[i] > RF_xSize)) {
+          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+          RF_nativeError("\nRF-SRC:  Parameter verification failed.");
+          RF_nativeError("\nRF-SRC:  Marginal predictor must be greater than zero and less than or equal to %10d:  %10d \n", RF_xSize, RF_xMarginal[i]);
+          RF_nativeExit();
+        }
+      }
+    }
+    else {
+      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+      RF_nativeError("\nRF-SRC:  Parameter verification failed.");
+      RF_nativeError("\nRF-SRC:  Number of marginal predictors must be greater than zero and less than or equal to %10d:  %10d \n", RF_xSize, RF_xMarginalSize);
+      RF_nativeExit();
+    }
+    RF_utTermMembership      =  (uint ***) new_vvector(1, RF_ntree, NRUTIL_UPTR2);
+    RF_utTermMembershipCount =  (uint **) new_vvector(1, RF_ntree, NRUTIL_UPTR);
+    RF_utTermMembershipAlloc =  (uint **) new_vvector(1, RF_ntree, NRUTIL_UPTR);
+    RF_xMarginalFlag         =  uivector(1, RF_xSize);
+    for (i = 1; i <= RF_xSize; i++) {
+      RF_xMarginalFlag[i] = FALSE;
+    }
+    for (i = 1; i <= RF_xMarginalSize; i++) {
+      RF_xMarginalFlag[RF_xMarginal[i]] = TRUE;
+    }
+  }
   initProtect(RF_stackCount);
   stackAuxiliaryInfoList(&RF_snpAuxiliaryInfoList, RF_stackCount);
   oobFlag = fullFlag = FALSE;
@@ -28022,7 +28060,12 @@ void unstackDefinedOutputObjects(char mode) {
     rspSize = RF_ySize;
     break;
   }
-   
+  if (RF_xMarginalSize > 0) {
+    free_new_vvector(RF_utTermMembership,      1, RF_ntree, NRUTIL_UPTR2);
+    free_new_vvector(RF_utTermMembershipCount, 1, RF_ntree, NRUTIL_UPTR);
+    free_new_vvector(RF_utTermMembershipAlloc, 1, RF_ntree, NRUTIL_UPTR);
+    free_uivector(RF_xMarginalFlag, 1, RF_xSize);
+  }
   oobFlag = fullFlag = FALSE;
   if ((RF_opt & OPT_FENS) || (RF_opt & OPT_OENS)) {
     if (RF_opt & OPT_FENS) {
@@ -34504,7 +34547,8 @@ void finalizeWeight(char mode) {
   }
 }
 void updateWeight(char mode, uint b) {
-   
+  uint     **utTermMembership;
+  uint      *utTermMembershipCount;
   Terminal **itTermMembership, **gtTermMembership;
   uint  *gMembershipIndex, *iMembershipIndex;
   uint   gMembershipSize,   iMembershipSize;
@@ -34549,10 +34593,12 @@ void updateWeight(char mode, uint b) {
   iMembershipSize  = RF_ibgSize[b];
   bootMembershipCount = RF_bootMembershipCount[b];
   itTermMembership = RF_tTermMembership[b];
-  
-  mtnmFlag = FALSE;
-  
-   
+  if (RF_xMarginalSize > 0) {
+    mtnmFlag = TRUE;
+  }
+  else {
+    mtnmFlag = FALSE;
+  }
   if (!mtnmFlag) {
     for (uint i = 1; i <= gMembershipSize; i++) {
       uint ii, jj;
@@ -34572,7 +34618,41 @@ void updateWeight(char mode, uint b) {
 #endif
     }
   }
-   
+  else {
+    utTermMembershipCount = RF_utTermMembershipCount[b];
+    utTermMembership      = RF_utTermMembership[b];
+    for (uint i = 1; i <= gMembershipSize; i++) {
+      uint rowNodeID, colNodeID;
+      uint ii, jj;
+      uint xMembrCount;
+      ii = gMembershipIndex[i];
+#ifdef _OPENMP
+      omp_set_lock(&(RF_lockWeightRow[ii]));
+#endif
+      RF_weightDenom[ii] ++;
+      for (uint j = 1; j <= iMembershipSize; j++) {
+        jj = iMembershipIndex[j];
+        colNodeID = itTermMembership[jj] -> nodeID;
+        xMembrCount = 0;
+        for (uint k = 1; k <= utTermMembershipCount[ii]; k++) {
+          xMembrCount += RF_tTermList[b][utTermMembership[ii][k]] -> membrCount;
+          rowNodeID = utTermMembership[ii][k];
+          if ( colNodeID == rowNodeID ) {
+            for (uint kk = k+1; kk <= utTermMembershipCount[ii]; kk++) {
+              xMembrCount += RF_tTermList[b][utTermMembership[ii][kk]] -> membrCount;
+            }
+            RF_weightPtr[ii][jj] +=  (double) bootMembershipCount[jj] / (double) xMembrCount;
+            goto wghtMarginal;
+          }
+        }
+      wghtMarginal:
+        continue;
+      }
+#ifdef _OPENMP
+      omp_unset_lock(&(RF_lockWeightRow[ii]));
+#endif
+    }
+  }
 }
 void finalizeProximity(char mode) {
   uint  obsSize;
@@ -34599,7 +34679,8 @@ void finalizeProximity(char mode) {
   }
 }
 void updateProximity(char mode, uint b) {
-   
+  uint     **utTermMembership;
+  uint      *utTermMembershipCount;
   Terminal **tTermMembership;
   uint  *membershipIndex;
   uint   membershipSize;
@@ -34637,10 +34718,12 @@ void updateProximity(char mode, uint b) {
     }
     tTermMembership = RF_tTermMembership[b];
   }
-  
-  mtnmFlag = FALSE;
-  
-   
+  if (RF_xMarginalSize > 0) {
+    mtnmFlag = TRUE;
+  }
+  else {
+    mtnmFlag = FALSE;
+  }
   if (!mtnmFlag) {
     for (uint i = 1; i <= membershipSize; i++) {
       uint ii, jj;
@@ -34654,7 +34737,28 @@ void updateProximity(char mode, uint b) {
       }
     }
   }
-   
+  else {
+    utTermMembership =  RF_utTermMembership[b];
+    utTermMembershipCount =  RF_utTermMembershipCount[b];
+    for (uint i = 1; i <= membershipSize; i++) {
+      uint ii, jj;
+      ii = membershipIndex[i];
+      for (uint j = 1; j <= i; j++) {
+        jj = membershipIndex[j];
+        rfsrc_omp_atomic_update(&RF_proximityDenPtr[ii][jj], 1.0);
+        for (uint ki = 1; ki <= utTermMembershipCount[ii]; ki++) {
+          for (uint kj = 1; kj <= utTermMembershipCount[jj]; kj++) {
+            if ( utTermMembership[ii][ki] == utTermMembership[jj][kj] ) {
+              rfsrc_omp_atomic_update(&RF_proximityPtr[ii][jj], 1.0);
+              goto proxMarginal;
+            }
+          }
+        }
+      proxMarginal:
+        continue;
+      }
+    }
+  }
 }
 void finalizeDistance(char mode) {
   uint  obsSize;
@@ -34720,10 +34824,12 @@ void updateDistance(char mode, uint b) {
     }
     tTermMembership = RF_tTermMembership[b];
   }
-  
-  mtnmFlag = FALSE;
-  
-     
+  if (RF_xMarginalSize > 0) {
+    mtnmFlag = TRUE;
+  }
+  else {
+    mtnmFlag = FALSE;
+  }
   if (!mtnmFlag) {
     for (uint i = 1; i <= membershipSize; i++) {
       Node *iNodeMembership, *jNodeMembership;

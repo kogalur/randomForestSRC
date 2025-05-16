@@ -3,7 +3,7 @@ tune.rfsrc <- function(formula, data,
       nodesizeTry = c(1:9, seq(10, 100, by = 5)), ntreeTry = 100,
       sampsize = function(x){min(x * .632, max(150, x ^ (3/4)))},
       nsplit = 1, stepFactor = 1.25, improve = 1e-3, strikeout = 3, maxIter = 25,
-      trace = FALSE, doBest = FALSE, ...) 
+      trace = FALSE, doBest = TRUE, ...) 
 {
   ## inital checks - all are fatal
   if (improve < 0) {
@@ -22,11 +22,19 @@ tune.rfsrc <- function(formula, data,
   data <- data.frame(stump$yvar, stump$xvar)
   colnames(data)[1:length(yvar.names)] <- yvar.names
   rm(stump)
-  if (is.function(sampsize)) {##user has specified a function
+  ## sample size 
+  if (is.function(sampsize)) {
     ssize <- sampsize(n)
   }
   else {
     ssize <- sampsize
+  }
+  ## set performance type
+  if (is.null(list(...)$perf.type)) {
+    perf.type <- "default"
+  }
+  else {
+    perf.type <- list(...)$perf.type
   }
   ## now hold out a test data set equal to the tree sample size (if possible)
   if ((2 * ssize)  < n)  {
@@ -53,7 +61,7 @@ tune.rfsrc <- function(formula, data,
     else {
       o <- rfsrc.fast(formula, data[trn,, drop = FALSE], ntree = ntreeTry, mtry = mtryStart, nodesize = nsz,
                       sampsize = ssize, nsplit = nsplit, forest = TRUE, perf.type = "none", save.memory = FALSE, ...)
-      errorOld <- mean(get.mv.error(predict(o, newdata, perf.type = "default"), TRUE), na.rm = TRUE)
+      errorOld <- mean(get.mv.error(predict(o, newdata, perf.type = perf.type), TRUE), na.rm = TRUE)
     }
     mtryStart <- o$mtry
     mtryMax <- length(o$xvar.names)
@@ -102,7 +110,7 @@ tune.rfsrc <- function(formula, data,
         else {
           errorCur <- mean(get.mv.error(predict(rfsrc.fast(formula, data[trn,, drop = FALSE], ntree = ntreeTry, mtry = mtryCur,
                             nodesize = nsz, sampsize = ssize, nsplit = nsplit, forest = TRUE, perf.type = "none", save.memory = FALSE, ...),
-                            newdata, perf.type = "default"), TRUE), na.rm = TRUE)
+                            newdata, perf.type = perf.type), TRUE), na.rm = TRUE)
         }
         if (trace) {
           cat("nodesize = ", nsz,
@@ -138,8 +146,12 @@ tune.rfsrc <- function(formula, data,
   ## fit the optimized forest?
   rf <- NULL
   if (doBest) {
-    rf <- rfsrc.fast(formula, data, mtry = res[opt.idx, 2], nodesize = res[opt.idx, 1],
-                     sampsize = sampsize, nsplit = nsplit)
+    rf <- rfsrc.fast(formula, data,
+                     mtry = res[opt.idx, 2],
+                     nodesize = res[opt.idx, 1],
+                     sampsize = sampsize,
+                     nsplit = nsplit,
+                     forest = TRUE, ...)
   }
   ## return the goodies
   list(results = res, optimal = res[opt.idx, -3], rf = rf)

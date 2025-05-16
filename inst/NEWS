@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.3.5 (bld20250327)
+Version: 3.3.8 (bld20250509)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,7 +8,7 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.3.5
+CHANGES TO RELEASE 3.3.8
 ---------------------------------------------------------------------------------
 Fix to longstanding bug in conditional classification Brier Score.  We were not
 normalizing conditional values.  Addition of case.depth option.

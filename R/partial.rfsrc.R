@@ -15,7 +15,7 @@ partial.rfsrc <- function(
   ## hidden options
   user.option <- list(...)
   ## Object consistency
-  ## (TBD3) Version checking is NOT implemented in this mode
+  ## TBD Version checking is NOT implemented in this mode
   if (missing(object)) {
     stop("object is missing!")
   }
@@ -28,8 +28,9 @@ partial.rfsrc <- function(
   if (inherits(object, "anonymous")) {
     stop("this function does work with anonymous forests")
   }
-  ## jitt/data.pass
+  ## jitt=FALSE if not specified
   jitt <- is.hidden.jitt(user.option, "none", "na.omit", FALSE, partial = TRUE)
+  ## data-pass
   data.pass <- is.hidden.data.pass(user.option)
   ## acquire the forest --> hereafter the object is the forest
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) == 2) {

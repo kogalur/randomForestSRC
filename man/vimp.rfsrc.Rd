@@ -6,56 +6,47 @@
   Calculate variable importance (VIMP) for a single variable or group of
   variables for training or test data.
 }
-\usage{\method{vimp}{rfsrc}(object, xvar.names, m.target = NULL, 
+\usage{\method{vimp}{rfsrc}(object, xvar.names, 
   importance = c("anti", "permute", "random"), block.size = 10,
   joint = FALSE, seed = NULL, do.trace = FALSE, ...)
 }
+
 \arguments{
-  
-  \item{object}{An object of class \code{(rfsrc, grow)} or
-    \code{(rfsrc, forest)}. Requires \option{forest=TRUE} in the
-    original \command{rfsrc} call.}
 
-  \item{xvar.names}{Names of the x-variables to be used.  If not
-    specified all variables are used.}
+  \item{object}{An object of class \code{(rfsrc, grow)} or \code{(rfsrc, forest)}. The original \code{rfsrc} call must have been made with \code{forest = TRUE}.}
 
-  \item{m.target}{Character value for multivariate families
-    specifying the target outcome to be used.  If left unspecified, the
-    algorithm will choose a default target.}
+  \item{xvar.names}{Character vector of x-variable names to be evaluated. If not specified, all variables are used.}
 
-  \item{importance}{Type of VIMP.}
+  \item{importance}{Type of variable importance (VIMP) to compute.}
 
-  \item{block.size}{Specifies number of trees in a block when calculating
-    VIMP.}
+  \item{block.size}{Integer specifying the number of trees per block used for VIMP calculation. Balances between ensemble-level and tree-level estimates.}
 
-  \item{joint}{Individual or joint VIMP?}
+  \item{joint}{Logical indicating whether to compute joint VIMP for the specified variables.}
 
-  \item{seed}{Negative integer specifying seed for the random number
-    generator.} 
+  \item{seed}{Negative integer used to set the random number generator seed.}
 
-  \item{do.trace}{Number of seconds between updates to the user on
-    approximate time to completion.}
+  \item{do.trace}{Number of seconds between printed progress updates.}
 
-  \item{...}{Further arguments passed to or from other methods.}
-  
+  \item{...}{Additional arguments passed to or from other methods.}
+
 }
+
 \details{
-  Using a previously trained forest, calculate the VIMP for variables
-  \code{xvar.names}.  By default, VIMP is calculated for the original
-  data, but the user can specify a new test data for the VIMP
-  calculation using \code{newdata}.  See \command{rfsrc} for more
-  details about how VIMP is calculated.
-  
-  \option{joint=TRUE} returns joint VIMP, defined as importance for
-  a group of variables when the group is perturbed simultaneously.
 
-  \code{csv=TRUE} return case specific VIMP.  Applies to
-  all families except survival families.  See example below.  
+Using a previously trained forest, this function calculates variable importance (VIMP) for the specified variables in \code{xvar.names}. By default, VIMP is computed using the original training data, but the user may supply a new test set via the \code{newdata} argument. See \code{\link{rfsrc}} for further details on how VIMP is computed.
+
+If \code{joint = TRUE}, joint VIMP is returned. This is defined as the importance of a group of variables when the entire group is perturbed simultaneously.
+
+Setting \code{csv = TRUE} returns case-specific VIMP, which provides VIMP estimates at the individual observation level. This applies to all families except survival. See examples below.
+
 }
+
+
 \value{
   An object of class \code{(rfsrc, predict)} containing importance
   values.
 }
+
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }

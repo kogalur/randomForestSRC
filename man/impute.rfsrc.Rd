@@ -14,98 +14,100 @@
   ...)
 }
 \arguments{
-  \item{formula}{A symbolic description of the model to be fit.  Can be
-    left unspecified if there are no outcomes or we don't care to
-    distinguish between y-outcomes and x-variables in the imputation.
-    Ignored when using multivariate missForest imputation.}
-  \item{data}{Data frame containing the data to be imputed.}
-  \item{ntree}{Number of trees to grow.}
-  \item{nodesize}{Forest average terminal node size.}
-  \item{nsplit}{Non-negative integer value used to specify random splitting.}
-  \item{nimpute}{Number of iterations of the missing data algorithm.
-    Ignored for multivariate missForest; in which case the algorithm
-    iterates until a convergence criteria is achieved (users can
-    however enforce a maximum number of iterations with the option
-    \code{max.iter}).}
-  \item{fast}{Use fast random forests, \code{rfsrcFast}, in place of
-    \code{rfsrc}?  Improves speed but is less accurate.}
-  \item{blocks}{Integer value specifying the number of blocks the data
-    should be broken up into (by rows).  This can improve computational
-    efficiency when the sample size is large but imputation efficiency
-    decreases.  By default, no action is taken if left unspecified.}
-  \item{mf.q}{Use this to turn on missForest (which is off by default).
-    Specifies fraction of variables (between 0 and 1) used as responses
-    in multivariate missForest imputation.  When set to 1 this
-    corresponds to missForest, otherwise multivariate missForest is
-    used. Can also be an integer, in
-    which case this equals the number of multivariate responses.}
-  \item{max.iter}{Maximum number of iterations used when implementing
-    multivariate missForest imputation.}
-  \item{eps}{Tolerance value used to determine convergence of
-    multivariate missForest imputation.}
+  \item{formula}{A symbolic model description. Can be omitted if
+    outcomes are unspecified or if distinction between outcomes and
+    predictors is unnecessary. Ignored for multivariate missForest.}
+  
+  \item{data}{A data frame containing variables to be imputed.}
+  
+  \item{ntree}{Number of trees grown for each imputation.}
+  
+  \item{nodesize}{Minimum terminal node size in each tree.}
+  
+  \item{nsplit}{Non-negative integer for specifying random splitting.}
+  
+  \item{nimpute}{Number of iterations for the missing data
+  algorithm. Ignored for multivariate missForest, which iterates to
+  convergence unless capped by \code{max.iter}.}
+
+  \item{fast}{If \code{TRUE}, uses \code{rfsrcFast} instead of
+    \code{rfsrc}. Increases speed but may reduce accuracy.}
+   
+  \item{blocks}{Number of row-wise blocks to divide the data into. May
+  improve speed for large data, but can reduce imputation accuracy. No
+  action if unspecified.}
+  
+  \item{mf.q}{Enables missForest. Either a fraction (between 0 and 1) of
+  variables treated as responses, or an integer indicating number of
+  response variables. \code{mf.q = 1} corresponds to standard
+  missForest.}
+  
+  \item{max.iter}{Maximum number of iterations for multivariate missForest.}
+  
+  \item{eps}{Convergence threshold for multivariate missForest (change in imputed values).}
+  
   \item{ytry}{Number of variables used as pseudo-responses in
-    unsupervised forests.  See details below.}
-  \item{always.use}{Character vector of variable names to always
-    be included as a response in multivariate missForest imputation.
-    Does not apply for other imputation methods.}
-  \item{verbose}{Send verbose output to terminal (only applies to
-    multivariate missForest imputation).}
-  \item{...}{Further arguments passed to or from other methods.}
+    unsupervised forests. See Details.}
+  
+  \item{always.use}{Character vector of variables always included as
+    responses in multivariate missForest. Ignored by other methods.}
+  
+  \item{verbose}{If \code{TRUE}, prints progress during multivariate
+    missForest imputation.}
+  
+  \item{...}{Additional arguments passed to or from methods.}
+  
 }
+
 \details{
   \enumerate{
-    
-    \item Grow a forest and use this to impute data.  All external
-    calculations such as ensemble calculations, error rates, etc. are
-    turned off.  Use this function if your only interest is imputing the
-    data.
 
-    \item Split statistics are calculated using non-misssing data only.
-    If a node splits on a variable with missing data, the variable's
-    missing data is imputed by randomly drawing values from non-missing
-    in-bag data.  The purpose of this is to make it possible to assign
-    cases to daughter nodes based on the split.
-    
-    \item If no formula is specified, unsupervised splitting is
-    implemented using a \code{ytry} value of sqrt(\code{p}) where
-    \code{p} equals the number of variables.  More precisely,
-    \code{mtry} variables are selected at random, and for each of these
-    a random subset of \code{ytry} variables are selected and defined as
-    the multivariate pseudo-responses.  A multivariate composite
-    splitting rule of dimension \code{ytry} is then applied to each of
-    the \code{mtry} multivariate regression problems and the node split
-    on the variable leading to the best split (Tang and Ishwaran, 2017).
-    
-    \item If \code{mf.q} is specified, a multivariate version of
-    missForest imputation (Stekhoven and Buhlmann, 2012) is applied.
-    Specifically, a fraction \code{mf.q} of variables are used as
-    multivariate responses and split by the remaining variables using
-    multivariate composite splitting (Tang and Ishwaran, 2017).  Missing
-    data for responses are imputed by prediction.  The process is
-    repeated using a new set of variables for responses (mutually
-    exclusive to the previous fit), until all variables have been
-    imputed.  This is one iteration.  The entire process is repeated,
-    and the algorithm iterated until a convergence criteria is met
-    (specified using options \code{max.iter} and \code{eps}).  Integer
-    values for \code{mf.q} are allowed and interpreted as a request that
-    \code{mf.q} variables be selected for the multivariate response.  If
-    \code{mf.q=1}, the algorithm reverts to the original missForest
-    procedure. This is generally the most accurate of all the
-    imputation procedures, but also the most computationally demanding.
-    See examples below for strategies to increase speed.
+  \item Before imputation, observations and variables with all values
+  missing are removed.
+  
 
-    \item Prior to imputation, the data is processed and records with
-    all values missing are removed, as are variables having all missing
-    values.
-    
-    \item If there is no missing data, either before or after processing
-    of the data, the algorithm returns the processed data and no
-    imputation is performed.
+  \item A forest is grown and used solely for imputation. No ensemble
+  statistics (e.g., error rates) are computed. Use this function when
+  imputation is the only goal.
+  
 
-    \item All options are the same as \command{rfsrc} and the user should
-    consult the \command{rfsrc} help file for details.
+  \item For standard imputation (not missForest), splits are based only
+  on non-missing data. If a split variable has missing values, they are
+  temporarily imputed by randomly drawing from in-bag, non-missing
+  values to allow node assignment.
+  
+
+  \item If \code{mf.q} is specified, multivariate missForest imputation
+  is applied (Stekhoven and B\"uhlmann, 2012). A fraction (or integer
+  count) of variables are selected as multivariate responses, predicted
+  using the remaining variables with multivariate composite
+  splitting. Each round imputes a disjoint set of variables, and the
+  full cycle is repeated until convergence, controlled by
+  \code{max.iter} and \code{eps}. Setting \code{mf.q = 1} reverts to
+  standard missForest. This method is typically the most accurate, but
+  also the most computationally intensive.
+  
+
+  \item If no formula is provided, unsupervised splitting is used. The
+  default \code{ytry} is \code{sqrt(p)}, where \code{p} is the number of
+  variables. For each of \code{mtry} candidate variables, a random
+  subset of \code{ytry} variables is selected as pseudo-responses. A
+  multivariate composite splitting rule is applied, and the split is
+  made on the variable yielding the best result (Tang and Ishwaran,
+  2017).
+  
+
+  \item If no missing values remain after preprocessing, the function
+  returns the processed data without further action.
+  
+
+  \item All standard \code{rfsrc} options apply; see examples below for
+  illustration.
+  
+
   }
 }
+
 \value{
   Invisibly, the data frame containing the orginal data with imputed
   data overlaid.

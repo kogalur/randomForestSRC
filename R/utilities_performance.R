@@ -11,6 +11,8 @@ get.auc.workhorse <- function(roc.data) {
   AUC
 }
 ### Multiclass AUC -- Hand & Till (2001) definition
+#' @name get.auc
+#' @export
 get.auc <- function(y, prob) {
   if (is.factor(y)) {
     y.uniq <- levels(y)

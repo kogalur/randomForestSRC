@@ -7,7 +7,6 @@
 }
 \usage{\method{predict}{rfsrc}(object,
   newdata,
-  m.target = NULL,
   importance = c(FALSE, TRUE, "none", "anti", "permute", "random"),
   get.tree = NULL,
   block.size = if (any(is.element(as.character(importance),
@@ -24,224 +23,126 @@
   case.depth = FALSE,
   seed = NULL,
   do.trace = FALSE, membership = FALSE, statistics = FALSE,
-   
-  ...)
+  marginal.xvar = NULL,  ...)
 }
+
 \arguments{
-  \item{object}{An object of class \code{(rfsrc, grow)} or \code{(rfsrc,
-	    forest)}.}
-
-  \item{newdata}{Test data. If missing, the original grow (training)
-    data is used.}
+  \item{object}{An object of class \code{(rfsrc, grow)} or \code{(rfsrc, forest)}.}
   
-
-  \item{m.target}{Character vector for multivariate families
-    specifying the target outcomes to be used. The default uses all
-    coordinates.}
+  \item{newdata}{Test data. If omitted, the original training data is used.}
   
-  \item{importance}{Method used for variable importance (VIMP).  Also
-    see \command{vimp} for more flexibility, including joint vimp
-    calculations.  See \command{holdoutvimp} for an alternate importance
-    measure.}
+  \item{importance}{Method for computing variable importance (VIMP). See \code{\link{vimp}} for additional options including joint importance. See \code{\link{holdout.vimp}} for an alternative importance measure.}
   
-  \item{get.tree}{Vector of integer(s) identifying trees over which the
-    ensembles are calculated over.  By default, uses all trees in the
-    forest.  As an example, the user can extract the ensemble, the VIMP
-    , or proximity from a single tree (or several trees).  Note that
-    \code{block.size} will be over-ridden so that it is no larger than
-    the requested number of trees.  See example below illustrating how
-    to extract VIMP for each tree.}
+  \item{get.tree}{Vector of integers specifying which trees to use for ensemble calculations. Defaults to all trees. Useful for extracting ensembles, VIMP, or proximity from specific trees. If specified, \code{block.size} is overridden to match the number of trees. See examples for per-tree VIMP extraction.}
   
-  \item{block.size}{Should the error rate be calculated on every tree?
-    When \code{NULL}, it will only be calculated on the last tree.  To
-    view the error rate on every nth tree, set the value to an integer
-    between \code{1} and \code{ntree}.  If importance is requested, VIMP
-    is calculated in "blocks" of size equal to \code{block.size}, thus
-    resulting in a compromise between ensemble and permutation VIMP.}
+  \item{block.size}{Controls the granularity of error rate and VIMP calculation. If \code{NULL}, error is reported only for the final tree. Set to an integer \code{k} to compute error every \code{k} trees. For VIMP, calculations are done in blocks of size \code{block.size}, balancing between tree-level and forest-level assessments.}
   
-  \item{na.action}{Missing value action. The default \code{na.omit}
-    removes the entire record if any entry is \code{NA}.  
-    Selecting \option{na.random} uses fast random imputation, while
-    \option{na.impute} uses the imputation method described in
-    \command{rfsrc}.}
+  \item{na.action}{Action to take when missing values are present. Options are \code{"na.omit"} (default), \code{"na.random"} for fast random imputation, or \code{"na.impute"} to use the imputation method in \code{rfsrc}.}
   
-  \item{outcome}{Determines whether the y-outcomes from the training
-    data or the test data are used to calculate the predicted value.
-    The default and natural choice is \code{train} which uses the
-    original training data.  Option is ignored when \code{newdata} is
-    missing as the training data is used for the test data in such
-    settings.  The option is also ignored whenever the test data is
-    devoid of y-outcomes.  See the details and examples below for more
-    information.}
-
-  \item{perf.type}{Optional character value for requesting metric used
-    for predicted value, variable importance (VIMP) and error rate.  If not
-    specified, values returned are calculated by the default action used
-    for the family. Currently applicable only to classification and
-    multivariate classification; allowed values are
-    \code{perf.type="misclass"} (default), \code{perf.type="brier"} and
-    \code{perf.type="gmean"}.}
-
-  \item{proximity}{Should proximity between test observations
-    be calculated?  Possible choices are \code{"inbag"}, \code{"oob"},
-    \code{"all"}, \code{TRUE}, or \code{FALSE} --- but some options may
-    not be valid and will depend on the context of the predict call.
-    The safest choice is \code{TRUE} if proximity is desired.}
+  \item{outcome}{Specifies whether predicted values should be based on the outcomes from the training data (\code{"train"}, default) or test data. Ignored if \code{newdata} is missing or if test outcomes are unavailable.}
   
-  \item{distance}{Should distance between test observations
-    be calculated?  Possible choices are \code{"inbag"}, \code{"oob"},
-    \code{"all"}, \code{TRUE}, or \code{FALSE} --- but some options may
-    not be valid and will depend on the context of the predict call.
-    The safest choice is \code{TRUE} if distance is desired.}
+  \item{perf.type}{Optional metric for prediction, VIMP, and error. Currently used for classification and multivariate classification. Choices: \code{"misclass"} (default), \code{"brier"}, and \code{"gmean"}.}
   
-  \item{forest.wt}{Should the forest weight matrix for test observations
-    be calculated?  Choices are the same as proximity.}
-
-  \item{ptn.count}{The number of terminal nodes that each tree in the
-    grow forest should be pruned back to.  The terminal node membership
-    for the pruned forest is returned but no other action is taken.  The
-    default is \code{ptn.count=0} which does no pruning.}
-
-  \item{var.used}{Record the number of times a variable is split?}
+  \item{proximity}{Whether to compute the proximity matrix for test observations. Options include \code{"inbag"}, \code{"oob"}, \code{"all"}, \code{TRUE}, or \code{FALSE}. Not all options are valid in all contexts; \code{TRUE} is the safest choice.}
   
-  \item{split.depth}{Return minimal depth for each variable for each case?}
-
-  \item{case.depth}{Return a matrix recording the depth at which a case
-    first splits in a tree. Default is \code{FALSE}.}
+  \item{distance}{Whether to compute the distance matrix. Options are the same as for \code{proximity}.}
   
-  \item{seed}{Negative integer specifying seed for the random number
-    generator.} 
-
-  \item{do.trace}{Number of seconds between updates to the user on
-    approximate time to completion.}
-
-  \item{membership}{Should terminal node membership and inbag
-    information be returned?}
-
-  \item{statistics}{Should split statistics be returned?  Values can be
-    parsed using \command{stat.split}.}
-
-   
+  \item{forest.wt}{Whether to compute the forest weight matrix. Options are the same as for \code{proximity}.}
   
-
-  \item{...}{Further arguments passed to or from other methods.}
-
+  \item{ptn.count}{If nonzero, each tree is pruned to have this many terminal nodes. Only the terminal node membership is returned; no prediction is made. Default is \code{ptn.count = 0}.}
+  
+  \item{var.used}{If \code{TRUE}, records how many times each variable was used for splitting.}
+  
+  \item{split.depth}{If \code{TRUE}, returns minimal depth of each variable per case.}
+  
+  \item{case.depth}{If \code{TRUE}, returns a matrix of the depth at which each case first splits in each tree.}
+  
+  \item{seed}{Negative integer used to set the random seed.}
+  
+  \item{do.trace}{Number of seconds between progress updates during execution.}
+  
+  \item{membership}{If \code{TRUE}, returns terminal node membership and in-bag information.}
+  
+  \item{statistics}{If \code{TRUE}, returns split statistics, which can be parsed using \code{\link{stat.split}}.}
+  
+  \item{marginal.xvar}{Vector of variable names to marginalize over when calculating weights or proximity. If a variable is marginalized, its split does not partition the data; all cases are passed to both daughters. When all splits involve marginalized variables, terminal nodes contain the full dataset. When no marginalized variables are used, membership is unchanged. Default is \code{NULL} (no marginalization).}
+  
+  \item{...}{Additional arguments passed to or from other methods.}
 }
+
+
 \details{
 
-  Predicted values are obtained by "dropping" test data down the trained
-  forest (forest calculated using training data).  Performance values are
-  returned if test data contains y-outcome values.  Single as well as
-  joint VIMP are also returned if requested.
-  
-  If no test data is provided, the original training data is used, and
-  the code reverts to restore mode allowing the user to restore the
-  original trained forest.  This feature allows extracting outputs from
-  the forest not asked for in the original grow call.
-  
-  If \option{outcome="test"}, the predictor is calculated by using
-  y-outcomes from the test data (outcome information must be present).
-  Terminal nodes from the trained forest are recalculated using y-outcomes
-  from the test set.  This yields a modified predictor in which the
-  topology of the forest is based solely on the training data, but where
-  predicted values are obtained from test data.  Error rates and VIMP
-  are calculated by bootstrapping the test data and using out-of-bagging
-  to ensure unbiased estimates.  
+Predicted values are obtained by "dropping" the test data down the trained forest-i.e., the forest grown using the training data. If the test data includes y-outcome values, performance metrics are also returned. Variable importance (VIMP), including joint VIMP, is returned if requested.
 
-  \code{csv=TRUE} returns case specific VIMP;  \code{cse=TRUE} returns
-  case specific error rates.  Applies to all families except survival.
-  These options can also be applied while training.
-  
-}    
-\value{
-  An object of class \code{(rfsrc, predict)}, which is a list with the
-  following components:
-  \item{call}{The original grow call to \command{rfsrc}.}
-  \item{family}{The family used in the analysis.}
-  \item{n}{Sample size of test data (depends upon \code{NA} values).}
-  \item{ntree}{Number of trees in the grow forest.}
-  \item{yvar}{Test set y-outcomes or original grow y-outcomes if none.}
-  \item{yvar.names}{A character vector of the y-outcome names.}
-  \item{xvar}{Data frame of test set x-variables.}
-  \item{xvar.names}{A character vector of the x-variable names.}
-  \item{leaf.count}{Number of terminal nodes for each tree in the
-    grow forest.  Vector of length \code{ntree}.}
-  \item{proximity}{Symmetric proximity matrix of the test data.}
-  \item{forest}{The grow forest.}
-  
-                    
-  
-  \item{membership}{Matrix recording terminal node membership for the
-    test data where each column contains the node number that a
-    case falls in for that tree.}
-  \item{inbag}{Matrix recording inbag membership for the test data
-    where each column contains the number of times that a case
-    appears in the bootstrap sample for that tree.}
-  \item{var.used}{Count of the number of times a variable was used in
-    growing the forest.}
-  \item{imputed.indv}{Vector of indices of records in test data with
-    missing values.}
-  \item{imputed.data}{Data frame comprising imputed test data.  The first
-    columns are the y-outcomes followed by the x-variables.}
-  \item{split.depth}{Matrix (i,j) or array (i,j,k) recording the
-    minimal depth for variable j for case i, either averaged over
-    the forest, or by tree k.}
-  \item{node.stats}{Split statistics returned when
-    \code{statistics=TRUE} which can be parsed using \command{stat.split}.}
-  \item{err.rate}{Cumulative OOB error rate for the test data if
-    y-outcomes are present.}
-  \item{importance}{Test set variable importance (VIMP).  Can be
-    \code{NULL}.}
-  \item{predicted}{Test set predicted value.}
-  \item{predicted.oob}{OOB predicted value (\code{NULL} unless
-    \option{outcome="test"}).}\cr
-  \item{quantile}{Quantile value at probabilities requested.}
-  \item{quantile.oob}{OOB quantile value at probabilities requested (\code{NULL} unless
-    \option{outcome="test"}).}\cr
+If no test data is supplied, the function uses the original training data and enters "restore" mode. This allows users to extract outputs from the trained forest that were not requested during the original grow call.
 
-  
-  \item{++++++++}{for classification settings, additionally ++++++++} \cr     
-  \item{class}{In-bag predicted class labels.}
-  \item{class.oob}{OOB predicted class labels (\code{NULL} unless \option{outcome="test"}).}\cr
-  
-  \item{++++++++}{for multivariate settings, additionally ++++++++} \cr
-  
-  \item{regrOutput}{List containing performance values for
-	  test multivariate regression responses (applies only in
-	  multivariate settings).}
-	\item{clasOutput}{List containing performance values for
-	  test multivariate categorical (factor) responses (applies only in
-	  multivariate settings).}
-  
-  \item{++++++++}{for survival settings, additionally ++++++++} \cr
-  
-  \item{chf}{Cumulative hazard function (CHF).}
-  \item{chf.oob}{OOB CHF (\code{NULL} unless \option{outcome="test"}).}
-  \item{survival}{Survival function.}
-  \item{survival.oob}{OOB survival function (\code{NULL} unless \option{outcome="test"}).}
-  \item{time.interest}{Ordered unique death times.}
-  \item{ndead}{Number of deaths.}\cr
-  
-  \item{++++++++}{for competing risks, additionally ++++++++} \cr
-  
-  \item{chf}{Cause-specific cumulative hazard function (CSCHF)
-    for each event.}
-  \item{chf.oob}{OOB CSCHF for each event (\code{NULL} unless \option{outcome="test"}).}
-  \item{cif}{Cumulative incidence function (CIF) for each event.}
-  \item{cif.oob}{OOB CIF (\code{NULL} unless \option{outcome="test"}).}
+If \code{outcome = "test"}, predictions are computed using y-outcomes from the test data (which must include outcome values). Terminal node statistics are recalculated using these outcomes, while the tree topology remains fixed from training. Error rates and VIMP are then computed by bootstrapping the test set and applying out-of-bagging to maintain unbiased estimates.
+
+Set \code{csv = TRUE} to return case-specific VIMP, and \code{cse = TRUE} to return case-specific error rates. These apply to all families except survival. Both options can also be used at training time.
 }
+
+\value{
+An object of class \code{(rfsrc, predict)}, which is a list with the following components:
+
+\describe{
+  \item{call}{The original grow call to \code{rfsrc}.}
+  \item{family}{The family used in the analysis.}
+  \item{n}{Sample size of the test data (after handling missing values).}
+  \item{ntree}{Number of trees in the trained forest.}
+  \item{yvar}{Y-outcome values from the test data or original grow data (if \code{newdata} is missing).}
+  \item{yvar.names}{Character vector of response variable names.}
+  \item{xvar}{Data frame of test set predictor variables.}
+  \item{xvar.names}{Character vector of predictor variable names.}
+  \item{leaf.count}{Vector of length \code{ntree} giving the number of terminal nodes per tree.}
+  \item{proximity}{Proximity matrix computed on the test data.}
+  \item{forest}{The trained forest object.}
+  \item{forest.wt}{Forest weight matrix for test cases.}
+  \item{ptn.membership}{Matrix of pruned terminal node membership. Only returned if \code{ptn.count > 0}.}
+  \item{membership}{Matrix of terminal node membership for test cases. Each column corresponds to one tree.}
+  \item{inbag}{Matrix indicating how many times each case appears in the bootstrap sample for each tree.}
+  \item{var.used}{Number of times each variable was used in splitting.}
+  \item{imputed.indv}{Indices of test observations with missing values.}
+  \item{imputed.data}{Imputed version of the test data. Columns are ordered with responses first, followed by predictors.}
+  \item{split.depth}{Matrix or array recording minimal depth of each variable for each case, optionally by tree.}
+  \item{node.stats}{Split statistics (only if \code{statistics = TRUE}); see \code{\link{stat.split}}.}
+  \item{err.rate}{Cumulative out-of-bag (OOB) error rate, if y-outcomes are present.}
+  \item{importance}{Variable importance (VIMP) for the test data. May be \code{NULL}.}
+  \item{predicted}{Predicted values for the test data.}
+  \item{predicted.oob}{OOB predicted values. May be \code{NULL} depending on context.}
+  \item{quantile}{Estimated quantile values at the requested probabilities (quantile regression only).}
+  \item{quantile.oob}{OOB quantile values. May be \code{NULL}.}
+
+  \item{class}{(Classification only) Predicted class labels.}
+  \item{class.oob}{(Classification only) OOB predicted class labels.}
+
+  \item{regrOutput}{(Multivariate only) List of performance measures for multivariate regression outcomes.}
+  \item{clasOutput}{(Multivariate only) List of performance measures for multivariate categorical outcomes.}
+
+  \item{chf}{(Survival or competing risks) Cumulative hazard function (CHF).}
+  \item{chf.oob}{(Survival or competing risks) OOB CHF. May be \code{NULL}.}
+  \item{survival}{(Survival only) Survival function estimates.}
+  \item{survival.oob}{(Survival only) OOB survival function. May be \code{NULL}.}
+  \item{time.interest}{(Survival or competing risks) Sorted unique event times.}
+  \item{ndead}{(Survival or competing risks) Number of deaths observed.}
+
+  \item{cif}{(Competing risks only) Cumulative incidence function (CIF) for each event type.}
+  \item{cif.oob}{(Competing risks only) OOB CIF. May be \code{NULL}.}
+  \item{chf}{(Competing risks only) Cause-specific cumulative hazard function (CSCHF).}
+  \item{chf.oob}{(Competing risks only) OOB CSCHF. May be \code{NULL}.}
+}
+}
+
+
 \note{
 
-  The dimensions and values of returned objects depend heavily on the
-  underlying family and whether y-outcomes are present in the test data.
-  In particular, items related to performance will be \code{NULL} when
-  y-outcomes are not present.  For multivariate families, predicted
-  values, VIMP, error rate, and performance values are stored in the
-  lists \code{regrOutput} and \code{clasOutput} which can be extracted
-  using functions \code{get.mv.error}, \code{get.mv.predicted} and
-  \code{get.mv.vimp}.
-  
+The dimensions and contents of returned objects depend on the forest family and whether y-outcomes are available in the test data. In particular, performance-related components (e.g., error rate, VIMP) will be \code{NULL} if y-outcomes are missing.
+
+For multivariate families, predicted values, VIMP, error rates, and performance metrics are stored in the lists \code{regrOutput} and \code{clasOutput}. These can be accessed using the helper functions \code{\link{get.mv.predicted}}, \code{\link{get.mv.vimp}}, and \code{\link{get.mv.error}}.
+
 }
+
+
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }
@@ -494,31 +395,22 @@ matplot(Time, t(pbc.train$survival[1:3,]), ylab = "Survival", col = 1, type = "l
 matlines(Time, t(pbc.test$survival[1:3,]), col = 2)
 
 ## ------------------------------------------------------------
-## ... just for _fun_ ...
-## survival analysis using mixed multivariate outcome analysis 
-## compare the predicted value to RSF
+## multivariate forest example
 ## ------------------------------------------------------------
 
-## train survival forest using pbc data
-data(pbc, package = "randomForestSRC")
-rsf.obj <- rfsrc(Surv(days, status) ~ ., pbc)
-yvar <- rsf.obj$yvar
+## train the forest
+trn <- 1:20
+o <- rfsrc(cbind(mpg, disp)~.,mtcars[trn,])
 
-## fit a mixed outcome forest using days and status as y-variables
-pbc.mod <- pbc
-pbc.mod$status <- factor(pbc.mod$status)
-mix.obj <- rfsrc(Multivar(days, status) ~., pbc.mod)
+## print training results for each outcome
+print(o, outcome.target="mpg")
+print(o, outcome.target="disp")
 
-## compare oob predicted values
-rsf.pred <- rsf.obj$predicted.oob
-mix.pred <- mix.obj$regrOutput$days$predicted.oob
-plot(rsf.pred, mix.pred)
+## print test results for each outcome
+p <- predict(o, mtcars[-trn,])
+print(p, outcome.target="mpg")
+print(p, outcome.target="disp")
 
-## compare C-error rate
-rsf.err <- get.cindex(yvar$days, yvar$status, rsf.pred)
-mix.err <- 1 - get.cindex(yvar$days, yvar$status, mix.pred)
-cat("RSF                :", rsf.err, "\n")
-cat("multivariate forest:", mix.err, "\n")
 
 }
 }

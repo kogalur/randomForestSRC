@@ -2,6 +2,7 @@
 \alias{plot.variable.rfsrc}
 \alias{plot.variable}
 \title{Plot Marginal Effect of Variables}
+
 \description{
   Plot the marginal effect of an x-variable on the class probability
   (classification), response (regression), mortality (survival), or the
@@ -9,6 +10,7 @@
   marginal (unadjusted, but fast) and partial plots (adjusted, but
   slower).
 }
+
 \usage{\method{plot.variable}{rfsrc}(x, xvar.names, target,
   m.target = NULL, time, surv.type = c("mort", "rel.freq",
   "surv", "years.lost", "cif", "chf"), class.type =
@@ -16,140 +18,108 @@
   show.plots = TRUE, plots.per.page = 4, granule = 5, sorted = TRUE,
   nvar, npts = 25, smooth.lines = FALSE, subset, ...)
 }
+
 \arguments{
 
- \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc,
-    synthetic)}, or \code{(rfsrc, plot.variable)}.}
+  \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc, synthetic)}, or \code{(rfsrc, plot.variable)}.}
 
- \item{xvar.names}{Names of the x-variables to be used.  If not supplied
-   all variables will be used.}
+  \item{xvar.names}{Character vector of x-variable names to include. If not specified, all variables are used.}
 
- \item{target}{For classification, an integer or
-    character value specifying the class to focus on (defaults to the
-    first class).  For competing risks, an integer value between
-    1 and \code{J} indicating the event of interest, where \code{J} is
-    the number of event types.  The default is to use the first event
-    type.}
+  \item{target}{For classification, an integer or character specifying the class of interest (default is the first class). For competing risks, an integer between 1 and \code{J} indicating the event of interest, where \code{J} is the number of event types. Default is the first event type.}
 
-  \item{m.target}{Character value for multivariate families
-    specifying the target outcome to be used.  If left unspecified, the
-    algorithm will choose a default target.}
+  \item{m.target}{Character value for multivariate families specifying the target outcome. If unspecified, a default is automatically chosen.}
 
-  \item{time}{For survival, the time at which the predicted
-    survival value is evaluated at (depends on \code{surv.type}).}
+  \item{time}{(Survival only) Time point at which the predicted survival value is evaluated, depending on \code{surv.type}.}
 
-  \item{surv.type}{For survival, specifies the predicted value.
-    See details below.}
+  \item{surv.type}{(Survival only) Type of predicted survival value to compute. See \code{\link{plot.variable}} details.}
 
-  \item{class.type}{For classification, specifies the predicted value.
-    See details below.}
+  \item{class.type}{(Classification only) Type of predicted classification value to use. See \code{\link{plot.variable}} details.}
 
-  \item{partial}{Should partial plots be used?}
+  \item{partial}{Logical. If \code{TRUE}, partial dependence plots are generated.}
 
-  \item{oob}{OOB (TRUE)  or in-bag (FALSE) predicted values.}
+  \item{oob}{Logical. If \code{TRUE}, out-of-bag predictions are used; otherwise, in-bag predictions are used.}
 
-  \item{show.plots}{Should plots be displayed?}
+  \item{show.plots}{Logical. If \code{TRUE}, plots are displayed on the screen.}
 
-  \item{plots.per.page}{Integer value controlling page layout.}
+  \item{plots.per.page}{Integer controlling the number of plots displayed per page.}
 
-  \item{granule}{Integer value controlling whether a plot for a
-    specific variable should be treated as a factor and therefore given
-    as a boxplot. Larger values coerce boxplots.}
+  \item{granule}{Integer controlling the coercion of continuous variables to factors (used to generate boxplots). Larger values increase coercion.}
 
-  \item{sorted}{Should variables be sorted by importance values.}
+  \item{sorted}{Logical. If \code{TRUE}, variables are sorted by variable importance.}
 
-  \item{nvar}{Number of variables to be plotted. Default is all.}
+  \item{nvar}{Number of variables to plot. Defaults to all available variables.}
 
-  \item{npts}{Maximum number of points used when generating partial
-    plots for continuous variables.}
+  \item{npts}{Maximum number of points used when generating partial plots for continuous variables.}
 
-  \item{smooth.lines}{Use lowess to smooth partial plots.}
+  \item{smooth.lines}{Logical. If \code{TRUE}, applies \code{lowess} smoothing to partial plots.}
 
-  \item{subset}{Vector indicating which rows of the x-variable matrix
-    \code{x$xvar} to use. All rows are used if not specified.  Do not
-    define subset based on the original data (which could have been processed
-    due to missing values or for other reasons in the previous forest call) but
-    define subset based on the rows of \code{x$xvar}.}
+  \item{subset}{Vector indicating which rows of \code{x$xvar} to use. Defaults to all rows. Important: do not define \code{subset} based on the original dataset (which may have been altered due to missing data or other processing); define it relative to \code{x$xvar}.}
 
-  \item{...}{Further arguments passed to or from other methods.}
-  
+  \item{...}{Additional arguments passed to or from other methods.}
+
 }
+
 \details{
-  The vertical axis displays the ensemble predicted value, while
-  x-variables are plotted on the horizontal axis.
-  
-  \enumerate{
-    \item For regression, the predicted response is used.
-    
-    \item For classification, it is the predicted class probability
-    specified by \option{target}, or the class of maximum
-    probability depending on \option{class.type} is set to "prob" or
-    "bayes".
-    
-    \item For multivariate families, it is the predicted value of the
-    outcome specified by \option{m.target} and if that is a
-    classification outcome, by \option{target}.
-    
-    \item For survival, the choices are:
-    \itemize{
-      
-	    \item Mortality (\code{mort}).  Mortality (Ishwaran et al.,
-                  2008) represents estimated risk for an individual
-                  calibrated to the scale of number of events (as a
-                  specific example, if \emph{i} has a mortality value of
-                  100, then if all individuals had the same x-values as
-                  \emph{i}, we would expect an average of 100 events).
-		  
-	    \item  Relative frequency of mortality (\code{rel.freq}).
 
-	    \item Predicted survival (\code{surv}), where the predicted
-                  survival is for the time point specified using
-                  \code{time} (the default is the median follow up
-                  time).
-		  
-    }
-    \item For competing risks, the choices are:
-    \itemize{
-	    \item  The expected number of life years lost (\code{years.lost}).
-	    \item  The cumulative incidence function (\code{cif}).
-	    \item  The cumulative hazard function (\code{chf}).
-    }
-    In all three cases, the predicted value is for the event type
-    specified by \option{target}.  For \code{cif} and
-    \code{chf} the quantity is evaluated at the time point specified
-    by \code{time}.
-  }
-  
-  For partial plots use \option{partial=TRUE}.  Their interpretation are
-  different than marginal plots.  The y-value for a variable \eqn{X},
-  evaluated at \eqn{X=x}, is
-  \deqn{
-    \tilde{f}(x) = \frac{1}{n} \sum_{i=1}^n \hat{f}(x, x_{i,o}),
-  }
-  where \eqn{x_{i,o}} represents the value for all other variables
-  other than \eqn{X} for individual \eqn{i} and \eqn{\hat{f}} is the
-  predicted value. Generating partial plots can be very slow.
-  Choosing a small value for \code{npts} can speed up computational
-  times as this restricts the number of distinct \eqn{x} values used
-  in computing \eqn{\tilde{f}}.
-  
-  For continuous variables, red points are used to indicate partial
-  values and dashed red lines indicate a smoothed error bar of +/- two
-  standard errors.  Black dashed line are the partial values.  Set
-  \option{smooth.lines=TRUE} for lowess smoothed lines.  For discrete
-  variables, partial values are indicated using boxplots with whiskers
-  extending out approximately two standard errors from the mean.
-  Standard errors are meant only to be a guide and should be
-  interpreted with caution.
-  
-  Partial plots can be slow.  Setting \option{npts} to a smaller number
-  can help.
+The vertical axis displays the ensemble-predicted value, while x-variables are plotted along the horizontal axis.
 
-  For greater customization and computational speed for partial plot calls,
-  consider using the function \code{partial.rfsrc} which provides a
-  direct interface for calculating partial plot data.   
+\enumerate{
+
+  \item For regression, the predicted response is plotted.
+
+  \item For classification, the plotted value is the predicted class
+  probability for the class specified by \code{target}, or the most
+  probable class (Bayes rule) depending on whether \code{class.type} is
+  set to \code{"prob"} or \code{"bayes"}.
+
+  \item For multivariate families, the prediction corresponds to the outcome specified by \code{m.target}. If this is a classification outcome, \code{target} may also be used to indicate the class of interest.
+
+  \item For survival, the vertical axis shows the predicted value determined by \code{surv.type}, with the following options:
   
+  \itemize{
+    \item \code{mort}: Mortality (Ishwaran et al., 2008), interpreted as the expected number of events for an individual with the same covariates.
+    
+    \item \code{rel.freq}: Relative frequency of mortality.
+
+    \item \code{surv}: Predicted survival probability at a specified time point (default is the median follow-up time), controlled via \code{time}.
+  }
+
+  \item For competing risks, the vertical axis shows one of the following quantities, depending on \code{surv.type}:
+  
+  \itemize{
+    \item \code{years.lost}: Expected number of life-years lost.
+
+    \item \code{cif}: Cumulative incidence function for the specified event.
+
+    \item \code{chf}: Cause-specific cumulative hazard function.
+  }
+
+  In all competing risks settings, the event of interest is specified using \code{target}, and \code{cif} and \code{chf} are evaluated at the time point given by \code{time}.
 }
+
+To generate partial dependence plots, set \code{partial = TRUE}. These differ from marginal plots in that they isolate the effect of a single variable \eqn{X} on the predicted value by averaging over all other covariates:
+
+\deqn{
+  \tilde{f}(x) = \frac{1}{n} \sum_{i=1}^n \hat{f}(x, x_{i,o}),
+}
+
+where \eqn{x_{i,o}} denotes the observed values of all covariates other than \eqn{X} for individual \eqn{i}, and \eqn{\hat{f}} is the prediction function. Generating partial plots can be computationally expensive; use a smaller value for \code{npts} to reduce the number of grid points evaluated for \eqn{x}.
+
+\emph{Plot display conventions}:
+
+\itemize{
+  \item For continuous variables: red points indicate partial values; dashed red lines represent an error band of two standard errors. Black dashed lines show the raw partial values. Use \code{smooth.lines = TRUE} to overlay a \code{lowess} smoothed line.
+
+  \item For discrete (factor) variables: boxplots are used, with whiskers extending approximately two standard errors from the mean.
+
+  \item Standard errors are provided only as rough indicators and should be interpreted cautiously.
+}
+
+Partial plots can be slow to compute. Setting \code{npts} to a small value can improve performance.
+
+For additional flexibility and speed, consider using \code{\link{partial.rfsrc}}, which directly computes partial plot data and allows for greater customization.
+}
+
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }

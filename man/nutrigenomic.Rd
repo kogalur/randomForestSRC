@@ -2,13 +2,12 @@
 \docType{data}
 \alias{nutrigenomic}
 \title{Nutrigenomic Study}
-
 \description{
-  Study the effects of five diet treatments on 21 liver lipids and 120
-  hepatic gene expression in wild-type and PPAR-alpha deficient mice.  We
-  use a multivariate mixed random forest analysis by regressing gene
-  expression, diet and genotype (the x-variables) on lipid expressions
-  (the multivariate y-responses).
+  Investigates the effects of five dietary treatments on 21 liver lipids
+  and 120 hepatic gene expressions in wild-type and PPAR-alpha deficient
+  mice. A multivariate mixed random forest analysis is performed by
+  regressing gene expression, diet, and genotype (x-variables) on lipid
+  expression profiles (multivariate y-responses).
 }
 \references{
   Martin P.G. et al. (2007). Novel aspects of PPAR-alpha-mediated

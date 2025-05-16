@@ -2,10 +2,12 @@
 \alias{synthetic.rfsrc}
 \alias{synthetic}
 \title{Synthetic Random Forests}
+
 \description{
   Grows a synthetic random forest (RF) using RF machines as synthetic
   features.  Applies only to regression and classification settings.
 }
+
 \usage{\method{synthetic}{rfsrc}(formula, data, object, newdata,
   ntree = 1000, mtry = NULL, nodesize = 5, nsplit = 10,
   mtrySeq = NULL, nodesizeSeq = c(1:10,20,30,50,100),
@@ -17,74 +19,73 @@
   verbose = TRUE,
   ...)
 }
+
 \arguments{
 
-  \item{formula}{Model to be fit. Must be specified unless \code{object} is given.}
+  \item{formula}{Model to be fit. Must be specified unless \code{object} is provided.}
 
-  \item{data}{Data frame containing the y-outcome and x-variables in
-    the model. Must be specified unless \code{object} is given.}
+  \item{data}{Data frame containing the y-outcome and x-variables. Must be specified unless \code{object} is provided.}
 
-  \item{object}{An object of class \code{(rfsrc, synthetic)}.
-    Not required when \code{formula} and \code{data} are supplied.}
+  \item{object}{An object of class \code{(rfsrc, synthetic)}. Used to bypass the fitting step. Not required if \code{formula} and \code{data} are supplied.}
 
-  \item{newdata}{Test data used for prediction (optional).}
+  \item{newdata}{Optional test data for prediction. If omitted, the training data is used.}
 
-  \item{ntree}{Number of trees.}
+  \item{ntree}{Number of trees used in each RF machine.}
 
-  \item{mtry}{mtry value for over-arching synthetic forest.}
+  \item{mtry}{\code{mtry} value used in the final synthetic forest.}
 
-  \item{nodesize}{Nodesize value for over-arching synthetic forest.}
+  \item{nodesize}{\code{nodesize} value used in the final synthetic forest.}
 
-  \item{nsplit}{nsplit-randomized splitting for significantly increased speed.}
+  \item{nsplit}{Number of random splits used in randomized splitting. Increases speed when set to a small positive integer.}
 
-  \item{mtrySeq}{Sequence of mtry values used for fitting the
-    collection of RF machines.  If \code{NULL}, default is number of
-    variables divided by 3, rounded up.}
+  \item{mtrySeq}{Sequence of \code{mtry} values used to train the ensemble of RF machines. If \code{NULL}, defaults to \code{ceiling(p / 3)}, where \code{p} is the number of variables.}
 
-  \item{nodesizeSeq}{Sequence of nodesize values used for the fitting the
-    collection of RF machines.}
+  \item{nodesizeSeq}{Sequence of \code{nodesize} values used to train the ensemble of RF machines.}
 
-  \item{min.node}{Minimum forest averaged number of nodes a RF machine
-    must exceed in order to be used as a synthetic feature.}
+  \item{min.node}{Minimum forest-averaged number of terminal nodes required for an RF machine to be retained as a synthetic feature.}
 
-  \item{fast}{Use fast random forests, \code{rfsrc.fast}, in place of
-    \code{rfsrc}?  Improves speed but may be less accurate.}
+  \item{fast}{Use \code{rfsrc.fast} instead of \code{rfsrc} to fit base learners? Improves speed at the cost of accuracy.}
 
-  \item{use.org.features}{In addition to synthetic features, should
-    the original features be used when fitting synthetic forests?}
+  \item{use.org.features}{Should original features be included alongside synthetic features in the final synthetic forest?}
 
-  \item{na.action}{Missing value action. The default \code{na.omit}
-    removes the entire record if even one of its entries is \code{NA}.
-    The action \code{na.impute} pre-imputes the data using fast
-    imputation via \command{impute.rfsrc}.}
+  \item{na.action}{Action to be taken on missing data. The default, \code{"na.omit"}, removes records with any missing values. Set to \code{"na.impute"} to pre-impute data using \command{impute.rfsrc}.}
 
-  \item{oob}{Preserve "out-of-bagness" so that error rates and
-    VIMP are honest?  Default is yes (\option{oob=TRUE}).}
+  \item{oob}{Preserve out-of-bag (OOB) estimation for error rates and VIMP? Defaults to \code{TRUE}.}
 
-  \item{verbose}{Set to \code{TRUE} for verbose output.}
+  \item{verbose}{Display detailed output of the fitting process? Defaults to \code{FALSE}.}
 
-  \item{...}{Further arguments to be passed to the \code{rfsrc}
-    function used for fitting the synthetic forest.}
+  \item{...}{Additional arguments passed to \code{rfsrc} for training the synthetic forest.}
 }
+
 \details{
-  A collection of random forests are fit using different nodesize
-  values.  The predicted values from these machines are then used as
-  synthetic features (called RF machines) to fit a synthetic random
-  forest (the original features are also used in constructing the
-  synthetic forest).  Currently only implemented for regression and
-  classification settings (univariate and multivariate).
 
-  Synthetic features are calculated using out-of-bag (OOB) data to avoid
-  over-using training data.  However, to guarantee that performance
-  values such as error rates and VIMP are honest, bootstrap draws are
-  fixed across all trees used in the construction of the synthetic
-  forest and its synthetic features.  The option \option{oob=TRUE}
-  ensures that this happens.  Change this option at your own peril.
+  A collection of random forests are trained using different values of
+  \code{nodesize} (and optionally \code{mtry}). The out-of-bag (OOB)
+  predicted values from these forests are then used as synthetic
+  features (referred to as RF machines) to train a final synthetic random
+  forest. The original features can optionally be included in the final
+  model.
   
-  If values for \code{mtrySeq} are given, RF machines are constructed
-  for each combination of nodesize and mtry values specified by
-  \code{nodesizeSeq} \code{mtrySeq}.
+
+  This approach is currently implemented for regression and
+  classification settings (both univariate and multivariate).
+  
+
+  Synthetic features are generated using OOB predictions to prevent
+  overfitting. To ensure that performance metrics (such as error rates
+  and VIMP) remain valid, the same bootstrap samples are reused across
+  all trees for both the synthetic forest and its constituent RF
+  machines. This behavior is controlled by the \code{oob=TRUE}
+  option. Disabling this may yield misleading performance estimates and
+  should be done with caution.
+  
+
+  If values for \code{mtrySeq} are provided, RF machines are constructed
+  for every combination of \code{nodesizeSeq} and \code{mtrySeq}.
+  
+
 }
+
 \value{
   A list with the following components:
   \item{rfMachines}{RF machines used to construct the synthetic
@@ -95,6 +96,7 @@
   \item{opt.machine}{Optimal machine: RF machine with smallest
     OOB error rate.}
 }
+
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }

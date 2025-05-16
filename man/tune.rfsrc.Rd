@@ -15,7 +15,7 @@
   nodesizeTry = c(1:9, seq(10, 100, by = 5)), ntreeTry = 100,
   sampsize = function(x){min(x * .632, max(150, x ^ (3/4)))},
   nsplit = 1, stepFactor = 1.25, improve = 1e-3, strikeout = 3, maxIter = 25,
-  trace = FALSE, doBest = FALSE, ...)
+  trace = FALSE, doBest = TRUE, ...)
 
 \method{tune.nodesize}{rfsrc}(formula, data,
   nodesizeTry = c(1:9, seq(10, 150, by = 5)), ntreeTry = 100,
@@ -23,56 +23,58 @@
   nsplit = 1, trace = TRUE, ...)
 
 }
+
 \arguments{
-  \item{formula}{A symbolic description of the model to be fit.}
-  \item{data}{Data frame containing the y-outcome and x-variables.} 
-  \item{mtryStart}{Starting value of mtry.}
-  \item{nodesizeTry}{Values of nodesize optimized over.}
-  \item{ntreeTry}{Number of trees used for the tuning step.}
-  \item{sampsize}{Function specifying requested size of subsampled data.
-    Can also be passed in as a number.}
-  \item{nsplit}{Number of random splits used for splitting.}
-  \item{stepFactor}{At each iteration, mtry is inflated (or deflated) by
-    this value.}
-  \item{improve}{The (relative) improvement in out-of-sample error must be by this
-    much for the search to continue.}
-  \item{strikeout}{The search is discontinued when the relative
-    improvement in OOB error is negative.  However \code{strikeout}
-    allows for some tolerance in this.  If a negative improvement is
-    noted a total of \code{strikeout} times, the search is stopped.
-    Increase this value only if you want an exhaustive search.}
-  \item{maxIter}{The maximum number of iterations allowed for each mtry
-    bisection search.}
-  \item{trace}{Print the progress of the search?}
-  \item{doBest}{Return a forest fit with the optimal mtry and nodesize parameters?}
-  \item{...}{Further options to be passed to \code{\link{rfsrc.fast}}.}
+  \item{formula}{A symbolic formula describing the model to be fit.}
+  
+  \item{data}{A data frame containing the response variable and predictor variables.}
+  
+  \item{mtryStart}{Initial value of \code{mtry} used to start the tuning search.}
+  
+  \item{nodesizeTry}{Vector of \code{nodesize} values over which tuning is performed.}
+  
+  \item{ntreeTry}{Number of trees used during the tuning step.}
+  
+  \item{sampsize}{Function specifying the size of the subsample. Can also be a numeric value.}
+  
+  \item{nsplit}{Number of random split points considered when splitting a node.}
+  
+  \item{stepFactor}{Multiplicative factor used to adjust \code{mtry} at each iteration.}
+  
+  \item{improve}{Minimum relative improvement in out-of-sample error required to continue the search.}
+  
+  \item{strikeout}{Number of consecutive non-improving steps (negative improvement) allowed before stopping the search. Increase to allow a more exhaustive search.}
+  
+  \item{maxIter}{Maximum number of iterations allowed for the \code{mtry} bisection search.}
+  
+  \item{trace}{If \code{TRUE}, prints progress during the search.}
+  
+  \item{doBest}{If \code{TRUE}, fits and returns a forest using the optimal \code{mtry} and \code{nodesize}.}
+  
+  \item{...}{Additional arguments passed to \code{\link{rfsrc.fast}}.}
 }
+
 \details{
-  \code{tune} returns a matrix whose first and second
-  columns contain the nodesize and mtry values searched and whose third
-  column is the corresponding out-of-sample error.  Uses standardized error
-  and in the case of multivariate forests it is the averaged
-  standardized rror over the outcomes and for competing risks it is
-  the averaged standardized error over the event types.
 
-  If \code{doBest=TRUE}, also returns a forest object fit using the
-  optimal \code{mtry} and \code{nodesize} values.
+\code{tune} returns a matrix with three columns: the first and second columns contain the \code{nodesize} and \code{mtry} values evaluated during the tuning process, and the third column contains the corresponding out-of-sample error.
 
-  All calculations (including the final optimized forest) are based on
-  the fast forest interface \code{\link{rfsrc.fast}} which utilizes
-  subsampling.  However, while this yields a fast optimization strategy,
-  such a solution can only be considered approximate.  Users may wish to
-  tweak various options to improve accuracy.  Increasing the default
-  \code{sampsize} will definitely help. Increasing \code{ntreeTry}
-  (which is set to 100 for speed) may also help.  It is also useful to
-  look at contour plots of the out-of-sample error as a function of
-  \code{mtry} and \code{nodesize} (see example below) to identify
-  regions of the parameter space where error rate is small.
+The error is standardized. For multivariate forests, it is averaged over the outcomes; for competing risks, it is averaged over the event types.
 
-  \code{tune.nodesize} returns the optimal nodesize where optimization is
-  over \code{nodesize} only.  
+If \code{doBest = TRUE}, the function also returns a forest object fit using the optimal \code{mtry} and \code{nodesize} values.
 
+All tuning calculations, including the final optimized forest, are performed using the fast forest interface \code{\link{rfsrc.fast}}, which relies on subsampling. This makes the procedure computationally efficient but approximate. Users seeking more accurate tuning results may wish to adjust parameters such as:
+
+\itemize{
+  \item Increasing \code{sampsize}, which controls the size of the subsample used for tuning.
+  \item Increasing \code{ntreeTry}, which defaults to 100 for speed.
 }
+
+It is also helpful to visualize the out-of-sample error surface as a function of \code{mtry} and \code{nodesize} using a contour plot (see example below) to identify regions of low error.
+
+The function \code{tune.nodesize} performs a simplified search by optimizing only over \code{nodesize}.
+}
+
+
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
 }

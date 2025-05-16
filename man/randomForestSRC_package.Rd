@@ -1,166 +1,139 @@
 \name{randomForestSRC-package}
 \alias{randomForestSRC-package}
 \docType{package}
+
 \title{
   Fast Unified Random Forests for Survival, Regression, and Classification (RF-SRC)
 }
+
 \description{
 
-  Fast OpenMP parallel computing of Breiman random forests (Breiman
-  2001) for regression, classification, survival analysis (Ishwaran
-  2008), competing risks (Ishwaran 2012), multivariate (Segal and Xiao
-  2011), unsupervised (Mantero and Ishwaran 2020), quantile regression
-  (Meinhausen 2006, Zhang et al. 2019, Greenwald-Khanna 2001), and class
-  imbalanced q-classification (O'Brien and Ishwaran 2019).  Different
-  splitting rules invoked under deterministic or random splitting
-  (Geurts et al. 2006, Ishwaran 2015) are available for all families.
-  Variable importance (VIMP), and holdout VIMP, as well as confidence
-  regions (Ishwaran and Lu 2019) can be calculated for single and
-  grouped variables.  Minimal depth variable selection (Ishwaran et
-  al. 2010, 2011).  Fast interface for missing data imputation using a
-  variety of different random forest methods (Tang and Ishwaran 2017).
-  Visualize trees on your Safari or Google Chrome browser (works for all
-  families, see \command{\link{get.tree}}).
-  
+Fast OpenMP-parallel implementation of Breiman's random forests
+(Breiman, 2001) for regression, classification, survival analysis
+(Ishwaran, 2008), competing risks (Ishwaran, 2012), multivariate
+outcomes (Segal and Xiao, 2011), unsupervised learning (Mantero and
+Ishwaran, 2020), quantile regression (Meinshausen, 2006; Zhang et al.,
+2019; Greenwald and Khanna, 2001), and imbalanced q-classification
+(O'Brien and Ishwaran, 2019).
+
+
+Supports deterministic and randomized splitting rules (Geurts et al.,
+2006; Ishwaran, 2015) across all families. Variable importance (VIMP),
+holdout VIMP, and confidence regions (Ishwaran and Lu, 2019) can be
+computed for single and grouped variables. Includes minimal depth
+variable selection (Ishwaran et al., 2010, 2011) and a fast interface
+for missing data imputation using multiple forest-based methods (Tang
+and Ishwaran, 2017).
+
+
+Tree structures can be visualized in Safari or Chrome for any family;
+see \code{\link{get.tree}}.
+
 }
 
 \section{Package Overview}{
-  
-  This package contains many useful functions and users should read the
-  help file in its entirety for details.  However, we briefly mention
-  several key functions that may make it easier to navigate and
-  understand the layout of the package.
-  
+
+This package contains many useful functions. Users are encouraged to read the help files in full for detailed guidance. Below is a brief overview of key functions to help navigate the package.
+
+\enumerate{
+
+  \item \code{\link{rfsrc}}
+
+  The main entry point to the package. Builds a random forest using user-supplied training data. The returned object is of class \code{(rfsrc, grow)}.
+
+  \item \code{\link{rfsrc.fast}}
+
+  A computationally efficient version of \code{rfsrc} using subsampling.
+
+  \item \code{\link{quantreg.rfsrc}}, \code{\link{quantreg}}
+
+  Univariate and multivariate quantile regression forests for training and testing. Includes methods such as the Greenwald-Khanna (2001) algorithm, ideal for large data due to its memory efficiency.
+
+  \item \code{\link{predict.rfsrc}}, \code{predict}
+
+  Predicts outcomes by dropping test data down the trained forest. Returns an object of class \code{(rfsrc, predict)}.
+
+  \item \code{\link{sidClustering.rfsrc}}, \code{sidClustering}
+
+  Unsupervised clustering using SID (Staggered Interaction Data). Also includes Breiman's artificial two-class method (Breiman, 2003).
+
+  \item \code{\link{vimp}}, \code{\link{subsample}}, \code{\link{holdout.vimp}}
+
+  Functions for variable selection and importance assessment:
   \enumerate{
-    \item \code{\link{rfsrc}}
+    \item \code{vimp}: Computes variable importance (VIMP) by perturbing each variable (e.g., via permutation). Can also be computed directly in \code{rfsrc} and \code{predict.rfsrc}.
     
-    This is the main entry point to the package.  It grows a random forest
-    using user supplied training data.  We refer to the resulting object
-    as a RF-SRC grow object.  Formally, the resulting object has class
-    \code{(rfsrc, grow)}.
-
-    \item \code{\link{rfsrc.fast}}
+    \item \code{subsample}: Computes confidence intervals for VIMP using subsampling.
     
-    A fast implementation of \code{rfsrc} using subsampling.
-
-    \item \code{\link{quantreg.rfsrc}}, \code{\link{quantreg}}
-
-    Univariate and multivariate quantile regression forest for training
-    and testing.  Different methods available including the
-    Greenwald-Khanna (2001) algorithm, which is especially suitable for
-    big data due to its high memory efficiency.
-
-    \item \code{\link{predict.rfsrc}}, \code{predict}
+    \item \code{holdout.vimp}: Measures the effect of removing a variable from the model.
     
-    Used for prediction.  Predicted values are obtained by dropping the
-    user supplied test data down the grow forest.  The resulting object
-    has class \code{(rfsrc, predict)}.
-
-    \item \code{\link{sidClustering.rfsrc}}, \code{sidClustering}
-    
-    Clustering of unsupervised data using SID (Staggered Interaction
-    Data).  Also implements the artificial two-class approach of Breiman
-    (2003).
-
-    
-    \item \code{\link{vimp}}, \code{\link{subsample}}, \code{\link{holdout.vimp}}
-    
-    
-    Used for variable selection:
-    \enumerate{
-
-      \item \code{vimp} calculates variable imporance (VIMP) from a
-      RF-SRC grow/predict object by noising up the variable (for example
-      by permutation).  Note that grow/predict calls can always directly
-      request VIMP.
-
-      \item \code{subsample} calculates VIMP confidence itervals via
-      subsampling.
-
-      \item \code{holdout.vimp} measures the importance of a variable
-      when it is removed from the model.
-
-    }
-
-    \item \code{\link{imbalanced.rfsrc}}, \code{\link{imbalanced}}
-    
-    q-classification and G-mean VIMP for class imbalanced data.
-
-    
-    \item \code{\link{impute.rfsrc}}, \code{\link{impute}}
-    
-    Fast imputation mode for RF-SRC.  Both \code{rfsrc} and
-    \code{predict.rfsrc} are capable of imputing missing data.
-    However, for users whose only interest is imputing data, this function
-    provides an efficient and fast interface for doing so.
-
-    \item \code{\link{partial.rfsrc}}, \code{\link{partial}}
-    
-    Used to extract the partial effects of a variable or variables on the ensembles.
-
+    \item \strong{VarPro} (\pkg{VarPro} package): For advanced model-independent variable selection using rule-based variable priority. Supports regression, classification, survival, and unsupervised data. See \url{https://www.varprotools.org}.
   }
-  
+
+  \item \code{\link{imbalanced.rfsrc}}, \code{\link{imbalanced}}
+
+  Implements q-classification and G-mean-based VIMP for class-imbalanced data.
+
+  \item \code{\link{impute.rfsrc}}, \code{\link{impute}}
+
+  A fast interface for missing data imputation. While \code{rfsrc} and \code{predict.rfsrc} can handle missing data internally, this provides a dedicated, efficient solution for imputation tasks.
+
+  \item \code{\link{partial.rfsrc}}, \code{\link{partial}}
+
+  Computes partial dependence functions to assess the marginal effect of one or more variables on the forest ensemble.
+
+}
 }
 
 \section{Home page, Vignettes, Discussions, Bug Reporting, Source Code, Beta Builds}{
 
-  \enumerate{
+\enumerate{
 
-    \item The home page for the package, containing vignettes, manuals,
-    links to GitHub and other useful information is found at
-    \url{https://www.randomforestsrc.org/index.html}
+  \item The package home page, with vignettes, manuals, GitHub links, and additional documentation, is available at:
+  \url{https://www.randomforestsrc.org/index.html}
 
-    \item Questions, comments, and non-bug related issues may be sent
-    via \url{https://github.com/kogalur/randomForestSRC/discussions/}.
+  \item Questions, comments, and general usage discussions (non-bug-related) can be posted at:
+  \url{https://github.com/kogalur/randomForestSRC/discussions/}
 
-    \item Bugs may be reported via \url{https://github.com/kogalur/randomForestSRC/issues/}.
-    This is for bugs only.  Please provide the accompanying information with any reports:
-    \enumerate{
-      \item \code{sessionInfo()}
-      \item A minimal reproducible example consisting of the following items:
+  \item Bug reports should be submitted at:
+  \url{https://github.com/kogalur/randomForestSRC/issues/}
+
+  Please use this only for bugs, and include the following with your report:
+  \itemize{
+    \item Output from \code{sessionInfo()}.
+    \item A minimal reproducible example including:
       \itemize{
-	      \item a minimal dataset, necessary to reproduce the error
-	      \item the minimal runnable code necessary to reproduce the error, 
-	      which can be run on the given dataset
-	      \item the necessary information on the used packages,
-        R version and system it is run on
-	      \item in the case of random processes, a seed (set by
-        \code{set.seed()}) for reproducibility
+        \item A minimal dataset required to reproduce the error.
+        \item The smallest runnable code needed to reproduce the issue.
+        \item Version details of R and all relevant packages.
+        \item A random seed (via \code{set.seed()}) if randomness is involved.
       }
-    }
-
-    \item Regular stable releases of this package are available on CRAN
-    at \url{https://cran.r-project.org/package=randomForestSRC/}
-
-    \item Interim unstable development builds with bug fixes and
-    sometimes additional functionality are available at
-    \url{https://github.com/kogalur/randomForestSRC/}
-
   }
-  
-}
-\section{OpenMP Parallel Processing -- Installation}{This package
-  implements OpenMP shared-memory parallel programming if the
-  target architecture and operating system support it.  This is the
-  default mode of execution.
 
-  Additional instructions for configuring OpenMP parallel processing
-  are available at
-  \url{https://www.randomforestsrc.org/articles/installation.html}.
-  
-  An understanding of resource utilization (CPU and RAM) is necessary
-  when running the package using OpenMP and Open MPI parallel execution.
-  Memory usage is greater when running with OpenMP
-  enabled.  Diligence should be used not to overtax the hardware available.
+  \item The latest stable release of the package is available on CRAN:
+  \url{https://cran.r-project.org/package=randomForestSRC/}
 
+  \item Development builds (unstable) with bug fixes and new features are hosted on GitHub:
+  \url{https://github.com/kogalur/randomForestSRC/}
 }
-\section{Reproducibility}{With respect to reproducibility, a model is
-defined by a seed, the topology of the trees in the forest, and terminal
-node membership of the training data. This allows the user to restore a
-model and, in particular, its terminal node statistics.  On the other
-hand, VIMP and many other statistics are dependent on additional
-randomization, which we do not consider part of the model. These
-statistics are susceptible to Monte Carlo effects.}
+}
+
+\section{OpenMP Parallel Processing -- Installation}{
+
+This package supports OpenMP shared-memory parallel programming on systems where the architecture and operating system permit it. OpenMP is enabled by default.
+
+Detailed instructions for configuring OpenMP parallel processing can be found at:
+\url{https://www.randomforestsrc.org/articles/installation.html}
+
+Note that running the package with OpenMP (or Open MPI) may increase memory (RAM) usage. Users are advised to understand their system's hardware limits and to monitor resource consumption to avoid overtaxing CPU and memory capacity.
+}
+
+\section{Reproducibility}{
+
+Model reproducibility is determined by three components: the random seed, the forest topology (i.e., the structure of trees), and terminal node membership for the training data. These elements together allow the model and its terminal node statistics to be faithfully restored.
+
+Other outputs, such as variable importance (VIMP) and performance metrics, rely on additional internal randomization and are not considered part of the model definition. As a result, such statistics are subject to Monte Carlo variability and may differ across runs, even with the same seed.
+}
 
 
 \author{
@@ -267,7 +240,6 @@ statistics are susceptible to Monte Carlo effects.}
   
   \command{\link{tune.rfsrc}},
 
-  \command{\link{var.select.rfsrc}},
   \command{\link{vimp.rfsrc}}
 }
 \keyword{package}

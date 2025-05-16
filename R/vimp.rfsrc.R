@@ -1,6 +1,5 @@
 vimp.rfsrc <- function(object,
                        xvar.names,
-                       m.target = NULL,
                        importance = c("anti", "permute", "random"),
                        block.size = 10,
                        joint = FALSE,
@@ -13,7 +12,7 @@ vimp.rfsrc <- function(object,
     stop("object is missing")
   }
   if (object$family == "unsupv") {
-    stop("vimp does not apply to unsupervised forests: consider using max.subtree and var.select")
+    stop("vimp does not apply to unsupervised forests: consider using max.subtree or varpro")
   }
   if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2    &
       sum(inherits(object, c("rfsrc", "forest"), TRUE) == c(1, 2)) != 2) {
@@ -50,16 +49,24 @@ vimp.rfsrc <- function(object,
   if (bootstrap == "none" || bootstrap == "by.node") {
     stop("grow objects under non-standard bootstrapping are devoid of performance values")
   }
-  ## make the call to generic predict
-  result <- generic.predict.rfsrc(object,
-                                  m.target = m.target,
-                                  importance = importance,
-                                  block.size = block.size,
-                                  importance.xvar = xvar.names,
-                                  seed = seed,
-                                  do.trace = do.trace,
-                                  membership = FALSE,
-                                  ...)
-  return(result)
+  ## legacy m.target
+  dots <- list(...)
+  m.target <- dots$m.target
+  dots$m.target <- NULL
+  ## generic predict call
+  args <- c(list(
+    object = object,
+    m.target = m.target,
+    importance = importance,
+    block.size = block.size,
+    seed = seed,
+    do.trace = do.trace,
+    membership = FALSE
+    ), dots)
+  ## if xvar.names is not missing  
+  if (!missing(xvar.names)) {
+    args$importance.xvar <- xvar.names
+  }
+  return(do.call("generic.predict.rfsrc", args))
 }
 vimp <- vimp.rfsrc

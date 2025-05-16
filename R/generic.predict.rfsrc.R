@@ -20,7 +20,7 @@ generic.predict.rfsrc <-
            do.trace = FALSE,
            membership = FALSE,
            statistics = FALSE,
-            
+           marginal.xvar = NULL,
            ...)
 {
   univariate.nomenclature <- TRUE
@@ -112,7 +112,11 @@ generic.predict.rfsrc <-
   subj.names <- object$subj.names
   importance.xvar <- get.importance.xvar(importance.xvar, importance, object)
   importance.xvar.idx <- match(importance.xvar, xvar.names)
-   
+  marginal.xvar <- get.marginal.xvar(marginal.xvar, object)
+  marginal.xvar.idx <- NULL
+  if (length(marginal.xvar) > 0) {
+    marginal.xvar.idx <- match(marginal.xvar, xvar.names)
+  }
   var.used <- match.arg(as.character(var.used), c("FALSE", "all.trees", "by.tree"))
   if (var.used == "FALSE") var.used <- FALSE
   split.depth <- match.arg(as.character(split.depth),  c("FALSE", "all.trees", "by.tree"))
@@ -149,7 +153,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("3.3.5", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("3.3.8", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
@@ -674,10 +678,8 @@ generic.predict.rfsrc <-
                                   list(if (is.null(m.target.idx)) as.integer(0) else as.integer(length(m.target.idx)),
                                        if (is.null(m.target.idx)) NULL else as.integer(m.target.idx)),
                                   as.integer(ptn.count),
-                                  
-                                  NULL,
-                                  
-                                    
+                                  list(if (is.null(marginal.xvar.idx)) as.integer(0) else as.integer(length(marginal.xvar.idx)),
+                                       if (is.null(marginal.xvar.idx)) NULL else as.integer(marginal.xvar.idx)),
                                   list(if (is.null(importance.xvar.idx)) as.integer(0) else as.integer(length(importance.xvar.idx)),
                                        if (is.null(importance.xvar.idx)) NULL else as.integer(importance.xvar.idx)),
                                   ## Partial variables disabled.

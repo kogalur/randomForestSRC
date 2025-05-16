@@ -10,11 +10,19 @@ tune.nodesize.rfsrc <- function(formula, data,
   data <- data.frame(stump$yvar, stump$xvar)
   colnames(data)[1:length(yvar.names)] <- yvar.names
   rm(stump)
-  if (is.function(sampsize)) {##user has specified a function
+  ## sample size 
+  if (is.function(sampsize)) {
     ssize <- sampsize(n)
   }
   else {
     ssize <- sampsize
+  }
+  ## set performance type
+  if (is.null(list(...)$perf.type)) {
+    perf.type <- "default"
+  }
+  else {
+    perf.type <- list(...)$perf.type
   }
   ## now hold out a test data set equal to the tree sample size (if possible)
   if ((2 * ssize)  < n)  {
@@ -41,7 +49,7 @@ tune.nodesize.rfsrc <- function(formula, data,
      err.nsz <- tryCatch({mean(get.mv.error(predict(rfsrc.fast(formula, data[trn,, drop = FALSE],
             ntree = ntreeTry, nodesize = nsz,
             sampsize = sampsize, nsplit = nsplit, forest = TRUE,
-            perf.type="none", save.memory = FALSE, ...), newdata, perf.type = "default"), TRUE), na.rm = TRUE)}, 
+            perf.type="none", save.memory = FALSE, ...), newdata, perf.type = perf.type), TRUE), na.rm = TRUE)}, 
             error=function(ex){NA})
     }
     ## verbose output

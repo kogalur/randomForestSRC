@@ -598,7 +598,20 @@ get.importance.xvar <- function(importance.xvar, importance, object) {
     }
   return (importance.xvar)
 }
- 
+get.marginal.xvar <- function(marginal.xvar, object) {
+  ## Check the coherency of the incoming vector.
+  if (missing(marginal.xvar) | is.null(marginal.xvar)) {
+    marginal.xvar <- NULL
+  }
+    else {
+      marginal.xvar <- unique(marginal.xvar)
+      marginal.xvar <- intersect(marginal.xvar, object$xvar.names)
+      if (length(marginal.xvar) == 0) {
+        stop("marginal xvar names must be a subset of xvar names")
+      }
+    }
+  return (marginal.xvar)
+}
 get.nmiss <- function(xvar, yvar = NULL) {
   if (!is.null(yvar)) {
     sum(apply(yvar, 1, function(x){any(is.na(x))}) | apply(xvar, 1, function(x){any(is.na(x))}))

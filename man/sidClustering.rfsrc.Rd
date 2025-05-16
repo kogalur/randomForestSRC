@@ -1,13 +1,14 @@
 \name{sidClustering.rfsrc}
 \alias{sidClustering.rfsrc}
 \alias{sidClustering}
-\alias{sid.perf.metric}
 \title{sidClustering using SID (Staggered Interaction Data) for Unsupervised Clustering}
+
 \description{
   Clustering of unsupervised data using SID (Mantero and Ishwaran,
-  2020).  Also implements the artificial two-class approach of
+  2021).  Also implements the artificial two-class approach of
   Breiman (2003).
 }
+
 \usage{\method{sidClustering}{rfsrc}(data,
   method = "sid",
   k = NULL,
@@ -20,137 +21,87 @@
   x.only = NULL, y.only = NULL,
   dist.sharpen = TRUE, ...)
 }
-\arguments{
-  \item{data}{Data frame containing the unsupervised data.}
 
-  \item{method}{The method used for unsupervised clustering.  Default is
-    "sid" which implements sidClustering using SID (Staggered
-    Interaction Data; see Mantero and Ishwaran, 2020).  A second
-    approach transforms the unsupervised learning problem into a
-    two-class supervised problem (Breiman, 2003) using artificial data
-    created using mode 1 or mode 2 of Shi-Horvath (2006).  This approach
-    is specified by any one of the following: "sh", "SH", "sh1", "SH1"
-    for mode 1, or "sh2", "SH2" for mode 2.  Finally, a third approach
-    is a plain vanilla method where the data are used both as features
-    and response with splitting implemented using the multivariate
-    splitting rule.  This is faster than sidClustering but potentially
-    less accurate.  This method is specified using "unsupv".}
-  \item{k}{Requested number of clusters.  Can be a number or a vector.
-    If a fixed number, returns a vector recording clustering of data.
-    If a vector, returns a matrix of clusters with each column recording
-    the clustering of the data for the specified number of clusters.}
-  \item{reduce}{Apply dimension reduction? Uses holdout vimp which is
-    computationally intensive and conservative but has good false
-    discovery properties.  Only applies to \code{method="sid"}.}
-  \item{ntree}{Number of trees used by sidClustering in the main analysis.}
-  \item{ntree.reduce}{Number of trees used by holdout vimp in the
-    reduction step.  See \command{holdout.vimp} for details.}
-  \item{fast}{Use fast random forests, \code{rfsrcFast}, in place of
-    \code{rfsrc}?  Improves speed but is less accurate.}
-  \item{x.no.sid}{Features not to be "sid-ified": meaning that these
-      features are to be included in the final design matrix without SID
-      processing.  Can be either a data frame (should not overlap with
-      \code{data}), or a character vector containing the names of
-      features from the original data that the user wishes to protect
-      from sidification.  Applies only to \code{method="sid"}.}
-  \item{use.sid.for.x}{If FALSE, reverses features and outcomes in the
-    SID analysis.  Thus, staggered interactions are used for the
-    outcomes rather than staggered features.  This is much slower and is
-    generally much less effective.  This option is only retained for
-    legacy reasons. Applies only to \code{method="sid"}.}
-  \item{x.only}{Use only these variables for the features.  Applies only
-    to \code{method="unsupv"}.}
-  \item{y.only}{Use only these variables for the multivariate outcomes.  Applies only
-    to \code{method="unsupv"}.}
-  \item{dist.sharpen}{By default, distance sharpening is requested,
-    which applies Euclidean distance to the random forest distance
-    matrix to sharpen it.  Because of this, the returned distance matrix
-    will not have values between 0 and 1 (as for random forests distance) when
-    this option is in effect.  Distance sharpening is a useful, but slow
-    step. Set this option to \code{FALSE} to improve computational
-    times, however clustering performance will not be as good.  Applies
-    only when \code{method="sid"} or \code{method="unsupv"}.}
-  \item{...}{Further arguments to be passed to the \command{rfsrc}
-    function to specify random forest parameters.}
+\arguments{
+
+  \item{data}{A data frame containing the unsupervised data.}
+
+  \item{method}{Clustering method. Default is \code{"sid"}, which implements SID clustering using Staggered Interaction Data (Mantero and Ishwaran, 2021). An alternative approach reformulates the problem as a two-class supervised learning task using artificial data, per Breiman (2003) and Shi-Horvath (2006). Mode 1 is specified via \code{"sh"}, \code{"SH"}, \code{"sh1"}, or \code{"SH1"}; Mode 2 via \code{"sh2"} or \code{"SH2"}. A third method, \code{"unsupv"}, uses a plain unsupervised forest where the data act as both features and responses, split using the multivariate rule. This is faster than SID but may be less accurate.}
+
+  \item{k}{Requested number of clusters. Can be a single integer or a vector. If a scalar, returns a vector assigning each observation to a cluster. If a vector, returns a matrix with one column per requested value of \code{k}, each containing a clustering assignment.}
+
+  \item{reduce}{Logical. If \code{TRUE}, applies a variable reduction step via holdout VIMP. This is conservative and computationally intensive but has strong false discovery control. Applies only when \code{method = "sid"}.}
+
+  \item{ntree}{Number of trees used in the main SID clustering analysis.}
+
+  \item{ntree.reduce}{Number of trees used in the holdout VIMP step during variable reduction. See \code{\link{holdout.vimp}} for details.}
+
+  \item{fast}{Logical. If \code{TRUE}, uses the fast implementation \code{\link{rfsrc.fast}} instead of \code{\link{rfsrc}}. Improves speed at the cost of accuracy.}
+
+  \item{x.no.sid}{Variables to exclude from SID transformation. Can be either a separate data frame (not overlapping with \code{data}) or a character vector of variable names from \code{data}. These variables will be included in the final design matrix without SID processing. Applies only when \code{method = "sid"}.}
+
+  \item{use.sid.for.x}{Logical. If \code{FALSE}, reverses the roles of features and responses in the SID process. Staggered interactions are applied to the outcome rather than to features. This option is slower and generally less effective. Included for legacy compatibility. Applies only when \code{method = "sid"}.}
+
+  \item{x.only}{Character vector specifying which variables to use as features. Applies only when \code{method = "unsupv"}.}
+
+  \item{y.only}{Character vector specifying which variables to use as multivariate responses. Applies only when \code{method = "unsupv"}.}
+
+  \item{dist.sharpen}{Logical. If \code{TRUE} (default), applies Euclidean distance to the forest distance matrix to improve clustering ("distance sharpening"). The resulting distance matrix will not be bounded between 0 and 1. Turning this off speeds up computation but may reduce clustering quality. Applies only when \code{method = "sid"} or \code{"unsupv"}.}
+
+  \item{...}{Additional arguments passed to \code{\link{rfsrc}} to control forest construction.}
+
 }
+
 \details{
 
-  Given an unsupervised data set, random forests is used to calculate
-  the distance between all pairs of data points.  The distance matrix is
-  used for clustering the unsupervised data where the default is to use
-  hierarchcial clustering.  Users can apply other clustering procedures
-  to the distance matrix.  See the examples below.
+Given an unsupervised dataset, random forests is used to compute a distance matrix measuring dissimilarity between all pairs of observations. By default, hierarchical clustering is applied to this distance matrix, although users may apply any other clustering algorithm. See the examples below for alternative workflows.
 
-  The default method, \code{method="sid"}, implements sidClustering.
-  The sidClustering algorithm begins by first creating an enhanced SID
-  (Staggered Interaction Data) feature space by sidification of the
-  original variables.  Sidification results in: (a) SID main features
-  which are the original features that have been shifted in order to
-  make them strictly positive and staggered so all of their ranges are
-  mutually exclusive; and (b) SID interaction features which are the
-  multiplicative interactions formed between every pair of SID main
-  features.  Multivariate random forests are then trained to predict the
-  main SID features using the interaction SID features as predictors.
-  The basic premise is if features are informative for clusters, then
-  they will vary over the space in a systematic manner, and because each
-  SID interaction feature is uniquely determined by the original feature
-  values used to form the interaction, cuts along the SID interaction
-  feature will be able to find the regions where the informative
-  features vary by cluster, thereby not only reducing impurity, but also
-  separating the clusters which are dependent on those features.  See
-  Mantero and Ishwaran (2020) for details.
+The default method, \code{method = "sid"}, implements SID clustering (sidClustering). The algorithm begins by enhancing the original feature space using Staggered Interaction Data (SID). This transformation creates:
 
-  Because SID uses all pairwise interactions, the dimension of the
-  feature space is proportional to the square of the number of original
-  features (or even larger if factors are present).  Thus it is helpful
-  to reduce the feature space. The reduction step (applied by default)
-  utilizes holdout VIMP to accomplish this.  It is recommended this step
-  be skipped only when the dimension is reasonably small.  For very
-  large data sets this step may be slow.
-  
-  A second approach (Breiman, 2003; Shi-Horvath, 2006) transforms the
-  unsupervised learning problem into a two class supervised problem.
-  The first class consists of the original observations, while the
-  second class is artificially created.  The idea is that in detecting
-  the first class out of the second, the model will generate the random
-  forest proximity between observations of which those for the original
-  class can be extracted and used for clustering.  Note in this approach
-  the distance matrix is defined to equal one minus the proximity.  This
-  is unlike the distance matrix from SID which is not proximity based.
-  Artificial data is created using "mode 1" or "mode 2" of Shi-Horvath
-  (2006).  Mode 1 randomly draws from each set of observed features.
-  Mode 2 draws a uniform value from the minimum and maximum values of a
-  feature.
-  
-  Mantero and Ishwaran (2020) studied both methods and found SID worked
-  well in all settings, whereas Breiman/Shi-Horvath was sensitive to
-  cluster structure.  Performance was poor when clusters were hidden in
-  lower dimensional subspaces; for example when interactions were
-  present or in mixed variable settings (factors/continuous variables).
-  See the V-shaped cluster example below.  Generally Shi-Horvath mode 1
-  outperforms mode 2.
-
-  Finally, a third method where the data is used for both the features
-  and outcome is implemented using \code{method="unsupv"}.  Tree nodes
-  are split using the multivariate splitting rule.  This is much faster
-  than sidClustering but potentially less accurate.
-
-  There is an internal function \command{sid.perf.metric} for evaluating
-  performance of the procedures using a normalized measure score.
-  Smaller values indicate better performance.  See Mantero and Ishwaran
-  (2020) for details.
-  
+\itemize{
+  \item SID main features: shifted and staggered versions of the original features that are made strictly positive and mutually non-overlapping in range;
+  \item SID interaction features: pairwise multiplicative interactions formed between all SID main features.
 }
 
-\value{ A list with the following components:
-  \item{clustering}{Vector or matrix containing indices mapping data
-    points to their clusters.}
-  \item{rf}{Random forest object (either a multivariate forest or RF-C object).}
-  \item{dist}{Distance matrix.}
-  \item{sid}{The "sid-ified" data. Conveniently broken up into
-    separate values for outcomes and features used by the
-    multivariate forest.}
+A multivariate random forest is trained to predict SID main features
+using the SID interaction features as predictors. The rationale is that
+if a feature is informative for distinguishing clusters, it will exhibit
+systematic variation across the data space. Because each interaction
+feature is uniquely defined by the features it is formed from, node
+splits on interaction terms are able to capture and separate such
+variation, thus effectively identifying the clusters. See Mantero and
+Ishwaran (2021) for further details.
+
+Since SID includes all pairwise interactions, the dimensionality of the feature space grows quadratically with the number of original variables (or worse when factor variables are present). As such, the reduction step using holdout variable importance (VIMP) is strongly recommended (enabled by default). This step can be disabled using \code{reduce = FALSE}, but only when the original feature space is of manageable size.
+
+A second approach, proposed by Breiman (2003) and refined by Shi and Horvath (2006), transforms the unsupervised task into a two-class supervised classification problem. The first class consists of the original data, while the second class is generated artificially. The goal is to separate real data from synthetic data. A proximity matrix is constructed from this supervised model, and the proximity values for the original class are extracted and converted into a distance matrix (distance = 1 - proximity) for clustering. 
+
+Artificial data can be generated using two modes:
+\itemize{
+  \item \code{mode 1} (default): draws random values from the empirical distribution of each feature;
+  \item \code{mode 2}: draws uniformly between the observed minimum and maximum of each feature.
 }
+
+This method is invoked by setting \code{method = "sh"}, \code{"sh1"}, or \code{"sh2"}. Mantero and Ishwaran (2021) found that while this approach works in certain settings, it can fail when clusters exist in lower-dimensional subspaces (e.g., when defined by interactions or involving both factors and continuous variables). Among the two modes, mode 1 is generally more robust.
+
+The third method, \code{method = "unsupv"}, trains a multivariate forest using the data both as predictors and as responses. The multivariate splitting rule is applied at each node. This method is fast and simple but may be less accurate compared to SID clustering.
+
+The package includes a helper function \code{sid.perf.metric} for evaluating clustering performance using a normalized score; smaller values indicate better performance. See Mantero and Ishwaran (2021) for theoretical background and empirical benchmarking.
+}
+
+\value{
+
+A list with the following components:
+
+\item{clustering}{A vector or matrix assigning each observation to a cluster. If multiple values of \code{k} were specified, this is a matrix with one column per clustering solution.}
+
+\item{rf}{The trained random forest object used in the clustering procedure. This is typically a multivariate forest (for \code{method = "sid"} or \code{"unsupv"}) or a classification forest (for Breiman-style methods).}
+
+\item{dist}{The distance matrix computed from the forest. Used for clustering. For \code{method = "sid"}, this is based on the forest dissimilarity; for Breiman/SH methods, this is one minus the proximity matrix.}
+
+\item{sid}{The SID-transformed data used in the clustering (applies only to \code{method = "sid"}). Provided as a list with separate components for the staggered features and their interactions, corresponding to outcomes and predictors in the multivariate forest.}
+}
+
   
 \author{Hemant Ishwaran and Udaya B. Kogalur}
 

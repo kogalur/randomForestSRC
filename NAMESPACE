@@ -98,10 +98,18 @@ export(extract.bootsample,
        tune.rfsrc,
        tune.nodesize,
        tune.nodesize.rfsrc,
-       var.select,
-       var.select.rfsrc,
        vimp,
        vimp.rfsrc)
+
+
+
+
+export(fast.save)
+export(fast.load)
+export(fast.save.list)
+export(fast.load.list)
+export(lsos)
+
 
 
 S3method(max, subtree)

@@ -10,93 +10,86 @@
    class.type = c("bayes", "rfq", "prob"),
    ensemble = FALSE, oob = TRUE, show.plots = TRUE, do.trace = FALSE)
 }
+
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)}.}
-  \item{tree.id}{Integer value specifying the tree to be extracted.}
-  \item{target}{For classification, an integer or
-    character value specifying the class to focus on (defaults to the
-    first class).  For competing risks, an integer value between
-    1 and \code{J} indicating the event of interest, where \code{J} is
-    the number of event types.  The default is to use the first event
-    type.}
-  \item{m.target}{Character value for multivariate families
-    specifying the target outcome to be used.  If left unspecified, the
-    algorithm will choose a default target.}
-   \item{time}{For survival, the time at which the predicted
-    survival value is evaluated at (depends on \code{surv.type}).}
-  \item{surv.type}{For survival, specifies the predicted value.
-    See details below.}
-  \item{class.type}{For classification, specifies the predicted value.
-    See details below.}
-  \item{ensemble}{Use the ensemble (of all trees) for prediction, or use
-    the requested tree for prediction (this is the default).}
-  \item{oob}{OOB (TRUE) or in-bag (FALSE) predicted values.  Only
-    applies when \code{ensemble=TRUE}.}
-  \item{show.plots}{Should plots be displayed?}
-  \item{do.trace}{Number of seconds between updates to the user on
-    approximate time to completion.}
 
+  \item{tree.id}{Integer specifying the tree to extract.}
+
+  \item{target}{For classification: integer or character indicating the class of interest (defaults to the first class). For competing risks: integer between 1 and \code{J} (number of event types) specifying the event of interest (default is the first event type).}
+
+  \item{m.target}{Character string specifying the target outcome for multivariate families. If unspecified, a default is selected.}
+
+  \item{time}{For survival: time point at which the predicted value is evaluated (depends on \code{surv.type}).}
+
+  \item{surv.type}{For survival: specifies the type of predicted value returned. See \code{Details}.}
+
+  \item{class.type}{For classification: specifies the type of predicted value. See \code{Details}.}
+
+  \item{ensemble}{Logical. If \code{TRUE}, prediction is based on the ensemble of all trees. If \code{FALSE} (default), prediction is based on the specified tree.}
+
+  \item{oob}{Logical. Use OOB predicted values (\code{TRUE}) or in-bag values (\code{FALSE}). Only applies when \code{ensemble=TRUE}.}
+
+  \item{show.plots}{Logical. Should plots be displayed?}
+
+  \item{do.trace}{Number of seconds between progress updates.}
 }
+
 \details{
 
-  Extracts a specified tree from a forest and converts the tree to a
-  hierarchical structure suitable for use with the "data.tree" package.
-  Plotting the object will conveniently render the tree on the users
-  browser. Left tree splits are displayed.  For continuous values, left
-  split is displayed as an inequality with right split equal to the
-  reversed inequality.  For factors, split values are described in terms
-  of the levels of the factor. In this case, the left daughter split is
-  a set consisting of all levels that are assigned to the left daughter
-  node.  The right daughter split is the complement of this set.
-
-  Terminal nodes are highlighted by color and display the sample size
-  and predicted value.  By default, predicted value equals the tree
-  predicted value and sample size are terminal node inbag sample sizes.
-  If \code{ensemble=TRUE}, then the predicted value equals the forest
-  ensemble value which could be useful as it allows one to visualize the
-  ensemble predictor over a given tree and therefore for a given
-  partition of the feature space.  In this case, sample sizes are for
-  all cases and not the tree specific inbag cases.
-
-  The predicted value displayed is as follows:
-
+  Extracts a specified tree from a forest and converts it into a
+  hierarchical structure compatible with the \pkg{data.tree}
+  package. Plotting the resulting object renders an interactive tree
+  visualization in the user's web browser.
   
+
+  Left-hand splits are shown. For continuous variables, the left split
+  is displayed as an inequality (e.g., \code{x < value}); the right
+  split is the reverse. For factor variables, the left daughter node is
+  defined by a set of levels assigned to it; the right daughter is its
+  complement.
+  
+
+  Terminal nodes are highlighted with color and display both sample size
+  and predicted value. By default, the predicted value corresponds to
+  the prediction from the selected tree, and the sample size refers to
+  the in-bag cases reaching the terminal node. If \code{ensemble =
+  TRUE}, the predicted value equals the forest ensemble prediction,
+  allowing visualization of the full forest predictor over the selected
+  tree's partition. In this case, sample sizes refer to all observations
+  (not just in-bag cases).
+
+  Predicted values displayed in terminal nodes are defined as follows:
+
   \enumerate{
-    \item For regression, the mean of the response.
-    
-    \item For classification, for the target class specified by
-    \option{target}, either the class with most votes if
-    \code{class.type="bayes"}; or in a two-class problem the classifier
-    using the RFQ quantile threshold if \code{class.type="bayes"}
-    (see \link{imbalanced} for more details); or the relative class
-    frequency when \code{class.type="prob"}.
-    
-    \item For multivariate families, the predicted value of the outcome
-    specified by \option{m.target}.  This being the value for regression
-    or classification described above, depending on whether the outcome
-    is real valued or a factor.
-    
-    \item For survival, the choices are:
-    \itemize{
-	    \item  Mortality (\code{mort}).
-	    \item  Relative frequency of mortality (\code{rel.freq}).
-	    \item Predicted survival (\code{surv}), where the predicted
-      survival is for the time point specified using
-      \code{time} (the default is the median follow up time).
-    }
-    \item For competing risks, the choices are:
-    \itemize{
-	    \item  The expected number of life years lost (\code{years.lost}).
-	    \item  The cumulative incidence function (\code{cif}).
-	    \item  The cumulative hazard function (\code{chf}).
-    }
-    In all three cases, the predicted value is for the event type
-    specified by \option{target}.  For \code{cif} and
-    \code{chf} the quantity is evaluated at the time point specified
-    by \code{time}.
+    \item For regression: the mean of the response.
+
+    \item For classification: depends on the \code{class.type} argument and target class:
+      \itemize{
+        \item If \code{class.type = "bayes"}, the predicted class with the most votes, or the RFQ classifier threshold in two-class problems.
+        \item If \code{class.type = "prob"}, the class probability for the target class.
+      }
+
+    \item For multivariate families: the predicted value for the outcome specified by \code{m.target}, using the logic above depending on whether the outcome is continuous or categorical.
+
+    \item For survival:
+      \itemize{
+        \item \code{mort}: estimated mortality (Ishwaran et al., 2008).
+        \item \code{rel.freq}: relative frequency of mortality.
+        \item \code{surv}: predicted survival probability at the specified time (\code{time}).
+      }
+
+    \item For competing risks:
+      \itemize{
+        \item \code{years.lost}: expected number of life years lost.
+        \item \code{cif}: cumulative incidence function.
+        \item \code{chf}: cause-specific cumulative hazard function.
+      }
+      For \code{cif} and \code{chf}, predictions are evaluated at the time point given by \code{time}, and all metrics are specific to the event type indicated by \code{target}.
   }
-  
 }
+
+
 \value{
   Invisibly, returns an object with hierarchical structure formatted for use with
   the data.tree package.
