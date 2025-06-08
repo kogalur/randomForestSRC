@@ -5,7 +5,7 @@ dnl which in turn is based on autoconf's openmp.m4,
 dnl with is licensed under GPL-3 with the 
 dnl Autoconf Configure Script Exception, version 3.0.
 
-AC_INIT([randomForestSRC], [3.4.0], [ubk@kogalur.com], [randomForestSRC], [https://github.com/kogalur/randomForestSRC])
+AC_INIT([randomForestSRC], [3.4.1], [ubk@kogalur.com], [randomForestSRC], [https://github.com/kogalur/randomForestSRC])
 
 AC_PREREQ([2.62])
 

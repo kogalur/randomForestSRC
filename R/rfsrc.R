@@ -632,7 +632,7 @@ rfsrc <- function(formula, data, ntree = 500,
   ## class imbalanced processing
   class.relfrq <- NULL
   if (family == "class" && rfq) {
-    class.relfrq <- table(yvar) / length(yvar)
+    class.relfrq <- prop.table(table(yvar))
   }
   ## map imputed data factors back to original values
   ## does NOT apply for y under unsupervised mode
@@ -862,7 +862,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        terminal.quants = terminal.quants,
                        importance = importance.value,
                        vimp.threshold = vimp.threshold,
-                       version = "3.4.0")
+                       version = "3.4.1")
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -897,7 +897,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        samptype = samptype,
                        samp = samp,
                        case.wt = case.wt,
-                       version = "3.4.0",
+                       version = "3.4.1",
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,

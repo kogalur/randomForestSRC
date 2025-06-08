@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.4.0 (bld20250525)
+Version: 3.4.1 (bld20250607)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,12 +8,15 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.4.0
+CHANGES TO RELEASE 3.4.1
+---------------------------------------------------------------------------------
+Bug related to fast/save for classification objects.
+
+---------------------------------------------------------------------------------
+RELEASE 3.4.0
 ---------------------------------------------------------------------------------
 Removal of var.select().  It is recommended that users install the package
 varPro available on GitHub for variable selection.
-
-
 
 ---------------------------------------------------------------------------------
 RELEASE 3.3.1, RELEASE 3.3.2
