@@ -1,0 +1,627 @@
+#include "global.h"
+/*
+#include "nativeInfo.h"
+NATXDInfo **RF_natXDInfoList;
+NativeEnsembleInfo **RF_nativeEnsembleInfoList;
+uint       RF_natXDInfoListSize;
+uint       RF_nativeEnsembleInfoListSize;
+PS_arrayXD *RF_rLevelsPYTH;
+PS_arrayXD *RF_xLevelsPYTH;
+*/
+/*
+JNIEnv    *RF_java_env;
+jobject    RF_java_obj;
+jclass     RF_java_cls;
+jclass     RF_java_except_cls;
+jclass     RF_java_hshmap_cls;
+jmethodID  RF_java_hshmap_constr;
+jmethodID  RF_java_hshmap_put;
+jobject    RF_java_hshmap_obj;
+jclass     RF_java_ens_cls;
+jmethodID  RF_java_ens_mid;
+jmethodID  RF_java_mid_log;
+jmethodID  RF_java_mid_logError;
+jmethodID  RF_java_mid_logExit;
+NAT1DInfo **RF_nat1DInfoList;
+NAT2DInfo **RF_nat2DInfoList;
+NativeEnsembleInfo **RF_nativeEnsembleInfoList;
+uint       RF_nat1DInfoListSize;
+uint       RF_nat2DInfoListSize;
+uint       RF_nativeEnsembleInfoListSize;
+jobject    RF_rLevelsJNIE;
+jobject    RF_xLevelsJNIE;
+*/
+
+#include <Rinternals.h>
+#include "nativeInfo.h"
+SEXP RF_sexpVector[2];
+SEXP      RF_rLevelsSEXP;
+SEXP      RF_xLevelsSEXP;
+
+#include "factor.h"
+#include "leafLink.h"
+#include "node.h"
+#include "terminal.h"
+#include "snpAuxiliaryInfo.h"
+#include "split.h"
+#include "quantile.h"
+#include "sortedLink.h"
+#include "sampling.h"
+SNPAuxiliaryInfo **RF_snpAuxiliaryInfoList;
+SNPAuxiliaryInfo **RF_incAuxiliaryInfoList;
+uint RF_stackCount;
+uint RF_nativeIndex;
+uint RF_incStackCount;
+double   *RF_cpuTime_;
+uint     *RF_treeID_;
+uint     *RF_nodeID_;
+uint     *RF_nodeSZ_;
+uint     *RF_blnodeID_;
+uint     *RF_brnodeID_;
+int      **RF_parmID_;
+double   **RF_contPT_;
+uint     **RF_mwcpSZ_;
+uint     **RF_fsrecID_;
+uint     **RF_mwcpPT_;
+uint   **RF_mwcpCT_;
+ulong     RF_totalNodeCount;
+ulong     RF_totalTerminalCount;
+ulong     RF_totalMWCPCount;
+ulong    *RF_restoreTreeOffset;
+ulong   **RF_restoreMWCPoffset;
+uint     *RF_orderedTreeIndex;
+uint     *RF_serialTreeIndex;
+uint      RF_serialTreeID;
+uint      RF_userTreeID;
+uint     *RF_restoreTreeID;
+uint      RF_perfBlockCount;
+uint      RF_serialBlockID;
+double   *RF_TN_SURV_;
+double   *RF_TN_MORT_;
+double   *RF_TN_NLSN_;
+double   *RF_TN_CSHZ_;
+double   *RF_TN_CIFN_;
+double   *RF_TN_REGR_;
+uint     *RF_TN_CLAS_;
+int      *RF_seed_;
+int      *RF_seedVimp_;
+uint     *RF_optLoGrow_;
+uint      RF_optLoGrow;
+uint     *RF_tLeafCount_;
+uint     *RF_tLeafCount;
+double   *RF_imputation_;
+uint     *RF_varUsed_;
+double   *RF_splitDepth_;
+uint     *RF_MEMB_ID_;
+uint     *RF_BOOT_CT_;
+uint     *RF_PRUN_ID_;
+uint     *RF_CASE_DPTH_;
+uint     *RF_RMBR_ID_;
+uint     *RF_AMBR_ID_;
+uint     *RF_OMBR_ID_;
+uint     *RF_IMBR_ID_;
+uint     *RF_TN_RCNT_;
+uint     *RF_TN_ACNT_;
+uint     *RF_TN_OCNT_;
+uint     *RF_TN_ICNT_;
+uint     *RF_OOB_SZ_;
+uint     *RF_IBG_SZ_;
+double   *RF_perfMRT_;
+double   *RF_perfCLS_;
+double   *RF_perfRGR_;
+double   *RF_holdMRT_;
+double   *RF_holdCLS_;
+double   *RF_holdRGR_;
+uint     *RF_holdBLK_;
+double   *RF_splitStatLOT_;
+double   *RF_emprRSK_;
+double   *RF_oobEmprRSK_;
+double   *RF_vimpMRT_;
+double   *RF_vimpCLS_;
+double   *RF_vimpRGR_;
+double   *RF_perfBlockMRT_;
+double   *RF_perfBlockCLS_;
+double   *RF_perfBlockRGR_;
+double   *RF_partial_SURV_;
+double   *RF_partial_CRSK_;
+double   *RF_partial_CLAS_;
+double   *RF_partial_REGR_;
+double   *RF_oobEnsembleSRG_;
+double   *RF_fullEnsembleSRG_;
+double   *RF_oobEnsembleCIF_;
+double   *RF_fullEnsembleCIF_;
+double   *RF_oobEnsembleSRV_;
+double   *RF_fullEnsembleSRV_;
+double   *RF_oobEnsembleMRT_;
+double   *RF_fullEnsembleMRT_;
+double   *RF_oobEnsembleCLS_;
+double   *RF_fullEnsembleCLS_;
+double   *RF_cseNumCLS_;
+double   *RF_csvNumCLS_;
+double   *RF_oobEnsembleRGR_;
+double   *RF_fullEnsembleRGR_;
+double   *RF_cseNumRGR_;
+double   *RF_csvNumRGR_;
+uint     *RF_cseDen_;
+uint     *RF_csvDen_;
+double   *RF_oobEnsembleQNT_;
+double   *RF_fullEnsembleQNT_;
+double     *RF_proximity_;
+double     *RF_distance_;
+double     *RF_weight_;
+uint      RF_opt;
+uint      RF_optHigh;
+uint      RF_optSup;
+uint      RF_splitRule;
+uint      RF_splitCustomIdx;
+uint      RF_nsplit;
+uint      RF_nImpute;
+uint      RF_ntree;
+uint      RF_nodeSize;
+int       RF_nodeDepth;
+uint      RF_crWeightSize;
+double   *RF_crWeight;
+uint      RF_perfBlock;
+uint      RF_mtry;
+uint      RF_vtry;
+uint    **RF_vtryArray;
+uint      RF_vtryMode;
+uint      RF_vtryBlockSize;
+uint      RF_subjSize;
+double   *RF_subjWeight;
+uint      RF_bootstrapSize;
+uint    **RF_bootstrapIn;
+double   *RF_xWeightStat;
+double   *RF_yWeight;
+uint      RF_xMarginalSize;
+uint     *RF_xMarginal;
+uint     *RF_xMarginalFlag;
+double   *RF_xWeight;
+uint      RF_ptnCount;
+int       RF_numThreads;
+uint      RF_observationSize;
+uint      RF_ySize;
+uint      RF_rTargetCount;
+uint      RF_rTargetFactorCount;
+uint      RF_rTargetNonFactorCount;
+uint     *RF_rTarget;
+uint     *RF_rTargetFactor;
+uint     *RF_rTargetNonFactor;
+double  **RF_responseIn;
+double  **RF_observationIn;
+uint     *RF_subjIn;
+uint      RF_xSize;
+char     *RF_xType;
+uint     *RF_xLevelsMax;
+uint     *RF_xLevelsCnt;
+uint    **RF_xLevels;
+uint     *RF_xtType;
+uint     *RF_stType;
+char     *RF_rType;
+uint     *RF_rLevelsMax;
+uint     *RF_rLevelsCnt;
+uint    **RF_rLevels;
+uint      RF_ytry;
+double    RF_wibsTau;
+double   **RF_qStarPlus;
+double    RF_vimpThreshold;
+uint      RF_fobservationSize;
+uint      RF_frSize;
+double  **RF_fresponseIn;
+double  **RF_fobservationIn;
+uint      RF_timeIndex;
+uint      RF_statusIndex;
+uint     *RF_yIndex;
+uint      RF_ySizeProxy;
+uint     *RF_yIndexZero;
+uint      RF_yIndexZeroSize;
+char     *RF_testMembershipFlag;  
+uint      RF_intrPredictorSize;
+uint     *RF_intrPredictor;
+char     *RF_importanceFlag;   
+uint      RF_partialType;
+uint      RF_partialXvar;
+uint      RF_partialLength;
+double   *RF_partialValue;
+uint      RF_partialLength2;
+uint     *RF_partialXvar2;
+double   *RF_partialValue2;
+uint      RF_partialTimeLength;
+double   *RF_partialTime;
+double   *RF_quantile;
+uint      RF_quantileSize;
+double    RF_qEpsilon;
+uint      RF_inv_2qEpsilon;
+uint     *RF_getTree;
+uint      RF_xWeightType;
+uint     *RF_xWeightSorted;
+uint      RF_xWeightDensitySize;
+uint      RF_yWeightType;
+uint     *RF_yWeightSorted;
+uint      RF_yWeightDensitySize;
+uint      RF_subjWeightType;
+uint     *RF_subjWeightSorted;
+uint      RF_subjWeightDensitySize;
+uint      RF_eventTypeSize;
+uint      RF_feventTypeSize;
+uint      RF_mStatusSize;
+uint     *RF_eventType;
+uint     *RF_eventTypeIndex;
+uint     *RF_eIndividualSize;
+uint    **RF_eIndividualIn;
+uint     *RF_subjSlot;
+uint     *RF_subjSlotCount;
+uint    **RF_subjList;
+uint     *RF_caseMap;
+uint      RF_subjCount;
+uint      *RF_classLevelSize;
+uint     **RF_classLevel;
+uint     **RF_classLevelIndex;
+uint    ***RF_cIndividualIn;
+double   *RF_timeInterest;
+uint      RF_timeInterestSize;
+uint      RF_sortedTimeInterestSize;
+double   *RF_masterTime;
+uint      RF_masterTimeSize;
+uint     *RF_masterTimeIndexIn;
+uint     *RF_masterToInterestTimeMap;
+double    RF_wibsTauTime;
+uint      RF_wibsTauTimeIdx;
+uint      RF_rFactorCount;
+uint     *RF_rFactorMap;
+uint     *RF_rFactorIndex;
+uint     *RF_rFactorSize;
+uint     *RF_rFactorSizeTest;
+uint      RF_mrFactorSize;
+uint      RF_fmrFactorSize;
+uint     *RF_mrFactorIndex;
+uint     *RF_fmrFactorIndex;
+uint      RF_rNonFactorCount;
+uint     *RF_rNonFactorMap;
+uint     *RF_rNonFactorIndex;
+uint      RF_xFactorCount;
+uint     *RF_xFactorMap;
+uint     *RF_xFactorIndex;
+uint     *RF_xFactorSize;
+uint      RF_mxFactorSize;
+uint      RF_fmxFactorSize;
+uint     *RF_mxFactorIndex;
+uint     *RF_fmxFactorIndex;
+uint      RF_xNonFactorCount;
+uint     *RF_xNonFactorMap;
+uint     *RF_xNonFactorIndex;
+uint      RF_rMaxFactorLevel;
+uint      RF_xMaxFactorLevel;
+uint      RF_maxFactorLevel;
+char      RF_mStatusFlag;
+char      RF_mTimeFlag;
+char      RF_mResponseFlag;
+char      RF_mPredictorFlag;
+char      RF_fmStatusFlag;
+char      RF_fmTimeFlag;
+char      RF_fmResponseFlag;
+char      RF_fmPredictorFlag;
+uint     *RF_mRecordMap;
+uint     *RF_fmRecordMap;
+uint      RF_mRecordSize;
+uint      RF_fmRecordSize;
+uint     *RF_mRecordIndex;
+uint     *RF_fmRecordIndex;
+uint      RF_mpIndexSize;
+uint      RF_fmpIndexSize;
+int     **RF_mpSign;
+int     **RF_fmpSign;
+int      *RF_mpIndex;
+int      *RF_fmpIndex;
+uint     *RF_getTreeIndex;
+uint      RF_getTreeCount;
+SplitRuleObj *RF_splitRuleObj;
+double   **RF_importancePtr;
+double **RF_sImputeResponsePtr;
+double **RF_sImputePredictorPtr;
+double **RF_sImputeDataPtr;
+uint  **RF_MEMB_ID_ptr;
+uint  **RF_BOOT_CT_ptr;
+uint  **RF_PRUN_ID_ptr;
+uint  **RF_CASE_DPTH_ptr;
+uint     **RF_treeID_ptr;
+uint     **RF_nodeID_ptr;
+uint     **RF_nodeSZ_ptr;
+uint     **RF_blnodeID_ptr;
+uint     **RF_brnodeID_ptr;
+int     ***RF_parmID_ptr;
+double  ***RF_contPT_ptr;
+uint    ***RF_mwcpSZ_ptr;
+uint    ***RF_fsrecID_ptr;
+uint    ***RF_mwcpPT_ptr;
+uint     **RF_mwcpCT_ptr;
+double   **RF_spltST_ptr;
+uint     **RF_dpthST_ptr;
+uint  **RF_RMBR_ID_ptr;
+uint  **RF_AMBR_ID_ptr;
+uint  **RF_OMBR_ID_ptr;
+uint  **RF_IMBR_ID_ptr;
+uint  **RF_TN_RCNT_ptr;
+uint  **RF_TN_ACNT_ptr;
+uint  **RF_TN_OCNT_ptr;
+uint  **RF_TN_ICNT_ptr;
+LeafLinkedObj **RF_leafLinkedObjHead;
+LeafLinkedObj **RF_leafLinkedObjTail;
+double **RF_proximityPtr;
+double **RF_proximityDenPtr;
+double  *RF_proximityDen;
+double **RF_distancePtr;
+double **RF_distanceDenPtr;
+double  *RF_distanceDen;
+uint    RF_rejectedTreeCount;
+uint    RF_validTreeCount;
+uint    RF_stumpedTreeCount;
+double  ***RF_TN_SURV_ptr;
+double  ***RF_TN_MORT_ptr;
+double  ***RF_TN_NLSN_ptr;
+double ****RF_TN_CSHZ_ptr;
+double ****RF_TN_CIFN_ptr;
+double  ***RF_TN_REGR_ptr;
+uint   ****RF_TN_CLAS_ptr;
+Terminal ****RF_vimpMembership;
+Terminal ***RF_partMembership;
+double  ***RF_vimpMRTstd;
+double ****RF_vimpCLSstd;
+double  ***RF_vimpRGRstd;
+double   **RF_vimpEnsembleDen;
+double   **RF_perfMRTptr;
+double  ***RF_perfCLSptr;
+double   **RF_perfRGRptr;
+double   **RF_cseNumCLSptr;
+double   **RF_cseNumRGRptr;
+uint      *RF_cseDENptr;
+double  ***RF_csvNumCLSptr;
+double  ***RF_csvNumRGRptr;
+uint     **RF_csvDENptr;
+double   **RF_blkEnsembleMRTnum;
+double  ***RF_blkEnsembleCLSnum;
+double   **RF_blkEnsembleRGRnum;
+double    *RF_blkEnsembleDen;
+double  ***RF_vimpMRTblk;
+double ****RF_vimpCLSblk;
+double  ***RF_vimpRGRblk;
+double   **RF_perfMRTblk;
+double  ***RF_perfCLSblk;
+double   **RF_perfRGRblk;
+double   **RF_vimpMRTptr;
+double  ***RF_vimpCLSptr;
+double   **RF_vimpRGRptr;
+double  ***RF_holdMRTptr;
+double ****RF_holdCLSptr;
+double  ***RF_holdRGRptr;
+double  ****RF_holdMRTstd;
+double *****RF_holdCLSstd;
+double  ****RF_holdRGRstd;
+double   ***RF_holdEnsembleDen;
+uint **RF_holdoutMap;
+uint *RF_holdBLKptr;
+uint **RF_runningHoldoutCount;
+uint ***RF_blockSerialTreeIndex;
+double   **RF_splitStatLOTptr;
+double   **RF_emprRSKptr;
+double   **RF_oobEmprRSKptr;
+double  ****RF_partSURVptr;
+double  ****RF_partCLASptr;
+double   ***RF_partREGRptr;
+double ***RF_oobEnsembleSRGptr;
+double ***RF_fullEnsembleSRGptr;
+double ***RF_oobEnsembleCIFptr;
+double ***RF_fullEnsembleCIFptr;
+double  **RF_oobEnsembleSRVptr;
+double  **RF_fullEnsembleSRVptr;
+double  **RF_oobEnsembleMRTptr;
+double  **RF_fullEnsembleMRTptr;
+double ***RF_oobEnsembleCLSptr;
+double ***RF_fullEnsembleCLSptr;
+double  **RF_oobEnsembleRGRptr;
+double  **RF_fullEnsembleRGRptr;
+double  ***RF_oobEnsembleQNTptr;
+double  ***RF_fullEnsembleQNTptr;
+uint    **RF_oobQuantileStreamSize;
+uint    **RF_fullQuantileStreamSize;
+LookUpInfo *** RF_oobQuantileSearchTree;
+LookUpInfo *** RF_fullQuantileSearchTree;
+QuantileObj ***RF_oobQuantileHead;
+QuantileObj ***RF_oobQuantileTail;
+uint         **RF_oobQuantileLinkLength;
+QuantileObj ***RF_fullQuantileHead;
+QuantileObj ***RF_fullQuantileTail;
+uint         **RF_fullQuantileLinkLength;
+double ***RF_oobEnsembleSRGnum;
+double ***RF_fullEnsembleSRGnum;
+double ***RF_oobEnsembleCIFnum;
+double ***RF_fullEnsembleCIFnum;
+double  **RF_oobEnsembleSRVnum;
+double  **RF_fullEnsembleSRVnum;
+double  **RF_oobEnsembleMRTnum;
+double  **RF_fullEnsembleMRTnum;
+double ***RF_oobEnsembleCLSnum;
+double ***RF_fullEnsembleCLSnum;
+double  **RF_oobEnsembleRGRnum;
+double  **RF_fullEnsembleRGRnum;
+double   *RF_oobEnsembleDen;
+double   *RF_fullEnsembleDen;
+double ***RF_splitDepthPtr;
+double **RF_weightPtr;
+uint    *RF_weightDenom;
+char    **RF_dmRecordBootFlag;
+uint   **RF_varUsedPtr;
+uint    *RF_oobSize;
+uint    *RF_ibgSize;
+uint    *RF_nodeCount;
+uint   **RF_mwcpPtr;
+uint    *RF_pLeafCount;
+uint    *RF_maxDepth;
+Node    **RF_root;
+Node   ***RF_nodeMembership;  
+Node   ***RF_fnodeMembership;
+Node   ***RF_pNodeMembership;
+Node   ***RF_pNodeList;
+Terminal   ***RF_tTermMembership;
+Terminal   ***RF_ftTermMembership;
+uint       ***RF_utTermMembership;
+uint        **RF_utTermMembershipCount;
+uint        **RF_utTermMembershipAlloc;
+Terminal   ***RF_pTermMembership;
+Terminal   ***RF_tTermList;
+Terminal   ***RF_pTermList;
+LeafLinkedObj ***RF_hTermMembership;
+uint    **RF_bootMembershipIndex;
+uint     *RF_identityMembershipIndex;
+uint      RF_identityMembershipIndexSize;
+uint     *RF_fidentityMembershipIndex;
+char    **RF_bootMembershipFlag;
+uint    **RF_bootMembershipCount;
+char    **RF_oobMembershipFlag;
+uint    **RF_ibgMembershipIndex;
+uint    **RF_oobMembershipIndex;
+double  **RF_status;
+double  **RF_time;
+double ***RF_response;
+double  **RF_ftime;
+double  **RF_fstatus;
+double ***RF_fresponse;
+double ***RF_observation;
+double ***RF_fobservation;
+uint    ***RF_observationRank;
+uint     **RF_observationUniqueSize;
+SortedLinkedObj **RF_sortedLinkedHead;
+SortedLinkedObj **RF_sortedLinkedTail;
+uint    **RF_masterTimeIndex;
+Factor ***RF_factorList;
+double   *RF_rFactorThreshold;
+uint     *RF_rFactorMinority;
+uint     *RF_rFactorMajority;
+char     *RF_rFactorMinorityFlag;
+void (*acquireTree) (char mode, uint r, uint b);
+Node *(*antiMembership) (uint     treeID,
+                         Node    *parent,
+                         uint     individual,
+                         uint     vimpX,
+                         double **xArray);
+Node *(*randomMembership) (uint     treeID,
+                           Node    *parent,
+                           uint     individual,
+                           uint     vimpX,
+                           double **xArray);
+Node *(*getMembership) (uint     treeID,
+                        Node    *parent,
+                        uint     individual,
+                        double **xArray);
+void (*partialMembership) (uint       treeID,
+                           Node      *parent,
+                           uint       partialIndex,
+                           uint      *allMembrIndx,
+                           uint       obsSize,
+                           double   **xArray,
+                           Terminal **membership);
+char (*getVariance) (uint, uint*, uint, uint*, double*, double*, double*);
+char (*growTree) (uint, char, char, uint, Node*, uint*, uint*, uint*);
+char (*getPreSplitResult) (uint, Node*, char, char);
+DistributionObj *(*stackRandomCovariates) (uint, Node*);
+void (*unstackRandomCovariates) (uint, DistributionObj*);
+char (*selectRandomCovariates) (uint, Node*, DistributionObj*, char*, uint*, uint*);
+DistributionObj *(*stackRandomResponses) (uint, Node*);
+void (*unstackRandomResponses) (uint, DistributionObj*);
+char (*selectRandomResponses) (uint, Node*, DistributionObj*, uint*, uint*);
+uint (*virtuallySplitNode) (uint, Node*, char, uint, double*, uint*, void*, uint, char*, uint*, uint, uint*);
+uint (*stackAndConstructSplitVector) (uint treeID, Node *parent, uint covariate);
+char (*updateMaximumSplit) (uint    treeID,
+                            Node   *parent,
+                            double  delta,
+                            uint    covariate,
+                            uint    index,
+                            char    factorFlag,
+                            uint    mwcpSizeAbsolute,
+                            uint    repMembrSize,
+                            char  **polarity,
+                            void   *splitVectorPtr,
+                            SplitInfoMax *splitInfoMax);
+char (*forkAndUpdate) (uint       treeID,
+                       Node      *parent,
+                       uint      *repMembrIndx,
+                       uint       repMembrSize,
+                       uint      *allMembrIndx,
+                       uint       allMembrSize,
+                       char       multImpFlag,
+                       SplitInfo *info,
+                       uint      *leafCount,
+                       Node     **nodeMembership);
+void (*freeNode) (Node *parent);
+void (*unstackSplitVector) (uint   treeID,
+                            Node  *parent,
+                            uint   splitLength,
+                            char   factorFlag,
+                            uint   splitVectorSize,
+                            uint   mwcpSizeAbsolute,
+                            char   deterministicSplitFlag,
+                            void  *splitVectorPtr,
+                            char   multImpFlag,
+                            uint  *indxx);
+char (*randomSplit) (uint, Node*, SplitInfoMax*, GreedyObj*, char);
+char (*regressionXwghtSplit) (uint, Node*, SplitInfoMax*, GreedyObj*, char);
+char (*classificationXwghtSplit) (uint, Node*, SplitInfoMax*, GreedyObj*, char);
+char (*multivariateSplit) (uint, Node*, SplitInfoMax*, GreedyObj*, char);
+char (*unsupervisedSplit) (uint, Node*, SplitInfoMax*, GreedyObj*, char);
+void (*getConditionalClassificationIndex) (uint,
+                                           uint,
+                                           double*,
+                                           double**,
+                                           double*,
+                                           double*,
+                                           double*);
+double (*getGMeanIndex) (uint,
+                         uint,
+                         double*,
+                         double*,
+                         double*);
+float (*ran1A) (uint);
+void  (*randomSetChain) (uint, int);
+int   (*randomGetChain) (uint);
+float (*ran1B) (uint);
+void  (*randomSetUChain) (uint, int);
+int   (*randomGetUChain) (uint);
+void  (*randomSetUChainVimp) (uint, int);
+int   (*randomGetUChainVimp) (uint);
+float (*ran1D) (uint);
+void  (*randomSetChainVimp) (uint, int);
+int   (*randomGetChainVimp) (uint);
+uint RF_forestChunkSize;
+uint RF_forestChunkCount;
+uint *RF_forestChunkSizeActual;
+uint **RF_forestChunk;
+#ifdef _OPENMP
+omp_lock_t   *RF_lockPartial;
+omp_lock_t  **RF_lockWeight;
+omp_lock_t   *RF_lockWeightRow;
+omp_lock_t  **RF_lockVimp;
+omp_lock_t   *RF_lockVimpRow;
+omp_lock_t   *RF_lockVimpCol;
+omp_lock_t  **RF_lockVimpHoldout;
+omp_lock_t  **RF_lockMRToens;
+omp_lock_t  **RF_lockMRTfens;
+omp_lock_t  **RF_lockSRVoens;
+omp_lock_t  **RF_lockSRVfens;
+omp_lock_t ***RF_lockSRGoens;
+omp_lock_t ***RF_lockSRGfens;
+omp_lock_t ***RF_lockCIFoens;
+omp_lock_t ***RF_lockCIFfens;
+omp_lock_t ***RF_lockCLSoens;
+omp_lock_t ***RF_lockCLSfens;
+omp_lock_t   *RF_lockDENoens;
+omp_lock_t   *RF_lockDENfens;
+omp_lock_t   *RF_lockQNToens;
+omp_lock_t   *RF_lockQNTfens;
+omp_lock_t      RF_lockPerf;
+omp_lock_t      RF_lockEnsbUpdtCount;
+#endif
+uint RF_ensbUpdtCount;
+customFunction customFunctionArray[4][16];
+uint   RF_userTraceFlag;
+time_t RF_userTimeStart;
+time_t RF_userTimeSplit;  

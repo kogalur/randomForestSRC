@@ -39,8 +39,7 @@
   \emph{j} in \emph{i}'s subtree. Entry (i,i) gives the depth of
   \emph{i} relative to the root. Read the matrix across rows to assess
   inter-variable relationships: small (i,j) entries suggest interactions
-  between variables \emph{i} and \emph{j}. See \code{find.interaction}
-  for further details.
+  between variables \emph{i} and \emph{j}. 
 
   For competing risks, all analyses are unconditional (non-event specific).
 }

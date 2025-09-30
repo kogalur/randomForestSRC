@@ -16,7 +16,6 @@ rfsrc.anonymous <- function(formula, data, forest = TRUE, ...)
   ##--------------------------------------------------------------
   ## list of forest parameters
   rfnames <- get.rfnames(hidden = TRUE)
-   
   ## restrict to allowed values
   rfnames <- rfnames[rfnames != "data" & rfnames != "forest"]
   ## get the permissible hidden options

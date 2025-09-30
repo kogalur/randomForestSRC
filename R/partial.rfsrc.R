@@ -134,14 +134,6 @@ partial.rfsrc <- function(
   jitt.bits <- get.jitt.bits(jitt)
   seed <- get.seed(seed)
   do.trace <- get.trace.bits(do.trace)
-  ## Check that hdim is initialized.  If not, set it zero.
-  ## This is necessary for backwards compatibility with 2.3.0
-  if (is.null(object$hdim)) {
-    hdim <- 0
-  }
-  else {
-    hdim <- object$hdim
-  }
   ## The pivot in this predict related function is different from
   ## the pivot used in the grow related function.  In rfsrc we are
   ## referencing the list nativeOutput[[]].  Here we are referencing
@@ -153,25 +145,8 @@ partial.rfsrc <- function(
   ## WARNING: Note that the maximum number of slots in the following
   ## foreign function call is 64.  Ensure that this limit is not
   ## exceeded.  Otherwise, the program will error on the call.
-  if (hdim == 0) {
-      pivot = 0
-      chunk = 0
-  } else {
-      pivot <- which(names(object$nativeArray) == "contPTR")
-      chunk = 5
-      if (!is.null(object$base.learner)) {
-          if (object$base.learner$interact.depth > 1) {
-              ## Adjusted for pairCT, augmXone2, augmXtwo2 above, but the chunck size needs to increased.
-              ## pivot = pivot + 3
-              chunk = chunk + 2
-          }
-          if (object$base.learner$synthetic.depth > 1) {
-              ## Adjusted for sythSZ, augmXS2 above, but the chunck size needs to increased.
-              ## pivot = pivot + 2
-              chunk = chunk + 1
-          }
-      }
-  }
+  pivot = 0
+  chunk = 0
   nativeOutput <- tryCatch({.Call("rfsrcPredict",
                                   as.integer(do.trace),
                                   as.integer(seed),
@@ -229,9 +204,9 @@ partial.rfsrc <- function(
                                   list(as.integer(object$seed),
                                        if (is.null(object$seedVimp)) NULL else as.integer(object$seedVimp),
                                        as.integer(object$optLoGrow)),
-                                  as.integer(hdim),
-                                  ## Object containing base learner settings, this is never NULL.
-                                  object$base.learner, 
+                                  as.integer(0),
+                                  ## Deleted base learner. 
+                                  NULL,
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
                                   as.integer((object$nativeArray)$nodeSZ),
@@ -242,22 +217,6 @@ partial.rfsrc <- function(
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeArray)$fsrecID),
                                   if (is.null((object$nativeFactorArray)$mwcpPT)) NULL else as.integer((object$nativeFactorArray)$mwcpPT)),
-                                  ## This slot is hc_one_augm_intr.  This slot can be NULL.
-                                  if (!is.null(object$base.learner)) {
-                                      if (object$base.learner$interact.depth > 1) {
-                                          list(as.integer((object$nativeArray)$pairCT),
-                                               as.integer((object$nativeArray)$augmXone),
-                                               as.integer((object$nativeArray)$augmXtwo))
-                                      } else { NULL }
-                                  } else { NULL },
-                                  ## This slot is hc_one_augm_syth.  This slot can be NULL.
-                                  if (!is.null(object$base.learner)) {
-                                      if (object$base.learner$synthetic.depth > 1) {
-                                          list(as.integer((object$nativeArray)$sythSZ),
-                                               as.integer((object$nativeArray)$augmXS))
-                                      } else { NULL }
-                                  } else { NULL },
-                                  
                                   NULL,
                                   NULL,
                                   NULL,
@@ -269,8 +228,8 @@ partial.rfsrc <- function(
                                   NULL,
                                   NULL,
                                   NULL,
-                                  
-                                   
+                                  NULL,
+                                  NULL,
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
                                   as.integer(object$nativeArrayTNDS$tnRCNT),
@@ -286,10 +245,7 @@ partial.rfsrc <- function(
                                   list(if (is.null(m.target.idx)) as.integer(0) else as.integer(length(m.target.idx)),
                                        if (is.null(m.target.idx)) NULL else as.integer(m.target.idx)),
                                   as.integer(0),  ## Pruning disabled
-                                  
                                   NULL,
-                                  
-                                    
                                   list(as.integer(0), NULL), ## Importance disabled.
                                   ## Partial variables enabled.  Note the as.integer is needed.
                                   list(as.integer(get.partial.type(family, partial.type)),

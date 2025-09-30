@@ -347,7 +347,7 @@ get.grow.nodesize <- function(fmly, nodesize) {
   ## Nodesize should be rounded if non-integer
   nodesize <- round(nodesize)
 }
-get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.info) {
+get.grow.splitinfo <- function (formula.detail, splitrule, nsplit, event.info) {
   ## CAUTION:  HARD CODED ON NATIVE SIDE
   splitrule.names <- c("logrank",              ##  1
                        "logrankscore",         ##  2
@@ -374,9 +374,8 @@ get.grow.splitinfo <- function (formula.detail, splitrule, hdim, nsplit, event.i
                        "sg.regr",              ## 23
                        "sg.class",             ## 24
                        "sg.surv",              ## 25
-                       "tdc.gradient",         ## 26
-                       "mahalanobis",          ## 27
-                       "logrankCRGeneral")     ## 28
+                       "mahalanobis",          ## 26
+                       "logrankCRGeneral")     ## 27
   ## set the family
   fmly <- formula.detail$family
   ## initialization
@@ -653,7 +652,6 @@ get.rfnames <- function(hidden = TRUE, stealth = FALSE) {
                "vtry",
                "holdout.array")
   }
-   
   rfnames
 }
 get.weight <- function(weight, n) {

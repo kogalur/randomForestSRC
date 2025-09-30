@@ -141,7 +141,6 @@ For additional flexibility and speed, consider using \code{\link{partial.rfsrc}}
 }
 \seealso{
   \command{\link{rfsrc}},
-  \command{\link{synthetic.rfsrc}},
   \command{\link{partial.rfsrc}},
   \command{\link{predict.rfsrc}}
 }

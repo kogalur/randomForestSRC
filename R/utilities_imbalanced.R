@@ -1,145 +1,167 @@
 ###################################################################
 ##
-##
-## performance measures
-##
+## performance measures (with random-baseline as an attribute)
 ##
 ###################################################################
+.safe_div <- function(num, den) {
+  num <- as.numeric(num); den <- as.numeric(den)
+  ifelse(den == 0, NA_real_, num / den)
+}
 get.imbalanced.performance <- function(obj,
                                        prob = NULL,
                                        threshold = NULL,
                                        confusion = FALSE,
-                                       robust = FALSE)
-{
+                                       robust = FALSE) {
   ## determine if a forest object is provided or two vectors (yvar, prob)
   if (is.null(prob)) {
     if (class(obj)[1] != "rfsrc") {
       stop("obj must be a forest object")
-    }
-    else {
+    } else {
       yvar <- obj$yvar
       if (!is.null(obj$predicted.oob) && !all(is.na(obj$predicted.oob))) {
         prob <- obj$predicted.oob
-      }
-      else {
+      } else {
         prob <- obj$predicted
       }
     }
-  }
-  ## user has supplied (yvar, prob)
-  else {
+  } else {
+    ## user has supplied (yvar, prob)
     yvar <- obj
   }
-  ## if this is not a two-class prob, return with NULL
-  if (!is.factor(yvar) || length(levels(yvar)) != 2) {
-    NULL
-  }
-  ## acquire performance values from workhorse
-  perf.o <- get.imbalanced.performance.workhorse(yvar, prob, threshold = threshold,
-                       confusion = confusion, robust = robust)
-  ## default is to return as a named vector
-  if (!confusion) {
-    unlist(perf.o)
-  }
-  ## when confusion is requested, results are returned as a list
-  else {
-    perf.o
-  }
-}
-## extract performance values
-## gmean, sensitivity, specificity, recall, F1, etc.
-get.imbalanced.performance.workhorse <- function (yvar, prob,
-                                                  threshold = NULL,
-                                                  confusion = FALSE,
-                                                  robust = FALSE)
-{
-  ## if this is not a two-class forest object, return with NULL
+  ## if this is not a two-class problem, return NULL
   if (!is.factor(yvar) || length(levels(yvar)) != 2) {
     return(NULL)
   }
-  ## transform y so that class labels are {0,1}
-  ## y=0 --> majority
-  ## y=1 --> minority
+  ## compute
+  perf.o <- get.imbalanced.performance.workhorse(
+    yvar, prob,
+    threshold = threshold,
+    confusion = confusion,
+    robust = robust
+  )
+  ## carry the baseline attribute through compact printing
+  rand.attr <- attr(perf.o, "rand")
+  if (!confusion) {
+    v <- unlist(perf.o)        # default behavior preserved
+    attr(v, "rand") <- rand.attr
+    class(v) <- c("imbalanced.performance", class(v))
+    v
+  } else {
+    attr(perf.o, "rand") <- rand.attr
+    class(perf.o) <- c("imbalanced.performance", class(perf.o))
+    perf.o
+  }
+}
+get.imbalanced.performance.workhorse <- function (yvar, prob,
+                                                  threshold = NULL,
+                                                  confusion = FALSE,
+                                                  robust = FALSE) {
+  ## not two-class -> NULL
+  if (!is.factor(yvar) || length(levels(yvar)) != 2) return(NULL)
+  ## recode to {0,1}: 0=majority, 1=minority
   y.frq <- table(yvar)
+  if (length(y.frq) != 2 || any(is.na(y.frq))) return(NULL)
   class.labels <- names(y.frq)
   minority <- which.min(y.frq)
   majority <- setdiff(1:2, minority)
-  pihat <- y.frq[minority] / length(yvar)
-  iratio <- max(y.frq, na.rm = TRUE) / min(y.frq, na.rm = TRUE)
+  n.eff    <- sum(y.frq)
+  pihat    <- as.numeric(y.frq[minority]) / n.eff
+  iratio   <- max(y.frq, na.rm = TRUE) / min(y.frq, na.rm = TRUE)
   y <- rep(0, length(yvar))
-  y[yvar==class.labels[minority]] <- 1
+  y[yvar == class.labels[minority]] <- 1
   y <- factor(y, levels = c(0,1))
-  ## map probabilities --> 0=majority, 1=minority
-  ## save probability as a vector and matrix
+  ## map probabilities --> (majority, minority)
   if (!is.null(ncol(prob)) && ncol(prob) == 2) {
     prob.matx <- prob[, c(majority, minority), drop = FALSE]
+    ## PRESERVE 1-column MATRIX for minority
     prob <- prob[, minority, drop = FALSE]
-  }
-  else {## user supplied a vector, we always assume this is for minority class
+    ## clamp to [0,1]
+    prob[] <- pmin(pmax(prob[], 0), 1)
+  } else {
+    ## user supplied a vector => assume it is minority prob
+    prob <- as.numeric(prob)
+    prob <- pmin(pmax(prob, 0), 1)
     prob.matx <- cbind(1 - prob, prob)
   }
   colnames(prob.matx) <- levels(y)
-  ## get rfq threshold (default) if one is not supplied    
-  if (is.null(threshold)) {
-    threshold <- as.numeric(pihat)
-  }
-  else {
-    threshold <- as.numeric(threshold)
-  }
-  ##-------------------------------------------
-  ## extract table rates
-  ##
-  ##             predicted
-  ## T          0        1
-  ## R     0    TN       FP
-  ## U     1    FN       TP
-  ## E
-  ##
-  ## sens=TP/(FN+TP)      =tpr=recall
-  ## spec=TN/(TN+FP)      =tnr=1-fpr
-  ## ppv=TP/(TP+FP)       =prec
-  ## npv=TN/(TN+FN)  
-  ## ------------------------------------------
+  ## threshold
+  if (is.null(threshold)) threshold <- as.numeric(pihat) else threshold <- as.numeric(threshold)
+  threshold <- max(0, min(1, threshold))
+  ## confusion at threshold
   yhat <- factor(1 * (prob >= threshold), levels = c(0, 1))
   confusion.matx <- table(y, yhat)
-  if (nrow(confusion.matx) > 1) {
-    TN <- confusion.matx[1, 1]
-    FP <- confusion.matx[1, 2]
-    FN <- confusion.matx[2, 1]
-    TP <- confusion.matx[2, 2]
+  N <- sum(confusion.matx)
+  if (N > 0) {
+    TN <- confusion.matx[1, 1]; FP <- confusion.matx[1, 2]
+    FN <- confusion.matx[2, 1]; TP <- confusion.matx[2, 2]
     if (robust) {
-      sens <- (1 + TP) / (1 + FN + TP)
-      spec <- (1 + TN) / (1 + TN + FP)
-      prec  <- (1 + TP) / (1 + TP + FP)
-      npv <- (1 + TN) / (1 + TN + FN)
+      sens <- .safe_div(1 + TP, 1 + FN + TP)
+      spec <- .safe_div(1 + TN, 1 + TN + FP)
+      prec <- .safe_div(1 + TP, 1 + TP + FP)
+      npv  <- .safe_div(1 + TN, 1 + TN + FN)
+    } else {
+      sens <- .safe_div(TP, FN + TP)
+      spec <- .safe_div(TN, TN + FP)
+      prec <- .safe_div(TP, TP + FP)
+      npv  <- .safe_div(TN, TN + FN)
     }
-    else {
-      sens <- TP / (FN + TP)
-      spec <- TN / (TN + FP)
-      prec <- TP / (TP + FP)
-      npv <- TN / (TN + FN)
-    }
-    ## performance values based on the confusion matrix
-    misclass <- (FP + FN) / length(y)
-    F1 <- 2 * (prec * sens) / (prec + sens)
-    F1mod <- 4 / (1 / sens + 1 / spec + 1 / prec + 1 / npv)
-    gmean <- sqrt(sens * spec)
-    F1gmean <- (F1 + gmean) / 2
+    misclass   <- (FP + FN) / N
+    F1         <- ifelse((prec + sens) > 0, 2 * (prec * sens) / (prec + sens), NA_real_)
+    F1mod      <- ifelse(all(is.finite(c(sens, spec, prec, npv))) &&
+                         all(c(sens, spec, prec, npv) > 0),
+                         4 / (1/sens + 1/spec + 1/prec + 1/npv), NA_real_)
+    gmean      <- sqrt(sens * spec)
+    F1gmean    <- (F1 + gmean) / 2
     F1modgmean <- (F1mod + gmean) / 2
+  } else {
+    sens <- spec <- prec <- npv <- misclass <-
+      F1 <- F1mod <- gmean <- F1gmean <- F1modgmean <- NA_real_
   }
-  else {
-    sens <- spec <- prec <- npv <- misclass <- 
-      F1 <- F1mod <- gmean <- F1gmean <- F1modgmean <- NA
-  }
-  ## performance values based on probability
-  brier <- get.brier.error(y, prob.matx, normalized = FALSE)
-  brier.norm <- get.brier.error(y, prob.matx)
-  auc <- get.auc(y, prob.matx)
-  logloss <- get.logloss(y, prob.matx)
-  prO <- get.pr.auc(y, prob)
-  pr.auc <- prO[1]
+  ## probability-based metrics
+  brier       <- get.brier.error(y, prob.matx, normalized = FALSE)
+  brier.norm  <- get.brier.error(y, prob.matx)   # normalized per your function
+  auc         <- get.auc(y, prob.matx)
+  logloss     <- get.logloss(y, prob.matx)
+  prO         <- get.pr.auc(y, prob)             # vector or 1-col matrix is OK
+  pr.auc      <- prO[1]
   pr.auc.rand <- prO[2]
-  ## assemble output as a list
+  ## ------------------------------
+  ## Analytical random baseline
+  ## ------------------------------
+  t  <- threshold
+  pi <- pihat
+  TP.e <- n.eff * pi * (1 - t)
+  FN.e <- n.eff * pi * t
+  TN.e <- n.eff * (1 - pi) * t
+  FP.e <- n.eff * (1 - pi) * (1 - t)
+  if (robust) {
+    sens.rand <- (1 + TP.e) / (1 + FN.e + TP.e)
+    spec.rand <- (1 + TN.e) / (1 + TN.e + FP.e)
+    prec.rand <- (1 + TP.e) / (1 + TP.e + FP.e)
+    npv.rand  <- (1 + TN.e) / (1 + TN.e + FN.e)
+  } else {
+    sens.rand <- 1 - t
+    spec.rand <- t
+    prec.rand <- pi
+    npv.rand  <- 1 - pi
+  }
+  misclass.rand   <- (FP.e + FN.e) / n.eff                     # == pi*t + (1-pi)*(1-t)
+  F1.rand         <- ifelse((prec.rand + sens.rand) > 0,
+                            2 * (prec.rand * sens.rand) / (prec.rand + sens.rand), NA_real_)
+  F1mod.rand      <- ifelse(all(is.finite(c(sens.rand, spec.rand, prec.rand, npv.rand))) &&
+                            all(c(sens.rand, spec.rand, prec.rand, npv.rand) > 0),
+                            4 / (1/sens.rand + 1/spec.rand + 1/prec.rand + 1/npv.rand), NA_real_)
+  gmean.rand      <- sqrt(sens.rand * spec.rand)
+  F1gmean.rand    <- (F1.rand + gmean.rand) / 2
+  F1modgmean.rand <- (F1mod.rand + gmean.rand) / 2
+  auc.rand        <- 0.5
+  ## Brier baselines aligned to your get.brier.error():
+  ##   - unnormalized (J=2): E[(p - Y)^2] = 1/3
+  ##   - normalized: factor is 4x the unnormalized in binary case
+  brier.rand      <- 1/3
+  brier.norm.rand <- 4 * brier.rand
+  logloss.rand    <- 1.0
+  ## assemble primary output (unchanged fields)
   rO <- list(n.majority = as.numeric(y.frq[majority]),
              n.minority = as.numeric(y.frq[minority]),
              iratio = iratio,
@@ -160,12 +182,129 @@ get.imbalanced.performance.workhorse <- function (yvar, prob,
              F1gmean = F1gmean,
              F1modgmean = F1modgmean,
              gmean = gmean)
-  ## add confusion?
   if (confusion) {
     class.error <- 1 - diag(confusion.matx) / rowSums(confusion.matx, na.rm = TRUE)
     rO$confusion <- cbind(confusion.matx, class.error = round(class.error, 4))
   }
+  ## attach random-baseline as an attribute so default print stays compact
+  rand.metrics <- c(
+    sens.rand = sens.rand,
+    spec.rand = spec.rand,
+    prec.rand = prec.rand,
+    npv.rand  = npv.rand,
+    misclass.rand = misclass.rand,
+    F1.rand = F1.rand,
+    F1mod.rand = F1mod.rand,
+    F1gmean.rand = F1gmean.rand,
+    F1modgmean.rand = F1modgmean.rand,
+    gmean.rand = gmean.rand,
+    auc.rand = auc.rand,
+    brier.rand = brier.rand,
+    brier.norm.rand = brier.norm.rand,
+    logloss.rand = logloss.rand
+  )
+  confusion.rand.expected <- matrix(c(TN.e, FP.e, FN.e, TP.e), nrow = 2, byrow = TRUE)
+  dimnames(confusion.rand.expected) <- list(Truth = levels(y), Pred = levels(y))
+  attr(rO, "rand") <- list(
+    metrics = rand.metrics,
+    confusion.expected = confusion.rand.expected
+  )
   rO
+}
+# pretty printer for imbalanced performance (model vs random baseline)
+print.imbalanced.performance <- function(x, digits = 4, show.confusion = TRUE, ...) {
+  # helpers to extract by name from list or named numeric
+  .has <- function(nm) nm %in% names(x)
+  .get <- function(nm) {
+    if (.has(nm)) {
+      if (is.list(x)) x[[nm]] else as.numeric(x[nm])
+    } else NA_real_
+  }
+  .fmt <- function(z) formatC(z, digits = digits, format = "f")
+  .fmt_pct <- function(z) ifelse(is.na(z), NA, paste0(.fmt(z), " %"))
+  rand <- attr(x, "rand")
+  rand.metrics <- if (!is.null(rand)) rand$metrics else NULL
+  # prevalence pi (prefer prec.rand, else pr.auc.rand)
+  pi.hat <- if (!is.null(rand.metrics) && "prec.rand" %in% names(rand.metrics)) {
+    as.numeric(rand.metrics["prec.rand"])
+  } else {
+    .get("pr.auc.rand")
+  }
+  # header ----------------------------------------------------------
+  cat("Imbalanced classification performance (model vs random baseline)\n")
+  cat(sprintf(" n.majority = %s   n.minority = %s   iratio = %s   threshold = %s   prevalence  = %s\n\n",
+              .get("n.majority"),
+              .get("n.minority"),
+              .fmt(.get("iratio")),
+              .fmt(.get("threshold")),
+              .fmt(pi.hat)))
+  # metrics to display (grouped for readability)
+  rate_metrics   <- c("sens","spec","prec","npv","F1","F1mod","gmean","F1gmean","F1modgmean")
+  auc_metrics    <- c("auc","pr.auc")
+  error_metrics  <- c("misclass","brier","brier.norm","logloss")
+  all_metrics    <- c(rate_metrics, auc_metrics, error_metrics)
+  # mapping to baseline names
+  base_map <- stats::setNames(paste0(all_metrics, ".rand"), all_metrics)
+  base_map["pr.auc"] <- "pr.auc.rand"  # special case lives in main list
+  # build table -----------------------------------------------------
+  model_vals <- sapply(all_metrics, .get)
+  base_vals  <- sapply(all_metrics, function(m) {
+    nm <- base_map[[m]]
+    if (m == "pr.auc") {
+      .get(nm)                       # "pr.auc.rand" is in the main object
+    } else if (!is.null(rand.metrics) && nm %in% names(rand.metrics)) {
+      as.numeric(rand.metrics[[nm]]) # most baselines live in the attribute
+    } else {
+      NA_real_
+    }
+  })
+  # gains: higher-is-better vs lower-is-better
+  hib <- c(rate_metrics, auc_metrics)                   # higher is better
+  lib <- error_metrics                                  # lower is better
+  delta <- rep(NA_real_, length(all_metrics)); names(delta) <- all_metrics
+  gain  <- delta
+  for (m in all_metrics) {
+    mv <- model_vals[[m]]; bv <- base_vals[[m]]
+    if (is.na(mv) || is.na(bv)) next
+    if (m %in% lib) {
+      delta[m] <- bv - mv
+      gain[m]  <- if (bv != 0) (bv - mv) / bv * 100 else NA_real_
+    } else {
+      delta[m] <- mv - bv
+      gain[m]  <- if (abs(bv) > .Machine$double.eps) (mv - bv) / abs(bv) * 100 else NA_real_
+    }
+  }
+  df <- data.frame(
+    Metric   = all_metrics,
+    Model    = .fmt(model_vals[all_metrics]),
+    Baseline = .fmt(base_vals[all_metrics]),
+    Delta    = .fmt(delta[all_metrics]),
+    Gain     = .fmt_pct(gain[all_metrics]),
+    row.names = NULL,
+    check.names = FALSE
+  )
+  # visual grouping by inserting blank lines (printed as separate blocks)
+  print(df[df$Metric %in% rate_metrics,   , drop = FALSE], row.names = FALSE, right = TRUE)
+  cat("\n")
+  print(df[df$Metric %in% auc_metrics,    , drop = FALSE], row.names = FALSE, right = TRUE)
+  cat("\n")
+  print(df[df$Metric %in% error_metrics,  , drop = FALSE], row.names = FALSE, right = TRUE)
+  # confusion matrices ---------------------------------------------
+  if (show.confusion && is.list(x) && !is.null(x$confusion)) {
+    cat("\nConfusion matrix (model):\n")
+    print(x$confusion)
+    ce <- if (!is.null(rand) && !is.null(rand$confusion.expected)) rand$confusion.expected else NULL
+    if (!is.null(ce)) {
+      cat("\nExpected confusion (random baseline):\n")
+      ce_err <- c(
+        ifelse(sum(ce[1,]) > 0, 1 - ce[1,1]/sum(ce[1,]), NA_real_),
+        ifelse(sum(ce[2,]) > 0, 1 - ce[2,2]/sum(ce[2,]), NA_real_)
+      )
+      ce_out <- cbind(round(ce, 2), class.error = round(ce_err, 4))
+      print(ce_out)
+    }
+  }
+  invisible(x)
 }
 ###################################################################
 ##

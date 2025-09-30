@@ -71,7 +71,6 @@ rfsrc(formula, data, ntree = 500,
   split.depth = c(FALSE, "all.trees", "by.tree"),
   seed = NULL,
   do.trace = FALSE,
-  statistics = FALSE,
   ...)
 
 ## convenient interface for growing a CART tree
@@ -149,8 +148,6 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
   \item{seed}{Integer seed for reproducibility (negative values only).}
 
   \item{do.trace}{Print progress updates every \code{do.trace} seconds.}
-
-  \item{statistics}{Return raw split statistics? Use \code{stat.split} to extract.}
 
   \item{...}{Additional arguments passed to or from other methods.}
 }
@@ -327,7 +324,6 @@ An object of class \code{(rfsrc, grow)} with the following components:
   \item{imputed.indv}{Indices of individuals with missing values.}
   \item{imputed.data}{Imputed dataset with responses followed by predictors.}
   \item{split.depth}{Matrix or array recording minimal split depth of variables by case and tree.}
-  \item{node.stats}{Split statistics returned if \code{statistics=TRUE}, parsed with \code{stat.split}.}
   \item{err.rate}{Cumulative OOB error rate.}
   \item{err.block.rate}{Cumulative error per ensemble block (size defined by \code{block.size}). If \code{block.size = 1}, error per tree.}
   \item{importance}{Variable importance (VIMP) for each predictor.}
@@ -477,7 +473,6 @@ Values returned by the forest depend on the family:
 
 }
 \seealso{
-  \command{\link{find.interaction.rfsrc}},
 
   \command{\link{get.tree.rfsrc}},
 
@@ -506,9 +501,7 @@ Values returned by the forest depend on the family:
   
   \command{\link{sidClustering.rfsrc}},
 
-  \command{\link{stat.split.rfsrc}},
   \command{\link{subsample.rfsrc}},
-  \command{\link{synthetic.rfsrc}},
   
   \command{\link{tune.rfsrc}},
 

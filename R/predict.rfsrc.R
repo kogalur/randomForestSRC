@@ -16,7 +16,6 @@ predict.rfsrc <-  function(object,
    seed = NULL,
    do.trace = FALSE,
    membership = FALSE,
-   statistics = FALSE,
    marginal.xvar = NULL,
    ...)
 {
@@ -45,7 +44,6 @@ predict.rfsrc <-  function(object,
     seed = seed,
     do.trace = do.trace,
     membership = membership,
-    statistics = statistics,
     marginal.xvar = marginal.xvar
   ), dots)
   ## if newdata is not missing

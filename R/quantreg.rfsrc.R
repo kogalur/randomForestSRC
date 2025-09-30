@@ -21,7 +21,6 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
     grow <- TRUE
     ## list of forest parameters
     rfnames <- get.rfnames(hidden = TRUE)
-     
     ## restrict to allowed values
     rfnames <- rfnames[rfnames != "formula"            &
                        rfnames != "data"               &

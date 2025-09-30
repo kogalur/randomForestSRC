@@ -18,7 +18,6 @@ rfsrc <- function(formula, data, ntree = 500,
                   split.depth = c(FALSE, "all.trees", "by.tree"),
                   seed = NULL,
                   do.trace = FALSE,
-                  statistics = FALSE,
                    ...)
 {
   univariate.nomenclature = TRUE
@@ -49,17 +48,12 @@ rfsrc <- function(formula, data, ntree = 500,
   quantile.regr <- is.hidden.quantile.regr(user.option)
   prob <- is.hidden.prob(user.option)
   prob.epsilon <- is.hidden.prob.epsilon(user.option)
-  ## lot
-  lot <- is.hidden.lot(user.option)    
-  hdim <- lot$hdim
   ## mahalanobis sigma matrix
   mahalanobis.sigma <- is.hidden.mahalanobis.sigma(user.option)
   ## misc.
-  base.learner <- is.hidden.base.learner(user.option)
   vtry <- is.hidden.vtry(user.option)
   holdout.array <- is.hidden.holdout.array(user.option)
   holdout.specs <- is.hidden.holdout.specs(user.option)
-  empirical.risk <- is.hidden.empirical.risk(user.option)
   tdc.rule <- is.hidden.tdc.rule(user.option)
   vimp.threshold  <- is.hidden.vimp.threshold(user.option)
   ## verify key options
@@ -185,7 +179,6 @@ rfsrc <- function(formula, data, ntree = 500,
   subj <- NULL
   xvar.time <- NULL
   subj.time <- NULL
-   
   ## bootstrap case
   if (bootstrap == "by.root") {
     ## now applies to Time Dependent Covariates (TDC)
@@ -298,7 +291,7 @@ rfsrc <- function(formula, data, ntree = 500,
   ## Get event information and dimensioning for families
   event.info <- get.grow.event.info(yvar, family, ntime = ntime)
   ## Initialize nsplit, noting that it may be been overridden.
-  splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, hdim, nsplit, event.info)
+  splitinfo <- get.grow.splitinfo(formulaDetail, splitrule, nsplit, event.info)
   ## Set the cause weights for the split statistic calculation.
   if (family == "surv" || family == "surv-CR") {
     if (length(event.info$event.type) > 1) {
@@ -414,7 +407,6 @@ rfsrc <- function(formula, data, ntree = 500,
   rfq <- get.rfq(rfq)
   rfq.bits  <- get.rfq.bits(rfq, family)
   gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
-  empirical.risk.bits <- get.empirical.risk.bits(empirical.risk)
   tdc.rule.bits <- get.tdc.rule.bits(tdc.rule)
   ## Assign low bits for the native code
   ensemble.bits <- get.ensemble.bits(ensemble)
@@ -428,7 +420,6 @@ rfsrc <- function(formula, data, ntree = 500,
   proximity.bits <- get.proximity.bits(TRUE, proximity)
   distance.bits <- get.distance.bits(TRUE, distance)
   membership.bits <-  get.membership.bits(membership)
-  statistics.bits <- get.statistics.bits(statistics)
   split.cust.bits <- get.split.cust.bits(splitinfo$cust)
   case.depth.bits  <- get.case.depth.bits(case.depth)
   ## Assign high bits for the native code
@@ -463,8 +454,6 @@ rfsrc <- function(formula, data, ntree = 500,
                                              perf.bits +
                                              rfq.bits +
                                              gk.quantile.bits +
-                                             statistics.bits +
-                                             empirical.risk.bits +
                                              case.depth.bits),
                                   as.integer(samptype.bits +
                                              forest.wt.bits +
@@ -482,8 +471,8 @@ rfsrc <- function(formula, data, ntree = 500,
                                   as.integer(splitinfo$index),
                                   as.integer(splitinfo$nsplit),
                                   as.integer(mtry),
-                                  lot, ## object containing lot settings
-                                  base.learner, ## Object containing base learner settings.  This is never NULL.
+                                  NULL, ## object containing lot settings
+                                  NULL, ## Object containing base learner settings.
                                   as.integer(vtry),
                                   as.integer(holdout.array),
                                   holdout.specs, ## object containing speculative holdout settings
@@ -645,11 +634,8 @@ rfsrc <- function(formula, data, ntree = 500,
   ## Define the forest.
   if (forest) {
     nativeArraySize = 0
-    if (hdim == 0) {
-      mwcpCountSummary <- rep (0, 1)
-      nativeFactorArray <- vector("list", 1)
-    }
-     
+    mwcpCountSummary <- rep (0, 1)
+    nativeFactorArray <- vector("list", 1)
     ## Marker for start of forest topology.  This can
     ## change with the outputs requested.  For the arithmetic
     ## related to the pivot point, refer to
@@ -663,32 +649,14 @@ rfsrc <- function(formula, data, ntree = 500,
     ## elements by their name and instead using the offset nativeOutput[[...]].
     ## The pivot is "one" based.
     pivot <- which(names(nativeOutput) == "treeID")
-    ## The offset, when added to the pivot gives the start of the
-    ## repeatable chunks representing the hyper-splits, 
-    ## including $hcDim, and $contPTR for the case of hdim == 1.
-    if (hdim == 0) {
-      ## The offset is irrelevant, no calculations are conducted, so we just safe it.
-      offset = 0
-    }
-     
-    if (!is.null(base.learner)) {
-      if (base.learner$synthetic.depth > 1) {
-        ## Generalized MWCP counts, for when we support hdim > 1.
-        mwcpCountSummarySyth <- rep (0, 1)
-        nullO <- lapply(1:ntree, function(b) {
-          ## Add the tree-specific number of mwcp's to the total. 
-          mwcpCountSummarySyth[1] <<- mwcpCountSummarySyth[1] + nativeOutput$mwcpCTsyth[b]                    
-          NULL
-        })
-      }
-    }
+    ## The offset is irrelevant, no calculations are conducted, so we just safe it.
+    offset = 0
     nullO <- lapply(1:ntree, function(b) {
       if (nativeOutput$leafCount[b] > 0) {
         ## The tree was not rejected.  Count the number of internal
         ## and external (terminal) nodes in the forest.
         nativeArraySize <<- nativeArraySize + (2 * nativeOutput$leafCount[b]) - 1
         mwcpCountSummary[1] <<- mwcpCountSummary[1] + nativeOutput$mwcpCT[b]
-                   
       }
       else {
         ## The tree was rejected.  However, it acts as a
@@ -716,36 +684,6 @@ rfsrc <- function(formula, data, ntree = 500,
       nativeFactorArray[[1]] <- nativeOutput$mwcpPT[1:mwcpCountSummary[1]]
     }
     nativeFactorArrayHeader <- "mwcpPT"
-     
-     
-    ## Finally, we parse the synthetic topologies.
-    nativeArraySyth <- nativeFactorArraySyth <- NULL
-    nodeCountSyth <- NULL
-    totalNodeCountSyth = 0
-    if (!is.null(base.learner)) {
-      if (base.learner$synthetic.depth > 1) {
-        if (!is.null(nativeOutput$treeIDsyth)) {
-          nativeArraySyth <- as.data.frame(cbind(nativeOutput$treeIDsyth,
-                                                 nativeOutput$nodeIDsyth,
-                                                 nativeOutput$hcDimsyth,
-                                                 nativeOutput$parmIDsyth,
-                                                 nativeOutput$contPTsyth,
-                                                 nativeOutput$contPTRsyth,
-                                                 nativeOutput$mwcpSZsyth))
-          nativeArrayHeaderSyth <- c("treeID", "nodeID", "hcDim", "parmID", "contPT", "contPTR", "mwcpSZ")
-          names(nativeArraySyth) = nativeArrayHeaderSyth
-          totalNodeCountSyth <- length(nativeOutput$treeIDsyth)
-          nodeCountSyth <- nativeOutput$nodeCountSyth
-          if (mwcpCountSummarySyth[1] > 0) {
-            ## This can be NULL if there are no factor splits along this dimension.
-            nativeFactorArraySyth <- nativeOutput$mwcpPTsyth[1:mwcpCountSummarySyth[1]]
-            nativeFactorArrayHeaderSyth <- "mwcpPT"
-            names(nativeFactorArraySyth) = nativeFactorArrayHeaderSyth
-          }
-        }
-      }
-    }
-     
     names(nativeArray) <- nativeArrayHeader
     names(nativeFactorArray) <- nativeFactorArrayHeader
     if (terminal.qualts | terminal.quants) {
@@ -803,25 +741,11 @@ rfsrc <- function(formula, data, ntree = 500,
     else {
       nativeArrayTNDS <- NULL
     }
-    ## Node statistics are processed here.  They are not part of the forest object proper, but their close
-    ## processing relationship to the forest topology makes it convenient to place that code here.  Actual
-    ## inclusing in the returned model object occurs later, and not immediately below.
-    if (statistics) {
-      node.stats <- as.data.frame(cbind(nativeOutput$spltST[1:nativeArraySize],
-                                        nativeOutput$dpthST[1:nativeArraySize]))
-      names(node.stats) <- c("spltST", "dpthST")
-    }
-    else {
-      node.stats      <- NULL
-    }
     forest.out <- list(forest = TRUE,
                        nativeArray = nativeArray,
                        nativeFactorArray = nativeFactorArray,
                        leafCount = nativeOutput$leafCount,
                        totalNodeCount = dim(nativeArray)[1],
-                       nativeArraySyth = nativeArraySyth,
-                       nativeFactorArraySyth = nativeFactorArraySyth,
-                       nodeCountSyth = nodeCountSyth,
                        nodesize = nodesize,
                        nodedepth = nodedepth,
                        ntree = ntree,
@@ -834,13 +758,11 @@ rfsrc <- function(formula, data, ntree = 500,
                        yvar = yvar,
                        yvar.names = yvar.names,
                        yvar.factor = yfactor,
-                       base.learner = base.learner,
                        block.size = block.size,
                        bootstrap = bootstrap,
                        case.wt = case.wt,
                        event.info = event.info,
                        gk.quantile = gk.quantile,
-                       hdim = hdim,
                        na.action = na.action,
                        nativeArrayTNDS = nativeArrayTNDS,
                        optLoGrow = nativeOutput$optLoGrow,
@@ -862,7 +784,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        terminal.quants = terminal.quants,
                        importance = importance.value,
                        vimp.threshold = vimp.threshold,
-                       version = "3.4.1")
+                       version = "3.4.2")
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -876,10 +798,7 @@ rfsrc <- function(formula, data, ntree = 500,
   ## the forest is NULL (the user has requested not to save the forest)
   ## add basic information needed for downstream niceties like printing
   else {
-    node.stats      <- NULL
     forest.out <- list(forest = FALSE,
-                       hdim = hdim,
-                       base.learner = base.learner,
                        nodesize = nodesize,
                        nodedepth = nodedepth,
                        ntree = ntree,
@@ -897,7 +816,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        samptype = samptype,
                        samp = samp,
                        case.wt = case.wt,
-                       version = "3.4.1",
+                       version = "3.4.2",
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,
@@ -1017,16 +936,6 @@ rfsrc <- function(formula, data, ntree = 500,
   }
   empr.risk <- NULL
   oob.empr.risk <- NULL
-  if (empirical.risk) {
-    if (!is.null(nativeOutput$emprRisk)) {
-      empr.risk <- array(nativeOutput$emprRisk, c(lot$treesize, ntree))
-      nativeOutput$emprRisk <- NULL
-    }
-    if (!is.null(nativeOutput$oobEmprRisk)) {
-      oob.empr.risk <- array(nativeOutput$oobEmprRisk, c(lot$treesize, ntree))
-      nativeOutput$oobEmprRisk <- NULL
-    }
-  }
   if (!is.null(holdout.specs)) {
     holdout.blk <- nativeOutput$holdoutBlk
     nativeOutput$holdoutBlk <- NULL
@@ -1069,7 +978,6 @@ rfsrc <- function(formula, data, ntree = 500,
     imputed.indv = (if (n.miss > 0) imputed.indv else NULL),
     imputed.data = (if (n.miss > 0) imputed.data else NULL),
     split.depth  = split.depth.out,
-    node.stats = node.stats,
     ensemble = ensemble,
     holdout.array = holdout.array,
     block.size = block.size,

@@ -1,10 +1,11 @@
 \name{internal.utils}
 \alias{extract.subsample}
 \alias{extract.bootsample}
-\alias{print.subsample}
-\alias{print.subsample.rfsrc}
 \alias{print.bootsample}
 \alias{print.bootsample.rfsrc}
+\alias{print.imbalanced.performance}
+\alias{print.subsample}
+\alias{print.subsample.rfsrc}
 \alias{fast.save}
 \alias{fast.load}
 \alias{fast.save.list}

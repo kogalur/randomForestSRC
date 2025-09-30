@@ -13,7 +13,6 @@
   The data were obtained from the UCI machine learning repository, see
   \url{http://archive.ics.uci.edu/ml/datasets/Breast+Cancer+Wisconsin+(Prognostic)}.
 }
- 
 \examples{
 \donttest{
 ## ------------------------------------------------------------

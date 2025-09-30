@@ -175,14 +175,6 @@ get.distance.bits <- function (grow.equivalent, distance) {
   }
   return (dist.bits)
 }
-get.empirical.risk.bits <-  function (empirical.risk) {
-  if (empirical.risk) {
-    return (2^18)
-  }
-  else {
-    return (0)
-  }
-}
 ## convert ensemble option into native code parameter.
 get.ensemble.bits <- function (ensemble) {
   if (ensemble == "oob") {
@@ -626,24 +618,6 @@ get.split.null.bits <- function (split.null) {
   }
   return (split.null)
 }
-get.statistics.bits <- function (statistics) {
-  ## Convert statistics option into native code parameter.
-  if (!is.null(statistics)) {
-    if (statistics == TRUE) {
-      statistics <- 2^27
-    }
-    else if (statistics == FALSE) {
-      statistics <- 0
-    }
-    else {
-      stop("Invalid choice for 'statistics' option:  ", statistics)
-    }
-  }
-  else {
-    stop("Invalid choice for 'statistics' option:  ", statistics)
-  }
-  return (statistics)
-}
 get.tdc.rule.bits <- function (tdc.rule) {
   if (is.null(tdc.rule)) {
     ## Allow splits on everything.
@@ -744,50 +718,6 @@ get.trace.bits <- function (do.trace) {
   }
   return (do.trace)
 }
-get.base.learner <- function(interact.depth = 2,
-                             interact.rule = c("multiplication", "division", "addition", "subtraction"),
-                             synthetic.depth = 0,
-                             dim.reduce = TRUE) {
-  ## No verificiation is done here, or before conveyance to the
-  ## native code.  So be careful.
-  ## When augmentation is of the interaction type, interact.depth is
-  ## the number of sub-terminal nodes grown to
-  ## determine interactions.  Thus, a value of 2 or greater is
-  ## necessary for interactions. The number of interactions considered is interact.depth - 1.
-  ## This does not guarantee
-  ## that there will be interactions.  It is just a pre-requisite.
-  ## When augmentation is of the synthetic type, synthetic.depth is the
-  ## number of sub-terminal nodes in the sub-tree that is grown to
-  ## determine the synthetic x-variable.  Thus, a value of 2 or
-  ## great is necessary for synthetic interactions.
-  ## Don't mess with the order here.  The matching of position is relevant to the C-side code.
-  valid.rule <- c("multiplication", "division", "addition", "subtraction")
-  rule <- match.arg(interact.rule, valid.rule)
-  base.learner <- list(as.integer(interact.depth), as.integer(which(valid.rule == rule)), as.integer(synthetic.depth), as.integer(dim.reduce))
-  names(base.learner) = c("interact.depth", "interact.rule", "synthetic.depth", "dim.reduce")
-  class(base.learner) = "base.learner"
-  return (base.learner)
-}
-get.lot <- function(hdim = 5, treesize = function(x){min(50, x * .25)}, lag = 8, strikeout = 3) {
-  ## The size of tree can be specified as a function or an integer.
-  ## If a function is specified, it MUST be processed downstream and
-  ## converted to an integer before passing the lot object into the
-  ## native code.
-  if (!is.function(treesize) && !is.numeric(treesize)) {
-    stop("treesize must be a function or number specifying size of tree")
-  }
-  else {
-    if (is.function(treesize)) {
-      lot = list(as.integer(hdim), treesize, as.integer(lag), as.integer(strikeout))
-    }
-    if (is.numeric(treesize)) {
-      lot = list(as.integer(hdim), as.integer(treesize), as.integer(lag), as.integer(strikeout))
-    }
-  }
-  names(lot) = c("hdim", "treesize", "lag", "strikeout")
-  class(lot) = "lot"
-  return (lot)
-}
 get.tree.index <- function(get.tree, ntree) {
   ## NULL --> default setting
   if (is.null(get.tree)) {
@@ -856,33 +786,6 @@ is.forest.missing <- function(object) {
     !object$forest$forest
   }
 }
-## HIDDEN VARIABLES FOLLOW:
-is.hidden.base.learner <-  function(user.option) {
-  if (is.null(user.option$base.learner)) {
-    ## Traditional non-augmented data matrix, with default
-    ## base-learners, i.e. x-vars.  trial.depth is the trial
-    ## sub-tree depth, in the case of interactions, and the
-    ## sub-terminal node count in the case of synthetic cuts.
-    ## Thus, a value of 3 implies we have 2 splits, and 3
-    ## sub-terminal nodes.  We need a value of 2 in either case
-    ## for base learner injection.  Rules can be "multiplication",
-    ## "division", "addition", and "substraction" in the case of
-    ## interactions.  If synthetic cuts are requested, the rule is
-    ## "synthetic".  Note that division by zero is a possibility
-    ## in interactions and not handled, so be careful.
-    base.learner <- get.base.learner(interact.depth = 0, synthetic.depth = 0) 
-  }
-  else {
-    ## Check the class of the object.
-    if (inherits(user.option$base.learner, "base.learner")) {
-      base.learner <- user.option$base.learner
-    }
-    else {
-      stop("Invalid choice for 'base.learner' option:  ", user.option$base.learner)
-    }
-  }
-  return (base.learner)
-}
 is.hidden.cse <-  function(user.option) {
   if (is.null(user.option$cse)) {
     FALSE
@@ -915,14 +818,6 @@ is.hidden.do.trace <-  function(user.option) {
     user.option$do.trace
   }
 }
-is.hidden.empirical.risk <-  function(user.option) {
-  if (is.null(user.option$empirical.risk)) {
-    FALSE
-  }
-  else {
-    as.logical(as.character(user.option$empirical.risk))
-  }
-}
 is.hidden.experimental <-  function(user.option) {
   if (is.null(user.option$experimental)) {
     e <- FALSE
@@ -939,18 +834,6 @@ is.hidden.gk.quantile <-  function(user.option) {
   else {
     as.logical(as.character(user.option$gk.quantile))
   }
-}
-is.hidden.hdim <-  function(user.option) {
-  if (is.null(user.option$hdim)) {
-    hdim = 0
-  }
-  else {
-    hdim = as.integer(user.option$hdim)
-    if (hdim < 0) {
-      stop("Invalid choice for 'hdim' option:  ", user.option$hdim)
-    }
-  }
-  return (hdim)
 }
 is.hidden.holdout.array <-  function(user.option) {
   if (is.null(user.option$holdout.array)) {
@@ -989,13 +872,6 @@ is.hidden.insitu.ensemble <-  function(user.option) {
   }
 }
 is.hidden.jitt <-  function (user.option, importance, na.action = "na.omit", anonymous = FALSE,  partial = FALSE) {
-  ## no augmented data for SGTs, no TDC (internally TDC is seen as augmented data)
-  if (!is.null(user.option$base.learner)) {
-    if (user.option$base.learner$interact.depth > 1 ||
-        user.option$base.learner$synthetic.depth > 1) {
-      return(FALSE)
-    }
-  }
   ## no missing data
   ## anonymous = TRUE, jitt = TRUE,
   ## anonymous = TRUE, jitt = FALSE,
@@ -1027,22 +903,6 @@ is.hidden.jitt <-  function (user.option, importance, na.action = "na.omit", ano
   else {
     as.logical(as.character(user.option$jitt))
   }
-}
-is.hidden.lot <-  function(user.option) {
-  if (is.null(user.option$lot)) {
-    ## Traditional non-greedy recursive growth.  Parameter hdim must be zero.
-    lot <- get.lot(hdim = 0, treesize = 0, lag = 0, strikeout = 0) 
-  }
-  else {
-    ## Check the class of the object.
-    if (inherits(user.option$lot, "lot")) {
-      lot <- user.option$lot
-    }
-    else {
-      stop("Invalid choice for 'lot' option:  ", user.option$lot)
-    }
-  }
-  return (lot)
 }
 is.hidden.mahalanobis.sigma <- function(user.option) {
   if (is.null(user.option$mahalanobis.sigma) & is.null(user.option$sigma)) {

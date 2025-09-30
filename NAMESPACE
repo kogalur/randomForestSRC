@@ -21,8 +21,6 @@ importFrom("grDevices", "gray")
 export(extract.bootsample,
        extract.quantile,
        extract.subsample,
-       find.interaction,
-       find.interaction.rfsrc,
        get.auc,
        get.bayes.rule,
        get.brier.error,
@@ -47,7 +45,6 @@ export(extract.bootsample,
        get.quantile.crps,
        get.quantile.stat,
        get.rfq.threshold,
-        
        get.tree,
        get.tree.rfsrc,
        holdout.vimp,
@@ -75,6 +72,7 @@ export(extract.bootsample,
        print.rfsrc,
        print.bootsample,
        print.bootsample.rfsrc,
+       print.imbalanced.performance,
        print.subsample,
        print.subsample.rfsrc,
        quantreg,
@@ -84,16 +82,11 @@ export(extract.bootsample,
        rfsrc.cart,
        rfsrc.fast,
        rfsrc.news,
-       synthetic.rfsrc,
-       synthetic,
        sid.perf.metric,
        sidClustering,
        sidClustering.rfsrc,
-        
        subsample,
        subsample.rfsrc,
-       stat.split,
-       stat.split.rfsrc,
        tune,
        tune.rfsrc,
        tune.nodesize,
@@ -132,6 +125,7 @@ S3method(predict, rfsrc)
 S3method(print, rfsrc)
 S3method(print, bootsample)
 S3method(print, bootsample.rfsrc)
+S3method(print, imbalanced.performance)
 S3method(print, subsample)
 S3method(print, subsample.rfsrc)
 

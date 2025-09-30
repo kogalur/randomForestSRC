@@ -22,7 +22,7 @@
   split.depth = c(FALSE, "all.trees", "by.tree"),
   case.depth = FALSE,
   seed = NULL,
-  do.trace = FALSE, membership = FALSE, statistics = FALSE,
+  do.trace = FALSE, membership = FALSE,
   marginal.xvar = NULL,  ...)
 }
 
@@ -62,8 +62,6 @@
   \item{do.trace}{Number of seconds between progress updates during execution.}
   
   \item{membership}{If \code{TRUE}, returns terminal node membership and in-bag information.}
-  
-  \item{statistics}{If \code{TRUE}, returns split statistics, which can be parsed using \code{\link{stat.split}}.}
   
   \item{marginal.xvar}{Vector of variable names to marginalize over when calculating weights or proximity. If a variable is marginalized, its split does not partition the data; all cases are passed to both daughters. When all splits involve marginalized variables, terminal nodes contain the full dataset. When no marginalized variables are used, membership is unchanged. Default is \code{NULL} (no marginalization).}
   
@@ -105,7 +103,6 @@ An object of class \code{(rfsrc, predict)}, which is a list with the following c
   \item{imputed.indv}{Indices of test observations with missing values.}
   \item{imputed.data}{Imputed version of the test data. Columns are ordered with responses first, followed by predictors.}
   \item{split.depth}{Matrix or array recording minimal depth of each variable for each case, optionally by tree.}
-  \item{node.stats}{Split statistics (only if \code{statistics = TRUE}); see \code{\link{stat.split}}.}
   \item{err.rate}{Cumulative out-of-bag (OOB) error rate, if y-outcomes are present.}
   \item{importance}{Variable importance (VIMP) for the test data. May be \code{NULL}.}
   \item{predicted}{Predicted values for the test data.}
@@ -164,8 +161,6 @@ For multivariate families, predicted values, VIMP, error rates, and performance 
   \command{\link{plot.variable.rfsrc}},
   \command{\link{rfsrc}},
   \command{\link{rfsrc.fast}},
-  \command{\link{stat.split.rfsrc}},
-  \command{\link{synthetic.rfsrc}},
   \command{\link{vimp.rfsrc}}
 }
 \examples{

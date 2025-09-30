@@ -207,7 +207,6 @@ Other outputs, such as variable importance (VIMP) and performance metrics, rely 
   
 }
 \seealso{
-  \command{\link{find.interaction.rfsrc}},
 
   \command{\link{get.tree.rfsrc}},
 
@@ -234,9 +233,7 @@ Other outputs, such as variable importance (VIMP) and performance metrics, rely 
 
   \command{\link{sidClustering.rfsrc}},
 
-  \command{\link{stat.split.rfsrc}},
   \command{\link{subsample.rfsrc}},
-  \command{\link{synthetic.rfsrc}},
   
   \command{\link{tune.rfsrc}},
 

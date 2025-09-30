@@ -27,7 +27,6 @@ rfsrc.fast <- function(formula, data,
   ##--------------------------------------------------------------
   ## list of forest parameters
   rfnames <- get.rfnames(hidden = TRUE)
-   
   ## restrict to allowed values
   rfnames <- rfnames[rfnames != "data"               &
                      rfnames != "ntree"              &

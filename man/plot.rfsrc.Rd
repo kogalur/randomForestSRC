@@ -8,7 +8,7 @@
 \usage{\method{plot}{rfsrc}(x, m.target = NULL,
   plots.one.page = TRUE, sorted = TRUE, verbose = TRUE,  ...)}
 \arguments{
-  \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc, synthetic)},
+  \item{x}{An object of class \code{(rfsrc, grow)}, 
     or \code{(rfsrc, predict)}.}
   \item{m.target}{Character value for multivariate families
     specifying the target outcome to be used.  If left unspecified, the

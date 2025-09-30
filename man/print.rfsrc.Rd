@@ -7,7 +7,7 @@
 }
 \usage{\method{print}{rfsrc}(x, outcome.target = NULL, ...)}
 \arguments{
-  \item{x}{An object of class \code{(rfsrc, grow)}, \code{(rfsrc, synthetic)},
+  \item{x}{An object of class \code{(rfsrc, grow)}, 
     or \code{(rfsrc, predict)}.}
   \item{outcome.target}{Character value for multivariate families
     specifying the target outcome to be used. The default is to use the

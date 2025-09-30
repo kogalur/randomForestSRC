@@ -19,7 +19,6 @@ generic.predict.rfsrc <-
            seed = NULL,
            do.trace = FALSE,
            membership = FALSE,
-           statistics = FALSE,
            marginal.xvar = NULL,
            ...)
 {
@@ -153,7 +152,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("3.4.1", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("3.4.2", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
@@ -469,7 +468,6 @@ generic.predict.rfsrc <-
   rfq <- get.rfq(rfq)
   rfq.bits <- get.rfq.bits(rfq, family)
   gk.quantile.bits <- get.gk.quantile.bits(gk.quantile)
-  statistics.bits <- get.statistics.bits(statistics)
   bootstrap.bits <- get.bootstrap.bits(object$bootstrap)
   ## initialize the low bits
   ensemble.bits <- get.ensemble.bits(ensemble)
@@ -517,30 +515,16 @@ generic.predict.rfsrc <-
   }
   na.action.bits <- get.na.action.bits(na.action)
   do.trace <- get.trace.bits(do.trace)
-  ## Check that hdim is initialized.  If not, set it zero.
-  ## This is necessary for backwards compatibility with 2.3.0
-  if (is.null(object$hdim)) {
-    hdim <- 0
-  }
-  else {
-    hdim <- object$hdim
-  }
   ## The pivot in this predict related function is different from
   ## the pivot used in the grow related function.  In rfsrc we are
   ## referencing the list nativeOutput[[]].  Here we are referencing
   ## the $nativeArray[[]] object which is a massaged version of
-  ## nativeOutput[[]].  Here, pivot points to the record PRIOR to
-  ## parmID2.  We adjust for the presence of interactions, and
-  ## synthetics.  The default chunk is parmIDx, contPTx, contPTRx,
-  ## mwcpSZx, fsrecIDx.
+  ## nativeOutput[[]].
   ## WARNING: Note that the maximum number of slots in the following
   ## foreign function call is 64.  Ensure that this limit is not
   ## exceeded.  Otherwise, the program will error on the call.
-  if (hdim == 0) {
       pivot = 0
       chunk = 0
-  }
-   
   ## set the maximum class levels
   max.class.levels <- 0
   ## Start the C external timer.
@@ -559,7 +543,6 @@ generic.predict.rfsrc <-
                                              rfq.bits +
                                              cr.bits +
                                              gk.quantile.bits +
-                                             statistics.bits +
                                              anonymize.bits +
                                              case.depth.bits),
                                   as.integer(forest.wt.bits +
@@ -620,9 +603,9 @@ generic.predict.rfsrc <-
                                   list(as.integer(object$seed),
                                        if (is.null(object$seedVimp)) NULL else as.integer(object$seedVimp),
                                        as.integer(object$optLoGrow)),
-                                  as.integer(hdim),
-                                  ## Object containing base learner settings.  This is never NULL.
-                                  object$base.learner, 
+                                  as.integer(0),
+                                  ## Deleted base learner slot.
+                                  NULL,
                                   as.integer((object$nativeArray)$treeID),
                                   as.integer((object$nativeArray)$nodeID),
                                   as.integer((object$nativeArray)$nodeSZ),
@@ -633,23 +616,6 @@ generic.predict.rfsrc <-
                                   as.integer((object$nativeArray)$mwcpSZ),
                                   as.integer((object$nativeArray)$fsrecID),
                                   if (is.null((object$nativeFactorArray)$mwcpPT)) NULL else as.integer((object$nativeFactorArray)$mwcpPT)),
-##                                as.integer((object$nativeFactorArray)$mwcpPT)),
-                                  ## This slot is hc_one_augm_intr.  This slot can be NULL.
-                                  if (!is.null(object$base.learner)) {
-                                      if (object$base.learner$interact.depth > 1) {
-                                          list(as.integer((object$nativeArray)$pairCT),
-                                               as.integer((object$nativeArray)$augmXone),
-                                               as.integer((object$nativeArray)$augmXtwo))
-                                      } else { NULL }
-                                  } else { NULL },
-                                  ## This slot is hc_one_augm_syth.  This slot can be NULL.
-                                  if (!is.null(object$base.learner)) {
-                                      if (object$base.learner$synthetic.depth > 1) {
-                                          list(as.integer((object$nativeArray)$sythSZ),
-                                               as.integer((object$nativeArray)$augmXS))
-                                      } else { NULL }
-                                  } else { NULL },
-                                  
                                   NULL,
                                   NULL,
                                   NULL,
@@ -661,8 +627,8 @@ generic.predict.rfsrc <-
                                   NULL,
                                   NULL,
                                   NULL,
-                                  
-                                   
+                                  NULL,
+                                  NULL,
                                   as.integer(object$nativeArrayTNDS$tnRMBR),
                                   as.integer(object$nativeArrayTNDS$tnAMBR),
                                   as.integer(object$nativeArrayTNDS$tnRCNT),
@@ -879,14 +845,6 @@ generic.predict.rfsrc <-
     else {
       split.depth.out <-  NULL
     }
-  ## node statistics
-  if (statistics == TRUE) {
-    node.stats <- as.data.frame(cbind(nativeOutput$spltST))
-    names(node.stats) <- c("spltST")
-  }
-    else {
-      node.stats <- NULL
-    }
   ## make the output object
   rfsrcOutput <- list(
     call = match.call(),
@@ -913,7 +871,6 @@ generic.predict.rfsrc <-
     imputed.indv = (if (n.miss>0) imputed.indv else NULL),
     imputed.data = (if (n.miss>0) imputed.data else NULL),
     split.depth  = split.depth.out,
-    node.stats = node.stats,
     block.size = block.size,
     perf.type = perf.type,
     ctime.internal = nativeOutput$cTimeInternal,
@@ -933,7 +890,6 @@ generic.predict.rfsrc <-
   if (n.miss > 0) remove(imputed.data)
   remove(var.used.out)
   remove(split.depth.out)
-  remove(node.stats)
   ## Safe the outputs.
   survOutput <- NULL
   classOutput <- NULL
