@@ -312,12 +312,7 @@ void finalizeVimpPerformance(char       mode) {
                 }
               }
               if (cumDenomCount != 0) {
-                if ( k > 1) {
-                  RF_vimpCLSptr[p][j][k] = M_E * result / (double) cumDenomCount;
-                }
-                else {
-                  RF_vimpCLSptr[p][j][k] = result / (double) cumDenomCount;
-                }
+                RF_vimpCLSptr[p][j][k] = result / (double) cumDenomCount;
               }
               else {
                 RF_vimpCLSptr[p][j][k] = RF_nativeNaN;

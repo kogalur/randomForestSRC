@@ -1,4 +1,4 @@
-AC_INIT([randomForestSRC], [3.4.2], [ubk@kogalur.com], [randomForestSRC], [https://github.com/kogalur/randomForestSGT])
+AC_INIT([randomForestSRC], [3.4.3], [ubk@kogalur.com], [randomForestSRC], [https://github.com/kogalur/randomForestSGT])
 
 AC_PREREQ([2.62])
 

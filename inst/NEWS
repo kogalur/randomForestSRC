@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.4.2 (bld20250929)
+Version: 3.4.3 (bld20251008)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,7 +8,13 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.4.2
+CHANGES TO RELEASE 3.4.3
+---------------------------------------------------------------------------------
+Removed multiplication factor by e^1 for conditional vimp rates for classification.
+This was causing vimps greater than one.
+
+---------------------------------------------------------------------------------
+RELEASE 3.4.2
 ---------------------------------------------------------------------------------
 Improves "tune.rfsrc" now includes "golden-search". Improved print
 output for grow object.  Improved print output for imbalanced forests

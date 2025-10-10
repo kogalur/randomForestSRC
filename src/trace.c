@@ -51,13 +51,13 @@ void setMinMemoryAllocation(size_t value) {
 void setProbeMemoryAllocation(size_t value) {
   RF_memor_probeMemoryAllocation = value;
 }
-size_t getMaxMemoryAllocation() {
+size_t getMaxMemoryAllocation(void) {
   return (RF_memor_maxMemoryAllocation);
 }
-size_t getMinMemoryAllocation() {
+size_t getMinMemoryAllocation(void) {
   return (RF_memor_minMemoryAllocation);
 }
-size_t getProbeMemoryAllocation() {
+size_t getProbeMemoryAllocation(void) {
   return (RF_memor_probeMemoryAllocation);
 }
 void increaseMemoryAllocation(size_t amount) {
