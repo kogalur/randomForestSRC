@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.4.3 (bld20251008)
+Version: 3.4.4 (bld20251103)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,7 +8,13 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.4.3
+CHANGES TO RELEASE 3.4.4
+---------------------------------------------------------------------------------
+Improved output for quantile regression, new full sweep option for
+imputation via the impute function.
+
+---------------------------------------------------------------------------------
+RELEASE 3.4.3
 ---------------------------------------------------------------------------------
 Removed multiplication factor by e^1 for conditional vimp rates for classification.
 This was causing vimps greater than one.

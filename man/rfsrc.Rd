@@ -74,7 +74,8 @@ rfsrc(formula, data, ntree = 500,
   ...)
 
 ## convenient interface for growing a CART tree
-rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data), bootstrap = "none", ...)
+rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
+   bootstrap = "none", nsplit = 0, ...)
 }
 
 \arguments{

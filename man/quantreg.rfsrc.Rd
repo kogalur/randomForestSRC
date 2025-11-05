@@ -61,7 +61,12 @@
     function used for fitting the quantile regression forest.}  
 }
 \details{
-  
+
+  \emph{Methods}
+
+  \enumerate{
+
+  \item
   The most common method for calculating RF quantiles uses the method
   described in Meinshausen (2006) using forest weights.  The forest
   weights method employed here (specified using \code{method}="forest"),
@@ -77,39 +82,44 @@
   have the option to over-ride this using
   Mahalanobis splitting by setting \code{splitrule="mahalanobis"}
 
+  \item
   A second method for estimating quantiles uses the Greenwald-Khanna
   (2001) algorithm (invoked by \code{method}="gk", "GK", "G-K" or
   "g-k").  While this will not be as accurate as forest weights, the
   high memory efficiency of Greenwald-Khanna makes it feasible to
   implement in big data settings unlike forest weights.
+
+  The Greenwald-Khanna algorithm is implemented roughly as follows. 
+  \itemize{
+    \item
+    To form a distribution of values for each case, from which we sample to
+    determine quantiles, we create a chain of values for the case as we
+    grow the forest.  Every time a case lands in a terminal node, we
+    insert all of its co-inhabitants to its chain of values.
+    \item
+    The best case scenario is when tree node size is 1 because each case
+    gets only one insert into its chain for that tree.  The worst case
+    scenario is when node size is so large that trees stump. This is
+    because each case receives insertions for the entire in-bag
+    population.  
+    \item
+    What the user needs to know is that Greenwald-Khanna can become slow
+    in counter-intutive settings such as when node size is large.  The
+    easy fix is to change the epsilon quantile approximation that is
+    requested.  You will see a significant speed-up just by doubling
+    \code{prob.epsilon}.  This is because the chains stay a lot smaller as
+    epsilon increases, which is exactly what you want when node sizes are
+    large. Both time and space requirements for the algorithm are affected
+    by epsilon.
+    \item
+    The best results for Greenwald-Khanna come from setting the number of
+    quantiles equal to 2 times the sample size and epsilon to 1 over 2
+    times the sample size which is the default values used if left
+    unspecified.  This will be slow, especially for big data, and less
+    stringent choices should be used if computational speed is of concern.
+  }
   
-  The Greenwald-Khanna algorithm is implemented roughly as follows.  To
-  form a distribution of values for each case, from which we sample to
-  determine quantiles, we create a chain of values for the case as we
-  grow the forest.  Every time a case lands in a terminal node, we
-  insert all of its co-inhabitants to its chain of values.
-
-  The best case scenario is when tree node size is 1 because each case
-  gets only one insert into its chain for that tree.  The worst case
-  scenario is when node size is so large that trees stump. This is
-  because each case receives insertions for the entire in-bag
-  population.  
-  
-  What the user needs to know is that Greenwald-Khanna can become slow
-  in counter-intutive settings such as when node size is large.  The
-  easy fix is to change the epsilon quantile approximation that is
-  requested.  You will see a significant speed-up just by doubling
-  \code{prob.epsilon}.  This is because the chains stay a lot smaller as
-  epsilon increases, which is exactly what you want when node sizes are
-  large. Both time and space requirements for the algorithm are affected
-  by epsilon.
-
-  The best results for Greenwald-Khanna come from setting the number of
-  quantiles equal to 2 times the sample size and epsilon to 1 over 2
-  times the sample size which is the default values used if left
-  unspecified.  This will be slow, especially for big data, and less
-  stringent choices should be used if computational speed is of concern.
-
+  \item
   Finally, the default method, \code{method}="local", implements the
   locally adjusted cdf estimator of Zhang et al. (2019).  This does not
   use forest weights and is reasonably fast and can be used for large
@@ -119,6 +129,34 @@
   there are instances where this may perform poorly; see Zhang et
   al. (2019) for details.  If hetereogeneity is suspected we recommend
   \code{method}="forest".
+
+  }
+
+  \emph{Quantile-error metrics}
+
+  \enumerate{
+
+  \item When trees are grown with the quantile splitting rule
+  (\code{splitrule = "quantile"}), \code{print.rfsrc} reports error
+  metrics aligned with the quantile objective: (i) the standardized
+  continuous ranked probability score (CRPS) computed from the estimated
+  conditional CDF, and (ii) the pinball loss at selected quantile levels
+  \eqn{\tau}.
+  
+  \item These metrics supplement the usual regression error rate printed
+  by \code{print.rfsrc}. The line labeled "Requested performance error"
+  remains the OOB mean squared error (MSE) by default (and is the
+  quantity used to print \code{R squared}), regardless of the split
+  rule. These quantile-metrics are printed in addition to MSE and do not
+  change model fitting.
+
+  \item Pinball levels can be controlled via
+  \code{options(rfsrc.pinball.taus = c(0.1, 0.5, 0.9))}.  The CRPS
+  curves used by \code{plot.quantreg} can be obtained with
+  \code{get.quantile.crps()}.
+
+  }
+
   
 }
 \value{
@@ -171,6 +209,16 @@ print(get.quantile.stat(o))
 ## standardized continuous rank probabiliy score (crps) performance
 plot(get.quantile.crps(o), type = "l")
 
+## ------------------------------------------------------------
+## quantile-metrics provided in print.rfsrc output 
+## ------------------------------------------------------------
+op <- options(rfsrc.pinball.taus = c(0.1, 0.5, 0.9))
+
+o <- quantreg(mpg ~ ., data = mtcars)
+
+print(o)
+
+options(op)  ## restore options
 
 ## ------------------------------------------------------------
 ## train/test regression example
@@ -184,9 +232,21 @@ o.tst <- quantreg(object = o, newdata = mtcars[-(1:20),])
 print(get.quantile(o.tst))
 print(get.quantile.stat(o.tst))
 
+## ------------------------------------------------------------
+## quantile regression for Boston Housing canonical call
+## ------------------------------------------------------------
+
+if (library("mlbench", logical.return = TRUE)) {
+  data(BostonHousing)
+  o <- quantreg(medv ~ ., BostonHousing, nodesize = 1)
+  print(o)
+  plot.quantreg(o)
+}
+
 
 ## ------------------------------------------------------------
 ## quantile regression for Boston Housing using forest method
+## also demonstrates quantile statistics 
 ## ------------------------------------------------------------
 
 if (library("mlbench", logical.return = TRUE)) {

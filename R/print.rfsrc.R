@@ -8,14 +8,27 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     print.default(x)
     return()
   }
-  ## synthetic forest processing
-  sf.flag <- FALSE
-  if (has.all.classes(x, c("rfsrc","synthetic"))) {
-    if (!has.all.classes(x, c("rfsrc","synthetic","oob"))) {
-      sf.flag <- TRUE
-      sf.message <- "OOB was not used for synthetic forests, error rates/VIMP will be unreliable"
-    }
-    x <- x$rfSyn
+  ## mean pinball losses from a quantreg object
+  .get.pinball.losses <- function(qobj, taus = c(0.1, 0.5, 0.9), subset = NULL) {
+    qL <- extract.quantile(qobj)
+    j <- 1L
+    q <- qL[[j]]
+    y <- if (is.vector(qobj$yvar)) c(qobj$yvar) else qobj$yvar[, names(qL)[j]]
+    if (is.null(subset)) subset <- seq_along(y)
+    y    <- y[subset]
+    cdf  <- q$cdf[subset, , drop = FALSE]
+    yunq <- q$yunq
+    pinball <- function(y, q, tau) (tau - (y < q)) * (y - q)
+    out <- sapply(taus, function(tt) {
+      ## invert CDF to get q_tau by monotone interpolation
+      qhat <- vapply(seq_len(nrow(cdf)), function(i) {
+        suppressWarnings(stats::approx(x = cdf[i, ], y = yunq, xout = tt,
+                                ties = "ordered", rule = 2)$y)
+      }, numeric(1))
+      mean(pinball(y, qhat, tt), na.rm = TRUE)
+    })
+    names(out) <- paste0("tau=", taus)
+    out
   }
   ## subsample/bootsample
   if (has.all.classes(x, c("rfsrc","subsample"))) {
@@ -59,6 +72,8 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   event.freq.txt <- NULL
   k.class <- NULL
   brier.rand <- brier.norm.rand <- logloss.rand <- NULL
+  q.crps <- q.crps.std <- NULL
+  q.pinball <- NULL
   ## ---- Classification block
   if (x$family == "class") {
     if (!is.null(x$yvar)) {
@@ -118,6 +133,24 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     if (!is.null(event)) {
       tab <- table(event)
       event.freq.txt <- if (length(tab)) paste(paste(names(tab), as.integer(tab), sep = "="), collapse = ", ") else "0"
+    }
+  }
+  ## ---- Quantile regression (pinball/CRPS) block
+  quantile.flag <- has.all.classes(x, c("rfsrc","quantreg")) && identical(x$family, "regr")
+  if (quantile.flag) {
+    if (!is.null(x$yvar)) {
+      ## CRPS (standardized and raw) from existing internal helper
+      qcrps.std.df <- tryCatch(get.quantile.crps(x, pretty = TRUE, standardize = TRUE),
+                               error = function(e) NULL)
+      qcrps.raw.df <- tryCatch(get.quantile.crps(x, pretty = TRUE, standardize = FALSE),
+                               error = function(e) NULL)
+      if (is.data.frame(qcrps.std.df) && nrow(qcrps.std.df))
+        q.crps.std <- tail(qcrps.std.df$crps, 1L)
+      if (is.data.frame(qcrps.raw.df) && nrow(qcrps.raw.df))
+        q.crps      <- tail(qcrps.raw.df$crps, 1L)
+      ## Pinball loss at user-selectable taus (defaults 0.1, 0.5, 0.9)
+      taus <- getOption("rfsrc.pinball.taus", c(0.1, 0.5, 0.9))
+      q.pinball <- tryCatch(.get.pinball.losses(x, taus = taus), error = function(e) NULL)
     }
   }
   ## ---- Requested performance error (last row)
@@ -207,6 +240,13 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         cat("                          (OOB) CRPS: ", digits.pretty(crps.err, 8), "\n", sep = "")
       if (x$family == "surv" && !is.null(crps.std.err))
         cat("             (OOB) standardized CRPS: ", digits.pretty(crps.std.err, 8), "\n", sep = "")
+      if (quantile.flag && !is.null(q.crps))
+        cat("                 (OOB) Quantile-CRPS: ", digits.pretty(q.crps, 8), "\n", sep = "")
+      if (quantile.flag && !is.null(q.crps.std))
+        cat("           (OOB) Quantile-CRPS (std): ", digits.pretty(q.crps.std, 8), "\n", sep = "")
+      if (quantile.flag && length(q.pinball))
+        cat("           (OOB) Pinball loss by tau: ", digits.pretty(q.pinball, 8),
+            " (tau = ", digits.pretty(taus), ")", "\n", sep = "")
       cat("   (OOB) Requested performance error: ", err.rate, "\n\n", sep = "")
     }
     if (x$family == "class" && !is.null(conf.mat)) {
@@ -271,6 +311,13 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         cat("                                CRPS: ", digits.pretty(crps.err, 8), "\n", sep = "")
       if (x$family == "surv" && !is.null(crps.std.err))
         cat("                     standardized CRPS: ", digits.pretty(crps.std.err, 8), "\n", sep = "")
+      if (quantile.flag && !is.null(q.crps))
+        cat("                       Quantile-CRPS: ", digits.pretty(q.crps, 8), "\n", sep = "")
+      if (quantile.flag && !is.null(q.crps.std))
+        cat("                 Quantile-CRPS (std): ", digits.pretty(q.crps.std, 8), "\n", sep = "")
+            if (quantile.flag && length(q.pinball))
+        cat("                 Pinball loss by tau: ", digits.pretty(q.pinball, 8),
+            " (tau = ", digits.pretty(taus), ")", "\n", sep = "")
       cat("         Requested performance error: ", err.rate, "\n\n", sep = "")
     }
     if (x$family == "class" && !is.null(conf.mat)) {
@@ -290,5 +337,4 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       }
     }
   }
-  if (sf.flag) message(sf.message)
 }
