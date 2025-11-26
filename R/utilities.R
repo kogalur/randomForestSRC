@@ -536,12 +536,26 @@ get.rfq.bits <- function (rfq, family) {
   return (result)
 }
 get.rf.cores <- function () {
-  if (is.null(getOption("rf.cores"))) {
-    if(!is.na(as.numeric(Sys.getenv("RF_CORES")))) {
-      options(rf.cores = as.integer(Sys.getenv("RF_CORES")))
+    ## PART I:  Two ways for the user to specify cores:
+    ## (1) R-option "rf.cores"
+    ## (2) Shell-environment-option "RF_CORES"
+    if (is.null(getOption("rf.cores", NULL))) {
+        if (!is.na(as.numeric(Sys.getenv("RF_CORES")))) {
+            options(rf.cores = as.integer(Sys.getenv("RF_CORES")))
+        }
     }
-  }
-  return (getOption("rf.cores", -1L))
+    ## If the user has set the cores using either of the two methods, we respect it.
+    if (!is.null(getOption("rf.cores", NULL))) {
+        return (getOption("rf.cores"))
+    }
+    ## PART II:  Respect R CMD check limit
+    chk <- tolower(Sys.getenv("_R_CHECK_LIMIT_CORES_", ""))
+    if (nzchar(chk) && chk != "false") {
+        ## under R CMD check --as-cran (CRAN sets this)
+        return(2L)
+    }
+    ## PART III:  Use everything.
+    return (-1L)
 }
 ## convert samptype option into native code parameter.
 get.samptype.bits <- function (samptype) {

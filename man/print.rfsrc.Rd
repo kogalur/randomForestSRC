@@ -23,7 +23,6 @@
   \emph{Rnews}, 7/2:25-31.
 }
 \examples{
-  options(rf.cores=2, mc.cores=2)
   iris.obj <- rfsrc(Species ~., data = iris, ntree=10)
   print(iris.obj)
 }

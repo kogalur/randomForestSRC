@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.4.4 (bld20251103)
+Version: 3.4.5 (bld20251125)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,9 +8,14 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.4.4
+CHANGES TO RELEASE 3.4.5
 ---------------------------------------------------------------------------------
-Improved output for quantile regression, new full sweep option for
+Change to get.rf.cores() to respect check-as-cran limits. 
+
+---------------------------------------------------------------------------------
+RELEASE 3.4.4
+---------------------------------------------------------------------------------
+Improved output for quantile regression.  New full sweep option for
 imputation via the impute function.
 
 ---------------------------------------------------------------------------------
