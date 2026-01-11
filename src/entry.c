@@ -49,7 +49,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP perfBlock,
                SEXP quantileInfo,
                SEXP qStarPlus,
-               SEXP xPreSort,
+               SEXP unoWeight,
                SEXP numThreads) {
   clock_t cpuTimeStart = clock();
   setUserTraceFlag(INTEGER(traceFlag)[0]);
@@ -225,6 +225,12 @@ SEXP rfsrcGrow(SEXP traceFlag,
       }
     }
   }
+  if (unoWeight != R_NilValue) {  
+    RF_unoWeight            = REAL(unoWeight);  RF_unoWeight--;
+  }
+  else {
+    RF_unoWeight = NULL;
+  }
   RF_numThreads           = INTEGER(numThreads)[0];
   processDefaultGrow();
   rfsrc(RF_GROW, seedValue);
@@ -301,6 +307,7 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP perfBlock,
                   SEXP quantile,
                   SEXP getTree,
+                  SEXP unoWeight,
                   SEXP numThreads) {
   char mode;
   clock_t cpuTimeStart = clock();
@@ -504,6 +511,12 @@ SEXP rfsrcPredict(SEXP traceFlag,
   RF_frSize               = INTEGER(frSize)[0];
   RF_fresponseIn          = (double **) copy2DObject(frData, NATIVE_TYPE_NUMERIC, RF_frSize > 0, RF_frSize, RF_fobservationSize);
   RF_fobservationIn       = (double **) copy2DObject(fxData, NATIVE_TYPE_NUMERIC, RF_fobservationSize > 0, RF_xSize, RF_fobservationSize);
+  if (unoWeight != R_NilValue) {  
+    RF_unoWeight            = REAL(unoWeight);  RF_unoWeight--;
+  }
+  else {
+    RF_unoWeight = NULL;
+  }
   RF_getTree = (uint *) INTEGER(getTree);  RF_getTree --;
   RF_TN_SURV_ = REAL(tnSURV);
   RF_TN_MORT_ = REAL(tnMORT);

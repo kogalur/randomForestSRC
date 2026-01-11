@@ -642,7 +642,6 @@ get.rfnames <- function(hidden = TRUE, stealth = FALSE) {
   if (hidden) {
     rfnames <- c(rfnames,              
                "impute.only",
-               "presort.xvar",
                "experimental",
                "rfq",
                "perf.type",

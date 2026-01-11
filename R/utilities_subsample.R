@@ -179,22 +179,36 @@ get.subsample.standardize.vimp <- function(obj, vmp, standardize = FALSE, sc = 1
 ## double bootstrap sampling
 ##
 ###################################################################
-make.double.boot.sample <- function(ntree, n, smp, size = function(x) {x}, replace = TRUE)
+make.double.boot.sample <- function(ntree, n, smp,
+                                    size = function(x) { x },
+                                    replace = TRUE)
 {
-  dbl.smp <- do.call(cbind, mclapply(1:ntree, function(bb) {
-    inb <- rep(0, n)
-    smp.2 <- sample(smp, size = size(n), replace = replace)
-    frq <- tapply(smp.2, smp.2, length)
-    idx <- as.numeric(names(frq))
-    inb[idx] <- frq
-    inb
-  }))
-  if (length(setdiff(1:n, smp)) > 0) {
-    dbl.smp[-setdiff(1:n, smp),, drop = FALSE]
+  ntree <- as.integer(ntree)[1]
+  n     <- as.integer(n)[1]
+  m     <- as.integer(size(n))[1]
+  if (is.na(ntree) || ntree < 1L) stop("ntree must be >= 1")
+  if (is.na(n)     || n     < 1L) stop("n must be >= 1")
+  if (is.na(m)     || m     < 0L) stop("size(n) must be >= 0")
+  # Keep only rows that correspond to cases present in the 1st-stage bootstrap sample.
+  idx <- sort(unique(smp))  # this is smp.unq, but we need it locally
+  k   <- length(idx)
+  # Map the multiset 'smp' (values in 1..n) onto 1..k so we can work on the reduced support.
+  # This reduces memory/time when k << n.
+  map <- match(smp, idx)  # length n, values in 1..k
+  if (replace) {
+    # Probabilities proportional to first-stage frequencies (sum(freq) = n)
+    freq <- tabulate(map, nbins = k)
+    prob <- freq / sum(freq)
+    # k x ntree matrix of counts (rows correspond to idx in ascending order)
+    dbl.smp <- rmultinom(ntree, size = m, prob = prob)
+  } else {
+    if (m > length(map)) stop("size(n) cannot exceed length(smp) when replace=FALSE")
+    # Without replacement from the multiset: simulate by sampling positions, then tabulate.
+    dbl.smp <- vapply(seq_len(ntree), function(bb) {
+      tabulate(map[sample.int(length(map), size = m, replace = FALSE)], nbins = k)
+    }, integer(k))
   }
-  else {
-    dbl.smp
-  }
+  dbl.smp
 }
 ###################################################################
 ##

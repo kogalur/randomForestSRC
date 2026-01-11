@@ -387,12 +387,13 @@ void getPerformance(uint      serialTreeID,
   uint j, k;
   if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
     if (!(RF_opt & OPT_COMP_RISK)) {
-      perfMRTptr[1] = getConcordanceIndex(1,
-                                          obsSize,
-                                          responsePtr[RF_timeIndex],
-                                          responsePtr[RF_statusIndex],
-                                          outcomeMRT[1],
-                                          denomPtr);
+      perfMRTptr[1] = getConcordanceIndex(-1,
+                                           obsSize,
+                                           responsePtr[RF_timeIndex],
+                                           responsePtr[RF_statusIndex],
+                                           outcomeMRT[1],
+                                           denomPtr,
+                                           RF_unoWeight);
     }
     else {
       double *cpv = dvector(1, RF_eventTypeSize);
@@ -401,6 +402,7 @@ void getPerformance(uint      serialTreeID,
                        responsePtr,
                        outcomeMRT,
                        denomPtr,
+                       RF_unoWeight,
                        cpv);
       for (j=1; j <= RF_eventTypeSize; j++) {
         perfMRTptr[j] = cpv[j];

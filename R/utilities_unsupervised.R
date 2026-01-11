@@ -13,12 +13,12 @@ make.sh <- function(dat, mode = 1) {
   ## mode 1
   if (mode == 1) {
     data.frame(classes = factor(c(rep(1, nr), rep(2, nr))),
-      rbind(dat, data.frame(mclapply(dat, sample, replace = TRUE))))
+      rbind(dat, data.frame(lapply(dat, sample, replace = TRUE))))
   }
   ## mode 2
   else {
     data.frame(classes = factor(c(rep(1, nr), rep(2, nr))),
-      rbind(dat, data.frame(mclapply(dat, function(x) {
+      rbind(dat, data.frame(lapply(dat, function(x) {
         if (is.factor(x)) {
           resample(x, replace = TRUE)
         }
@@ -29,7 +29,7 @@ make.sh <- function(dat, mode = 1) {
   }
 }
 ##  make sid (staggered interaction data)
-make.sid <- function(dat, order.by.range = TRUE, delta = NULL) {
+make.sid <- function(dat, order.by.range = TRUE, delta = NULL, papply = mclapply) {
   ## coerce to data frame format
   if (!is.data.frame(dat)) {
     dat <- data.frame(dat)
@@ -125,8 +125,14 @@ make.sid <- function(dat, order.by.range = TRUE, delta = NULL) {
   ##    all factors at this point have <= 2 unique values (whether they are dummy anova or numerical)
   intdat <- staggerdat
   if (numvar > 1) {##interactions do not apply if only one variable is supplied - maybe add this as a failure check?
+    ## resolve papply
+    papply <- .resolve_papply(
+      papply,
+      cores = getOption("mc.cores", 1L),
+      envir = environment()
+    )
     ##SID interaction names mapped back to original names
-    ##we do this first inside of an lapply and not in next mclapply
+    ##we do this first inside of an lapply and not in next loop
     counter <- numvar
     lapply(1:(numvar-1), function(i) {
       for (j in (i + 1):numvar) {
@@ -139,7 +145,7 @@ make.sid <- function(dat, order.by.range = TRUE, delta = NULL) {
     })
     ## suggested by Alex M. 02/19/2019
     ## make interaction matrix after creating interactions - faster on big p
-    ints <- mclapply(1:(numvar - 1), function(i) {
+    ints <- papply(1:(numvar - 1), function(i) {
       d <- data.frame(rep(NA, dim(dat)[1]))
       d <- d[, -1]
       counter.ints <- 1

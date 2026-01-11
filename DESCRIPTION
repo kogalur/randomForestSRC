@@ -1,6 +1,6 @@
 Package: randomForestSRC
-Version: 3.4.5
-Date: 2025-11-26
+Version: 3.5.0
+Date: 2026-01-11
 Title: Fast Unified Random Forests for Survival, Regression, and Classification (RF-SRC)
 Authors@R: c(person("Hemant", "Ishwaran", email = "hemant.ishwaran@gmail.com", role = "aut"),
     person("Udaya B.", "Kogalur", email = "ubk@kogalur.com", role = c("aut", "cre")))
@@ -9,7 +9,7 @@ Maintainer: Udaya B. Kogalur <ubk@kogalur.com>
 BugReports: https://github.com/kogalur/randomForestSRC/issues/
 Depends: R (>= 4.3.0),
 Imports: parallel, data.tree, DiagrammeR
-Suggests: survival, pec, prodlim, mlbench, interp, caret, imbalance, cluster, fst, data.table
+Suggests: survival, pec, prodlim, mlbench, interp, caret, cluster, fst, data.table
 Description: Fast OpenMP parallel computing of Breiman's random forests for univariate, multivariate, unsupervised, survival, competing risks, class imbalanced classification and quantile regression. New Mahalanobis splitting for correlated outcomes.  Extreme random forests and randomized splitting.  Suite of imputation methods for missing data.  Fast random forests using subsampling. Confidence regions and standard errors for variable importance. New improved holdout importance. Case-specific importance.  Minimal depth variable importance. Visualize trees on your Safari or Google Chrome browser. Anonymous random forests for data privacy.
 License: GPL (>=3)
 URL: https://www.randomforestsrc.org/ https://ishwaran.org/

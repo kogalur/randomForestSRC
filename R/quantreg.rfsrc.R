@@ -267,18 +267,36 @@ quantreg.rfsrc <- function(formula, data, object, newdata,
       }
       ## extract unique y values
       yunq <- sort(unique(y))
-      ## forest weight method, locally adjusts cdf using forest weights
-      if (method == "forest") {
-        cdf <- do.call(rbind, mclapply(1:nrow(object$forest.wt), function(i) {
-          ind.matx <- do.call(rbind, lapply(yunq, function(yy) {res <= (yy - yhat[i])}))
-          c(ind.matx %*% object$forest.wt[i, ])
-        }))
+      ## trim atoms for density/cdf (useful for big data otherwise O(n^2) memory)
+      if (length(yunq) > maxn) {
+        yunq <- yunq[unique(round(seq(1, length(yunq), length.out = maxn)))]
       }
-      else {
+      ## fast CDF construction
+      ## ------------------------------------------------------------
+      if (method == "forest") {
+        ord <- order(res)
+        res_sorted <- res[ord]
+        n_res <- length(res_sorted)
+        n_pred <- length(yhat)
+        K <- length(yunq)
+        cdf <- matrix(0, nrow = n_pred, ncol = K)
+        cw0 <- numeric(n_res + 1L)
+        for (i in seq_len(n_pred)) {
+          cw0[-1L] <- cumsum(object$forest.wt[i, ord])
+          pos <- findInterval(yunq - yhat[i], res_sorted)
+          cdf[i, ] <- cw0[pos + 1L]
+        }
+      } else {
         ## locally adjusted cdf 
-        cdf <- do.call(rbind, mclapply(1:length(yhat), function(i) {
-          sapply(yunq, function(yy) {mean(res <= (yy - yhat[i]))})
-        }))
+        res_sorted <- sort(res)
+        n_res <- length(res_sorted)
+        n_pred <- length(yhat)
+        K <- length(yunq)
+        cdf <- matrix(0, nrow = n_pred, ncol = K)
+        for (i in seq_len(n_pred)) {
+          pos <- findInterval(yunq - yhat[i], res_sorted)
+          cdf[i, ] <- pos / n_res
+        }
       }
       ## quantiles
       quant <- t(apply(cdf, 1, function(pr) {

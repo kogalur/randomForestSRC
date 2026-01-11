@@ -106,60 +106,143 @@ get.confusion <- function(y, class.or.prob) {
   class.error <- 1 - diag(confusion) / rowSums(confusion, na.rm = TRUE)
   cbind(confusion, class.error = round(class.error, 4))
 }
-## cindex
-get.cindex <- function (time, censoring, predicted, do.trace = FALSE) {
+## cindex - extended to CR + uno/fenwick
+get.cindex <- function(time, censoring, predicted, weight, fast, do.trace = FALSE) {
   size <- length(time)
-  if (size != length(time) |
-      size != length(censoring) |
-      size != length(predicted)) {
+  if (size != length(censoring)) {
     stop("time, censoring, and predicted must have the same length")
   }
-  miss <- is.na(time) | is.na(censoring) | is.na(predicted)
-  nmiss <- sum(miss)
-  if (nmiss == size) {
+  ## determine competing risks (CR) vs right-censoring
+  isCR <- any(censoring > 1, na.rm = TRUE)
+  ## weight is optional
+  if (missing(weight)) {
+    weight <- NULL
+  } else {
+    if (length(weight) != size) {
+      stop("weight must have the same length as time")
+    }
+  }
+  ## fast switch is dynamic - now set by the native library
+  if (missing(fast)) {
+    fast <- -1
+  }
+  ## -----------------------------
+  ## Right-censoring
+  ## -----------------------------
+  if (!isCR) {
+    ## accept predicted as a vector or a 1-column matrix/data.frame
+    if (is.matrix(predicted) || is.data.frame(predicted)) {
+      if (NROW(predicted) != size) {
+        stop("predicted must have the same length as time")
+      }
+      if (NCOL(predicted) != 1) {
+        stop("predicted must be a vector for right-censoring")
+      }
+      predicted <- predicted[, 1]
+    }
+    if (length(predicted) != size) {
+      stop("time, censoring, and predicted must have the same length")
+    }
+    miss <- is.na(time) | is.na(censoring) | is.na(predicted)
+    if (!is.null(weight)) {
+      miss <- miss | is.na(weight)
+    }
+    if (sum(miss) == size) {
+      stop("no valid pairs found, too much missing data")
+    }
+    ## Flag missing members so we can exclude them in the pairs.
+    denom <- as.double(!miss)
+    nativeOutput <- .Call("rfsrcCIndex",
+                          as.integer(do.trace),
+                          as.integer(fast),
+                          as.integer(size),
+                          as.double(time),
+                          as.double(censoring),
+                          as.double(predicted),
+                          as.double(denom),
+                          if (is.null(weight)) NULL else as.double(weight))
+    if (is.null(nativeOutput)) {
+      stop("An error has occurred in rfsrcCIndex.  Please turn trace on for further analysis.")
+    }
+    return(nativeOutput$err)
+  }
+  ## -----------------------------
+  ## Competing Risks (CR path)
+  ## -----------------------------
+  ## Convert predicted into an n x J matrix (one column per event type).
+  ## Allow: matrix/data.frame, or list of J vectors.
+  baseMiss <- is.na(time) | is.na(censoring)
+  if (!is.null(weight)) {
+    baseMiss <- baseMiss | is.na(weight)
+  }
+  if (all(baseMiss)) {
     stop("no valid pairs found, too much missing data")
   }
-  ## Flag missing members so we can exclude them in the pairs.
-  denom <- sapply(miss, function(x) if (x) 0 else 1)
-  nativeOutput <- .Call("rfsrcCIndex",
-                        as.integer(do.trace),
-                        as.integer(size),
-                        as.double(time),
-                        as.double(censoring),
-                        as.double(predicted),
-                        as.double(denom))
-  ## check for error return condition in the native code
-  if (is.null(nativeOutput)) {
-    stop("An error has occurred in rfsrcCIndex.  Please turn trace on for further analysis.")
+  J <- max(censoring[!baseMiss], na.rm = TRUE)
+  if (is.matrix(predicted) || is.data.frame(predicted)) {
+    predMat <- as.matrix(predicted)
+  } else if (is.list(predicted) && is.null(dim(predicted))) {
+    if (length(predicted) < J) {
+      stop("for competing risks, predicted must have at least J event-specific prediction vectors")
+    }
+    predMat <- do.call(cbind, lapply(predicted[1:J], as.double))
+  } else {
+    stop("for competing risks, predicted must be a matrix/data.frame with one column per event type, or a list of event-specific prediction vectors")
   }
-  return (nativeOutput$err)
-}
-get.cindex.new <- function (time, censoring, predicted, do.trace = FALSE) {
-  size <- length(time)
-  if (size != length(time) |
-      size != length(censoring) |
-      size != length(predicted)) {
-    stop("time, censoring, and predicted must have the same length")
+  if (NROW(predMat) != size) {
+    stop("for competing risks, predicted must have nrow == length(time)")
   }
-  miss <- is.na(time) | is.na(censoring) | is.na(predicted)
-  nmiss <- sum(miss)
-  if (nmiss == size) {
-    stop("no valid pairs found, too much missing data")
+  if (NCOL(predMat) < J) {
+    stop("for competing risks, predicted must have at least one column per event type")
   }
-  ## Flag missing members so we can exclude them in the pairs.
-  denom <- sapply(miss, function(x) if (x) 0 else 1)
-  nativeOutput <- .Call("rfsrcCIndexNew",
-                        as.integer(do.trace),
-                        as.integer(size),
-                        as.double(time),
-                        as.double(censoring),
-                        as.double(predicted),
-                        as.double(denom))
-  ## check for error return condition in the native code
-  if (is.null(nativeOutput)) {
-    stop("An error has occurred in rfsrcCIndex.  Please turn trace on for further analysis.")
+  predMat <- predMat[, seq_len(J), drop = FALSE]
+  err <- rep(NA_real_, J)
+  ## (A) CR + weights: IPCW Fenwick, event-by-event
+  if (!is.null(weight)) {
+    for (j in seq_len(J)) {
+      miss.j <- baseMiss | is.na(predMat[, j])
+      denom.j <- as.double(!miss.j)
+      nativeOutput <- .Call("rfsrcCIndexFenwick",
+                            as.integer(do.trace),
+                            as.integer(j),
+                            as.integer(size),
+                            as.double(time),
+                            as.double(censoring),
+                            as.double(predMat[, j]),
+                            as.double(denom.j),
+                            as.double(weight))
+      if (is.null(nativeOutput)) {
+        stop("An error has occurred in rfsrcCIndexFenwick.  Please turn trace on for further analysis.")
+      }
+      err[j] <- nativeOutput$err
+    }
+    return(err)
   }
-  return (nativeOutput$err)
+  ## (B) CR + no weights: legacy conditional approach
+  ##     subset to {0, j} and call right-censored concordance
+  for (j in seq_len(J)) {
+    keep <- !baseMiss & !is.na(predMat[, j])
+    idx  <- which(keep & (censoring == 0 | censoring == j))
+    if (length(idx) < 2) {
+      err[j] <- NA_real_
+      next
+    }
+    denom.sub <- rep(1, length(idx))
+    nativeOutput <- .Call("rfsrcCIndex",
+                          as.integer(do.trace),
+                          as.integer(fast),  
+                          as.integer(length(idx)),
+                          as.double(time[idx]),
+                          as.double(censoring[idx]),      # values are 0 or j (j>0 => event)
+                          as.double(predMat[idx, j]),
+                          as.double(denom.sub),
+                          NULL)
+    if (is.null(nativeOutput)) {
+      stop("An error has occurred in rfsrcCIndex.  Please turn trace on for further analysis.")
+    }
+    err[j] <- nativeOutput$err
+  }
+  return(err)
 }
 ## gmean rule
 get.gmean.rule <- function(y, prob) {

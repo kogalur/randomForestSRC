@@ -204,6 +204,7 @@ uint    **RF_rLevels;
 uint      RF_ytry;
 double    RF_wibsTau;
 double   **RF_qStarPlus;
+double    *RF_unoWeight;
 double    RF_vimpThreshold;
 uint      RF_fobservationSize;
 uint      RF_frSize;

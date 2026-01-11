@@ -27,6 +27,19 @@ Ishwaran, 2017).
 \strong{Highlighted updates:}
 
 \enumerate{
+  
+  \item For survival and competing risk analysis, concordance-based
+  performance is now computed using Uno inverse-probability-of-censoring
+  weighting (Uno et al. 2001). This affects all survival performance
+  values derived from the concordance index, including out-of-bag and
+  test error rates and variable importance (VIMP). To revert to
+  unweighted Harrell concordance, set \code{use.uno = FALSE} when
+  fitting a survival forest.  Concordance calculations now use an
+  efficient \eqn{O(n \log n)} algorithm based on a binary indexed tree
+  (Fenwick 1994, Therneau 2024), replacing the naive \eqn{O(n^2)}
+  pairwise computation for large \eqn{n}.
+
+  
   \item For variable selection, we recommend using \pkg{VarPro}, an R
   package for model-independent variable selection using rule-based
   variable priority. It supports regression, classification, survival
@@ -66,7 +79,7 @@ rfsrc(formula, data, ntree = 500,
   xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt  = NULL,
   case.depth = FALSE,
   forest = TRUE,
-  save.memory = FALSE,
+  use.uno = TRUE, save.memory = FALSE,
   var.used = c(FALSE, "all.trees", "by.tree"),
   split.depth = c(FALSE, "all.trees", "by.tree"),
   seed = NULL,
@@ -139,6 +152,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
   \item{case.depth}{Return matrix recording depth of first split for each case? Default is \code{FALSE}.}
 
   \item{forest}{Save forest object for future prediction? Set \code{FALSE} if prediction is not needed.}
+
+  \item{use.uno}{Logical.  If \code{TRUE} (default for survival), concordance-based performance is computed using inverse-probability-of-censoring weights as
+  proposed by Uno et al. (2011). This affects all survival performance values derived from the C-index, including error rates (C-error) and variable
+  importance (VIMP). Set \code{use.uno = FALSE} to use the unweighted Harrell concordance. Applies only to survival families.}
 
   \item{save.memory}{Reduce memory usage by avoiding storage of prediction quantities. Recommended for large survival or competing risk forests.}
 
@@ -382,7 +399,10 @@ Values returned by the forest depend on the family:
   Dietterich, T. G. (2000). An experimental comparison of three methods for
   constructing ensembles of decision trees: bagging, boosting, and randomization.
   \emph{Machine Learning}, 40, 139-157.
-  
+
+  Fenwick, P.M. (1994).  A new data structure for cumulative frequency
+  tables.  \emph{Software: Practice and Experience}, 24(3):327--336.
+
   Gray R.J. (1988).  A class of k-sample tests for comparing the
   cumulative incidence of a competing risk, \emph{Ann. Statist.},
   16: 1141-1154.
@@ -467,6 +487,13 @@ Values returned by the forest depend on the family:
   
   Tang F. and Ishwaran H. (2017).  Random forest missing data
   algorithms.  \emph{Statistical Analysis and Data Mining}, 10:363-377.
+
+  Therneau, T.M. (2024).  Concordance.  Vignette in the \pkg{survival} R
+  package.
+  
+  Uno, H., Cai, T., Pencina, M.J., D'Agostino, Ralph B. and Wei, L-J. (2011).
+  On the C-statistics for evaluating overall adequacy of risk prediction procedures with censored survival data.
+  \emph{Statistics in Medicine}, 30:1105-1117.
 
   Zhang H., Zimmerman J., Nettleton D. and Nordman D.J. (2019).  Random
   forest prediction intervals. \emph{The American Statistician}. 4:1-5.
@@ -690,18 +717,23 @@ if (library("survival", logical.return = TRUE)
   plot(prederror.pbc)
 
   ## compute out-of-bag C-error for cox regression and compare to rfsrc
+  ## use uno weights throughout
   rfsrc.obj <- rfsrc(surv.f, pbc.na)
+  uno.wt <- rfsrc.obj$forest$uno.weights$weight
   cat("out-of-bag Cox Analysis ...", "\n")
   cox.err <- sapply(1:100, function(b) {
     if (b\%\%10 == 0) cat("cox bootstrap:", b, "\n")
     train <- sample(1:nrow(pbc.na), nrow(pbc.na), replace = TRUE)
     cox.obj <- tryCatch({coxph(surv.f, pbc.na[train, ])}, error=function(ex){NULL})
     if (!is.null(cox.obj)) {
-      get.cindex(pbc.na$days[-train], pbc.na$status[-train], predict(cox.obj, pbc.na[-train, ]))
+      get.cindex(pbc.na$days[-train],
+                 pbc.na$status[-train],
+                 predict(cox.obj, pbc.na[-train, ]),
+                 weight=uno.wt[-train])
     } else NA
   })
-  cat("\n\tOOB error rates\n\n")
-  cat("\tRSF            : ", rfsrc.obj$err.rate[rfsrc.obj$ntree], "\n")
+  cat("\n\tOOB error rates (with Uno-IPCW):\n")
+  cat("\tRSF            : ", get.mv.error(rfsrc.obj), "\n")
   cat("\tCox regression : ", mean(cox.err, na.rm = TRUE), "\n")
 }
 

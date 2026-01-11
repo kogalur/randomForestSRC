@@ -152,7 +152,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("3.4.5", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("3.5.0", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
@@ -252,6 +252,15 @@ generic.predict.rfsrc <-
   ## thus, this is not yet well-defined in [S] settings.
   if (grepl("surv", family)) {
     ptn.count <- 0
+  }
+  ## by default: uno.weights are NULL; use.uno set by training object 
+  uno.weights.test <- NULL
+  use.uno <- !is.null(object$uno.weights)
+  if (!is.null(user.option$use.uno) && isFALSE(user.option$use.uno)) {
+    use.uno <- FALSE
+  }
+  if (!is.null(user.option$use.uno) && isTRUE(user.option$use.uno)) {
+    use.uno <- TRUE
   }
   ## ----------------------------------------------------------------
   ## From the native code's perspective, PRED mode can process one
@@ -363,8 +372,20 @@ generic.predict.rfsrc <-
           length(setdiff(na.omit(event.info.newdata$cens), na.omit(event.info$cens))) > 1) {
         stop("survival events in test data do not match training data")
       }
+      ## uno weights
+      if (!is.null(object$uno.weights) && isTRUE(use.uno)) {
+        uno.weights.test <- uno.prepare.test(yvar.newdata[, 1],
+                                             yvar.newdata[, 2],
+                                             object$uno.weights$fit)$weight
+      }      
+      if (is.null(object$uno.weights) && isTRUE(use.uno)) {
+        uno.weights.fit <- get.uno.weights.train(object$event.info$time, object$event.info$cens)$fit
+        uno.weights.test <- uno.prepare.test(yvar.newdata[, 1],
+                                             yvar.newdata[, 2],
+                                             uno.weights.fit)$weight
+      }      
     }
-      else {
+    else {
         ## Disallow outcome=TEST without y-outcomes
         if (outcome == "test") {
           stop("outcome=TEST, but the test data has no y values, which is not permitted")
@@ -374,7 +395,7 @@ generic.predict.rfsrc <-
         yvar.newdata <-  NULL
         perf.type <- "none"
         importance <- "none"
-      }
+    }
     ## Remove xvar row and column names for proper processing by the native library
     ## does not apply when outcome = TEST because the xvar TEST data has been made NULL
     if (outcome != "test") {
@@ -408,7 +429,14 @@ generic.predict.rfsrc <-
     ## restore hidden parameters
     if (is.null(user.option$vimp.threshold)) {
       vimp.threshold <- object$vimp.threshold 
-    }      
+    }
+    ## uno weights -- assign training weights
+    if (!is.null(object$uno.weights) && isTRUE(use.uno)) {
+        uno.weights.test <- object$uno.weights$weight
+    }
+    if (is.null(object$uno.weights) && isTRUE(use.uno)) {
+      uno.weights.test <- get.uno.weights.train(object$event.info$time, object$event.info$cens)$weight
+    }
   } ## ends restore.mode check
   ## ------------------------------------------------------------
   ## We have completed the restore/non-restore mode processing
@@ -665,6 +693,7 @@ generic.predict.rfsrc <-
                                        if (is.null(prob.assign$prob)) NULL else as.double(prob.assign$prob),
                                        if (is.null(prob.assign$prob.epsilon)) as.double(0) else as.double(prob.assign$prob.epsilon)),
                                   as.integer(get.tree),
+                                  if (is.null(uno.weights.test)) NULL else as.double(uno.weights.test),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -868,6 +897,7 @@ generic.predict.rfsrc <-
     splitrule = splitrule,
     inbag = inbag.out,
     var.used = var.used.out,
+    uno.weights = uno.weights.test,
     imputed.indv = (if (n.miss>0) imputed.indv else NULL),
     imputed.data = (if (n.miss>0) imputed.data else NULL),
     split.depth  = split.depth.out,

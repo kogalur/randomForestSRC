@@ -25,46 +25,92 @@
 
   \item{ntree}{Number of trees to grow.}
 
-  \item{method}{Method used to fit the classifier. The default is \code{"rfq"}, which implements the random forest quantile classifier (RFQ) of O'Brien and Ishwaran (2017). The option \code{"brf"} applies the balanced random forest (BRF) approach of Chen et al. (2004), which undersamples the majority class to match the minority class size. The option \code{"standard"} performs a standard random forest analysis.}
+  \item{method}{Method used to fit the classifier. The default is
+  \code{"rfq"}, which implements the random forest quantile classifier
+  (RFQ) of O'Brien and Ishwaran (2017). The option \code{"brf"} applies
+  the balanced random forest (BRF) approach of Chen et al. (2004), which
+  undersamples the majority class to match the minority class size. The
+  option \code{"standard"} performs a standard random forest analysis.}
 
-  \item{splitrule}{Splitting rule used to grow trees. The default is \code{"auc"}, which optimizes G-mean performance. Other supported options are \code{"gini"} and \code{"entropy"}.}
 
-  \item{perf.type}{Performance metric used for evaluating the classifier and computing downstream quantities such as VIMP. Defaults depend on the method: \code{"gmean"} for RFQ and BRF; \code{"misclass"} (misclassification error) for standard random forests. Users may override this by specifying \code{"gmean"}, \code{"misclass"}, or \code{"brier"} (normalized Brier score). See examples for usage.}
+  \item{splitrule}{Splitting rule used to grow trees. The default is
+  \code{"auc"}, which optimizes G-mean performance. Other supported
+  options are \code{"gini"} and \code{"entropy"}.}
 
-  \item{block.size}{Controls how the cumulative error rate is computed. If \code{NULL}, it is calculated only once for the final tree. If set to an integer, cumulative error and VIMP are computed in blocks of that size. If unspecified, uses the default in \code{\link{rfsrc}}.}
 
-  \item{fast}{Logical. If \code{TRUE}, uses the fast random forest implementation via \code{\link{rfsrc.fast}} instead of \code{rfsrc}. Improves speed at the cost of accuracy. Applies only to RFQ.}
+  \item{perf.type}{Performance metric used for evaluating the classifier
+  and computing downstream quantities such as VIMP. Defaults depend on
+  the method: \code{"gmean"} for RFQ and BRF; \code{"misclass"}
+  (misclassification error) for standard random forests. Users may
+  override this by specifying \code{"gmean"}, \code{"misclass"}, or
+  \code{"brier"} (normalized Brier score). See examples for usage.}
 
-  \item{ratio}{Optional and experimental. Specifies the proportion (between 0 and 1) of majority class cases to sample during RFQ training. Sampling is without replacement. Ignored for BRF.}
 
-  \item{...}{Additional arguments passed to \code{\link{rfsrc}} to control random forest behavior.}
+  \item{block.size}{Controls how the cumulative error rate is
+  computed. If \code{NULL}, it is calculated only once for the final
+  tree. If set to an integer, cumulative error and VIMP are computed in
+  blocks of that size. If unspecified, uses the default in
+  \code{\link{rfsrc}}.}
+
+
+  \item{fast}{Logical. If \code{TRUE}, uses the fast random forest
+  implementation via \code{\link{rfsrc.fast}} instead of
+  \code{rfsrc}. Improves speed at the cost of accuracy. Applies only to
+  RFQ.}
+
+
+  \item{ratio}{Optional and experimental. Specifies the proportion
+  (between 0 and 1) of majority class cases to sample during RFQ
+  training. Sampling is without replacement. Ignored for BRF.}
+
+  
+  \item{...}{Additional arguments passed to \code{\link{rfsrc}} to
+    control random forest behavior.}
+  
 
 }
 
 \details{
 
-Imbalanced data, also known as the minority class problem, refers to two-class classification settings where the majority class significantly outnumbers the minority class. This function supports two approaches to address class imbalance:
+Imbalanced data, also known as the minority class problem, refers to
+two-class classification settings where the majority class significantly
+outnumbers the minority class. This function supports two approaches to
+address class imbalance:
+
 
 \itemize{
   \item The random forests quantile classifier (RFQ) proposed by O'Brien and Ishwaran (2017).
   \item The balanced random forest (BRF) undersampling method of Chen et al. (2004).
 }
 
-By default, the performance metric used is the G-mean (Kubat et al., 1997), which balances sensitivity and specificity.
+By default, the performance metric used is the G-mean (Kubat et al.,
+1997), which balances sensitivity and specificity.
 
-\strong{Handling of missing values:} Missing data are not supported for BRF or when the \code{ratio} option is specified. In these cases, records with missing values are removed prior to analysis.
 
-\strong{Variable importance:} Permutation-based VIMP is used by default in this setting, in contrast to anti-VIMP which is the default for other families. Empirical results suggest that permutation VIMP is more reliable in highly imbalanced settings.
+\strong{Handling of missing values:} Missing data are not supported for
+BRF or when the \code{ratio} option is specified. In these cases,
+records with missing values are removed prior to analysis.
+
+
+\strong{Variable importance:} Permutation-based VIMP is used by default
+in this setting, in contrast to anti-VIMP which is the default for other
+families. Empirical results suggest that permutation VIMP is more
+reliable in highly imbalanced settings.
+
 
 \strong{Tree count recommendation:} We recommend using a relatively
 large value for \code{ntree} in imbalanced problems to ensure stable
 performance estimation, especially for G-mean. As a general guideline,
 use at least five times the usual number of trees.
 
-\strong{Performance metrics:} A helper function, \code{\link{get.imbalanced.performance}}, is provided for extracting classification performance summaries. The metric names are self-explanatory in most cases. Some key metrics include:
+\strong{Performance metrics:} A helper function,
+\code{\link{get.imbalanced.performance}}, is provided for extracting
+classification performance summaries. The metric names are
+self-explanatory in most cases. Some key metrics include:
 \itemize{
   \item \code{F1}: The harmonic mean of precision and recall.
-  \item \code{F1mod}: The harmonic mean of sensitivity, specificity, precision, and negative predictive value.
+  \item \code{F1mod}: The harmonic mean of sensitivity, specificity,
+  precision, and negative predictive value.
   \item \code{F1gmean}: The average of F1 and G-mean.
   \item \code{F1modgmean}: The average of F1mod and G-mean.
 }
@@ -211,50 +257,6 @@ if (library("caret", logical.return = TRUE)) {
  
 } 
 
-##----------------------------------------------------------------
-##  illustrates RFQ with and without SMOTE
-## 
-## - simulation example using the caret R-package
-## - creates imbalanced data by randomly sampling the class 1 data
-## - use SMOTE from "imbalance" package to oversample the minority
-## 
-##----------------------------------------------------------------
-
-if (library("caret", logical.return = TRUE) &
-    library("imbalance", logical.return = TRUE)) {
-
-  ## experimental settings
-  n <- 5000
-  q <- 20
-  ir <- 6
-  f <- as.formula(Class ~ .)
- 
-  ## simulate the data, create minority class data
-  d <- twoClassSim(n, linearVars = 15, noiseVars = q)
-  d$Class <- factor(as.numeric(d$Class) - 1)
-  idx.0 <- which(d$Class == 0)
-  idx.1 <- sample(which(d$Class == 1), sum(d$Class == 1) / ir , replace = FALSE)
-  d <- d[c(idx.0,idx.1),, drop = FALSE]
-  d <- d[sample(1:nrow(d)), ]
-
-  ## define train/test split
-  trn <- sample(1:nrow(d), size = nrow(d) / 2, replace = FALSE)
-
-  ## now make SMOTE training data
-  newd.50 <- mwmote(d[trn, ], numInstances = 50, classAttr = "Class")
-  newd.500 <- mwmote(d[trn, ], numInstances = 500, classAttr = "Class")
-
-  ## fit RFQ with and without SMOTE
-  o.with.50 <- imbalanced(f, rbind(d[trn, ], newd.50)) 
-  o.with.500 <- imbalanced(f, rbind(d[trn, ], newd.500))
-  o.without <- imbalanced(f, d[trn, ])
-  
-  ## compare performance on test data
-  print(predict(o.with.50, d[-trn, ]))
-  print(predict(o.with.500, d[-trn, ]))
-  print(predict(o.without, d[-trn, ]))
-  
-}
 
 ##----------------------------------------------------------------
 ##

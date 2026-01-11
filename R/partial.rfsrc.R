@@ -264,6 +264,7 @@ partial.rfsrc <- function(
                                        NULL,
                                        as.double(0)), ## Quantiles disabled.
                                   as.integer(get.tree),
+                                  NULL,
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})

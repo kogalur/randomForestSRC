@@ -409,3 +409,243 @@ get.brier.survival <- function(o, subset, cens.model = c("km", "rfsrc"), papply 
        surv.aalen = surv.aalen,
        surv.ensb = surv.ensb)
 }
+## ------------------------------------------------------------
+## Uno weights
+## - training mode: KM or OOB KM
+## - test mode: works generically
+## - censors happen after deaths at tied times
+## ------------------------------------------------------------
+## fit censoring KM on training outcomes only
+km_censor_fit <- function(time, status) {
+  stopifnot(length(time) == length(status))
+  ok <- !is.na(time) & !is.na(status)
+  time   <- as.numeric(time[ok])
+  status <- as.integer(status[ok])
+  n <- length(time)
+  if (n == 0L) stop("No non-missing training outcomes.")
+  ord <- order(time)
+  t <- time[ord]
+  s <- status[ord]
+  times <- numeric(n)
+  G     <- numeric(n)
+  surv   <- 1.0
+  n_risk <- n
+  k <- 0L
+  i <- 1L
+  while (i <= n) {
+    ti <- t[i]
+    j <- i
+    d_death <- 0L
+    d_cens  <- 0L
+    while (j <= n && t[j] == ti) {
+      if (s[j] == 1L) d_death <- d_death + 1L else d_cens <- d_cens + 1L
+      j <- j + 1L
+    }
+    ## Update censoring survival AFTER removing deaths at this time
+    n_after_death <- n_risk - d_death
+    if (d_cens > 0L) {
+      if (n_after_death <= 0L) {
+        surv <- 0.0
+      } else {
+        surv <- surv * (1 - d_cens / n_after_death)
+      }
+    }
+    k <- k + 1L
+    times[k] <- ti
+    G[k]     <- surv
+    n_risk <- n_risk - (d_death + d_cens)
+    i <- j
+  }
+  list(time = times[1L:k], G = G[1L:k])
+}
+## Generic left-limit step evaluation: returns Ghat(t-)
+## for arbitrary t_new using knots/time_knots and post-step values G.
+uno_Ghat_minus_predict <- function(time_knots, G, t_new) {
+  t_new <- as.numeric(t_new)
+  out <- rep(NA_real_, length(t_new))
+  ok <- !is.na(t_new)
+  if (!any(ok)) return(out)
+  if (length(time_knots) == 0L) {
+    out[ok] <- 1.0
+    return(out)
+  }
+  idx <- findInterval(t_new[ok], time_knots, left.open = TRUE)
+  out[ok] <- ifelse(idx == 0L, 1.0, G[idx])
+  out
+}
+## Effective sample size of positive weights
+uno_ess <- function(w) {
+  w <- w[is.finite(w) & !is.na(w) & (w > 0)]
+  if (length(w) == 0L) return(NA_real_)
+  (sum(w)^2) / sum(w^2)
+}
+## Choose gmin automatically from training event-time Ghat(t-).
+##
+## Input:  G_event = vector of Ghat(t-) evaluated at event times only.
+## Output: list(gmin, ess_target, ess_kept, n_events, n_dropped, wmax_kept)
+##
+## Rule: drop the largest weights (smallest G) until ESS >= ess_target,
+## where ess_target = max(ess_min, ceil(ess_frac * n_events)).
+uno_choose_gmin_auto <- function(G_event,
+                                 eps = 1e-12,
+                                 ess_frac = 0.20,
+                                 ess_min  = 20L) {
+  g <- as.numeric(G_event)
+  g <- g[is.finite(g) & !is.na(g)]
+  d <- length(g)
+  if (d <= 1L) {
+    return(list(gmin = 0.0, ess_target = NA_real_, ess_kept = NA_real_,
+                n_events = d, n_dropped = 0L, wmax_kept = NA_real_))
+  }
+  ## If essentially no censoring (G ~ 1), no trimming needed
+  if (min(g) >= 1 - 1e-12) {
+    return(list(gmin = 0.0, ess_target = d, ess_kept = d,
+                n_events = d, n_dropped = 0L, wmax_kept = 1.0))
+  }
+  ## weights are monotone in g: smaller g => larger weight
+  g_sorted <- sort(g)                       # ascending g
+  w_desc   <- 1.0 / pmax(g_sorted, eps)^2   # descending weights
+  ## prefix sums (with leading 0)
+  p1 <- c(0.0, cumsum(w_desc))
+  p2 <- c(0.0, cumsum(w_desc * w_desc))
+  ess_target <- max(as.integer(ess_min), as.integer(ceiling(ess_frac * d)))
+  ess_target <- min(ess_target, d)
+  ## drop k largest weights; must keep at least ess_target events
+  best_k <- 0L
+  best_ess <- NA_real_
+  for (k in 0L:(d - ess_target)) {
+    sum_w  <- p1[d + 1L] - p1[k + 1L]
+    sum_w2 <- p2[d + 1L] - p2[k + 1L]
+    ess_k  <- if (sum_w2 > 0) (sum_w * sum_w) / sum_w2 else NA_real_
+    if (is.finite(ess_k) && (ess_k >= ess_target)) {
+      best_k <- k
+      best_ess <- ess_k
+      break
+    }
+  }
+  ## If never hit the target (rare), keep only ess_target events
+  if (!is.finite(best_ess)) {
+    best_k <- d - ess_target
+    sum_w  <- p1[d + 1L] - p1[best_k + 1L]
+    sum_w2 <- p2[d + 1L] - p2[best_k + 1L]
+    best_ess <- if (sum_w2 > 0) (sum_w * sum_w) / sum_w2 else NA_real_
+  }
+  gmin <- g_sorted[best_k + 1L]
+  wmax <- 1.0 / pmax(gmin, eps)^2
+  list(gmin = gmin,
+       ess_target = ess_target,
+       ess_kept = best_ess,
+       n_events = d,
+       n_dropped = best_k,
+       wmax_kept = wmax)
+}
+## Train-mode Uno weights
+get.uno.weights.train <- function(time, status,
+                                  gmin = "auto",
+                                  ess_frac = 0.20,
+                                  ess_min  = 20L,
+                                  eps = 1e-12,
+                                  eps_keep = .Machine$double.eps,
+                                  drop_if_G0 = FALSE,
+                                  return_fit = TRUE) {
+  stopifnot(length(time) == length(status))
+  ## Fit KM censoring curve on training outcomes
+  fit <- km_censor_fit(time, status)
+  ## Global Ghat(t-) used for gating and (also) weight magnitude
+  G_gate <- uno_Ghat_minus_predict(fit$time, fit$G, time)
+  ## Decide gmin (train-once)
+  if (is.character(gmin)) {
+    gmin <- match.arg(gmin, c("auto", "none"))
+    if (gmin == "none") {
+      gmin_used <- 0.0
+      ginfo <- list(gmin = 0.0)
+    } else {
+      ev <- !is.na(status) & (as.integer(status) == 1L) & !is.na(G_gate)
+      ginfo <- uno_choose_gmin_auto(G_gate[ev], eps = eps,
+                                    ess_frac = ess_frac, ess_min = ess_min)
+      gmin_used <- ginfo$gmin
+    }
+  } else {
+    gmin_used <- as.numeric(gmin)[1L]
+    if (!is.finite(gmin_used) || gmin_used < 0) gmin_used <- 0.0
+    ginfo <- list(gmin = gmin_used)
+  }
+  ## Missing => exclude (weight 0)
+  miss <- is.na(time) | is.na(status)
+  G_gate[miss] <- NA_real_
+  w <- rep(0.0, length(time))
+  ok <- !is.na(G_gate)
+  if (!drop_if_G0) {
+    ## keep-as-comparator always; event contribution trimmed by gmin
+    keep <- ok & (G_gate >= gmin_used)
+    drop <- ok & !keep
+    if (any(keep)) {
+      Gsafe <- pmax(G_gate[keep], eps)
+      w[keep] <- 1.0 / (Gsafe * Gsafe)
+    }
+    if (any(drop)) {
+      w[drop] <- eps_keep
+    }
+  } else {
+    ## trim additionally when G is essentially 0
+    keep <- ok & (G_gate >= gmin_used) & (G_gate > eps)
+    drop <- ok & !keep
+    if (any(keep)) {
+      Gsafe <- pmax(G_gate[keep], eps)
+      w[keep] <- 1.0 / (Gsafe * Gsafe)
+    }
+    if (any(drop)) {
+      w[drop] <- eps_keep
+    }
+  }
+  ## Store once; test will reuse automatically
+  fit$gmin      <- gmin_used
+  fit$eps_keep  <- eps_keep
+  fit$gmin_info <- ginfo
+  if (return_fit) {
+    return(list(weight = w,
+                Ghat_minus = G_gate,
+                fit = fit))
+  }
+  w
+}
+## Test-mode Uno weights
+get.uno.weights.test <- function(time_test, fit,
+                                 eps = 1e-12,
+                                 drop_if_G0 = FALSE) {
+  if (is.null(fit$time) || is.null(fit$G))
+    stop("fit must be a list with elements $time and $G")
+  gmin_used <- if (!is.null(fit$gmin) && is.finite(fit$gmin)) fit$gmin else 0.0
+  eps_keep  <- if (!is.null(fit$eps_keep) && is.finite(fit$eps_keep)) fit$eps_keep else .Machine$double.eps
+  G_gate <- uno_Ghat_minus_predict(fit$time, fit$G, time_test)
+  w <- rep(0.0, length(time_test))
+  ok <- !is.na(G_gate)
+  if (!drop_if_G0) {
+    keep <- ok & (G_gate >= gmin_used)
+  } else {
+    keep <- ok & (G_gate >= gmin_used) & (G_gate > eps)
+  }
+  drop <- ok & !keep
+  if (any(keep)) {
+    Gsafe <- pmax(G_gate[keep], eps)
+    w[keep] <- 1.0 / (Gsafe * Gsafe)
+  }
+  if (any(drop)) {
+    w[drop] <- eps_keep
+  }
+  w
+}
+## ------------------------------------------------------------
+## Convenience helper for test evaluation
+## ------------------------------------------------------------
+uno.prepare.test <- function(time_test, status_test, fit,
+                             eps = 1e-12, drop_if_G0 = FALSE) {
+  w <- get.uno.weights.test(time_test, fit, eps = eps, drop_if_G0 = drop_if_G0)
+  list(time = time_test, status = status_test, weight = w)
+}
+## ------------------------------------------------------------
+## Convenience one-liner: training weights only
+## ------------------------------------------------------------
+get.uno.weights <- function(time, status) {
+  get.uno.weights.train(time, status, return_fit = FALSE)
+}

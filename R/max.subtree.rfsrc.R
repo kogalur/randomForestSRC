@@ -40,6 +40,16 @@ max.subtree.rfsrc <- function(object,
   MAX.DEPTH <- 10000
   ## Count the number of trees in the forest.
   numTree <- length(as.vector(unique(nativeArray$treeID)))
+  ## Pre-compute the starting offset for each tree to avoid an O(N) scan per tree.
+  treeID <- nativeArray$treeID
+  if (is.factor(treeID)) {
+    treeID <- as.integer(as.character(treeID))
+  }
+  treeOffset <- match(1:numTree, treeID)
+  if (any(is.na(treeOffset))) {
+    ## Fallback for unexpected/non-consecutive tree IDs.
+    treeOffset <- sapply(1:numTree, function(b) min(which(treeID == b)))
+  }
   ## Count the number of parameters in the data set.
   numParm <- length(xvar.names)
   ## Determine the sample size of the data set.
@@ -120,11 +130,10 @@ max.subtree.rfsrc <- function(object,
   ## This is a LOCAL operation
   ## Global dependencies:  (xvar.names, forest)
   ##
-  ## It is inefficient to use a do-loop, therefore we use lapply
-  ## or mclapply.  Later we parse the list to extract the necessary
-  ## objects
+  ## It is inefficient to use a do-loop, therefore we use lapply.
+  ## Later we parse the list to extract the necessary objects
   ## --------------------------------------------------------------
-  subtree.obj <- mclapply(1:numTree, function(b) {
+  subtree.obj <- lapply(1:numTree, function(b) {
     ## Create the (local) subtree object for recursion.  This is NOT the
     ## output object, but is closely related to it.
     subtree <- vector("list", 8)
@@ -138,7 +147,7 @@ max.subtree.rfsrc <- function(object,
                         "nodesAtDepth")
     ## Create the recursive output object.  This would be unnecessary 
     ## if it was possible to declare global variables in a package.
-    recursiveObject <- list(offset = min(which(nativeArray$treeID == b)),
+    recursiveObject <- list(offset = treeOffset[b],
                             subtree = subtree,
                             diagnostic = 0,
                             diagnostic2 = 0)
@@ -224,19 +233,19 @@ max.subtree.rfsrc <- function(object,
         ## Add the result to the forest sum.
         subOrderSum <- recursiveObject$subtree$subOrder
       }
-        else {
-          subOrderSum <- NULL
-        }
+      else {
+        subOrderSum <- NULL
+      }
       ## Update the nodes at depth count.
       nodesAtDepthMatrix <- recursiveObject$subtree$nodesAtDepth
     }
-      else {
-        ## The tree is a stump.  It will be excluded.
-        stumpCnt <- 1
-        ## All other parameters are set to NULL
-        forestMeanSum <- orderTree <- subtreeCountSum <-
-          terminalDepth <- subOrderSum <- nodesAtDepthMatrix <- NULL
-      }
+    else {
+      ## The tree is a stump.  It will be excluded.
+      stumpCnt <- 1
+      ## All other parameters are set to NULL
+      forestMeanSum <- orderTree <- subtreeCountSum <-
+        terminalDepth <- subOrderSum <- nodesAtDepthMatrix <- NULL
+    }
     ## return the local subtree objects for parsing
     return(list(forestMeanSum = forestMeanSum,
                 orderTree = orderTree,
@@ -268,29 +277,54 @@ max.subtree.rfsrc <- function(object,
   ## Initialize the stump count
   stumpCnt <- 0
   ## iterate over trees
-  for (b in 1:numTree) {
-    local.obj <- subtree.obj[[b]]
-    ## assignments only apply when the tree is not a stump
-    if (local.obj$stumpCnt == 0) {
-      forestMeanSum <- forestMeanSum <- forestMeanSum + local.obj$forestMeanSum
-      if (max.order > 0) {
-        orderSum   <- orderSum + local.obj$orderTree
-        order.tree[ , b] <- local.obj$orderTree[, 1]
+  ## (avoid an explicit for-loop; use vapply/lapply/Reduce instead)
+  is.valid.tree <- vapply(subtree.obj, function(z) z$stumpCnt == 0, logical(1))
+  stumpCnt <- sum(!is.valid.tree)
+  ## Minimal depth by variable by tree (stumps remain NA)
+  if (max.order > 0) {
+    order.tree <- vapply(subtree.obj, function(z) {
+      if (z$stumpCnt == 0) {
+        z$orderTree[, 1]
+      } else {
+        rep(NA_real_, numParm)
       }
-        else {
-          order.tree[ , b] <- local.obj$orderTree
-        }
-      subtreeCountSum <- subtreeCountSum + local.obj$subtreeCountSum
-      terminalDepth[b] <- local.obj$terminalDepth
-      if (sub.order == TRUE) {
-        subOrderSum <- subOrderSum + local.obj$subOrderSum
+    }, numeric(numParm))
+  } else {
+    order.tree <- vapply(subtree.obj, function(z) {
+      if (z$stumpCnt == 0) {
+        as.vector(z$orderTree)
+      } else {
+        rep(NA_real_, numParm)
       }
-      nodesAtDepthMatrix[, b] <- local.obj$nodesAtDepthMatrix
+    }, numeric(numParm))
+  }
+  ## Update the nodes at depth count (stumps remain NA)
+  nodesAtDepthMatrix <- vapply(subtree.obj, function(z) {
+    if (z$stumpCnt == 0) {
+      z$nodesAtDepthMatrix
+    } else {
+      rep(NA_real_, MAX.DEPTH)
     }
-    ## the tree is a stump
-      else {
-        stumpCnt <- stumpCnt + 1
-      }
+  }, numeric(MAX.DEPTH))
+  ## Tree terminal node depth (stumps coded as 0)
+  terminalDepth <- vapply(subtree.obj, function(z) {
+    if (z$stumpCnt == 0) {
+      z$terminalDepth
+    } else {
+      0
+    }
+  }, numeric(1))
+  ## Aggregate sums over non-stump trees
+  valid.obj <- subtree.obj[is.valid.tree]
+  if (length(valid.obj) > 0) {
+    forestMeanSum <- Reduce(`+`, lapply(valid.obj, `[[`, "forestMeanSum"))
+    subtreeCountSum <- Reduce(`+`, lapply(valid.obj, `[[`, "subtreeCountSum"))
+    if (max.order > 0) {
+      orderSum <- Reduce(`+`, lapply(valid.obj, `[[`, "orderTree"))
+    }
+    if (sub.order == TRUE) {
+      subOrderSum <- Reduce(`+`, lapply(valid.obj, `[[`, "subOrderSum"))
+    }
   }
   ## ---------------------------------------------------------------------
   ## Output preparation  
@@ -352,10 +386,10 @@ max.subtree.rfsrc <- function(object,
       result$order <- orderSum / (numTree - stumpCnt)
       rownames(result$order) <- xvar.names
     }
-      else {
-        result$order <- minDepthVarTree
-        rownames(result$order) <- xvar.names
-      }
+    else {
+      result$order <- minDepthVarTree
+      rownames(result$order) <- xvar.names
+    }
     ## Determine the forest average subtree count.
     result$count <- subtreeCountSum / (numTree - stumpCnt)
     names(result$count) <- xvar.names
@@ -380,17 +414,17 @@ max.subtree.rfsrc <- function(object,
       result$second.order.threshold <- parseDepthOrderObj$second.order.moment
     }
   }
-    else {
-      parseDepthOrderObj <- parseDepthOrder(result, 0)
-      if (!is.null(parseDepthOrderObj)) {
-        threshold.con <- parseDepthOrder(result, 1)$first.moment
-        threshold.lib <- mean(parseDepthOrderObj$first.moment, na.rm = TRUE)
-        result$threshold <- ifelse(threshold.lib - 0.5 > threshold.con, threshold.lib - 0.5, threshold.lib)
-        result$threshold.1se <- result$threshold + mean(parseDepthOrderObj$sd, na.rm = TRUE) / sqrt(numSamp)    
-        result$density <- apply(parseDepthOrderObj$prob, 1, mean, na.rm = TRUE)
-        result$second.order.threshold <- mean(parseDepthOrderObj$second.order.moment, na.rm = TRUE)
-      }
+  else {
+    parseDepthOrderObj <- parseDepthOrder(result, 0)
+    if (!is.null(parseDepthOrderObj)) {
+      threshold.con <- parseDepthOrder(result, 1)$first.moment
+      threshold.lib <- mean(parseDepthOrderObj$first.moment, na.rm = TRUE)
+      result$threshold <- ifelse(threshold.lib - 0.5 > threshold.con, threshold.lib - 0.5, threshold.lib)
+      result$threshold.1se <- result$threshold + mean(parseDepthOrderObj$sd, na.rm = TRUE) / sqrt(numSamp)    
+      result$density <- apply(parseDepthOrderObj$prob, 1, mean, na.rm = TRUE)
+      result$second.order.threshold <- mean(parseDepthOrderObj$second.order.moment, na.rm = TRUE)
     }
+  }
   if (!is.null(result$density)) {
     names(result$density) <- paste(0:(length(result$density) - 1))
   }
@@ -398,14 +432,14 @@ max.subtree.rfsrc <- function(object,
   if (max.order > 0) {
     minDepthVar <- result$order[, 1]
   }
-    else {
-      if (!is.null(result$order)) {
-        minDepthVar <- apply(minDepthVarTree, 1, mean, na.rm = TRUE)
-      }
-        else {
-          minDepthVar <- NULL
-        }
+  else {
+    if (!is.null(result$order)) {
+      minDepthVar <- apply(minDepthVarTree, 1, mean, na.rm = TRUE)
     }
+    else {
+      minDepthVar <- NULL
+    }
+  }
   top.pt <- minDepthVar <= result$threshold
   top.pt[is.na(top.pt)] <- FALSE
   if (sum(top.pt) > 0) {
@@ -422,11 +456,11 @@ max.subtree.rfsrc <- function(object,
     if (conservative == TRUE) {
       result$percentile <- cdf[pmax(round(minDepthVar), 1)]      
     }
-      else {
-        result$percentile <- apply(rbind(sapply(1:ncol(minDepthVarTree), function(b) {
-          cdf[pmax(minDepthVarTree[, b], 1)]
-        })), 1, mean, na.rm = TRUE)
-      }
+    else {
+      result$percentile <- apply(rbind(sapply(1:ncol(minDepthVarTree), function(b) {
+        cdf[pmax(minDepthVarTree[, b], 1)]
+      })), 1, mean, na.rm = TRUE)
+    }
     names(result$percentile) <- xvar.names
   }
   ## discard values no longer needed
@@ -461,10 +495,10 @@ rfsrcParseTree <- function(recursiveObject,
         ## This is the first split at this depth, so initialize the nodes at depth count.
         recursiveObject$subtree$nodesAtDepth[distance] <- 1
       }
-        else {
-          ## Increment the count of nodes at this depth.
-          recursiveObject$subtree$nodesAtDepth[distance] <- recursiveObject$subtree$nodesAtDepth[distance] + 1
-        }
+      else {
+        ## Increment the count of nodes at this depth.
+        recursiveObject$subtree$nodesAtDepth[distance] <- recursiveObject$subtree$nodesAtDepth[distance] + 1
+      }
     }
   }
   ## Read the current nativeArray split parameter.
@@ -473,9 +507,9 @@ rfsrcParseTree <- function(recursiveObject,
   if (splitParameter == 0) {
     terminalFlag <- TRUE
   }
-    else if (splitParameter != 0) {
-      terminalFlag <- FALSE
-    }
+  else if (splitParameter != 0) {
+    terminalFlag <- FALSE
+  }
   if (!terminalFlag) {
     ## Update the maximal subtree information for the parameter if it
     ## has not already been encountered in the tree.
@@ -486,9 +520,9 @@ rfsrcParseTree <- function(recursiveObject,
       if (is.na(recursiveObject$subtree$meanSum[splitParameter])) {
         recursiveObject$subtree$meanSum[splitParameter] <- distance
       }
-        else {
-          recursiveObject$subtree$meanSum[splitParameter] <- recursiveObject$subtree$meanSum[splitParameter] + distance
-        }
+      else {
+        recursiveObject$subtree$meanSum[splitParameter] <- recursiveObject$subtree$meanSum[splitParameter] + distance
+      }
       if (max.order > 0) {
         ## Update distance encountered for the order statistic.
         ## The last element, NA, in the temporary vector is a filler to handle which.max() silliness. 
@@ -503,21 +537,21 @@ rfsrcParseTree <- function(recursiveObject,
         if (index <= max.order) {
           orderVector <- c(sortedVector, rep(NA, max.order-index))
         }
-          else {
-            orderVector <- sortedVector[1:max.order]
-          }
+        else {
+          orderVector <- sortedVector[1:max.order]
+        }
         ## Update the order statistic.
         recursiveObject$subtree$order[splitParameter, ] <- orderVector
       }
-        else {
-          ## Update the minimum distance encountered for the parameter.
-          if (is.na(recursiveObject$subtree$order[splitParameter])) {
-            recursiveObject$subtree$order[splitParameter] <- distance
-          }
-            else {
-              recursiveObject$subtree$order[splitParameter] <- min(recursiveObject$order[splitParameter], distance, na.rm = TRUE)
-            }
+      else {
+        ## Update the minimum distance encountered for the parameter.
+        if (is.na(recursiveObject$subtree$order[splitParameter])) {
+          recursiveObject$subtree$order[splitParameter] <- distance
         }
+        else {
+          recursiveObject$subtree$order[splitParameter] <- min(recursiveObject$order[splitParameter], distance, na.rm = TRUE)
+        }
+      }
       ## Indicate that the parameter has been split on.
       subtreeFlag[splitParameter] <- TRUE
       if (sub.order == TRUE) {
@@ -525,9 +559,9 @@ rfsrcParseTree <- function(recursiveObject,
         if (is.na(recursiveObject$subtree$subOrderDiag[splitParameter])) {
           recursiveObject$subtree$subOrderDiag[splitParameter] <- distance
         }
-          else {
-            recursiveObject$subtree$subOrderDiag[splitParameter] <- min(recursiveObject$subtree$subOrderDiag[splitParameter], distance, na.rm = TRUE)
-          }
+        else {
+          recursiveObject$subtree$subOrderDiag[splitParameter] <- min(recursiveObject$subtree$subOrderDiag[splitParameter], distance, na.rm = TRUE)
+        }
         ## Create the recursive2 list object.  Note that the relative depth starts at zero (0) for the subtree.  Also note
         ## that the object returns a vector containing the unnormalized minimum maximal w-subtree distance.  
         recursive2Object <- list(offset = recursiveObject$offset,
@@ -556,9 +590,9 @@ rfsrcParseTree <- function(recursiveObject,
       }  ## if (sub.order == TRUE) ...
     }  ## if (subtreeFlag[splitParameter] == FALSE) ...
   }  ## if (terminalFlag and distance > 0) then adjust the node count by - 1
-    else if (distance > 0) {
-      recursiveObject$subtree$nodesAtDepth[distance] <- recursiveObject$subtree$nodesAtDepth[distance] - 1
-    }
+  else if (distance > 0) {
+    recursiveObject$subtree$nodesAtDepth[distance] <- recursiveObject$subtree$nodesAtDepth[distance] - 1
+  }
   ## Update the maximum depth encountered for this tree.
   recursiveObject$subtree$depth <- max(recursiveObject$subtree$depth, distance)
   ## Increment the offset.
@@ -572,10 +606,10 @@ rfsrcParseTree <- function(recursiveObject,
     ## Parse right:
     recursiveObject <- rfsrcParseTree(recursiveObject, max.order, sub.order, nativeArray, b, distance, subtreeFlag)
   }
-    else {
-      ## Update the terminal node depth sum. 
-      recursiveObject$subtree$terminalDepthSum <- recursiveObject$subtree$terminalDepthSum + distance
-    }
+  else {
+    ## Update the terminal node depth sum. 
+    recursiveObject$subtree$terminalDepthSum <- recursiveObject$subtree$terminalDepthSum + distance
+  }
   return(recursiveObject)
 }
 ## -----------------------------------------------------------------------
@@ -671,9 +705,9 @@ rfsrcParse2Tree <- function(recursiveObject,
   if (splitParameter == 0) {
     terminalFlag = TRUE
   }
-    else if (splitParameter != 0) {
-      terminalFlag = FALSE
-    }
+  else if (splitParameter != 0) {
+    terminalFlag = FALSE
+  }
   if (splitParameter != 0) {
     ## Check that the parameter has not already been encountered along this path.
     if (subtreeFlag[splitParameter] == FALSE) {
@@ -681,9 +715,9 @@ rfsrcParse2Tree <- function(recursiveObject,
       if (is.na(recursiveObject$minimumVector[splitParameter])) {
         recursiveObject$minimumVector[splitParameter] = distance
       }
-        else {
-          recursiveObject$minimumVector[splitParameter] = min(recursiveObject$minimumVector[splitParameter], distance, na.rm = TRUE)
-        }
+      else {
+        recursiveObject$minimumVector[splitParameter] = min(recursiveObject$minimumVector[splitParameter], distance, na.rm = TRUE)
+      }
       ## Indicate that the parameter has been split on
       subtreeFlag[splitParameter] = TRUE
     }
@@ -710,63 +744,69 @@ rfsrcParse2Tree <- function(recursiveObject,
 ## -----------------------------------------------------------------------
 ## minimal depth density
 minDepthProb <- function(p, D, l) {
-  if (!is.null(l)) Ld <- 0
-  prob <- rep(0, D+1)
-  nullObj <- sapply(0:(D-1), function(d) {##trick to avoid a for-loop
-    if (is.null(l)) {
-      Ld <- 2^d-1
-      ld <- 2^d
+  if (D <= 0) {
+    return(1)
+  }
+  log.term <- ifelse(p > 1, log(1 - 1 / p), 0)
+  prob <- rep(0, D + 1)
+  if (is.null(l)) {
+    d <- 0:(D - 1)
+    ld <- 2^d
+    Ld <- ld - 1
+  } else {
+    l <- l[1:D]
+    ld <- l
+    if (D > 1) {
+      ## cumulative number of nodes above depth d
+      Ld <- c(0, cumsum(l[1:(D - 1)]))
+    } else {
+      Ld <- 0
     }
-      else{
-        ld <- l[d+1]
-        if (d > 0) Ld <- Ld + l[d] 
-      }
-    prob.1 <- Ld * ifelse(p > 1, log(1 - 1 / p), 0)
-    prob.2 <- ld * ifelse(p > 1, log(1 - 1 / p), 0)
-    prob[d+1] <<- exp(prob.1) * (1 - exp(prob.2))
-    NULL
-  })
-  prob[D+1] <- 1 - sum(prob[1:D])
-  if (prob[D+1] < 0) {
-    prob[D+1] <- 0
+  }
+  prob[1:D] <- exp(Ld * log.term) * (1 - exp(ld * log.term))
+  prob[D + 1] <- 1 - sum(prob[1:D])
+  if (prob[D + 1] < 0) {
+    prob[D + 1] <- 0
     prob <- prob / sum(prob)
   }
   prob
 }
 ## second order depth density
 secondOrderDepthProb <- function(p, D, l) {
-  md.prob <- rep(0, D+1)
-  Ld <- 0
-  if (is.null(l)) {
-    l <- sapply(0:(D-1), function(d) 2^d)
+  if (D <= 0) {
+    return(1)
   }
-  nullObj <- sapply(0:(D-1), function(d) {##trick to avoid a for-loop
-    ld <- l[d+1]
-    if (d > 0) Ld <- Ld + l[d] 
-    md.prob.1 <- Ld * ifelse(p > 1, log(1 - 1 / p), 0)
-    md.prob.2 <- ld * ifelse(p > 1, log(1 - 1 / p), 0)
-    md.prob[d+1] <<- exp(md.prob.1) * (1 - exp(md.prob.2))
-    NULL
-  })
-  md.prob[D+1] <- 1 - sum(md.prob[1:D])
-  if (md.prob[D+1] < 0) {
-    md.prob[D+1] <- 0
+  log.term <- ifelse(p > 1, log(1 - 1 / p), 0)
+  if (is.null(l)) {
+    l <- sapply(0:(D - 1), function(d) 2^d)
+  } else {
+    l <- l[1:D]
+  }
+  ## First compute the minimal depth density
+  md.prob <- rep(0, D + 1)
+  ld <- l
+  if (D > 1) {
+    Ld <- c(0, cumsum(l[1:(D - 1)]))
+  } else {
+    Ld <- 0
+  }
+  md.prob[1:D] <- exp(Ld * log.term) * (1 - exp(ld * log.term))
+  md.prob[D + 1] <- 1 - sum(md.prob[1:D])
+  if (md.prob[D + 1] < 0) {
+    md.prob[D + 1] <- 0
     md.prob <- md.prob / sum(md.prob)
   }
-  ## md.prob is the minimal depth density
-  ## we now use it to define the second order depth density
-  prob <- rep(0, D+1)
+  ## Now define the second order depth density
+  prob <- rep(0, D + 1)
   if (D >= 2) {
-    nullObj <- sapply(1:(D-1), function(d) {##trick to avoid a for-loop
-      prob.d <- l[1:d] * ifelse(p > 1, log(1 - 1 / p), 0)
-      prob[d+1] <<- md.prob[d+1] * sum(exp(-prob.d) - 1)
-      NULL
-    })
+    g <- exp(-l * log.term) - 1
+    cumg <- cumsum(g)
+    prob[2:D] <- md.prob[2:D] * cumg[1:(D - 1)]
   }
-  prob[D+1] <- 1 - sum(prob[1:D])
-  if (prob[D+1] < 0) {
-    prob[D+1] <- 0
-    prob <- prob/sum(prob)
+  prob[D + 1] <- 1 - sum(prob[1:D])
+  if (prob[D + 1] < 0) {
+    prob[D + 1] <- 0
+    prob <- prob / sum(prob)
   }
   prob
 }
@@ -841,37 +881,37 @@ parseDepthOrder <- function(v, max.order) {
     prob <- minDepthStatObj$prob
     second.order.moment <- secondOrderDepthStat(p, l = l)
   }
-    else {
-      ## case II: tree-averaged (by-tree) analysis
-      ## set the dimension
-      p <- nrow(v$order)
-      ## extract the tree density in a matrix format
-      ## extract each trees depth
-      prob <- sapply(1:ntree, function(tree) {
-        l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
-        c(minDepthStat(p, l = l)$prob, rep(0, maxTreeHeight - treeHeight[tree] * (1 + 1 * (treeHeight[tree] == 1))))
-      })
-      ## extract the tree minimal threshold value
-      first.moment <- unlist(sapply(1:ntree, function(tree) {
-        l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
-        minDepthStat(p, l = l)$first.moment
-      }))
-      ## extract the tree second moment
-      second.moment <- unlist(sapply(1:ntree, function(tree) {
-        l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
-        minDepthStat(p, l = l)$second.moment
-      }))
-      ## extract the tree robust standard deviation
-      sd.robust  <- unlist(sapply(1:ntree, function(tree) {
-        l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
-        minDepthStat(p, l = l)$sd.robust
-      }))
-      ## extract the tree second order threshold value
-      second.order.moment <- unlist(sapply(1:ntree, function(tree) {
-        l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
-        secondOrderDepthStat(p, l = l)
-      }))
-    }
+  else {
+    ## case II: tree-averaged (by-tree) analysis
+    ## set the dimension
+    p <- nrow(v$order)
+    ## extract the tree density in a matrix format
+    ## extract each trees depth
+    prob <- sapply(1:ntree, function(tree) {
+      l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
+      c(minDepthStat(p, l = l)$prob, rep(0, maxTreeHeight - treeHeight[tree] * (1 + 1 * (treeHeight[tree] == 1))))
+    })
+    ## extract the tree minimal threshold value
+    first.moment <- unlist(sapply(1:ntree, function(tree) {
+      l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
+      minDepthStat(p, l = l)$first.moment
+    }))
+    ## extract the tree second moment
+    second.moment <- unlist(sapply(1:ntree, function(tree) {
+      l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
+      minDepthStat(p, l = l)$second.moment
+    }))
+    ## extract the tree robust standard deviation
+    sd.robust  <- unlist(sapply(1:ntree, function(tree) {
+      l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
+      minDepthStat(p, l = l)$sd.robust
+    }))
+    ## extract the tree second order threshold value
+    second.order.moment <- unlist(sapply(1:ntree, function(tree) {
+      l <- nodes.at.depth[, tree][1:sum(nodes.at.depth[, tree] > 0, na.rm = TRUE)]
+      secondOrderDepthStat(p, l = l)
+    }))
+  }
   return(list(prob = prob,
               first.moment = first.moment,
               sd = sqrt(second.moment - first.moment^2),

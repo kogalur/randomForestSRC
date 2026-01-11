@@ -71,19 +71,32 @@ get.imbalanced.performance.workhorse <- function (yvar, prob,
   y[yvar == class.labels[minority]] <- 1
   y <- factor(y, levels = c(0,1))
   ## map probabilities --> (majority, minority)
-  if (!is.null(ncol(prob)) && ncol(prob) == 2) {
-    prob.matx <- prob[, c(majority, minority), drop = FALSE]
-    ## PRESERVE 1-column MATRIX for minority
-    prob <- prob[, minority, drop = FALSE]
-    ## clamp to [0,1]
-    prob[] <- pmin(pmax(prob[], 0), 1)
-  } else {
-    ## user supplied a vector => assume it is minority prob
-    prob <- as.numeric(prob)
-    prob <- pmin(pmax(prob, 0), 1)
-    prob.matx <- cbind(1 - prob, prob)
+##
+## Important: some callers may pass a 2-column *data.frame* of probabilities.
+## Downstream metrics (brier/auc/logloss) expect a numeric matrix and may
+## fail on data.frames (which are lists).  We coerce to a double matrix here.
+if (!is.null(ncol(prob)) && ncol(prob) == 2) {
+  prob.matx <- prob[, c(majority, minority), drop = FALSE]
+  ## coerce to numeric matrix (handles data.frame inputs robustly)
+  prob.matx <- as.matrix(prob.matx)
+  storage.mode(prob.matx) <- "double"
+  ## minority probability is the 2nd column after re-ordering
+  prob <- prob.matx[, 2]
+  ## clamp to [0,1]
+  prob <- pmin(pmax(prob, 0), 1)
+  prob.matx[, 2] <- prob
+  prob.matx[, 1] <- pmin(pmax(prob.matx[, 1], 0), 1)
+} else {
+  ## user supplied a vector / 1-col object => assume it is minority prob
+  if (is.data.frame(prob) && ncol(prob) == 1) {
+    prob <- prob[[1]]
   }
-  colnames(prob.matx) <- levels(y)
+  prob <- as.numeric(prob)
+  prob <- pmin(pmax(prob, 0), 1)
+  prob.matx <- cbind(1 - prob, prob)
+  storage.mode(prob.matx) <- "double"
+}
+colnames(prob.matx) <- levels(y)
   ## threshold
   if (is.null(threshold)) threshold <- as.numeric(pihat) else threshold <- as.numeric(threshold)
   threshold <- max(0, min(1, threshold))
@@ -327,6 +340,84 @@ get.rfq.threshold <- function(y) {
 ##
 ##
 ###################################################################
+# internal: fast, vectorized sweep over thresholds (avoids mclapply)
+.get.imbalanced.optimize.sweep <- function(yvar, prob, thresholds) {
+  ## if this is not a two-class problem, return NULL
+  if (!is.factor(yvar) || length(levels(yvar)) != 2) {
+    return(NULL)
+  }
+  ## recode to {0,1}: 0=majority, 1=minority (same as get.imbalanced.performance.workhorse)
+  y.frq <- table(yvar)
+  if (length(y.frq) != 2 || any(is.na(y.frq))) {
+    return(NULL)
+  }
+  class.labels <- names(y.frq)
+  minority <- which.min(y.frq)
+  y <- rep.int(0L, length(yvar))
+  y[yvar == class.labels[minority]] <- 1L
+## extract minority probabilities (robust to matrices/data.frames/vectors)
+if (!is.null(ncol(prob))) {
+  if (ncol(prob) == 2) {
+    p <- prob[, minority]
+  } else if (ncol(prob) == 1) {
+    p <- prob[, 1]
+  } else {
+    ## unexpected column count: fall back to first column
+    p <- prob[, 1]
+  }
+} else {
+  p <- prob
+}
+p <- as.numeric(p)
+p <- pmin(pmax(p, 0), 1)
+  ## mimic table(y, factor(prob>=th)) behavior: drop NA probabilities
+  ok <- !is.na(p)
+  if (!any(ok)) {
+    return(data.frame(
+      threshold = thresholds,
+      gmean = NA_real_,
+      F1 = NA_real_,
+      F1mod = NA_real_,
+      F1modgmean = NA_real_
+    ))
+  }
+  y <- y[ok]
+  p <- p[ok]
+  ## sort by probability (ascending)
+  o <- order(p)
+  p <- p[o]
+  y <- y[o]
+  ## prefix sums (length n+1 to handle k=0)
+  n <- length(p)
+  cum_pos <- c(0L, cumsum(y))
+  cum_neg <- c(0L, cumsum(1L - y))
+  total_pos <- cum_pos[n + 1L]
+  total_neg <- cum_neg[n + 1L]
+  ## for each threshold t: k = number of probs < t  (since prediction is prob >= t)
+  k <- findInterval(thresholds, p, left.open = TRUE)
+  idx <- k + 1L
+  FN <- cum_pos[idx]
+  TN <- cum_neg[idx]
+  TP <- total_pos - FN
+  FP <- total_neg - TN
+  sens <- .safe_div(TP, FN + TP)
+  spec <- .safe_div(TN, TN + FP)
+  prec <- .safe_div(TP, TP + FP)
+  npv  <- .safe_div(TN, TN + FN)
+  F1 <- ifelse((prec + sens) > 0, 2 * (prec * sens) / (prec + sens), NA_real_)
+  ok2 <- is.finite(sens) & is.finite(spec) & is.finite(prec) & is.finite(npv) &
+    (sens > 0) & (spec > 0) & (prec > 0) & (npv > 0)
+  F1mod <- ifelse(ok2, 4 / (1/sens + 1/spec + 1/prec + 1/npv), NA_real_)
+  gmean <- sqrt(sens * spec)
+  F1modgmean <- (F1mod + gmean) / 2
+  data.frame(
+    threshold = thresholds,
+    gmean = gmean,
+    F1 = F1,
+    F1mod = F1mod,
+    F1modgmean = F1modgmean
+  )
+}
 get.imbalanced.optimize <- function(obj,
                                     prob = NULL,
                                     newdata = NULL,
@@ -338,7 +429,7 @@ get.imbalanced.optimize <- function(obj,
     if (class(obj)[1] != "rfsrc") {
       stop("obj must be a forest object")
     }
-    ## object is a forest ---> parse for (yvar, prob) 
+    ## object is a forest ---> parse for (yvar, prob)
     else {
       ## if newdata is provided, we swap the grow object with the predict object
       if (!is.null(newdata)) {
@@ -359,35 +450,34 @@ get.imbalanced.optimize <- function(obj,
   }
   ## check that measure requested is coherent
   measure <- match.arg(measure, c("gmean", "F1", "F1mod", "F1modgmean"))
-  x <- data.frame(do.call(rbind,
-                          mclapply(seq(0,1,length=ngrid),function(th){
-                            get.imbalanced.performance(yvar, prob, threshold = th)
-                          })))
-  if (measure == "gmean") {
-    best <- which.max(x$gmean)
+  thresholds <- seq(0, 1, length = ngrid)
+  ## fast, vectorized threshold sweep (avoids mclapply and is usually faster)
+  sweep <- .get.imbalanced.optimize.sweep(yvar, prob, thresholds)
+  if (is.null(sweep)) {
+    return(NULL)
   }
-  if (measure == "F1") {
-    best <- which.max(x$F1)
-  }
-  if (measure == "F1mod") {
-    best <- which.max(x$F1mod)
-  }
-  if (measure == "F1modgmean") {
-    best <- which.max(x$F1modgmean)
-  }
+  best <- which.max(sweep[[measure]])
+  best.threshold <- sweep$threshold[best]
   if (plot.it) {
     par(mfrow = c(2,2))
-    pt <- x$threshold < 3 * x$threshold[best]
-    plot(x$threshold[pt], x$gmean[pt], xlab = "threshold", ylab = "gmean")
-    abline(v = x$threshold[best], lty = 2, col = "blue")
-    plot(x$threshold[pt], x$F1[pt], xlab = "threshold", ylab = "F1")
-    abline(v = x$threshold[best], lty = 2, col = "blue")
-    plot(x$threshold[pt], x$F1mod[pt], xlab = "threshold", ylab = "F1mod")
-    abline(v = x$threshold[best], lty = 2, col = "blue")
-    plot(x$threshold[pt], x$F1modgmean[pt], xlab = "threshold", ylab = "F1modgmean")
-    abline(v = x$threshold[best], lty = 2, col = "blue")
+    pt <- sweep$threshold < 3 * best.threshold
+    plot(sweep$threshold[pt], sweep$gmean[pt], xlab = "threshold", ylab = "gmean")
+    abline(v = best.threshold, lty = 2, col = "blue")
+    plot(sweep$threshold[pt], sweep$F1[pt], xlab = "threshold", ylab = "F1")
+    abline(v = best.threshold, lty = 2, col = "blue")
+    plot(sweep$threshold[pt], sweep$F1mod[pt], xlab = "threshold", ylab = "F1mod")
+    abline(v = best.threshold, lty = 2, col = "blue")
+    plot(sweep$threshold[pt], sweep$F1modgmean[pt], xlab = "threshold", ylab = "F1modgmean")
+    abline(v = best.threshold, lty = 2, col = "blue")
   }
-  x[best,, drop = FALSE]
+  ## return full performance metrics at the optimal threshold (same as previous behavior)
+  perf <- get.imbalanced.performance(yvar, prob, threshold = best.threshold)
+  if (is.null(perf)) {
+    return(NULL)
+  }
+  out <- data.frame(as.list(perf))
+  rownames(out) <- best
+  out
 }
 ###################################################################
 ##

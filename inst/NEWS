@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.4.5 (bld20251125)
+Version: 3.5.0 (bld20260110)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,7 +8,22 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.4.5
+CHANGES TO RELEASE 3.5.0
+---------------------------------------------------------------------------------
+For survival and competing risk analysis, concordance-based
+performance is now computed using Uno inverse-probability-of-censoring
+weighting (Uno et al. 2001). This affects all survival performance
+values derived from the concordance index, including out-of-bag and
+test error rates and variable importance (VIMP). To revert to
+unweighted Harrell concordance, set use.uno = FALSE when fitting a
+survival forest.  Concordance calculations now use an efficient O(n,
+log n) algorithm based on a binary indexed tree (Fenwick 1994,
+Therneau 2024), replacing the naive O(n^2) pairwise computation for
+large n.  All mclapply() have been eliminated or replaced by PSOCK
+providing Windows compatibility as well.
+  
+---------------------------------------------------------------------------------
+RELEASE 3.4.5
 ---------------------------------------------------------------------------------
 Change to get.rf.cores() to respect check-as-cran limits. 
 

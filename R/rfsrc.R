@@ -13,7 +13,7 @@ rfsrc <- function(formula, data, ntree = 500,
                   proximity = FALSE, distance = FALSE, forest.wt = FALSE,
                   xvar.wt = NULL, yvar.wt = NULL, split.wt = NULL, case.wt = NULL, case.depth = FALSE, 
                   forest = TRUE,
-                  save.memory = FALSE,
+                  use.uno = TRUE, save.memory = FALSE,
                   var.used = c(FALSE, "all.trees", "by.tree"),
                   split.depth = c(FALSE, "all.trees", "by.tree"),
                   seed = NULL,
@@ -36,7 +36,6 @@ rfsrc <- function(formula, data, ntree = 500,
   }
   cse  <- is.hidden.cse(user.option)
   csv  <- is.hidden.csv(user.option)
-  presort.xvar  <- is.hidden.presort.xvar(user.option)
   ## experimental option(s)
   experimental <- is.hidden.experimental(user.option)
   ## this is always false by default
@@ -72,9 +71,6 @@ rfsrc <- function(formula, data, ntree = 500,
   if (split.depth == "FALSE") split.depth <- FALSE
   ## data cannot be missing
   if (missing(data)) stop("data is missing")
-  ## data cannot have Inf or -Inf values
-  ## but we are disabling this check for now
-  ## if (any(unlist(mclapply(data, function(x) {any(is.infinite(x))})))) stop("data contains Inf or -Inf values")
   ## conduct preliminary formula validation
   if (missing(formula) | (!missing(formula) && is.null(formula))) {
     if (is.null(ytry)) {
@@ -335,6 +331,11 @@ rfsrc <- function(formula, data, ntree = 500,
     ## We pass in NULL for the cause weight for all other families
     cause <- cause.wt <- NULL
   }
+  ## set the Uno-weights for survival
+  uno.weights <- NULL
+  if (use.uno && (family == "surv" || family == "surv-CR")) {
+    uno.weights <- get.uno.weights.train(event.info$time, event.info$cens)
+  }
   ## Nodesize determination
   nodesize <- get.grow.nodesize(family, nodesize)
   ## Turn ensemble outputs off unless bootstrapping by root or user.
@@ -431,7 +432,6 @@ rfsrc <- function(formula, data, ntree = 500,
   terminal.quants.bits <- get.terminal.quants.bits(terminal.quants)
   cse.bits = get.cse.bits(cse)
   csv.bits = get.csv.bits(csv)
-  presort.xvar  <- get.presort.xvar.bits(presort.xvar)
   data.pass.bits <- get.data.pass.bits(data.pass)
   experimental.bits <- get.experimental.bits(experimental)
   ## set the maximum class levels
@@ -530,7 +530,7 @@ rfsrc <- function(formula, data, ntree = 500,
                                        if (is.null(prob)) NULL else as.double(prob),
                                        if (is.null(prob.epsilon)) as.double(0) else as.double(prob.epsilon)),
                                   if (is.null(mahalanobis.sigma)) NULL else as.double(as.vector(mahalanobis.sigma)),
-                                  as.double(presort.xvar),
+                                  if (is.null(uno.weights)) NULL else as.double(uno.weights$weight),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -762,6 +762,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        bootstrap = bootstrap,
                        case.wt = case.wt,
                        event.info = event.info,
+                       uno.weights = uno.weights,
                        gk.quantile = gk.quantile,
                        na.action = na.action,
                        nativeArrayTNDS = nativeArrayTNDS,
@@ -784,7 +785,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        terminal.quants = terminal.quants,
                        importance = importance.value,
                        vimp.threshold = vimp.threshold,
-                       version = "3.4.5")
+                       version = "3.5.0")
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -816,7 +817,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        samptype = samptype,
                        samp = samp,
                        case.wt = case.wt,
-                       version = "3.4.5",
+                       version = "3.5.0",
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,

@@ -36,7 +36,7 @@ SEXP rfsrcGrow(SEXP traceFlag,
                SEXP perfBlock,
                SEXP quantile,
                SEXP qStarPlus,
-               SEXP xPreSort,
+               SEXP unoWeight,
                SEXP numThreads);
 SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP seedPtr,
@@ -99,5 +99,6 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP perfBlock,
                   SEXP quantileInfo,
                   SEXP getTree,
+                  SEXP unoWeight,
                   SEXP numThreads);
 #endif

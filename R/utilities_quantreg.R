@@ -77,7 +77,7 @@ get.quantile.crps <- function(o, pretty = TRUE, subset = NULL, standardize = TRU
     }
     n <- length(y)
     ## brier score
-    brS <- colMeans(do.call(rbind, mclapply(subset, function(i) {
+    brS <- colMeans(do.call(rbind, lapply(subset, function(i) {
       (1 * (y[i] <= q$yunq) - q$cdf[i, ]) ^ 2 
     })), na.rm = TRUE)
     ## crps

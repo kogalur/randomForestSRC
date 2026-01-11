@@ -424,16 +424,6 @@ get.outcome.bits <- function (outcome) {
   }
   return (outcome)
 }
-get.presort.xvar.bits <- function (presort.xvar) {
-  ## Convert trace into native code parameter.
-  if (!is.logical(presort.xvar)) {
-    ## Leave it as is.
-  }
-  else {
-    presort.xvar <- 1 * presort.xvar
-  }
-  return (presort.xvar)
-}
 get.perf <-  function (perf, impute.only, family) {
   ## first deal with impute.only where there is no performance
   if (impute.only == TRUE) {
@@ -938,14 +928,6 @@ is.hidden.perf.type <-  function(user.option) {
   }
   else {
     as.character(user.option$perf.type)
-  }
-}
-is.hidden.presort.xvar <-  function(user.option) {
-  if (is.null(user.option$presort.xvar)) {
-    FALSE
-  }
-  else {
-    user.option$presort.xvar
   }
 }
 is.hidden.prob <-  function(user.option) {

@@ -208,6 +208,7 @@ extern uint    **RF_rLevels;
 extern uint      RF_ytry;
 extern double    RF_wibsTau;
 extern double   **RF_qStarPlus;
+extern double    *RF_unoWeight;
 extern double    RF_vimpThreshold;
 extern uint      RF_fobservationSize;
 extern uint      RF_frSize;

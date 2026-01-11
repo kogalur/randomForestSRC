@@ -118,6 +118,8 @@ subsample.rfsrc <- function(obj,
     ## leave $samptype and $sampsize in place to be used for making double bootstrap
     rf.prms$bootstrap <- NULL
   }
+  ## use uno weights?
+  rf.prms$use.uno <- !is.null(obj$forest$uno.weights)
   ##--------------------------------------------------------------
   ##
   ## performance only?  (user is requesting generalization error only)
@@ -167,7 +169,11 @@ subsample.rfsrc <- function(obj,
       if (missing(importance)) {
         importance <- TRUE
       }
-      obj <- vimp(obj, perf.type = rf.prms$perf.type, block.size = block.size, importance = importance)
+      obj <- vimp(obj,
+                  perf.type = rf.prms$perf.type,
+                  use.uno = rf.prms$use.uno,
+                  block.size = block.size,
+                  importance = importance)
       vmp <- get.mv.vimp(obj, FALSE, FALSE)
       rf.prms$block.size <- block.size
       if (verbose) cat("done\n")
