@@ -560,7 +560,8 @@ get.uno.weights.train <- function(time, status,
       gmin_used <- 0.0
       ginfo <- list(gmin = 0.0)
     } else {
-      ev <- !is.na(status) & (as.integer(status) == 1L) & !is.na(G_gate)
+      ## events = non-censored cases (otherwise breaks for CR)
+      ev <- !is.na(status) & (as.integer(status) != 0L) & !is.na(G_gate)
       ginfo <- uno_choose_gmin_auto(G_gate[ev], eps = eps,
                                     ess_frac = ess_frac, ess_min = ess_min)
       gmin_used <- ginfo$gmin

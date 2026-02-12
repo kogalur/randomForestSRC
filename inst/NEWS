@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.5.0 (bld20260110)
+Version: 3.5.1 (bld20260211)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,7 +8,12 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.5.0
+CHANGES TO RELEASE 3.5.1
+---------------------------------------------------------------------------------
+Fixed Uno weights that was breaking for CR.
+
+---------------------------------------------------------------------------------
+RELEASE 3.5.0
 ---------------------------------------------------------------------------------
 For survival and competing risk analysis, concordance-based
 performance is now computed using Uno inverse-probability-of-censoring

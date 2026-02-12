@@ -1,6 +1,6 @@
 Package: randomForestSRC
-Version: 3.5.0
-Date: 2026-01-11
+Version: 3.5.1
+Date: 2026-02-12
 Title: Fast Unified Random Forests for Survival, Regression, and Classification (RF-SRC)
 Authors@R: c(person("Hemant", "Ishwaran", email = "hemant.ishwaran@gmail.com", role = "aut"),
     person("Udaya B.", "Kogalur", email = "ubk@kogalur.com", role = c("aut", "cre")))
