@@ -1,0 +1,31 @@
+## Use R's portable OpenMP flags (do NOT hard-code -fopenmp etc.)
+PKG_CFLAGS = $(SHLIB_OPENMP_CFLAGS)
+PKG_LIBS   = $(SHLIB_OPENMP_CFLAGS) $(SHLIB_OPENMP_LIBS)
+
+## If you have headers in src/shared, make sure the compiler sees them
+## PKG_CPPFLAGS = -I$(srcdir)/shared
+
+## C sources in src/
+SRCS_MAIN = \
+  R_init_randomForestSRC.c \
+  augmentationOps.c bootstrap.c classification.c diagnostic.c \
+	entryGeneric.c factorOps.c importance.c importanceAnti.c \
+	importancePerm.c importanceRand.c impute.c internal.c leafLink.c \
+	marginal.c nodeOps.c nrutil.c parallel.c partial.c polarity.c \
+	processEnsemble.c quantile.c random.c regression.c rfsrc.c \
+	rfsrcUtil.c sampling.c sortedLink.c split.c splitClas.c \
+	splitCustom.c splitCustomDriver.c splitGreedy.c splitMahalanobis.c \
+	splitMult.c splitQuantile.c splitRegr.c splitSurv.c splitUtil.c \
+	splitUtilSimple.c splitUtilSurv.c stack.c stackOutput.c \
+	stackOutputQQ.c stackParallel.c stackPreDefined.c survival.c \
+	survivalE.c svdUtil.c termOps.c trace.c tree.c treeJIT.c treeUtil.c \
+	cindex.c distance.c entry.c error.c nativeUtil.c
+
+## C sources in src/shared/
+## SRCS_SHARED = \ ...
+
+## Tell R exactly which objects belong in the shared library
+OBJECTS = $(SRCS_MAIN:.c=.o) 
+
+## Do NOT override the default "all" target – R's own makefiles provide that.
+# all: $(SHLIB)

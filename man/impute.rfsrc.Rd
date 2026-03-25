@@ -20,7 +20,7 @@
 \arguments{
   \item{formula}{A symbolic model description. Can be omitted if
     outcomes are unspecified or if distinction between outcomes and
-    predictors is unnecessary. Ignored for multivariate missForest.}
+    predictors is unnecessary. Ignored for missForest.}
 
   \item{data}{A data frame containing variables to be imputed.}
 
@@ -34,7 +34,7 @@
     algorithm. Ignored for multivariate missForest, which iterates to
     convergence unless capped by \code{max.iter}.}
 
-  \item{fast}{If \code{TRUE}, uses \code{rfsrcFast} instead of
+  \item{fast}{If \code{TRUE}, uses \code{rfsrc.fast} instead of
     \code{rfsrc}. Increases speed but may reduce accuracy.}
 
   \item{blocks}{Number of row-wise blocks to divide the data into. May
@@ -135,9 +135,6 @@
   Hemant Ishwaran and Udaya B. Kogalur
 }
 \references{
-  Ishwaran H., Kogalur U.B., Blackstone E.H. and Lauer M.S.
-  (2008). Random survival forests, \emph{Ann. Appl. Stat.}, 2:841--860.
-
   Stekhoven D.J. and Buhlmann P. (2012). MissForest--non-parametric
   missing value imputation for mixed-type data.
   \emph{Bioinformatics}, 28(1):112--118.
@@ -146,6 +143,7 @@
   algorithms. \emph{Statistical Analysis and Data Mining}, 10:363--377.
 }
 \seealso{
+  \command{\link{impute.learn.rfsrc}},
   \command{\link{rfsrc}},
   \command{\link{rfsrc.fast}}
 }

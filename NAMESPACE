@@ -13,7 +13,7 @@ importFrom("stats", "as.dist", "as.formula", "cutree", "dlnorm", "formula",
            "hclust", "lowess", "median", "model.matrix", "na.omit",
            "optim", "pgamma", "plnorm", "pnorm", "predict", 
            "quantile", "qnorm", "runif", "sd", "supsmu", "var", "wilcox.test", "rnorm",
-           "lm", "coef", "binom.test", "rmultinom")
+           "lm", "coef", "binom.test", "rmultinom", "setNames")
 importFrom("utils", "installed.packages", "txtProgressBar", "setTxtProgressBar",
            "write.table", "tail", "object.size", "combn", "flush.console")
 importFrom("grDevices", "gray")
@@ -53,6 +53,10 @@ export(extract.bootsample,
        imbalanced.rfsrc,
        impute,       
        impute.rfsrc,
+       impute.learn,
+       impute.learn.rfsrc,
+       load.impute.learn,
+       load.impute.learn.rfsrc,
        max.subtree,
        max.subtree.rfsrc,
        partial,
@@ -82,6 +86,8 @@ export(extract.bootsample,
        rfsrc.cart,
        rfsrc.fast,
        rfsrc.news,
+       save.impute.learn,
+       save.impute.learn.rfsrc,
        sid.perf.metric,
        sidClustering,
        sidClustering.rfsrc,
@@ -121,11 +127,16 @@ S3method(plot, variable)
 S3method(plot, variable.rfsrc)
 
 S3method(predict, rfsrc)
+S3method(predict, impute.learn)
+S3method(predict, impute.learn.rfsrc)
+
 
 S3method(print, rfsrc)
 S3method(print, bootsample)
 S3method(print, bootsample.rfsrc)
 S3method(print, imbalanced.performance)
+S3method(print, impute.learn)
+S3method(print, impute.learn.rfsrc)
 S3method(print, subsample)
 S3method(print, subsample.rfsrc)
 

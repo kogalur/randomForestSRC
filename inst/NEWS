@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.5.1 (bld20260211)
+Version: 3.6.0 (bld20260325)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,7 +8,14 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.5.1
+CHANGES TO RELEASE 3.6.0
+---------------------------------------------------------------------------------
+Added impute.learn, a predictive imputation framework for test-time
+imputation. It learns an imputer from training data that can be saved
+and reloaded quickly for compact, low-memory deployment on new data.
+
+---------------------------------------------------------------------------------
+RELEASE 3.5.1
 ---------------------------------------------------------------------------------
 Fixed Uno weights that was breaking for CR.
 
