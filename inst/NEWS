@@ -1,5 +1,5 @@
 Package: randomForestSRC
-Version: 3.6.0 (bld20260325)
+Version: 3.6.0.1 (bld20260326)
 
 ---------------------------------------------------------------------------------
 FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
@@ -8,7 +8,7 @@ FOR BETA BUILDS, DOCUMENTATION, and dual compilation for R and
 ---------------------------------------------------------------------------------
 
 ---------------------------------------------------------------------------------
-CHANGES TO RELEASE 3.6.0
+CHANGES TO RELEASE 3.6.0.1
 ---------------------------------------------------------------------------------
 Added impute.learn, a predictive imputation framework for test-time
 imputation. It learns an imputer from training data that can be saved
