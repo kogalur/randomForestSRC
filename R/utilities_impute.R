@@ -69,5 +69,6 @@ get.impute.mean <- function(data) {
   imean
 }
 get.na.roughfix <- function(data) {
+  if (!is.data.frame(data)) data <- data.frame(data)
   assign.impute.mean(data, get.impute.mean(data))
 }

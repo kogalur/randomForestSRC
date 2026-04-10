@@ -1,0 +1,390 @@
+# randomForestSRC 3.6.1
+
+## New features
+
+* `impute.learn()` now supports training-time storage of out-of-distribution (OOD) calibration references through `save.ood = TRUE` (default), enabling a new test-time OOD scoring workflow via `impute.ood()` / `impute.ood.rfsrc()`.
+* `impute.ood()` scores new cases by masked reconstruction across the learned imputation targets and returns row-level OOD scores, plus score percentiles when the saved row-level calibration is directly reusable.
+* OOD scoring now calibrates each target against training-time out-of-bag reconstruction behavior saved in the imputer manifest, avoiding a second scoring pass over the training data.
+* Numeric targets are scored using calibrated absolute reconstruction error. Factor targets use probability-based surprise when available, with safe fallback behavior for cases where probability output is unavailable.
+* Deployment rows containing previously unseen factor levels are now flagged explicitly and assigned maximal OOD scores so schema and category anomalies are easy to identify.
+* Prediction-time imputation and OOD scoring now share the same harmonization and learner-loading pipeline, including caching controls and richer diagnostics for skipped targets, unseen levels, and learner reloads.
+
+## Documentation
+
+* Added `impute.ood()` usage, arguments, return values, and examples to the existing `impute.learn` help topic instead of creating a separate help page.
+* Documented that `target.mode = "all"` is the recommended training configuration when OOD scoring is intended for deployment use.
+
+## Bug fixes
+
+* Fixed `cache.learners` argument normalization in the OOD scoring path.
+
+# randomForestSRC 3.6.0
+
+## Changes
+
+* Added impute.learn, a predictive imputation framework for test-time imputation. It learns an imputer from training data that can be saved and reloaded quickly for compact, low-memory deployment on new data.
+
+# randomForestSRC 3.5.1
+
+## Changes
+
+* Fixed Uno weights that was breaking for CR.
+
+# randomForestSRC 3.5.0
+
+## Changes
+
+* For survival and competing risk analysis, concordance-based performance is now computed using Uno inverse-probability-of-censoring weighting (Uno et al. 2001). This affects all survival performance values derived from the concordance index, including out-of-bag and test error rates and variable importance (VIMP). To revert to unweighted Harrell concordance, set use.uno = FALSE when fitting a survival forest. Concordance calculations now use an efficient O(n, log n) algorithm based on a binary indexed tree (Fenwick 1994, Therneau 2024), replacing the naive O(n^2) pairwise computation for large n. All mclapply() have been eliminated or replaced by PSOCK providing Windows compatibility as well.
+
+# randomForestSRC 3.4.5
+
+## Changes
+
+* Change to get.rf.cores() to respect check-as-cran limits.
+
+# randomForestSRC 3.4.4
+
+## Changes
+
+* Improved output for quantile regression. New full sweep option for imputation via the impute function.
+
+# randomForestSRC 3.4.3
+
+## Changes
+
+* Removed multiplication factor by e^1 for conditional vimp rates for classification. This was causing vimps greater than one.
+
+# randomForestSRC 3.4.2
+
+## Changes
+
+* Improves "tune.rfsrc" now includes "golden-search". Improved print output for grow object. Improved print output for imbalanced forests "get.imbalanced.performance".
+
+# randomForestSRC 3.4.1
+
+## Changes
+
+* Bug related to fast/save for classification objects.
+
+# randomForestSRC 3.4.0
+
+## Changes
+
+* Removal of var.select(). It is recommended that users install the package varPro available on GitHub for variable selection.
+
+# randomForestSRC 3.3.1, 3.3.2
+
+## Changes
+
+* Fix to UBSAN warnings.
+
+# randomForestSRC 3.3.1
+
+## Changes
+
+* Fix to longstanding bug in conditional classification Brier Score. We were not normalizing conditional values. Addition of case.depth option.
+
+# randomForestSRC 3.3.0
+
+## Changes
+
+* Resolved an issue with classification where there is a discrepancy between training and unseen test set class labels. Minor fixes to subsampling and improved the plot function for subsampling to allow users to retrieve the plot information for developing custom figures.
+
+# randomForestSRC 3.2.3
+
+## Changes
+
+* Fix to insecure string warnings on Linux.
+
+# randomForestSRC 3.2.2
+
+## Changes
+
+* Improved the subsampling function. Now users can obtain standard errors and confidence regions for the generalization error of the forest. Addition of heavy weighted, and unweighted split rules for mse, gini, unsupv, and mv cases.
+
+# randomForestSRC 3.2.1
+
+## Changes
+
+* Fix to catestrophic cancellation and buffer overrun in updateCDF(), when xvar.wt is active with real weights, and mostly when they are very small values. This bug was introduced in Release 3.1.1.
+
+# randomForestSRC 3.2.0
+
+## Changes
+
+* Added case-depth. Improved plot.subsample. Improved get.brier.survival.
+
+# randomForestSRC 3.1.1
+
+## Changes
+
+* Fixed long standing bug in mtry when xvar.wt is specified as a real vector (not uniform, or integers). In such situations, mtry was not correctly being implemented. Generalized mtry to ytry which is now fully functional in the multivariate mixed case. Changed suggests from akima to interp. Updated homepage URL's.
+
+# randomForestSRC 3.1.0
+
+## Changes
+
+* Added a new way to deal with missing data in prediction where missing data is assigned randomly by daughter size. Use option na.action="na.random". Added enhanced capability to deal with test data with factors. Previously test data with factor levels not matching training data would throw an error. This then required users to apply hot encoding and other inferior workarounds. These workaround are no longer needed. Continued improvements to CPU times for training and prediction. Added a save.memory feature for big survival data to address slow training times that users were experiencing with large competing risk and right censored survival data. Added the ability for users to supply their own sigma matrix for the mahalanobis splitting rule. Added new features to subsample (used for VIMP confidence intervals). Users can now specify variables for joint VIMP confidence intervals and selectively plot confidence intervals using variables of their choosing. VIMP random now also uses daughter sizes as the secondary threshold after considering the primary vimp.threshold.
+
+# randomForestSRC 3.0.2
+
+## Changes
+
+* Minor changes to donttest examples that caused issues. Continued improvements to overall speed of the package.
+
+# randomForestSRC 3.0.1
+
+## Changes
+
+* Minor changes to Rd files. Re-introduction of competing risk generalized logrank split rule (3.1.1 in the CR paper). This had been accidentally removed in CRAN build 2_9_0. Fix to DESCRIPTION URL per Prof. Ripley's request.
+
+# randomForestSRC 3.0.0
+
+## Changes
+
+* Added the ability to get confidence intervals for out-of-bag error rates using the subsample function. Significant improvements in CPU times for restoration of models and prediction with new data. Fixed the ability to select between in situ ensemble calculation and post-forest ensemble calculation. This can be useful when doing these calculations in parallel causes significant contention for memory locations that are in critical OpenMP regions.
+
+# randomForestSRC 2.14.0
+
+## Changes
+
+* Fix to R_init per Prof. Ripley. Improved output from analysis, including more reported performance metrics. New get.brier.survival function for extracting Brier score in survival settings. Importance, when true, now defaults to anti. Fix to get.tree not playing well with seed for repeatability of importance.
+
+# randomForestSRC 2.13.0
+
+## Changes
+
+* Fix to missing data segfault related to GitHub issue 112. Mahalanobis splitting in multivariate regression settings when all outcomes are real-valued. This can have added benefit when outcomes are correlated in contrast to the default composite (independent) splitting rule. Improvements to the speed and output for missForest imputation. New home page with documentation and vignettes at https://luminwin.github.io/randomForestSRC
+
+# randomForestSRC 2.12.1
+
+## Changes
+
+* Fix to omp.h declaration before R headers per Prof. Ripley, in anticipation of clang 13.0.0.
+
+# randomForestSRC 2.12.0
+
+## Changes
+
+* Fixes to variable importance OpenMP threading inefficiencies related to GitHub issues 95,96,103. Variable importance is now repeatable via the seed argument, addressing GitHub issues 67,69. Fix to new distance measure not being normalized, addressing GitHub issue 100. Fixed an issue related to factors in test data where levels were not matching traning data. Improvements to user-interface for partial.rfsrc(). Some improvements in speed and internal logic in the absence of missing data.
+
+# randomForestSRC 2.11.0
+
+## Changes
+
+* Implementation of rfsrc.anonymous() allowing one to save a model without the presence of training data, and subsequently predicting without it, as well. Case specific error and VIMP for classification and regression.
+
+# randomForestSRC 2.10.0
+
+## Changes
+
+* New additions to the package include sidClustering of unsupervised data using staggered interaction data (SID) (Mantero and Ishwaran, 2020). Implements the artificial two-class approach of Breiman (2003). Improved hold out VIMP calculated from the error rate of mini ensembles of trees (blocks of trees) grown with and without a variable. Applies to all families. Finally, visualize trees on your Safari or Google Chrome browser using the new get.tree function for extracting trees from a forest. Many thanks to @dbarg1 on GitHub for the initial prototype of this last function.
+
+# randomForestSRC 2.9.3
+
+## Changes
+
+* Bug fixes: Serious impute() issue introduced in the last build (Bug 59 on GitHub). Fix to compile time error on systems that do not support OpenMP. Here, the OpenMP code that was inadvertently exposed is now protected when OpenMP support is not detected. Also updated impute.rfsc.Rd with a salient example.
+
+# randomForestSRC 2.9.2
+
+## Changes
+
+* Bug fixes: Fix to Windows 10 OpenMP stack allocation error encountered when survival and large n are encountered (Bug 50 on GitHub). Fix to get.quantile.stat() (Bug 51 on GitHub).
+
+# randomForestSRC 2.9.1
+
+## Changes
+
+* Bug fixes to quantreg and some minor updates to other functions.
+
+# randomForestSRC 2.9.0
+
+## Changes
+
+* Added new splitrules "auc" and "entropy" for classification. Improvements to quantile regression. Updates to holdout vimp. Some function names were changed as a general move towards name uniformity in the package. Updates to function imbalanced used for class imbalanced data.
+
+# randomForestSRC 2.8.0
+
+## Changes
+
+* Ensembles in regression now support Greenwald-Khanna approximate quantile queries via rfsrc(), predict.rfsrc() and the new wrapper quantileReg.rfsrc(). Related to this, a new split rule "quantile.regr" has been added. Specifications will be added to the GitHub page, shortly. Another new wrapper, imbalanced.rfsrc(), implements various solutions to the two-class imbalanced problem, including the newly proposed quantile-classifier approach of O'Brien and Ishwaran (2017). Also includes Breiman's balanced random forests undersampling of the majority class. Performance is assesssed using the G-mean, but misclassification error can be requested. Also, the new parameter get.tree in predict.rfsrc() allows users to extract the ensembles for a single tree or subset of trees over the forest. Finally, the default nodesize for survival and competing risk has been changed to 15.
+
+# randomForestSRC 2.7.0
+
+## Changes
+
+* Three primary additions.
+* Subsample Forests for VIMP Confidence Intervals: Uses subsampling to calculate confidence intervals and standard errors for VIMP (variable importance). Applies to all families.
+* Tune Random Forest for the optimal mtry and nodesize parameters: Finds the optimal mtry and nodesize tuning parameter for a random forest using out-of-bag (OOB) error. Applies to all families.
+* Fast approximate random forests: Uses subsampling with forest options set to encourage computational speed. Applies to all families.
+
+# randomForestSRC 2.6.1
+
+## Changes
+
+* Fix to predict() call not returning ensembles when y-vars not present. Sorry about that.
+
+# randomForestSRC 2.6.0
+
+## Changes
+
+* Serious improvements to OpenMP performance after addressing issues related to the blocking of threads during a number of calculations involving ensembles, importance, forest weights, and partial plots mostly in big-n data sets.
+
+# randomForestSRC 2.5.1
+
+## Changes
+
+* Addition of configure file to source package allowing more accessible OpenMP parallel execution on systems that support it.
+
+# randomForestSRC 2.5.0
+
+## Changes
+
+* Introduction of conditional quantiles for a regression forest. Applies to both univariate and multivariate forests. Can be used for both training and testing purposes and returns the conditional quantiles for the target outcomes, and conditional density, which can be used to calculate conditional moments, such as the mean and standard deviation.
+
+# randomForestSRC 2.4.2
+
+## Changes
+
+* Bug fixes to partial.rfsrc() on R and C side. Allowance of second order variable specification in this analysis. Conditional importance values in classification adjusted by a factor of exp.
+* Bug fix to unsafe threading in LB-VIMP calculations.
+
+# randomForestSRC 2.4.1
+
+## Changes
+
+* Fix to typedef that breaks Linux. Sorry about that.
+
+# randomForestSRC 2.4.0
+
+## Changes
+
+* Fix to custom splitting family verification and registration harness. Introduction of bootstrap="by.user". Fix to incorrect mapping of user specified time points to event times when ntime option is used. It is recommended that the use of this option be avoided. The effect of discretizing the time values compromises the ensembles. For best results, all event times must be used. This was and is the default behaviour. Fix to incorrect passing of time option parameter in plot.variable. Introduction of partial.rfsrc() to allow direct access to partial ensembles. Added support for long vectors on native code side.
+
+# randomForestSRC 2.3.0
+
+## Changes
+
+* Fix to levels.count when ntree=1. Some n-based loop optimization. Significant improvements in CPU times for restore-predict modes, and plot.variable(). Consequent changes to forest object, and incompatibility with objects created with previous versions of the package. Default is now importance=FALSE in predict.rfsrc().
+
+# randomForestSRC 2.2.0
+
+## Changes
+
+* Bug fix to coerce.factor option via get.xvar.nlevels() and get.yvar.nlevels() resolved by sending in max instead of number of levels. Bug fix to VIMP that potentially occurs in OpenMP mode causing non-zero LB-VIMP. Methodological fix to in-node imputation. and removal of na.random. Consequent incompatibility with objects created with previous versions of the package. Fix to rfsrcSyn() bug pertaining to colnames of test set synthetic features. Introduction of sampsize, samptype, and case.wt to address imbalanced data sets. Continued improvements to CPU and memory performance in big-n, big-p, and big-ntree scenarios.
+
+# randomForestSRC 2.1.0
+
+## Changes
+
+* Change to GROW mode default importance=none and to allow importance=TRUE. Addition of user trace with time estimates. CPU usage - code optimization of ensemble calculations. CPU usage - code optimization of imputation. Fix to R-side parsing of ensembles in multivariate classification. Change to treat ordered factors under classification setting instead of regression.
+
+# randomForestSRC 2.0.7
+
+## Changes
+
+* Fix to factor coercion option in responses. Fix to R-side processing of err.rate and importance in multivariate families with classification. Update of OPENMP protocols per CRAN recommendation. Expansion of fast.restore option to omit performance on every tree, and update to associated Rd file.
+
+# randomForestSRC 2.0.5
+
+## Changes
+
+* Fix to bug in dimensioning of predict object in survival families. Added documentation for custom splitting.
+
+# randomForestSRC 2.0.0
+
+## Changes
+
+* Multivariate capabilities added. Custom splitting harness modifications. Redefinition of nodesize to allow terminal nodes less than said size, subject to the initial test for 2 x nodesize before the split, maximum depth, and purity. Various bug fixes.
+
+# randomForestSRC 1.6.1
+
+## Changes
+
+* Fix to donttest example in rfsrc.Rd, and other adjustments per CRAN packaging protocols.
+
+# randomForestSRC 1.6.0
+
+## Changes
+
+* Bug fix to duplicating missingness protocol when restoring a forest. Added fast.restore option to grow call. Change to pass through xvar.wt as entered by user. RAM profile reduction in vimp(). Added versioning checks of forest object, thanks to suggestions by John Ehrlinger. Bug fix to allow logical responses, treated as reals. User trace functionality restored.
+
+# randomForestSRC 1.5.5
+
+## Changes
+
+* Bug fix to daughter assignment in classification. Significant RAM optimization in all modes.
+
+# randomForestSRC 1.5.4
+
+## Changes
+
+* Addition of new function stat.split() for extracting information from tree node splitting-statistics. Added more functionality to rfsrcSyn() for fitting synthetic random forests.
+
+# randomForestSRC 1.5.3
+
+## Changes
+
+* Addition of rfsrcSyn() function to grow a synthetic random forest (RF) using RF machines as synthetic features. Applies only to regression and classification settings. Used for prediction only.
+
+# randomForestSRC 1.5.2
+
+## Changes
+
+* Fix to non-standard GCC errors and warnings. Fix to bug in split rules related to omission of missing individuals in the split statistic. Minor R-side fixes.
+
+# randomForestSRC 1.5.1
+
+## Changes
+
+* Fix to UBSAN warnings. Implementation of new RG protocols.
+
+# randomForestSRC 1.5.0
+
+## Changes
+
+* Significant improvements to CPU and RAM usage profiles in serial and OpenMP modes of execution. Proximity options allow inbag, OOB and all. VIMP implements sub-setting and conditional variable importance. NA options allow the split statistic to be based on non-missing values only. In addition it allows random assignment of missing values.
+
+# randomForestSRC 1.4.0
+
+## Changes
+
+* Modification of terminal node imputation protocol. We now assign all individuals the same value rather than sampling from the distribution. Implementation of split.null option. Implementation of unsupervised splitting for missing data in impute.rfsrc(). Modification of nimpute > 1 protocols. In-bag, OOB, and all now depend on the mode. Reduction in impute memory footprint. Modification of proximity option to allow in-bag, OOB, and all. Fixed bug in predict involving manual formula calls. Fixed bug in find.interaction involving specifying covariate names. Changes relating to Undefined Behaviour Sanitizer.
+
+# randomForestSRC 1.3.0
+
+## Changes
+
+* Initial re-engineering of memory footprint for imputation. Performance enhancements to split rules.
+
+# randomForestSRC 1.2.0
+
+## Changes
+
+* Competing risks now implements two distinct splitting rules for identifying short term risks affecting the cause-specific hazard or long term predictions affecting the cumulative incidence function. The plot.variable function now returns, and can reuse, a plot.variable data structure object for user convenience. Thanks to John Ehrlinger for this improvement. Other minor bug fixes, and enhancements.
+
+# randomForestSRC 1.1.0
+
+## Changes
+
+* OpenMP performance enhancements to ensemble and variable importance calculations.
+
+# randomForestSRC 1.0.2
+
+## Changes
+
+* Fix to [S] missingness check when all status are non-censored. Fix to [S] summary imputation of time. Fix to variables used all.trees output. Fix to manual formula interface. Removed big.data option. Added ntime option for survival families.
+
+# randomForestSRC 1.0.1
+
+## Changes
+
+* Replaced 'suggests multicore' with 'depends parallel'. Followed protocol in parallel package for controlling number of cores, via options(), and environment variables. Reduced [S] memory footprint by prematurely de-allocating terminal node information.
+
+# randomForestSRC 1.0.0
+
+## Changes
+
+* First release of the package.
+

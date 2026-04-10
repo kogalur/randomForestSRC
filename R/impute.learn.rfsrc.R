@@ -14,7 +14,8 @@ impute.learn.rfsrc <- function(formula, data,
                                wipe = TRUE,
                                keep.models = is.null(out.dir),
                                keep.ximp = FALSE,
-                               save.on.fit = !is.null(out.dir)) {
+                               save.on.fit = !is.null(out.dir),
+                               save.ood = TRUE) {
   target.mode <- match.arg(target.mode)
   persist.on.fit <- !is.null(out.dir) && isTRUE(save.on.fit)
   if (isTRUE(save.on.fit) && is.null(out.dir)) {
@@ -130,6 +131,17 @@ impute.learn.rfsrc <- function(formula, data,
   engine <- if (isTRUE(anonymous)) rfsrc.anonymous else rfsrc
   models <- setNames(vector("list", length(targets)), targets)
   learners <- setNames(vector("list", length(targets)), targets)
+  ood.delta <- if (isTRUE(save.ood)) setNames(vector("list", length(targets)), targets) else NULL
+  ood.issues <- if (isTRUE(save.ood)) setNames(vector("list", length(targets)), targets) else NULL
+  record.ood.issue <- function(target, message) {
+    if (!isTRUE(save.ood)) return(invisible(NULL))
+    current <- ood.issues[[target]]
+    if (is.null(current)) current <- character(0)
+    if (!(message %in% current)) {
+      ood.issues[[target]] <<- c(current, message)
+    }
+    invisible(NULL)
+  }
   .msg("Training final-sweep learner bank...", verbose = verbose)
   sweep.start <- proc.time()[[3]]
   for (i in seq_along(sweep.order)) {
@@ -152,6 +164,7 @@ impute.learn.rfsrc <- function(formula, data,
          verbose = verbose)
     if (length(trn) == 0L) {
       learners[[yname]]$status <- "skipped.all.missing"
+      record.ood.issue(yname, "No observed training rows were available for OOD reference.")
       next
     }
     yy <- ximp[trn, yname]
@@ -179,12 +192,35 @@ impute.learn.rfsrc <- function(formula, data,
     if (inherits(grow, "error")) {
       learners[[yname]]$status <- "error"
       learners[[yname]]$error <- conditionMessage(grow)
+      record.ood.issue(yname, paste0("Learner fit failed: ", conditionMessage(grow)))
       .msg("      fit failed for `", yname, "`: ", conditionMessage(grow),
            verbose = verbose)
       next
     }
     learners[[yname]]$status <- "ok"
     learners[[yname]]$family <- grow$family
+    if (isTRUE(save.ood)) {
+      pred.oob <- list(
+        predicted = grow$predicted.oob,
+        class = grow$class.oob
+      )
+      delta.oob <- tryCatch(
+        .compute.ood.delta(yy, pred.oob, schema[[yname]]),
+        error = function(e) e
+      )
+      if (inherits(delta.oob, "error")) {
+        record.ood.issue(yname, paste0("Failed to compute OOD reference: ",
+                                       conditionMessage(delta.oob)))
+      }
+      else if (length(delta.oob) != length(trn)) {
+        record.ood.issue(yname, "OOB reference length did not match observed rows.")
+      }
+      else {
+        tmp <- rep(NA_real_, nrow(train.data))
+        tmp[trn] <- as.numeric(delta.oob)
+        ood.delta[[yname]] <- tmp
+      }
+    }
     if (isTRUE(keep.models)) {
       models[[yname]] <- grow
     }
@@ -201,8 +237,52 @@ impute.learn.rfsrc <- function(formula, data,
   sweep.seconds <- proc.time()[[3]] - sweep.start
   .msg("Final-sweep learner bank finished in ", format(sweep.seconds, digits = 4),
        " seconds.", verbose = verbose)
+  ood <- NULL
+  if (isTRUE(save.ood)) {
+    target.reference <- list()
+    valid.ood.targets <- character(0)
+    for (yname in targets) {
+      delta.y <- ood.delta[[yname]]
+      if (is.null(delta.y) || !any(is.finite(delta.y))) {
+        if (is.null(ood.issues[[yname]]) || length(ood.issues[[yname]]) == 0L) {
+          record.ood.issue(yname, "No finite OOD reference values were available.")
+        }
+        next
+      }
+      target.reference[[yname]] <- .make.ood.reference(delta.y)
+      valid.ood.targets <- c(valid.ood.targets, yname)
+    }
+    if (length(valid.ood.targets) > 0L) {
+      target.score.train <- do.call(cbind, lapply(valid.ood.targets, function(yname) {
+        .eval.ood.reference(ood.delta[[yname]], target.reference[[yname]])
+      }))
+      colnames(target.score.train) <- valid.ood.targets
+      default.weight <- setNames(rep(1, length(valid.ood.targets)), valid.ood.targets)
+      row.score.train <- .aggregate.ood.row(target.score.train, default.weight)
+      row.reference <- .make.ood.reference(row.score.train)
+    }
+    else {
+      default.weight <- setNames(numeric(0), character(0))
+      row.reference <- NULL
+    }
+    ood <- list(
+      version = "1.0",
+      reference = "oob",
+      aggregate = "weighted.mean",
+      target.metric = c(
+        numeric = "absolute.error",
+        factor = "negative.log.probability",
+        fallback = "misclass.or.rank.distance"
+      ),
+      targets = valid.ood.targets,
+      weight = default.weight,
+      target.reference = target.reference,
+      row.reference = row.reference,
+      issues = ood.issues
+    )
+  }
   manifest <- list(
-    version = "1.1",
+    version = "1.2",
     created.at = format(Sys.time(), tz = "UTC", usetz = TRUE),
     formula = if (missing(formula)) NULL else paste(deparse(formula), collapse = ""),
     formula.scope = "initial imputation stage only",
@@ -222,6 +302,8 @@ impute.learn.rfsrc <- function(formula, data,
     anonymous = anonymous,
     fast = fast,
     full.sweep.options = full.sweep.options,
+    save.ood = save.ood,
+    ood = ood,
     train.missing.count = colSums(which.na),
     train.missing.frac = colMeans(which.na),
     n.train = nrow(train.data),
@@ -343,37 +425,88 @@ predict.impute.learn.rfsrc <- function(object, newdata,
                                        cache.learners = c("session", "none", "all"),
                                        verbose = TRUE,
                                        ...) {
+  cache.learners <- match.arg(cache.learners)
+  prep <- .prepare.impute.learn.newdata(
+    object = object,
+    newdata = newdata,
+    targets = targets,
+    max.predict.iter = max.predict.iter,
+    eps = eps,
+    restore.integer = restore.integer,
+    cache.learners = cache.learners,
+    verbose = verbose
+  )
+  attr(prep$data, "impute.learn.info") <- prep$info
+  prep$data
+}
+predict.impute.learn <- predict.impute.learn.rfsrc
+impute.ood.rfsrc <- function(object, newdata,
+                             targets = NULL,
+                             max.predict.iter = 3L,
+                             eps = 1e-3,
+                             cache.learners = c("all", "session", "none"),
+                             weight = NULL,
+                             return.details = FALSE,
+                             verbose = TRUE,
+                             ...) {
+  cache.learners <- match.arg(cache.learners)
   if (!inherits(object, "impute.learn.rfsrc")) {
     stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
   }
-  harmonized <- .harmonize.newdata(newdata, object$manifest, verbose = verbose)
-  data <- harmonized$data
+  ood.ref <- object$manifest$ood
+  if (is.null(ood.ref) || length(ood.ref$targets %||% character(0)) == 0L) {
+    stop("No saved OOD reference was found in 'object$manifest$ood'. ",
+         "Refit with save.ood = TRUE to enable OOD scoring.",
+         call. = FALSE)
+  }
   if (!is.null(targets)) {
     bad.targets <- setdiff(targets, object$manifest$targets)
     if (length(bad.targets) > 0L) {
-      warning("Ignoring unknown prediction targets: ",
+      warning("Ignoring unknown OOD targets: ",
               paste(bad.targets, collapse = ", "),
               call. = FALSE)
     }
   }
-  use.targets <- if (is.null(targets)) object$manifest$targets else {
+  score.targets <- if (is.null(targets)) object$manifest$targets else {
     intersect(object$manifest$targets, targets)
   }
-  if (length(use.targets) == 0L) {
-    stop("No valid targets requested for prediction-time imputation.", call. = FALSE)
+  if (length(score.targets) == 0L) {
+    stop("No valid targets requested for OOD scoring.", call. = FALSE)
   }
-  cache.learners <- match.arg(cache.learners)
-  original.missing <- as.data.frame(is.na(data[, use.targets, drop = FALSE]))
-  names(original.missing) <- use.targets
-  data <- .apply.init(data, object$manifest$init, object$manifest$schema)
-  ## makes working copy of `data` look more like the training x-schema before iterative sweep
-  data <- .restore.schema(data, object$manifest$schema, restore.integer = TRUE)
-  pass.history <- numeric(0)
-  sweep.order <- object$manifest$sweep.order
-  sweep.order <- sweep.order[sweep.order %in% use.targets]
-  cache.env <- if (identical(cache.learners, "none")) NULL else new.env(parent = emptyenv())
-  disk.load.targets <- character(0)
-  target.issues <- setNames(vector("list", length(use.targets)), use.targets)
+  prep <- .prepare.impute.learn.newdata(
+    object = object,
+    newdata = newdata,
+    targets = NULL,
+    max.predict.iter = max.predict.iter,
+    eps = eps,
+    restore.integer = TRUE,
+    cache.learners = cache.learners,
+    verbose = verbose
+  )
+  use.targets <- intersect(score.targets, ood.ref$targets %||% character(0))
+  missing.ref.targets <- setdiff(score.targets, use.targets)
+  if (length(missing.ref.targets) > 0L) {
+    warning("Skipping targets without a saved OOD reference: ",
+            paste(missing.ref.targets, collapse = ", "),
+            call. = FALSE)
+  }
+  if (length(use.targets) == 0L) {
+    stop("No requested targets have a saved OOD reference.", call. = FALSE)
+  }
+  weight <- .resolve.ood.weight(use.targets, weight, default = ood.ref$weight)
+  completed.data <- prep$data
+  n <- nrow(completed.data)
+  target.delta <- matrix(NA_real_, nrow = n, ncol = length(use.targets),
+                         dimnames = list(NULL, use.targets))
+  target.score <- matrix(NA_real_, nrow = n, ncol = length(use.targets),
+                         dimnames = list(NULL, use.targets))
+  target.issues <- prep$info$target.issues
+  if (is.null(target.issues)) {
+    target.issues <- setNames(vector("list", length(use.targets)), use.targets)
+  }
+  for (nm in setdiff(use.targets, names(target.issues))) {
+    target.issues[[nm]] <- character(0)
+  }
   record.issue <- function(target, message) {
     current <- target.issues[[target]]
     if (is.null(current)) current <- character(0)
@@ -382,105 +515,124 @@ predict.impute.learn.rfsrc <- function(object, newdata,
     }
     invisible(NULL)
   }
-  any.target.missing <- length(sweep.order) > 0L &&
-    any(as.matrix(original.missing[, sweep.order, drop = FALSE]))
-  if (isTRUE(any.target.missing) && identical(cache.learners, "all")) {
-    .msg("Preloading learner bank for prediction...", verbose = verbose)
-    for (target in sweep.order) {
-      info <- object$manifest$learners[[target]]
-      if (!identical(info$status, "ok")) next
-      mdl.info <- .predict.get.model(object, target, cache.env = cache.env)
-      if (isTRUE(mdl.info$loaded.from.disk)) {
-        disk.load.targets <- c(disk.load.targets, target)
+  disk.load.targets <- prep$info$disk.load.targets %||% character(0)
+  unseen.mask <- prep$harmonized$unseen.mask
+  unseen.rows <- prep$harmonized$unseen.rows
+  .msg("Scoring OOD targets...", verbose = verbose)
+  for (target in use.targets) {
+    info <- object$manifest$learners[[target]]
+    if (!identical(info$status, "ok")) {
+      msg <- paste0("No trained learner is available (status = ",
+                    info$status %||% "unknown", ").")
+      record.issue(target, msg)
+      next
+    }
+    mdl.info <- .predict.get.model(object, target, cache.env = prep$cache.env)
+    mdl <- mdl.info$model
+    if (isTRUE(mdl.info$loaded.from.disk)) {
+      disk.load.targets <- c(disk.load.targets, target)
+    }
+    if (is.null(mdl)) {
+      record.issue(target, mdl.info$error %||% "learner could not be loaded")
+      next
+    }
+    xvars <- object$manifest$predictor.map[[target]]
+    pred.df <- completed.data[, xvars, drop = FALSE]
+    pred.df <- .conform.x.to.forest(pred.df, mdl)
+    pred <- tryCatch(
+      predict(mdl, pred.df),
+      error = function(e) e
+    )
+    if (inherits(pred, "error")) {
+      record.issue(target, paste0("Prediction failed: ", conditionMessage(pred)))
+      if (identical(prep$cache.learners, "none") && is.null(object$models[[target]])) {
+        rm(mdl)
+        gc()
       }
-      if (is.null(mdl.info$model) && !is.null(mdl.info$error)) {
-        record.issue(target, mdl.info$error)
-      }
+      next
+    }
+    observed <- prep$harmonized$data[[target]]
+    delta <- .compute.ood.delta(observed, pred,
+                                object$manifest$schema[[target]])
+    target.unseen <- if (target %in% names(unseen.mask)) {
+      unseen.mask[[target]]
+    } else {
+      rep(FALSE, n)
+    }
+    if (length(target.unseen) > 0L && any(target.unseen)) {
+      delta[target.unseen] <- Inf
+    }
+    score.j <- .eval.ood.reference(delta, ood.ref$target.reference[[target]])
+    if (length(target.unseen) > 0L && any(target.unseen)) {
+      score.j[target.unseen] <- 1
+    }
+    target.delta[, target] <- delta
+    target.score[, target] <- score.j
+    if (identical(prep$cache.learners, "none") && is.null(object$models[[target]])) {
+      rm(mdl)
+      gc()
     }
   }
-  if (isTRUE(any.target.missing)) {
-    .msg("Starting prediction-time sweep...", verbose = verbose)
-    for (iter in seq_len(max.predict.iter)) {
-      old.data <- data
-      .msg("  prediction pass ", iter, "/", max.predict.iter, verbose = verbose)
-      for (target in sweep.order) {
-        miss.idx <- which(original.missing[[target]])
-        if (length(miss.idx) == 0L) next
-        info <- object$manifest$learners[[target]]
-        if (!identical(info$status, "ok")) {
-          msg <- paste0("No trained learner is available (status = ",
-                        info$status %||% "unknown", ").")
-          record.issue(target, msg)
-          .msg("    skipping `", target, "` (", msg, ")", verbose = verbose)
-          next
-        }
-        mdl.info <- .predict.get.model(object, target, cache.env = cache.env)
-        mdl <- mdl.info$model
-        if (isTRUE(mdl.info$loaded.from.disk)) {
-          disk.load.targets <- c(disk.load.targets, target)
-        }
-        if (is.null(mdl)) {
-          msg <- mdl.info$error %||% "learner could not be loaded"
-          record.issue(target, msg)
-          .msg("    skipping `", target, "` (", msg, ")", verbose = verbose)
-          next
-        }
-        ## conform step: makes sure factors are treated properly
-        xvars <- object$manifest$predictor.map[[target]]
-        pred.df <- data[miss.idx, xvars, drop = FALSE]
-        pred.df <- .conform.x.to.forest(pred.df, mdl)
-        pred <- tryCatch(
-          predict(mdl, pred.df),
-          error = function(e) e
-        )
-        if (inherits(pred, "error")) {
-          msg <- paste0("Prediction failed: ", conditionMessage(pred))
-          record.issue(target, msg)
-          .msg("    prediction failed for `", target, "`: ", conditionMessage(pred),
-               verbose = verbose)
-          next
-        }
-        values <- .extract.prediction(pred, info$family, object$manifest$schema[[target]])
-        data[miss.idx, target] <- values
-        if (identical(cache.learners, "none") && is.null(object$models[[target]])) {
-          rm(mdl)
-          gc()
-        }
-      }
-      diff.err <- .compute.pass.diff(old.data, data, original.missing,
-                                     object$manifest$schema,
-                                     object$manifest$scale,
-                                     sweep.order)
-      pass.history <- c(pass.history, diff.err)
-      .msg("    pass diff = ", format(diff.err, digits = 4), verbose = verbose)
-      if (is.finite(diff.err) && diff.err < eps) {
-        .msg("    convergence criterion met; stopping early.", verbose = verbose)
-        break
-      }
-    }
+  score <- .aggregate.ood.row(target.score[, use.targets, drop = FALSE], weight)
+  weight.mask <- matrix(rep(weight > 0, each = n), nrow = n)
+  targets.used <- rowSums(is.finite(target.score[, use.targets, drop = FALSE]) & weight.mask)
+  score.percentile <- rep(NA_real_, n)
+  row.reference.used <- FALSE
+  row.reference.reason <- NULL
+  same.targets <- setequal(use.targets, ood.ref$targets %||% character(0)) &&
+    length(use.targets) == length(ood.ref$targets %||% character(0))
+  same.weight <- .same.ood.weight(use.targets, weight, ood.ref$weight)
+  if (!is.null(ood.ref$row.reference) && isTRUE(same.targets) && isTRUE(same.weight)) {
+    score.percentile <- .eval.ood.reference(score, ood.ref$row.reference)
+    row.reference.used <- TRUE
   }
   else {
-    .msg("No missing values were found among prediction-time targets; ",
-         "skipping iterative sweep.", verbose = verbose)
+    if (is.null(ood.ref$row.reference)) {
+      row.reference.reason <- "No saved row-level OOD reference is available."
+    }
+    else if (!isTRUE(same.targets)) {
+      row.reference.reason <- "Saved row-level OOD calibration requires scoring the original target set."
+    }
+    else if (!isTRUE(same.weight)) {
+      row.reference.reason <- "Saved row-level OOD calibration requires the default target weights."
+    }
   }
-  data <- .restore.schema(data, object$manifest$schema,
-                          restore.integer = restore.integer)
+  if (length(unseen.rows) > 0L && any(unseen.rows)) {
+    score[unseen.rows] <- 1
+    if (isTRUE(row.reference.used)) {
+      score.percentile[unseen.rows] <- 1
+    }
+  }
   target.issues <- target.issues[lengths(target.issues) > 0L]
-  attr(data, "impute.learn.info") <- list(
-    n.passes = length(pass.history),
-    pass.diff = pass.history,
-    targets = use.targets,
-    added.columns = harmonized$added.cols,
-    dropped.extra.columns = harmonized$extra.cols,
-    unseen.levels = harmonized$unseen.levels,
-    cache.learners = cache.learners,
-    n.disk.loads = length(disk.load.targets),
-    disk.load.targets = unique(disk.load.targets),
-    target.issues = target.issues
+  out <- list(
+    score = score,
+    score.percentile = score.percentile,
+    targets.used = targets.used,
+    target.score = if (isTRUE(return.details)) target.score[, use.targets, drop = FALSE] else NULL,
+    target.delta = if (isTRUE(return.details)) target.delta[, use.targets, drop = FALSE] else NULL,
+    info = list(
+      targets = use.targets,
+      weight = weight,
+      added.columns = prep$info$added.columns,
+      dropped.extra.columns = prep$info$dropped.extra.columns,
+      unseen.levels = prep$info$unseen.levels,
+      unseen.rows = unseen.rows,
+      maxed.rows = unseen.rows,
+      cache.learners = prep$cache.learners,
+      n.disk.loads = length(unique(disk.load.targets)),
+      disk.load.targets = unique(disk.load.targets),
+      row.reference.used = row.reference.used,
+      row.reference.reason = row.reference.reason,
+      target.issues = target.issues
+    )
   )
-  data
+  if (isTRUE(return.details)) {
+    out$info$unseen.mask <- unseen.mask
+  }
+  class(out) <- c("impute.ood.rfsrc", "impute.ood")
+  out
 }
-predict.impute.learn <- predict.impute.learn.rfsrc
+impute.ood <- impute.ood.rfsrc
 print.impute.learn.rfsrc <- function(x, ...) {
   cat("Predictive imputer (randomForestSRC)\n")
   cat("  version:       ", x$manifest$version, "\n", sep = "")
@@ -488,6 +640,7 @@ print.impute.learn.rfsrc <- function(x, ...) {
   cat("  training rows: ", x$manifest$n.train, "\n", sep = "")
   cat("  training cols: ", x$manifest$p.train, "\n", sep = "")
   cat("  targets:       ", length(x$manifest$targets), "\n", sep = "")
+  cat("  ood targets:   ", length(x$manifest$ood$targets %||% character(0)), "\n", sep = "")
   cat("  learner root:  ", x$manifest$learner.root, "\n", sep = "")
   cat("  path:          ", x$path %||% "<memory>", "\n", sep = "")
   invisible(x)

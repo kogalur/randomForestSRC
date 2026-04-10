@@ -7,9 +7,11 @@
 \alias{load.impute.learn}
 \alias{predict.impute.learn.rfsrc}
 \alias{predict.impute.learn}
+\alias{impute.ood.rfsrc}
+\alias{impute.ood}
 \alias{print.impute.learn.rfsrc}
 \alias{print.impute.learn}
-\title{Learn a predictive imputer for test-time imputation}
+\title{Learn a predictive imputer for test-time imputation and OOD scoring}
 \description{
   Learns a predictive imputer from training data for later use on new data.
 
@@ -18,6 +20,12 @@
   learner per selected target on the completed training data and reuses
   those learners later to update missing values in new data without
   refitting on the test set.
+
+  The same saved learner bank can also be used to score new data for
+  out-of-distribution (OOD) behavior. Each selected target is reconstructed
+  from its saved conditional learner and compared with the observed value.
+  Target-wise discrepancies are calibrated against a training reference saved
+  in the manifest, preferably from out-of-bag predictions computed during fit.
 
   If the training data are complete and \code{target.mode = "all"},
   the initial training-data imputation step is skipped and the
@@ -40,7 +48,8 @@ impute.learn.rfsrc(formula, data,
   wipe = TRUE,
   keep.models = is.null(out.dir),
   keep.ximp = FALSE,
-  save.on.fit = !is.null(out.dir))
+  save.on.fit = !is.null(out.dir),
+  save.ood = TRUE)
 
 save.impute.learn.rfsrc(object, path, wipe = TRUE, verbose = TRUE)
 
@@ -52,6 +61,16 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
   targets = NULL,
   restore.integer = TRUE,
   cache.learners = c("session", "none", "all"),
+  verbose = TRUE,
+  ...)
+
+impute.ood.rfsrc(object, newdata,
+  targets = NULL,
+  max.predict.iter = 3L,
+  eps = 1e-3,
+  cache.learners = c("all", "session", "none"),
+  weight = NULL,
+  return.details = FALSE,
   verbose = TRUE,
   ...)
 }
@@ -70,7 +89,9 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
     max.iter, ytry, always.use, verbose}{Arguments passed to
     \code{impute} for the initial training-data imputation. The
     argument \code{full.sweep} is controlled internally and should not
-    be supplied.}
+    be supplied. The same \code{verbose}, \code{max.predict.iter},
+    \code{eps}, and \code{cache.learners} controls are also used by
+    \code{predict.impute.learn} and \code{impute.ood}.}
 
   \item{mf.q}{Controls the imputation engine used by \code{impute}. If
     \code{mf.q = 1}, training uses standard \code{missForest}. If
@@ -80,12 +101,12 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
 
   \item{eps}{Convergence threshold. In \code{impute.learn} this
     controls the initial training-data imputation. In
-    \code{predict.impute.learn} it controls early stopping for the
-    prediction-time sweep.}
+    \code{predict.impute.learn} and \code{impute.ood} it controls early
+    stopping for the prediction-time sweep.}
 
   \item{\dots}{For \code{impute.learn}, additional arguments passed to
-    \code{impute}. For \code{predict.impute.learn}, additional
-    arguments are currently ignored.}
+    \code{impute}. For \code{predict.impute.learn} and
+    \code{impute.ood}, additional arguments are currently ignored.}
 
   \item{full.sweep.options}{A \code{list} of options used when fitting
     the full sweep after the training data have been imputed.
@@ -100,7 +121,8 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
     learners only for variables that were missing in the training data.
     The option \code{"all"} saves a learner for every variable. If the
     training data are complete, \code{target.mode = "all"} must be
-    used.}
+    used. For the broadest OOD coverage, \code{target.mode = "all"} is
+    recommended so every deployment-time variable can be reconstructed.}
 
   \item{deployment.xvars}{Controls which predictors are assumed to be
     available later when the saved imputer is used on new data. If
@@ -138,6 +160,11 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
   \item{save.on.fit}{If \code{TRUE} and \code{out.dir} is supplied,
     writes the imputer to disk during fitting.}
 
+  \item{save.ood}{If \code{TRUE}, computes and stores an OOD reference
+    in \code{object$manifest$ood}. The reference is built during
+    training from target-wise out-of-bag reconstruction discrepancies
+    and a row-level aggregate using the default equal target weights.}
+
   \item{object}{An object returned by \code{impute.learn} or
     \code{load.impute.learn}.}
 
@@ -145,19 +172,25 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
     operations require the \pkg{fst} package because learners are read
     and written with \code{fast.save} and \code{fast.load}.}
 
-  \item{targets}{Optional subset of target variables to load or to
-    update during prediction. Unknown names are ignored with a warning.}
+  \item{targets}{Optional subset of target variables to load, update,
+    or score. Unknown names are ignored with a warning. For
+    \code{impute.ood}, the row-level percentile calibration stored in
+    the manifest is only directly reusable when the original saved OOD
+    target set is scored.}
 
   \item{lazy}{If \code{TRUE}, saved learners are loaded only when they
     are needed. If \code{FALSE}, all saved learners are loaded at once.}
 
-  \item{newdata}{New data to be imputed. Missing columns are added and
-    extra columns are dropped to match the training schema. Unseen
-    factor levels are converted to \code{NA} and then treated as missing
-    values during initialization and imputation.}
+  \item{newdata}{New data to be imputed or scored. Missing columns are
+    added and extra columns are dropped to match the training schema.
+    Unseen factor levels are converted to \code{NA} for harmonization,
+    but they are also tracked row-wise. In \code{impute.ood}, any row
+    containing an unseen factor level is flagged and its row-level OOD
+    score is set to the maximum value.}
 
   \item{max.predict.iter}{Maximum number of full-sweep passes applied to
-    \code{newdata}.}
+    \code{newdata} before the saved learner bank is used for OOD
+    reconstruction or returned prediction-time imputations.}
 
   \item{restore.integer}{If \code{TRUE}, integer columns in the
     returned data are rounded and restored as integers. Factor columns
@@ -167,13 +200,25 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
     possible, otherwise an error is raised.}
 
   \item{cache.learners}{How saved learners are reused during
-    prediction. The default \code{"session"} loads each needed learner
-    once per call to \code{predict}. The option \code{"none"} reloads a
-    learner every time it is needed. The option \code{"all"} loads all
-    saved learners before prediction starts.}
+    prediction or OOD scoring. For \code{predict.impute.learn}, the
+    default \code{"session"} loads each needed learner once per call.
+    The option \code{"none"} reloads a learner every time it is needed.
+    The option \code{"all"} loads all requested learners before work
+    starts. For \code{impute.ood}, \code{"all"} is the default because
+    the saved learner bank is typically reused once for predictor-side
+    completion and again for target reconstruction.}
+
+  \item{weight}{Optional nonnegative target weights used by
+    \code{impute.ood} when aggregating calibrated target scores into a
+    row-level score. If omitted, the saved default weights from the
+    manifest are used, or equal weights if no defaults are available.}
+
+  \item{return.details}{If \code{TRUE}, \code{impute.ood} returns the
+    per-target discrepancy and calibrated target-score matrices and a
+    row-by-variable unseen-level mask in the diagnostics.}
 }
 \details{
-  This function fits a predictive imputer in two stages.
+  This functionality fits a predictive imputer in two stages.
 
   The training data are first normalized to a data frame. Variables
   that are not real-valued are coerced to factors when possible;
@@ -225,13 +270,51 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
   variable. Complete training data also require
   \code{target.mode = "all"}, because otherwise there are no missing
   variables from which to determine the saved targets.
+
+  If \code{save.ood = TRUE}, the fit also stores an OOD reference in the
+  manifest. For each saved target, the out-of-bag prediction from the
+  fitted learner is compared with the observed training value to form a
+  target-wise reconstruction discrepancy. Continuous and integer targets
+  use absolute reconstruction error. Factor targets prefer the negative
+  log predictive probability assigned to the observed class. When class
+  probabilities are unavailable, unordered factors fall back to a 0/1
+  mismatch score and ordered factors fall back to a scaled rank
+  distance.
+
+  \code{impute.ood} first completes the predictor side of \code{newdata}
+  using the same iterative sweep method of
+  \code{predict.impute.learn}. It then reconstructs each requested
+  target directly from its saved learner and compares the reconstruction
+  with the observed value. Raw target discrepancies are converted to
+  target-wise OOD scores using the saved target-specific training
+  references, which places continuous and factor targets on a common
+  scale.
+
+  The row-level OOD score is the weighted mean of those calibrated
+  target-wise scores over the targets that are both observed and
+  scoreable for that row. A second component, \code{score.percentile},
+  is returned when the saved row-level training reference can be used.
+  That percentile is directly reusable only when the original saved OOD
+  target set is scored with the default saved weights. If a different
+  target subset or different weights are used, the weighted mean score
+  is still returned but the saved row-level percentile is left
+  unavailable.
+
+  Unseen factor levels are tracked row-wise during harmonization.
+  Because such values are immediate anomalies relative to the training
+  schema, \code{impute.ood} flags those rows and assigns them the
+  maximum row-level score. If the unseen level occurs in a scored target
+  itself, the corresponding target-level discrepancy is also treated as
+  maximal.
 }
 \value{
   \code{impute.learn} returns an object of class
   \code{c("impute.learn.rfsrc", "impute.learn")}. The object
   contains a manifest, optionally the fitted full-sweep learners,
   optionally the completed training data, and optionally a path to the
-  saved imputer on disk.
+  saved imputer on disk. If \code{save.ood = TRUE}, the manifest also
+  contains an \code{ood} component storing compact target-wise and
+  row-wise OOD references.
 
   \code{load.impute.learn} returns an object of the same class.
 
@@ -239,8 +322,32 @@ load.impute.learn.rfsrc(path, targets = NULL, lazy = TRUE, verbose = TRUE)
   overlaid. An attribute named \code{"impute.learn.info"} contains
   prediction-time diagnostics such as the number of sweep passes,
   pass-difference history, caching mode, disk-load counts, schema
-  harmonization details, and any targets skipped because a learner was
-  unavailable or a prediction failed.
+  harmonization details, row-wise unseen-factor flags, and any targets
+  skipped because a learner was unavailable or a prediction failed.
+
+  \code{impute.ood} returns an object of class
+  \code{c("impute.ood.rfsrc", "impute.ood")}. It is a list with the
+  following components:
+  \itemize{
+    \item \code{score}: the row-level weighted mean of calibrated
+      target-wise OOD scores. Larger values indicate greater
+      out-of-distribution behavior.
+    \item \code{score.percentile}: the percentile of \code{score}
+      relative to the saved row-level training reference when that
+      calibration is valid for the requested targets and weights;
+      otherwise \code{NA}.
+    \item \code{targets.used}: the number of weighted targets that
+      contributed to each row-level score.
+    \item \code{target.score}: optional matrix of target-wise calibrated
+      OOD scores, returned when \code{return.details = TRUE}.
+    \item \code{target.delta}: optional matrix of raw target-wise
+      reconstruction discrepancies, returned when
+      \code{return.details = TRUE}.
+    \item \code{info}: a list of diagnostics including harmonization
+      details, row-wise unseen-factor flags, learner-loading
+      information, whether the saved row-level calibration was used, and
+      any target-specific issues.
+  }
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -281,6 +388,31 @@ fit <- impute.learn(
 
 test.imp <- predict(fit, test, max.predict.iter = 2, verbose = FALSE)
 head(test.imp)
+
+## OOD scoring is most informative when every deployment-time
+## variable can be reconstructed, so target.mode = "all" is recommended.
+ood.fit <- impute.learn(
+  data = train,
+  ntree = 25,
+  mf.q = 1,
+  max.iter = 5,
+  target.mode = "all",
+  save.ood = TRUE,
+  full.sweep.options = list(ntree = 25, nsplit = 5),
+  verbose = FALSE
+)
+
+ood <- impute.ood(ood.fit, test, return.details = TRUE, verbose = FALSE)
+head(ood$score)
+head(ood$score.percentile)
+
+
+## example where test data has unseen levels for a factor
+test.mod <- test
+levels(test.mod$Month) <- c(levels(test.mod$Month), "fake")
+test.mod$Month[sample(seq_len(nrow(test.mod)), 10)] <- "fake"
+print(impute.ood(ood.fit, test.mod)$score)
+
 }
 
 \dontrun{
@@ -331,13 +463,20 @@ levels(test$stage) <- c(levels(test$stage), "fake")
 test$stage[sample(seq_len(nrow(test)), 10)] <- "fake"
 
 ## train forest
-fit <- suppressWarnings(impute.learn(Surv(days, status) ~ ., train, keep.models = TRUE))
+fit <- suppressWarnings(
+  impute.learn(Surv(days, status) ~ ., train,
+               target.mode = "all",
+               save.ood = TRUE,
+               keep.models = TRUE)
+)
 
 ## save/reload
 bundle.dir <- file.path(tempdir(), "pbc.imputer")
 save.impute.learn(fit, bundle.dir, verbose = FALSE)
 imp <- load.impute.learn(bundle.dir, lazy = TRUE, verbose = FALSE)
 test.imp <- predict(imp, test, max.predict.iter = 2, verbose = FALSE)
+ood <- impute.ood(imp, test, return.details = TRUE, verbose = FALSE)
+which(ood$info$unseen.rows)
 print(summary(test.imp))
 unlink(bundle.dir, recursive = TRUE)
 }

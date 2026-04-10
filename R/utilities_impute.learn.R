@@ -266,14 +266,21 @@
   newdata <- newdata[, required.cols, drop = FALSE]
   unseen.levels <- vector("list", length(required.cols))
   names(unseen.levels) <- required.cols
+  unseen.mask <- matrix(FALSE, nrow = nrow(newdata), ncol = length(required.cols),
+                        dimnames = list(NULL, required.cols))
   for (nm in required.cols) {
     sc <- manifest$schema[[nm]]
     x <- newdata[[nm]]
     if (isTRUE(sc$is.factor)) {
       xchr <- as.character(x)
-      unseen <- unique(stats::na.omit(xchr[!(xchr %in% sc$levels)]))
+      bad <- !is.na(xchr) & !(xchr %in% sc$levels)
+      unseen <- unique(xchr[bad])
+      unseen <- stats::na.omit(unseen)
       if (length(unseen) > 0L) {
-        unseen.levels[[nm]] <- unseen
+        unseen.levels[[nm]] <- as.character(unseen)
+      }
+      if (nrow(newdata) > 0L) {
+        unseen.mask[, nm] <- bad
       }
       newdata[[nm]] <- .coerce.factor.levels(xchr, sc$levels, ordered = sc$ordered)
     }
@@ -285,7 +292,9 @@
     data = newdata,
     added.cols = added.cols,
     extra.cols = extra.cols,
-    unseen.levels = unseen.levels
+    unseen.levels = unseen.levels,
+    unseen.mask = as.data.frame(unseen.mask, stringsAsFactors = FALSE),
+    unseen.rows = if (nrow(newdata) == 0L) logical(0) else rowSums(unseen.mask) > 0L
   )
 }
 .apply.init <- function(data, init, schema) {
@@ -351,6 +360,191 @@
   }
   out
 }
+.extract.class.prob <- function(pred, target.schema = NULL) {
+  if (is.null(pred)) return(NULL)
+  prob <- pred$predicted
+  if (is.data.frame(prob)) {
+    prob <- as.matrix(prob)
+  }
+  if (!is.matrix(prob)) {
+    return(NULL)
+  }
+  if (is.null(colnames(prob)) && !is.null(target.schema$levels) &&
+      ncol(prob) == length(target.schema$levels)) {
+    colnames(prob) <- target.schema$levels
+  }
+  prob
+}
+.ood.delta.regression <- function(observed, pred, target.schema = NULL) {
+  if (is.null(pred) || is.null(pred$predicted)) {
+    return(rep(NA_real_, length(observed)))
+  }
+  out <- pred$predicted
+  if (isTRUE(target.schema$is.integer)) {
+    out <- as.integer(round(out))
+  }
+  obs <- .as.numeric.from.schema(observed, target.schema)
+  est <- .as.numeric.from.schema(out, target.schema)
+  abs(obs - est)
+}
+.ood.delta.classification <- function(observed, pred, target.schema,
+                                      prob.floor = 1e-12) {
+  y <- as.character(observed)
+  out <- rep(NA_real_, length(y))
+  missing.y <- is.na(y)
+  prob <- .extract.class.prob(pred, target.schema)
+  if (!is.null(prob) && nrow(prob) == length(y)) {
+    lev <- colnames(prob)
+    pos <- match(y, lev)
+    ok <- !missing.y & !is.na(pos)
+    if (any(ok)) {
+      p.true <- prob[cbind(which(ok), pos[ok])]
+      p.true[!is.finite(p.true)] <- 0
+      out[ok] <- -log(pmax(p.true, prob.floor))
+    }
+    if (any(!missing.y & is.na(pos))) {
+      out[!missing.y & is.na(pos)] <- Inf
+    }
+    return(out)
+  }
+  cls <- pred$class
+  if (is.null(cls) && !is.null(pred$predicted)) {
+    cls <- pred$predicted
+  }
+  cls <- as.character(cls)
+  ok <- !missing.y & !is.na(cls)
+  if (!any(ok)) {
+    return(out)
+  }
+  if (isTRUE(target.schema$ordered)) {
+    obs.code <- match(y[ok], target.schema$levels)
+    cls.code <- match(cls[ok], target.schema$levels)
+    denom <- max(1L, length(target.schema$levels) - 1L)
+    out[ok] <- abs(obs.code - cls.code) / denom
+  }
+  else {
+    out[ok] <- as.numeric(y[ok] != cls[ok])
+  }
+  out
+}
+.compute.ood.delta <- function(observed, pred, target.schema) {
+  if (isTRUE(target.schema$is.factor)) {
+    .ood.delta.classification(observed, pred, target.schema = target.schema)
+  }
+  else {
+    .ood.delta.regression(observed, pred, target.schema = target.schema)
+  }
+}
+.make.ood.reference <- function(x, probs = seq(0, 1, length.out = 257)) {
+  x <- as.numeric(x)
+  x <- x[is.finite(x)]
+  probs <- unique(sort(pmin(1, pmax(0, probs))))
+  if (length(probs) < 2L) {
+    probs <- c(0, 1)
+  }
+  if (length(x) == 0L) {
+    return(list(
+      probs = c(0, 1),
+      quantiles = c(0, 0),
+      n = 0L
+    ))
+  }
+  q <- as.numeric(stats::quantile(x, probs = probs, names = FALSE,
+                                  na.rm = TRUE, type = 8))
+  q <- cummax(q)
+  list(
+    probs = probs,
+    quantiles = q,
+    n = length(x)
+  )
+}
+.eval.ood.reference <- function(x, ref) {
+  out <- rep(NA_real_, length(x))
+  if (length(out) == 0L || is.null(ref) || is.null(ref$quantiles)) {
+    return(out)
+  }
+  ok <- is.finite(x)
+  if (!any(ok)) {
+    return(out)
+  }
+  q <- as.numeric(ref$quantiles)
+  p <- as.numeric(ref$probs)
+  if (length(q) == 0L || length(p) == 0L) {
+    return(out)
+  }
+  if (length(q) == 1L || all(q == q[1L])) {
+    out[ok] <- ifelse(x[ok] <= q[1L], p[1L], p[length(p)])
+    return(out)
+  }
+  idx <- findInterval(x[ok], q, rightmost.closed = TRUE, all.inside = TRUE)
+  idx <- pmax(1L, pmin(length(p), idx))
+  out[ok] <- p[idx]
+  out
+}
+.aggregate.ood.row <- function(mat, weight = NULL) {
+  mat <- as.matrix(mat)
+  if (ncol(mat) == 0L) {
+    return(rep(NA_real_, nrow(mat)))
+  }
+  if (is.null(weight)) {
+    weight <- rep(1, ncol(mat))
+  }
+  if (length(weight) != ncol(mat)) {
+    stop("'weight' must have one entry per target.", call. = FALSE)
+  }
+  weight <- as.numeric(weight)
+  out <- rep(NA_real_, nrow(mat))
+  for (i in seq_len(nrow(mat))) {
+    ok <- is.finite(mat[i, ]) & is.finite(weight) & weight > 0
+    if (!any(ok)) next
+    out[i] <- sum(weight[ok] * mat[i, ok]) / sum(weight[ok])
+  }
+  out
+}
+.resolve.ood.weight <- function(targets, weight = NULL, default = NULL) {
+  if (is.null(weight)) {
+    weight <- default
+  }
+  if (is.null(weight)) {
+    weight <- setNames(rep(1, length(targets)), targets)
+  }
+  if (is.null(names(weight))) {
+    if (length(weight) != length(targets)) {
+      stop("'weight' must have one entry per target.", call. = FALSE)
+    }
+    weight <- setNames(as.numeric(weight), targets)
+  }
+  else {
+    missing.targets <- setdiff(targets, names(weight))
+    if (length(missing.targets) > 0L) {
+      stop("Weights are missing for targets: ",
+           paste(missing.targets, collapse = ", "),
+           call. = FALSE)
+    }
+    weight <- as.numeric(weight[targets])
+    names(weight) <- targets
+  }
+  if (any(!is.finite(weight) | weight < 0)) {
+    stop("'weight' must contain finite nonnegative values.", call. = FALSE)
+  }
+  if (!any(weight > 0)) {
+    stop("At least one target weight must be positive.", call. = FALSE)
+  }
+  weight
+}
+.same.ood.weight <- function(targets, x, y,
+                             tolerance = sqrt(.Machine$double.eps)) {
+  if (is.null(x) || is.null(y)) {
+    return(FALSE)
+  }
+  wx <- tryCatch(.resolve.ood.weight(targets, x), error = function(e) NULL)
+  wy <- tryCatch(.resolve.ood.weight(targets, y), error = function(e) NULL)
+  if (is.null(wx) || is.null(wy)) {
+    return(FALSE)
+  }
+  isTRUE(all.equal(unname(wx), unname(wy), tolerance = tolerance,
+                   check.attributes = FALSE))
+}
 .compute.pass.diff <- function(old.data, new.data, missing.mask, schema, scale, targets) {
   diffs <- sapply(targets, function(y) {
     idx <- missing.mask[[y]]
@@ -369,6 +563,157 @@
     sqrt(mean((xn - xo)^2, na.rm = TRUE) / (0.001 + sy^2))
   })
   mean(diffs, na.rm = TRUE)
+}
+.prepare.impute.learn.newdata <- function(object, newdata,
+                                          targets = NULL,
+                                          max.predict.iter = 3L,
+                                          eps = 1e-3,
+                                          restore.integer = TRUE,
+                                          cache.learners = c("session", "none", "all"),
+                                          verbose = TRUE) {
+  if (!inherits(object, "impute.learn.rfsrc")) {
+    stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
+  }
+  if (!is.null(targets)) {
+    bad.targets <- setdiff(targets, object$manifest$targets)
+    if (length(bad.targets) > 0L) {
+      warning("Ignoring unknown targets: ",
+              paste(bad.targets, collapse = ", "),
+              call. = FALSE)
+    }
+  }
+  use.targets <- if (is.null(targets)) object$manifest$targets else {
+    intersect(object$manifest$targets, targets)
+  }
+  if (length(use.targets) == 0L) {
+    stop("No valid targets requested.", call. = FALSE)
+  }
+  cache.learners <- match.arg(cache.learners)
+  harmonized <- .harmonize.newdata(newdata, object$manifest, verbose = verbose)
+  data <- harmonized$data
+  original.missing <- as.data.frame(is.na(data[, use.targets, drop = FALSE]))
+  names(original.missing) <- use.targets
+  data <- .apply.init(data, object$manifest$init, object$manifest$schema)
+  ## makes working copy of `data` look more like the training x-schema before iterative sweep
+  data <- .restore.schema(data, object$manifest$schema, restore.integer = TRUE)
+  pass.history <- numeric(0)
+  sweep.order <- object$manifest$sweep.order
+  sweep.order <- sweep.order[sweep.order %in% use.targets]
+  cache.env <- if (identical(cache.learners, "none")) NULL else new.env(parent = emptyenv())
+  disk.load.targets <- character(0)
+  target.issues <- setNames(vector("list", length(use.targets)), use.targets)
+  record.issue <- function(target, message) {
+    current <- target.issues[[target]]
+    if (is.null(current)) current <- character(0)
+    if (!(message %in% current)) {
+      target.issues[[target]] <<- c(current, message)
+    }
+    invisible(NULL)
+  }
+  if (identical(cache.learners, "all")) {
+    .msg("Preloading learner bank...", verbose = verbose)
+    for (target in use.targets) {
+      info <- object$manifest$learners[[target]]
+      if (!identical(info$status, "ok")) next
+      mdl.info <- .predict.get.model(object, target, cache.env = cache.env)
+      if (isTRUE(mdl.info$loaded.from.disk)) {
+        disk.load.targets <- c(disk.load.targets, target)
+      }
+      if (is.null(mdl.info$model) && !is.null(mdl.info$error)) {
+        record_issue <- mdl.info$error
+        record.issue(target, record_issue)
+      }
+    }
+  }
+  any.target.missing <- length(sweep.order) > 0L &&
+    any(as.matrix(original.missing[, sweep.order, drop = FALSE]))
+  if (isTRUE(any.target.missing)) {
+    .msg("Starting prediction-time sweep...", verbose = verbose)
+    for (iter in seq_len(max.predict.iter)) {
+      old.data <- data
+      .msg("  prediction pass ", iter, "/", max.predict.iter, verbose = verbose)
+      for (target in sweep.order) {
+        miss.idx <- which(original.missing[[target]])
+        if (length(miss.idx) == 0L) next
+        info <- object$manifest$learners[[target]]
+        if (!identical(info$status, "ok")) {
+          msg <- paste0("No trained learner is available (status = ",
+                        info$status %||% "unknown", ").")
+          record.issue(target, msg)
+          .msg("    skipping `", target, "` (", msg, ")", verbose = verbose)
+          next
+        }
+        mdl.info <- .predict.get.model(object, target, cache.env = cache.env)
+        mdl <- mdl.info$model
+        if (isTRUE(mdl.info$loaded.from.disk)) {
+          disk.load.targets <- c(disk.load.targets, target)
+        }
+        if (is.null(mdl)) {
+          msg <- mdl.info$error %||% "learner could not be loaded"
+          record.issue(target, msg)
+          .msg("    skipping `", target, "` (", msg, ")", verbose = verbose)
+          next
+        }
+        xvars <- object$manifest$predictor.map[[target]]
+        pred.df <- data[miss.idx, xvars, drop = FALSE]
+        pred.df <- .conform.x.to.forest(pred.df, mdl)
+        pred <- tryCatch(
+          predict(mdl, pred.df),
+          error = function(e) e
+        )
+        if (inherits(pred, "error")) {
+          msg <- paste0("Prediction failed: ", conditionMessage(pred))
+          record.issue(target, msg)
+          .msg("    prediction failed for `", target, "`: ", conditionMessage(pred),
+               verbose = verbose)
+          next
+        }
+        values <- .extract.prediction(pred, info$family, object$manifest$schema[[target]])
+        data[miss.idx, target] <- values
+        if (identical(cache.learners, "none") && is.null(object$models[[target]])) {
+          rm(mdl)
+          gc()
+        }
+      }
+      diff.err <- .compute.pass.diff(old.data, data, original.missing,
+                                     object$manifest$schema,
+                                     object$manifest$scale,
+                                     sweep.order)
+      pass.history <- c(pass.history, diff.err)
+      .msg("    pass diff = ", format(diff.err, digits = 4), verbose = verbose)
+      if (is.finite(diff.err) && diff.err < eps) {
+        .msg("    convergence criterion met; stopping early.", verbose = verbose)
+        break
+      }
+    }
+  }
+  else {
+    .msg("No missing values were found among requested targets; ",
+         "skipping iterative sweep.", verbose = verbose)
+  }
+  data <- .restore.schema(data, object$manifest$schema,
+                          restore.integer = restore.integer)
+  target.issues <- target.issues[lengths(target.issues) > 0L]
+  list(
+    data = data,
+    use.targets = use.targets,
+    harmonized = harmonized,
+    cache.learners = cache.learners,
+    cache.env = cache.env,
+    info = list(
+      n.passes = length(pass.history),
+      pass.diff = pass.history,
+      targets = use.targets,
+      added.columns = harmonized$added.cols,
+      dropped.extra.columns = harmonized$extra.cols,
+      unseen.levels = harmonized$unseen.levels,
+      unseen.rows = harmonized$unseen.rows,
+      cache.learners = cache.learners,
+      n.disk.loads = length(disk.load.targets),
+      disk.load.targets = unique(disk.load.targets),
+      target.issues = target.issues
+    )
+  )
 }
 .fast.load.learner <- function(target, info, learner.root, strict = TRUE) {
   .check.fst()
