@@ -481,7 +481,157 @@
   out[ok] <- p[idx]
   out
 }
-.aggregate.ood.row <- function(mat, weight = NULL) {
+.canonicalize.ood.aggregate <- function(aggregate = "weighted.mean",
+                                        aggregate.args = NULL) {
+  choices <- c(
+    "bounded.product",
+    "weighted.mean",
+    "weighted.lp",
+    "weighted.lp.log",
+    "top.k"
+  )
+  if (is.null(aggregate) || length(aggregate) == 0L) {
+    aggregate <- "weighted.mean"
+  }
+  aggregate <- match.arg(aggregate, choices = choices)
+  if (is.null(aggregate.args)) {
+    aggregate.args <- list()
+  }
+  if (!is.list(aggregate.args)) {
+    stop("'aggregate.args' must be a list.", call. = FALSE)
+  }
+  used <- character(0)
+  args <- list()
+  if (aggregate %in% c("weighted.lp", "weighted.lp.log")) {
+    p <- aggregate.args$p %||% 2
+    if (!is.numeric(p) || length(p) != 1L || !is.finite(p) || p < 1) {
+      stop("The row aggregate power 'p' must be a finite scalar >= 1.",
+           call. = FALSE)
+    }
+    args$p <- as.numeric(p)
+    used <- c(used, "p")
+  }
+  if (aggregate == "weighted.lp.log") {
+    agg.eps <- aggregate.args$eps %||% 1e-12
+    if (!is.numeric(agg.eps) || length(agg.eps) != 1L ||
+        !is.finite(agg.eps) || agg.eps <= 0) {
+      stop("The row aggregate 'eps' must be a finite positive scalar.",
+           call. = FALSE)
+    }
+    args$eps <- as.numeric(agg.eps)
+    used <- c(used, "eps")
+  }
+  if (aggregate == "top.k") {
+    k <- aggregate.args$k %||% aggregate.args$top.k %||% 1L
+    if (!is.numeric(k) || length(k) != 1L || !is.finite(k) || k < 1) {
+      stop("The top-k row aggregate requires a finite scalar 'k' >= 1.",
+           call. = FALSE)
+    }
+    args$k <- as.integer(max(1L, round(k)))
+    used <- c(used, "k", "top.k")
+  }
+  if (aggregate == "bounded.product") {
+    agg.eps <- aggregate.args$eps %||% 1e-12
+    if (!is.numeric(agg.eps) || length(agg.eps) != 1L ||
+        !is.finite(agg.eps) || agg.eps <= 0) {
+      stop("The bounded-product row aggregate requires a finite positive 'eps'.",
+           call. = FALSE)
+    }
+    args$eps <- as.numeric(agg.eps)
+    used <- c(used, "eps")
+  }
+  extra <- setdiff(names(aggregate.args), unique(used))
+  if (length(extra) > 0L) {
+    warning("Ignoring unknown aggregate.args entries: ",
+            paste(extra, collapse = ", "),
+            call. = FALSE)
+  }
+  list(name = aggregate, args = args)
+}
+.same.ood.aggregate <- function(aggregate, aggregate.args = NULL,
+                                ref.aggregate, ref.aggregate.args = NULL,
+                                tolerance = sqrt(.Machine$double.eps)) {
+  ax <- tryCatch(
+    .canonicalize.ood.aggregate(aggregate, aggregate.args),
+    error = function(e) NULL
+  )
+  ay <- tryCatch(
+    .canonicalize.ood.aggregate(ref.aggregate, ref.aggregate.args),
+    error = function(e) NULL
+  )
+  if (is.null(ax) || is.null(ay)) {
+    return(FALSE)
+  }
+  if (!identical(ax$name, ay$name)) {
+    return(FALSE)
+  }
+  if (!setequal(names(ax$args), names(ay$args))) {
+    return(FALSE)
+  }
+  if (length(ax$args) == 0L) {
+    return(TRUE)
+  }
+  isTRUE(all(vapply(names(ax$args), function(nm) {
+    isTRUE(all.equal(ax$args[[nm]], ay$args[[nm]],
+                     tolerance = tolerance,
+                     check.attributes = FALSE))
+  }, logical(1))))
+}
+.ood.aggregate.vector <- function(x, weight, aggregate.spec) {
+  ok <- is.finite(x) & is.finite(weight) & weight > 0
+  if (!any(ok)) {
+    return(NA_real_)
+  }
+  x <- as.numeric(x[ok])
+  weight <- as.numeric(weight[ok])
+  denom <- sum(weight)
+  if (!is.finite(denom) || denom <= 0) {
+    return(NA_real_)
+  }
+  switch(
+    aggregate.spec$name,
+    weighted.mean = {
+      sum(weight * x) / denom
+    },
+    weighted.lp = {
+      p <- aggregate.spec$args$p
+      (sum(weight * (x ^ p)) / denom) ^ (1 / p)
+    },
+    weighted.lp.log = {
+      p <- aggregate.spec$args$p
+      agg.eps <- aggregate.spec$args$eps
+      u <- pmin(1, pmax(0, x))
+      z <- -log(pmax(1 - u, agg.eps))
+      (sum(weight * (z ^ p)) / denom) ^ (1 / p)
+    },
+    top.k = {
+      k <- min(length(x), aggregate.spec$args$k)
+      ord <- order(x, decreasing = TRUE, na.last = NA)
+      sel <- ord[seq_len(k)]
+      sum(weight[sel] * x[sel]) / sum(weight[sel])
+    },
+    bounded.product = {
+      agg.eps <- aggregate.spec$args$eps
+      u <- pmin(1, pmax(0, x))
+      wnorm <- weight / denom
+      surv <- pmax(1 - u, agg.eps)
+      pmin(1, pmax(0, 1 - exp(sum(wnorm * log(surv)))))
+    },
+    stop("Unknown OOD row aggregate: ", aggregate.spec$name, call. = FALSE)
+  )
+}
+.max.ood.aggregate.value <- function(aggregate = "weighted.mean",
+                                    aggregate.args = NULL) {
+  aggregate.spec <- .canonicalize.ood.aggregate(aggregate, aggregate.args)
+  switch(
+    aggregate.spec$name,
+    weighted.lp.log = -log(aggregate.spec$args$eps),
+    1
+  )
+}
+.aggregate.ood.row <- function(mat, weight = NULL,
+                               aggregate = "weighted.mean",
+                               aggregate.args = NULL) {
   mat <- as.matrix(mat)
   if (ncol(mat) == 0L) {
     return(rep(NA_real_, nrow(mat)))
@@ -493,36 +643,175 @@
     stop("'weight' must have one entry per target.", call. = FALSE)
   }
   weight <- as.numeric(weight)
+  aggregate.spec <- .canonicalize.ood.aggregate(aggregate, aggregate.args)
   out <- rep(NA_real_, nrow(mat))
   for (i in seq_len(nrow(mat))) {
-    ok <- is.finite(mat[i, ]) & is.finite(weight) & weight > 0
-    if (!any(ok)) next
-    out[i] <- sum(weight[ok] * mat[i, ok]) / sum(weight[ok])
+    out[i] <- .ood.aggregate.vector(mat[i, ], weight, aggregate.spec)
   }
   out
 }
-.resolve.ood.weight <- function(targets, weight = NULL, default = NULL) {
-  if (is.null(weight)) {
-    weight <- default
+.as.ood.train.score.matrix <- function(x, targets = NULL) {
+  if (is.null(x)) {
+    return(NULL)
   }
-  if (is.null(weight)) {
-    weight <- setNames(rep(1, length(targets)), targets)
+  mat <- tryCatch(as.matrix(x), error = function(e) NULL)
+  if (is.null(mat)) {
+    return(NULL)
   }
-  if (is.null(names(weight))) {
+  storage.mode(mat) <- "double"
+  if (is.null(colnames(mat)) && !is.null(targets) && ncol(mat) == length(targets)) {
+    colnames(mat) <- targets
+  }
+  mat
+}
+.rebuild.ood.row.reference <- function(train.target.score, targets, weight,
+                                       saved.targets = NULL,
+                                       aggregate = "weighted.mean",
+                                       aggregate.args = NULL) {
+  mat <- .as.ood.train.score.matrix(train.target.score, targets = saved.targets)
+  if (is.null(mat)) {
+    return(list(
+      reference = NULL,
+      row.score = NULL,
+      n.finite = 0L,
+      reason = paste(
+        "No saved training OOD target scores are available.",
+        "Refit with the updated imputer to enable row-level percentile",
+        "recalibration for arbitrary target subsets, weights, and row aggregates."
+      )
+    ))
+  }
+  if (length(targets) == 0L || ncol(mat) == 0L) {
+    return(list(
+      reference = NULL,
+      row.score = rep(NA_real_, nrow(mat)),
+      n.finite = 0L,
+      reason = "No saved training OOD target scores are available for the requested targets."
+    ))
+  }
+  if (is.null(colnames(mat))) {
+    return(list(
+      reference = NULL,
+      row.score = NULL,
+      n.finite = 0L,
+      reason = paste(
+        "Saved training OOD target scores lack target names.",
+        "Refit with the updated imputer to enable row-level percentile",
+        "recalibration for arbitrary target subsets, weights, and row aggregates."
+      )
+    ))
+  }
+  missing.targets <- setdiff(targets, colnames(mat))
+  if (length(missing.targets) > 0L) {
+    return(list(
+      reference = NULL,
+      row.score = NULL,
+      n.finite = 0L,
+      reason = paste0(
+        "Saved training OOD target scores are missing requested targets: ",
+        paste(missing.targets, collapse = ", "), "."
+      )
+    ))
+  }
+  row.score <- .aggregate.ood.row(
+    mat[, targets, drop = FALSE],
+    weight = weight,
+    aggregate = aggregate,
+    aggregate.args = aggregate.args
+  )
+  n.finite <- sum(is.finite(row.score))
+  if (n.finite == 0L) {
+    return(list(
+      reference = NULL,
+      row.score = row.score,
+      n.finite = 0L,
+      reason = paste(
+        "No finite row-level training OOD scores were available for the",
+        "requested targets, weights, and row aggregates."
+      )
+    ))
+  }
+  list(
+    reference = .make.ood.reference(row.score),
+    row.score = row.score,
+    n.finite = n.finite,
+    reason = NULL
+  )
+}
+.resolve.ood.weight <- function(targets, weight = NULL, default = NULL,
+                                warn.extra = TRUE) {
+  targets <- as.character(targets %||% character(0))
+  if (length(targets) == 0L) {
+    return(setNames(numeric(0), character(0)))
+  }
+  validate.named.weight <- function(x, what = "'weight'") {
+    if (is.null(names(x))) {
+      return(invisible(NULL))
+    }
+    dup <- unique(names(x)[duplicated(names(x))])
+    if (length(dup) > 0L) {
+      stop(what, " contains duplicated target names: ",
+           paste(dup, collapse = ", "),
+           call. = FALSE)
+    }
+    invisible(NULL)
+  }
+  align.named.weight <- function(x, what = "'weight'",
+                                 warn.extra = TRUE,
+                                 require.match = TRUE,
+                                 fill = 0) {
+    validate.named.weight(x, what = what)
+    out <- setNames(rep(fill, length(targets)), targets)
+    extra.targets <- setdiff(names(x), targets)
+    if (isTRUE(warn.extra) && length(extra.targets) > 0L) {
+      warning("Ignoring ", what, " entries for unknown targets: ",
+              paste(extra.targets, collapse = ", "),
+              call. = FALSE)
+    }
+    matched.targets <- intersect(targets, names(x))
+    if (length(matched.targets) == 0L) {
+      if (isTRUE(require.match)) {
+        stop(what, " did not match any requested targets.", call. = FALSE)
+      }
+      return(out)
+    }
+    out[matched.targets] <- as.numeric(x[matched.targets])
+    out
+  }
+  if (is.null(weight) || length(weight) == 0L) {
+    if (is.null(default) || length(default) == 0L) {
+      weight <- setNames(rep(1, length(targets)), targets)
+    }
+    else if (is.null(names(default))) {
+      if (length(default) != length(targets)) {
+        stop("'default' must have one entry per target.", call. = FALSE)
+      }
+      weight <- setNames(as.numeric(default), targets)
+    }
+    else {
+      weight <- align.named.weight(
+        x = default,
+        what = "'default'",
+        warn.extra = FALSE,
+        require.match = FALSE,
+        fill = 0
+      )
+    }
+  }
+  else if (is.null(names(weight))) {
     if (length(weight) != length(targets)) {
       stop("'weight' must have one entry per target.", call. = FALSE)
     }
     weight <- setNames(as.numeric(weight), targets)
   }
   else {
-    missing.targets <- setdiff(targets, names(weight))
-    if (length(missing.targets) > 0L) {
-      stop("Weights are missing for targets: ",
-           paste(missing.targets, collapse = ", "),
-           call. = FALSE)
-    }
-    weight <- as.numeric(weight[targets])
-    names(weight) <- targets
+    weight <- align.named.weight(
+      x = weight,
+      what = "'weight'",
+      warn.extra = warn.extra,
+      require.match = TRUE,
+      fill = 0
+    )
   }
   if (any(!is.finite(weight) | weight < 0)) {
     stop("'weight' must contain finite nonnegative values.", call. = FALSE)
@@ -537,8 +826,14 @@
   if (is.null(x) || is.null(y)) {
     return(FALSE)
   }
-  wx <- tryCatch(.resolve.ood.weight(targets, x), error = function(e) NULL)
-  wy <- tryCatch(.resolve.ood.weight(targets, y), error = function(e) NULL)
+  wx <- tryCatch(
+    .resolve.ood.weight(targets, x, warn.extra = FALSE),
+    error = function(e) NULL
+  )
+  wy <- tryCatch(
+    .resolve.ood.weight(targets, y, warn.extra = FALSE),
+    error = function(e) NULL
+  )
   if (is.null(wx) || is.null(wy)) {
     return(FALSE)
   }

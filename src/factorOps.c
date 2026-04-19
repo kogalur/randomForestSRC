@@ -13,6 +13,9 @@
 #include "error.h"
 Factor *makeFactor(uint r, char bookFlag) {
   uint i;
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nmakeFactor(%2x) ENTRY ...\n", bookFlag);
+  ${trace.token}  }
   Factor *f = (Factor*) gblock((size_t) sizeof(Factor));
   f -> r = r;
   f -> cardinalGroupCount = (uint) floor(r/2);
@@ -49,9 +52,36 @@ Factor *makeFactor(uint r, char bookFlag) {
       bookFactor(f);
     }
   }  
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    if (r <= MAX_EXACT_LEVEL) {
+  ${trace.token}      RF_nativePrint("\n    Levels   GrpCount  PairCount\n");
+  ${trace.token}      RF_nativePrint("%10d %10d %12d \n", f -> r, f -> cardinalGroupCount, *((uint*) f -> complementaryPairCount));
+  ${trace.token}      RF_nativePrint("\n     Group         Size \n");
+  ${trace.token}      for (i=1; i <= f -> cardinalGroupCount; i++) {
+  ${trace.token}        RF_nativePrint("%10d %12d \n", i, ((uint*) f -> cardinalGroupSize)[i]);
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    else {
+  ${trace.token}      RF_nativePrint("\n    Levels   GrpCount                PairCount\n");
+  ${trace.token}      RF_nativePrint("%10d %10d %24.0f \n", f -> r, f -> cardinalGroupCount, *((double*) f -> complementaryPairCount));
+  ${trace.token}      RF_nativePrint("\n     Group                     Size \n");
+  ${trace.token}      for (i=1; i <= f -> cardinalGroupCount; i++) {
+  ${trace.token}        RF_nativePrint("%10d %24.0f \n", i, ((double*) f -> cardinalGroupSize)[i]);
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nmakeFactor() EXIT ...\n");
+  ${trace.token}  }
   return f;
 }
 void freeFactor(Factor *f) {
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfreeFactor() ENTRY ...\n");
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("  Factor Size:  %10d \n", f -> r);
+  ${trace.token}  }
   if (f -> r > 1) {
     unbookFactor(f);
     if (f -> r <= MAX_EXACT_LEVEL) {
@@ -62,11 +92,17 @@ void freeFactor(Factor *f) {
     }
   }
   free_gblock(f, (size_t) sizeof(Factor));
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfreeFactor() EXIT ...\n");
+  ${trace.token}  }
 }
 char bookFactor(Factor *f) {
   uint i, j;
   uint row;
   char result;
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nbookFactor(%4d) ENTRY ...\n", f -> r);
+  ${trace.token}  }
   if (((f -> r) < 2) || ((f -> r) > MAX_EXACT_LEVEL)) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Minimum or Maximum number of factor levels violated in bookFactor(). ");
@@ -83,7 +119,14 @@ char bookFactor(Factor *f) {
       for (j = 1; j <= f -> cardinalGroupCount; j++) {
         leftLevel[j] = 0;
       }
+      ${trace.token}      if (getTraceFlag(0) & FACT_HGH_TRACE) {
+      ${trace.token}        RF_nativePrint("\nBooking Group:  %10d", i);
+      ${trace.token}        RF_nativePrint("\n     Index       Binary");
+      ${trace.token}      }
       bookPair(f -> r , i, 1, &row, leftLevel, f);
+      ${trace.token}      if (getTraceFlag(0) & FACT_HGH_TRACE) {
+      ${trace.token}        RF_nativePrint("\n");
+      ${trace.token}      }
     }
     free_uivector(leftLevel, 1, f -> cardinalGroupCount);
     result = TRUE;
@@ -91,11 +134,17 @@ char bookFactor(Factor *f) {
   else {
     result = FALSE;
   }
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nbookFactor(%2x) EXIT ...\n", result);
+  ${trace.token}  }
   return result;
 }
 char unbookFactor(Factor *f) {
   char result;
   uint i;
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunbookFactor() ENTRY ...\n");
+  ${trace.token}  }
   if (f -> cardinalGroupBinary != NULL) {
     for (i = 1; i <= f -> cardinalGroupCount; i++) {
       free_uivector((f -> cardinalGroupBinary)[i], 1, ((uint*) f -> cardinalGroupSize)[i]);
@@ -107,6 +156,9 @@ char unbookFactor(Factor *f) {
   else {
     result = FALSE;
   }
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunbookFactor(%2x) EXIT ...\n", result);
+  ${trace.token}  }
   return result;
 }
 void bookPair (uint    levelCount,
@@ -116,6 +168,9 @@ void bookPair (uint    levelCount,
                uint   *level,
                Factor *f) {
   uint i;
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nbookPair() ENTRY ...\n");
+  ${trace.token}  }
   level[levelIndex] ++;
   if (levelIndex < groupIndex) {
     levelIndex ++;
@@ -138,10 +193,17 @@ void bookPair (uint    levelCount,
     for (i=1; i <=groupIndex; i++) {
       (f -> cardinalGroupBinary)[groupIndex][*row] += upower(2, level[i] - 1);
     }
+    ${trace.token}    if (getTraceFlag(0) & FACT_HGH_TRACE) {
+    ${trace.token}      RF_nativePrint("\n%10d", *row);
+    ${trace.token}      RF_nativePrint(", hex = %16x", (uint) (f -> cardinalGroupBinary)[groupIndex][*row]);
+    ${trace.token}    }
     if ( (levelCount > 2) && (level[levelIndex] < levelCount)) {
       bookPair(levelCount, groupIndex, levelIndex, row, level, f);
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nbookPair() EXIT ...\n");
+  ${trace.token}  }
 }
 void nChooseK (uint n, uint r, char type, void *result) {
   if (type == EXACT) {
@@ -210,5 +272,14 @@ char splitOnFactor(uint level, uint *mwcp) {
   if (binaryWord & mwcp[mwcpWordIdent]) {
     daughterFlag = LEFT;
   }
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nSplit on factor with:  level = %8d, mwcp id = %8d, level in binary = %8x, word in binary = %8x --> ", level, mwcpWordIdent, binaryWord, mwcp[mwcpWordIdent]);
+  ${trace.token}    if (daughterFlag == LEFT) {
+  ${trace.token}      RF_nativePrint("LEFT");
+  ${trace.token}    }
+  ${trace.token}    else {
+  ${trace.token}      RF_nativePrint("RGHT");
+  ${trace.token}    }
+  ${trace.token}  }
   return daughterFlag;
 }

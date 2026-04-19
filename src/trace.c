@@ -41,6 +41,27 @@ unsigned int updateTimeStamp(unsigned int before) {
   return stamp;
 }
 void memoryCheck(void) {
+  ${stack.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${stack.token}    RF_nativePrint("\n");
+  ${stack.token}    RF_nativePrint("\nMaximum stack usage:  usage = %20lld ", getMaxMemoryAllocation());
+  ${stack.token}    RF_nativePrint("\nExiting stack usage:  usage = %20lld ", getMinMemoryAllocation());
+  ${stack.token}    RF_nativePrint("\n");
+  ${stack.token}    RF_nativePrint("\n");
+  ${stack.token}  }
+  ${stack.token}  if (getMinMemoryAllocation() != 0) {
+  ${stack.token}    RF_nativePrint("\n");
+  ${stack.token}    RF_nativePrint("\nProbe (informal) stack usage:  usage = %20lld ", getProbeMemoryAllocation());
+  ${stack.token}    RF_nativePrint("\n");
+  ${stack.token}    RF_nativePrint("\n");
+  ${stack.token}  }
+  ${stack.token}  if (getMinMemoryAllocation() != 0) {
+  ${stack.token}    RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+  ${stack.token}    RF_nativeError("\nRF-SRC:  Stack imbalance, exiting usage is not zero (0):  %20d  ", getMinMemoryAllocation());
+  ${stack.token}    RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+  ${stack.token}    RF_nativePrint("\n");
+  ${stack.token}    RF_nativePrint("\n");
+  ${stack.token}    RF_nativeExit();
+  ${stack.token}  }
 }
 void setMaxMemoryAllocation(size_t value) {
   RF_memor_maxMemoryAllocation = value;

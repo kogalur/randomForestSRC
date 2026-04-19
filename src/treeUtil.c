@@ -36,6 +36,14 @@ char growTreeRecursive (uint     r,
   uint *repMembrIndx, *allMembrIndx;
   uint  repMembrSize,  allMembrSize;
   uint i, p;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngrowTreeRecursive(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngrowTreeRecursive (%10d) leaf:  %10d at depth %10d \n", treeID, parent -> nodeID, parent -> depth);
+  ${trace.token}    RF_nativePrint("\n  called with   rep size:  %10d", parent -> repMembrSize);
+  ${trace.token}    RF_nativePrint("\n  called with   all size:  %10d", parent -> allMembrSize);
+  ${trace.token}  }
   bootResult = TRUE;
   terminalFlag = TRUE;
   splitInfo = NULL;
@@ -185,6 +193,17 @@ char growTreeRecursive (uint     r,
                                  &RF_tLeafCount[treeID],
                                  RF_nodeMembership[treeID]);
       if (forkResult == TRUE) {
+        ${trace.token}          if (getTraceFlag(treeID) & FORK_DEF_TRACE) {
+        ${trace.token}          if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+        ${trace.token}            RF_nativePrint("\ngNode Membership (%10d):  \n", treeID);
+        ${trace.token}            for (i=1; i <=  RF_observationSize; i++) {
+        ${trace.token}              RF_nativePrint("%10d %10d \n", i, RF_nodeMembership[treeID][i] -> nodeID);
+        ${trace.token}            }
+        ${trace.token}          }
+        ${trace.token}          }
+        ${trace.token}        if (getTraceFlag(treeID) & FORK_DEF_TRACE) {
+        ${trace.token}          RF_nativePrint("\ngrowTreeRecursive(%10d) LEFT:  \n", treeID);
+        ${trace.token}        }
         leftResult = growTreeRecursive (r,
                                FALSE,
                                multImpFlag,
@@ -194,7 +213,13 @@ char growTreeRecursive (uint     r,
                                rmbrIterator,
                                ambrIterator);
         if(!leftResult) {
+          ${trace.token}        if (getTraceFlag(treeID) & BOOT_MED_TRACE) {
+          ${trace.token}          RF_nativePrint("\ngrowTreeRecursive(%10d) LEFT call failed:  ", treeID);
+          ${trace.token}        }
         }
+        ${trace.token}        if (getTraceFlag(treeID) & FORK_DEF_TRACE) {
+        ${trace.token}          RF_nativePrint("\ngrowTreeRecursive(%10d) RIGHT:  \n", treeID);
+        ${trace.token}        }
         rghtResult = growTreeRecursive (r,
                                FALSE,
                                multImpFlag,
@@ -204,6 +229,9 @@ char growTreeRecursive (uint     r,
                                rmbrIterator,
                                ambrIterator);
         if(!rghtResult) {
+          ${trace.token}        if (getTraceFlag(treeID) & BOOT_MED_TRACE) {
+          ${trace.token}          RF_nativePrint("\ngrowTreeRecursive(%10d) RGHT call failed:  ", treeID);
+          ${trace.token}        }
         }
         free_uivector((parent -> left)  -> allMembrIndx, 1, (parent -> left)  -> allMembrSizeAlloc);
         free_uivector((parent -> right) -> allMembrIndx, 1, (parent -> right) -> allMembrSizeAlloc);
@@ -231,16 +259,25 @@ char growTreeRecursive (uint     r,
       parent -> permissibleIndxSize = 0;
       parent -> splitInfo = NULL;
       freeSplitInfoMax(splitInfoMax);
+      ${trace.token}      if (getTraceFlag(treeID) & SPLT_DEF_TRACE) {
+      ${trace.token}        RF_nativePrint("\ngetBestSplit() FAILED ...\n");
+      ${trace.token}      }
     }
   }  
   else {
     if (rootFlag) {
       if (!bootResult) {
         terminalFlag = FALSE;
+        ${trace.token}      if (getTraceFlag(treeID) & SPLT_DEF_TRACE) {
+        ${trace.token}        RF_nativePrint("\nbootstrap(%10d) FAILED at root node.  Tree rejected.  \n", treeID);
+        ${trace.token}      }
       }
     }
   }  
   if (terminalFlag) {
+    ${trace.token}  if (getTraceFlag(treeID) & SPLT_DEF_TRACE) {
+    ${trace.token}    RF_nativePrint("\n Terminal node encountered.  Saving pointer for leaf:  %10d %20x ",  parent -> nodeID, parent);
+    ${trace.token}  }
     RF_leafLinkedObjTail[treeID] = makeAndSpliceLeafLinkedObj(RF_leafLinkedObjTail[treeID],
                                                               parent,
                                                               repMembrSize,
@@ -318,9 +355,15 @@ char growTreeRecursive (uint     r,
     parent -> repMembrIndx = NULL;
     parent -> repMembrSizeAlloc = 0;
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngrowTreeRecursive(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return bootResult;
 }
 void freeTree(uint treeID, Node *parent) {
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfreeTree() ENTRY ...\n");
+  ${trace.token}  }
   if (parent != NULL) {
     if ((parent -> left) != NULL) {
       freeTree(treeID, parent -> left);
@@ -330,6 +373,9 @@ void freeTree(uint treeID, Node *parent) {
     }
     freeNode(parent);
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfreeTree() EXIT ...\n");
+  ${trace.token}  }
 }
 void saveStatistics(char     mode,
                     uint     b,
@@ -337,26 +383,48 @@ void saveStatistics(char     mode,
                     uint    *offset,
                     double  *spltST,
                     uint    *dpthST) {
+  ${trace.token}  if (getTraceFlag(b) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nsaveStatistics() ENTRY ...\n");
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(b) & SPLT_HGH_TRACE) {
+  ${trace.token}    getNodeInfo(parent);
+  ${trace.token}  }
   spltST[++(*offset)] = parent -> splitStatistic;
   dpthST[(*offset)]   = parent -> depth;
+  ${trace.token}  if (getTraceFlag(b) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\n   topology      depth               spltST \n");
+  ${trace.token}    RF_nativePrint(" %10d %10d %20.8f ", *offset, dpthST[*offset], spltST[*offset]);
+  ${trace.token}  }
   if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
     saveStatistics(mode, b, parent ->  left, offset, spltST, dpthST);
     saveStatistics(mode, b, parent -> right, offset, spltST, dpthST);
   }
+  ${trace.token}  if (getTraceFlag(b) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nsaveStatistics() EXIT ...\n");
+  ${trace.token}  }
 }
 void initTerminalNodeMembership(uint       treeID,
                                 Terminal  *parent,
                                 uint      *allMembrIndx,
                                 uint       allMembrSize) {
   uint i;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ninitTerminalNodeMembership() Entry ...\n");
+  ${trace.token}  }
   for (i = 1; i <= allMembrSize; i++) {
     RF_tTermMembership[treeID][allMembrIndx[i]] = parent;
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ninitTerminalNodeMembership() Exit ...\n");
+  ${trace.token}  }
 }
 void updatePruning(char mode, uint treeID) {
   Terminal ***gTermMembership;
   uint        obsSize;
   uint i;
+  ${trace.token}  if (getTraceFlag(treeID) & FORK_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdatePruning() ENTRY ...\n");
+  ${trace.token}  }
   if (RF_optHigh & OPT_MEMB_PRUN) {
     switch (mode) {
     case RF_PRED:
@@ -368,19 +436,35 @@ void updatePruning(char mode, uint treeID) {
       gTermMembership = RF_tTermMembership;
       break;
     }
+    ${trace.token}      if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+    ${trace.token}        RF_nativePrint("\nUpdate of PTNM with final TNM: ");
+    ${trace.token}        RF_nativePrint("\n      index              address     nodeID\n");
+    ${trace.token}      }
     for (i = 1; i <= obsSize; i++) {
       RF_pNodeMembership[treeID][i] = gTermMembership[treeID][i] -> mate;
+      ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+      ${trace.token}    RF_nativePrint("\n %10d %20x %10d", i, RF_pNodeMembership[treeID][i], RF_pNodeMembership[treeID][i] -> nodeID);
+      ${trace.token}  }
     }
     RF_pLeafCount[treeID] = pruneTree(obsSize, treeID, RF_ptnCount);
     for (i=1; i <= obsSize; i++) {
       RF_PRUN_ID_ptr[treeID][i] = RF_pNodeMembership[treeID][i] -> nodeID;
     }
+    ${trace.token}    if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+    ${trace.token}      printPseudoTNInfo(mode, treeID);
+    ${trace.token}    }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & FORK_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdatePruning() EXIT ...\n");
+  ${trace.token}  }
 }
 void updateCaseDepth(char mode, uint treeID) {
   Terminal ***gTermMembership;
   uint        obsSize;
   uint i;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateCaseDepth() ENTRY ...\n");
+  ${trace.token}  }
   if (RF_opt & OPT_CASE_DPTH) {
     switch (mode) {
     case RF_PRED:
@@ -392,8 +476,18 @@ void updateCaseDepth(char mode, uint treeID) {
       gTermMembership = RF_tTermMembership;
       break;
     }
+    ${trace.token}      if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+    ${trace.token}        RF_nativePrint("\nUpdate of CASE_DPTH for treeID %10d: ", treeID);
+    ${trace.token}        RF_nativePrint("\n      index              address     nodeID     depth\n");
+    ${trace.token}      }
     for (i = 1; i <= obsSize; i++) {
       RF_CASE_DPTH_ptr[treeID][i] = gTermMembership[treeID][i] -> mate -> depth;
+      ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+      ${trace.token}    RF_nativePrint("\n %10d %20x %10d %10d", i, gTermMembership[treeID][i], gTermMembership[treeID][i] -> nodeID, gTermMembership[treeID][i] -> mate -> depth);
+      ${trace.token}  }
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateCaseDepth() EXIT ...\n");
+  ${trace.token}  }
 }

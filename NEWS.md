@@ -1,4 +1,37 @@
-# randomForestSRC 3.6.1
+# randomForestSRC 3.6.2
+
+## New features
+
+- `impute.learn()` now supports training-time storage of OOD calibration objects through `save.ood = TRUE` (default), allowing deployment pipelines to return row-level anomaly summaries in addition to imputed values.
+- `impute.learn()` now accepts optional OOD `weight` values at fit time. These can be supplied as named target weights, are stored in the manifest, and are reused automatically by `impute.ood()` when score-time weights are not supplied.
+- OOD scoring now returns both a row-level `score` and a calibrated `score.percentile`, with optional target-level details when `return.details = TRUE`.
+- `impute.ood()` now supports generalized row aggregation through `aggregate` and `aggregate.args`, allowing users to experiment with row-level anomaly metrics beyond the default weighted mean. Initial options include weighted mean, weighted `L_p`, weighted `L_p` after a log-tail transform, top-`k`, and a bounded product metric on `1 - u_j`.
+
+## Improvements
+
+- OOD scoring is based on masked reconstruction of imputation targets, using training-time out-of-bag behavior to calibrate target-wise anomalies.
+- Numeric targets are scored through reconstruction error, while factor targets use probability-based surprise when available, with fallback behavior for cases where probability output is unavailable.
+- Unseen factor levels in `newdata` are now tracked row-wise and are assigned maximal row-level OOD scores so schema and category anomalies are easy to identify.
+- Prediction-time imputation and OOD scoring now share the same harmonization, iterative sweep, and learner-loading pipeline, including `cache.learners` support and richer diagnostics.
+- When a named OOD `weight` vector is supplied, weights are matched by target name; omitted targets receive weight `0`, and extra names are ignored.
+- Row-level percentile calibration is now rebuilt from saved training target-wise OOD scores, so `score.percentile` remains available for arbitrary target subsets and test-time weight overrides rather than being limited to the original training-time weighting scheme.
+- Row-level percentile calibration is now aligned to the active row aggregator, so alternate aggregators use their own training-time reference distribution rather than reusing the weighted-mean calibration.
+- If training data are complete and `target.mode = "all"`, `impute.learn()` still fits deployable predictive-imputation learners so later score-time missingness and OOD scoring can be handled without retraining.
+
+## Bug fixes
+
+- Fixed `cache.learners` normalization in the OOD scoring path.
+- Fixed row-level OOD calibration reuse after post-fit changes to saved OOD weights.
+- Fixed percentile calibration when score-time weights differ from the original saved weighting scheme.
+- Fixed handling of partial named weight vectors so omitted targets are no longer implicitly treated as weight `1`.
+- Improved compatibility behavior for older fitted objects by preserving raw `score` output even when legacy objects do not contain enough saved OOD information to rebuild `score.percentile` under the new calibration logic.
+
+## Documentation
+
+- Expanded the `impute.learn` help topic to document `impute.ood()`, OOD score interpretation, saved weights, test-time overrides, and unseen-level diagnostics.
+- Added examples illustrating deployment-oriented use with `target.mode = "all"`, weighted OOD scoring, and alternate row aggregators.
+
+# randomForestSRC 3.6.1  
 
 ## New features
 

@@ -16,6 +16,7 @@
 #include "impute.h"
 #include "termOps.h"
 #include "nrutil.h"
+${trace.token} #include "error.h"
 void updateTerminalNodeOutcomes(char       mode,
                                 uint       treeID,
                                 Terminal  *parent,
@@ -27,23 +28,35 @@ void updateTerminalNodeOutcomes(char       mode,
                                 uint      *ambrIterator) {
   uint clasIterator, regrIterator;
   uint i;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateTerminalNodeOutcomes(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   if (!(RF_optHigh & OPT_JIT_TOP)) {
     if (RF_optHigh & OPT_MEMB_INCG) {
       for (i = 1; i <= genMembrSize; i++) {
         ++(*ambrIterator);
         RF_tTermMembership[treeID][RF_AMBR_ID_ptr[treeID][(*ambrIterator)]] = parent;
       }
+      ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
+      ${trace.token}    RF_nativePrint("\n OPT_MEMB_INCG active with genMembrSize:  %10d", genMembrSize);
+      ${trace.token}  }
     }
     else if (RF_optHigh & OPT_MEMB_OUTG) {
       for (i = 1; i <= genMembrSize; i++) {
         RF_tTermMembership[treeID][genMembrIndx[i]] = parent;
         RF_AMBR_ID_ptr[treeID][++(*ambrIterator)] = genMembrIndx[i];
       }
+      ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
+      ${trace.token}    RF_nativePrint("\n OPT_MEMB_OUTG active with genMembrSize:  %10d", genMembrSize);
+      ${trace.token}  }
     }
     else {
       for (i = 1; i <= genMembrSize; i++) {
         RF_tTermMembership[treeID][genMembrIndx[i]] = parent;
       }
+      ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
+      ${trace.token}    RF_nativePrint("\n OPT_MEMB_---- inactive with genMembrSize:  %10d", genMembrSize);
+      ${trace.token}  }
     }
   }  
   if ((RF_opt & OPT_PERF) ||
@@ -89,6 +102,9 @@ void updateTerminalNodeOutcomes(char       mode,
   else {
     getMembrCountOnly(treeID, parent, repMembrIndx, repMembrSize, genMembrIndx, genMembrSize);
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateTerminalNodeOutcomes() EXIT ...\n");
+  ${trace.token}  }
 }
 void getMembrCountOnly (uint       treeID,
                         Terminal  *parent,
@@ -96,6 +112,9 @@ void getMembrCountOnly (uint       treeID,
                         uint       repMembrSize,
                         uint      *genMembrIndx,
                         uint       genMembrSize) {
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetMembrCountOnly() ENTRY ...\n");
+  ${trace.token}  }
   if ( !(RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2) ) {
     parent -> membrCount = genMembrSize;
   }
@@ -111,10 +130,16 @@ void getMembrCountOnly (uint       treeID,
     if (!(RF_opt & OPT_OUTC_TYPE)) {
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetMembrCountOnly() EXIT ...\n");
+  ${trace.token}  }
 }
 void updateEnsemble (char mode, uint b) {
   LeafLinkedObj *leafLinkedPtr;
   char      potentiallyMixedMultivariate;
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateEnsemble(%10d) ENTRY ...\n", b);
+  ${trace.token}  }
     if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
       updateEnsembleSurvival(mode, b, FALSE);
     }
@@ -188,6 +213,12 @@ void updateEnsemble (char mode, uint b) {
       }
       break;
     }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nRF-SRC:  Ensemble updates complete.");
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateEnsemble(%10d) EXIT ...\n", b);
+  ${trace.token}  }
 }
 void summarizeFaithfulBlockPerformance (char        mode,
                                         uint        b,
@@ -201,6 +232,9 @@ void summarizeFaithfulBlockPerformance (char        mode,
                                         double   ***perfCLSblk,
                                         double    **perfRGRblk) {
   uint      obsSize;
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nsummarizeFaithfulBlockPerformance(%10d) ENTRY ...\n", b);
+  ${trace.token}  }
   obsSize = (mode == RF_PRED) ?  RF_fobservationSize : RF_observationSize;
   if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
     getPerformance(b,
@@ -243,6 +277,9 @@ void summarizeFaithfulBlockPerformance (char        mode,
                      perfRGRblk[blockID]);
     }
   }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nsummarizeFaithfulBlockPerformance(%10d) EXIT ...\n", b);
+  ${trace.token}  }
 }
 void summarizeHoldoutBlockPerformance (char        mode,
                                        uint        b,
@@ -257,6 +294,9 @@ void summarizeHoldoutBlockPerformance (char        mode,
                                        double    **holdCLSptr,
                                        double     *holdRGRptr) {
   uint      obsSize;
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nsummarizeHoldoutBlockPerformance(%10d) ENTRY ...\n", b);
+  ${trace.token}  }
   obsSize = RF_observationSize;
   if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
     getPerformance(b,
@@ -303,6 +343,9 @@ void summarizeHoldoutBlockPerformance (char        mode,
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nsummarizeHoldoutBlockPerformance(%10d) EXIT ...\n", b);
+  ${trace.token}  }
 }
 char stackAndImputePerfResponse(char      mode,
                                 char      multImpFlag,
@@ -315,6 +358,12 @@ char stackAndImputePerfResponse(char      mode,
   uint     obsSize;
   char     imputeFlag;
   uint     i, p;
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndImputePerfResponse(%10d) ENTRY ...\n", b);
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\n  Called with (b, lo, hi) = (%10d %10d %10d)", b, loSerialTreeID, hiSerialTreeID);
+  ${trace.token}  }
   imputeFlag = FALSE;
   switch (mode) {
   case RF_PRED:
@@ -357,6 +406,9 @@ char stackAndImputePerfResponse(char      mode,
     }
     if (b != 0) {
       imputeResponse(mode, loSerialTreeID, hiSerialTreeID, serialTreePtr, mResponsePtr);
+      ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+      ${trace.token}    RF_nativePrint("\n  Allocation and Imputation Conducted. \n");
+      ${trace.token}  }
       *responsePtr = mResponsePtr;
     }
     else {
@@ -364,14 +416,26 @@ char stackAndImputePerfResponse(char      mode,
       *responsePtr = mResponsePtr;
     }      
   }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\n  Returning imputeFlag:  %10d", imputeFlag);
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndImputePerfResponse(%10d) EXIT ...\n", b);
+  ${trace.token}  }
   return imputeFlag;
 }
 void unstackPerfResponse(char mode, char flag, double **mResponsePtr) {
   uint obsSize;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackPerfResponse() ENTRY ...\n");
+  ${trace.token}  }
   if (flag == TRUE) {
     obsSize = (mode == RF_PRED) ?  RF_fobservationSize : RF_observationSize;
     free_dmatrix(mResponsePtr, 1, RF_ySize, 1, obsSize);
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackPerfResponse() EXIT ...\n");
+  ${trace.token}  }
 }
 void getPerformance(uint      serialTreeID,
                     char      mode,
@@ -385,6 +449,9 @@ void getPerformance(uint      serialTreeID,
                     double  **perfCLSptr,
                     double   *perfRGRptr) {
   uint j, k;
+  ${trace.token}  if (getTraceFlag(serialTreeID) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetPerformance() ENTRY() ...\n");
+  ${trace.token}  }
   if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
     if (!(RF_opt & OPT_COMP_RISK)) {
       perfMRTptr[1] = getConcordanceIndex(-1,
@@ -477,6 +544,49 @@ void getPerformance(uint      serialTreeID,
       }
     }
   }
+  ${trace.token}    if (getTraceFlag(serialTreeID) & SUMM_LOW_TRACE) {
+  ${trace.token}      RF_nativePrint("\nError Rate:  %10d", serialTreeID);
+  ${trace.token}      RF_nativePrint("\n");
+  ${trace.token}      if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
+  ${trace.token}        for (j = 1; j <= RF_eventTypeSize ; j++) {
+  ${trace.token}          RF_nativePrint("                [%2d]", j);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}        for (j = 1; j <= RF_eventTypeSize; j++) {
+  ${trace.token}          RF_nativePrint("%20.4f", perfMRTptr[j]);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}      }
+  ${trace.token}      else {
+  ${trace.token}        if (perfCLSptr != NULL) {
+  ${trace.token}          for (j = 1; j <= RF_rTargetFactorCount; j++) {
+  ${trace.token}            RF_nativePrint("                [%2d]", j);
+  ${trace.token}            RF_nativePrint("\n");
+  ${trace.token}            for (k = 1; k <= RF_rFactorSize[RF_rFactorMap[RF_rTargetFactor[j]]] + 1; k++) {
+  ${trace.token}              RF_nativePrint("                [%2d]", k-1);
+  ${trace.token}            }
+  ${trace.token}            RF_nativePrint("\n");
+  ${trace.token}            for (k = 1; k <= RF_rFactorSize[RF_rFactorMap[RF_rTargetFactor[j]]] + 1; k++) {
+  ${trace.token}              RF_nativePrint("%20.4f", perfCLSptr[j][k]);
+  ${trace.token}            }
+  ${trace.token}          }
+  ${trace.token}          RF_nativePrint("\n");
+  ${trace.token}        }
+  ${trace.token}        if (perfRGRptr != NULL) {
+  ${trace.token}          for (j = 1; j <= RF_rTargetNonFactorCount; j++) {
+  ${trace.token}            RF_nativePrint("                [%2d]", j);
+  ${trace.token}          }
+  ${trace.token}          RF_nativePrint("\n");
+  ${trace.token}          for (j = 1; j <= RF_rTargetNonFactorCount; j++) {
+  ${trace.token}            RF_nativePrint("%20.4f", perfRGRptr[j]);
+  ${trace.token}          }
+  ${trace.token}          RF_nativePrint("\n");
+  ${trace.token}        }
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}  if (getTraceFlag(serialTreeID) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetPerformance() EXIT() ...\n");
+  ${trace.token}  }
 }
 void normalizeEnsembleEstimates(char mode, char final) {
   char oobFlag, fullFlag;
@@ -498,6 +608,9 @@ void normalizeEnsembleEstimates(char mode, char final) {
   uint         **quantileStreamSize;
   double   *ensembleDen;
   uint i, j, k;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nnormalizeEnsembleEstimates() ENTRY ...\n");
+  ${trace.token}  }
   oobFlag = fullFlag = FALSE;
   switch (mode) {
   case RF_PRED:
@@ -656,6 +769,154 @@ void normalizeEnsembleEstimates(char mode, char final) {
         }
       }
     }
+    ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+    ${trace.token}      if (oobFlag == TRUE) {
+    ${trace.token}        RF_nativePrint("\nFinalized OOB  Ensembles Follow:  \n");
+    ${trace.token}      }
+    ${trace.token}      else {
+    ${trace.token}        RF_nativePrint("\nFinalized FULL Ensembles Follow:  \n");
+    ${trace.token}      }
+    ${trace.token}      if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
+    ${trace.token}        if (!(RF_opt & OPT_COMP_RISK)) {
+    ${trace.token}            if (final) {
+    ${trace.token}            RF_nativePrint("\nEnsemble SRG:  \n");
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", i);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}            for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+    ${trace.token}              RF_nativePrint("%10d", k);
+    ${trace.token}              for (i=1; i <= obsSize; i++) {
+    ${trace.token}                RF_nativePrint("%10.4f", ensembleSRGptr[1][k][i]);
+    ${trace.token}              }
+    ${trace.token}              RF_nativePrint("\n");
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\nEnsemble SRV:  \n");
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", i);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}            for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+    ${trace.token}              RF_nativePrint("%10d", k);
+    ${trace.token}              for (i=1; i <= obsSize; i++) {
+    ${trace.token}                RF_nativePrint("%10.4f", ensembleSRVptr[k][i]);
+    ${trace.token}              }
+    ${trace.token}              RF_nativePrint("\n");
+    ${trace.token}            }
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\nEnsemble MRT:  \n");
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", i);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10.4f", ensembleMRTptr[1][i]);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}        }
+    ${trace.token}        else {
+    ${trace.token}          for (j = 1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}            if (final) {
+    ${trace.token}            RF_nativePrint("\nEnsemble SRG:  Event %10d \n", j);
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", i);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}            for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+    ${trace.token}              RF_nativePrint("%10d", k);
+    ${trace.token}              for (i=1; i <= obsSize; i++) {
+    ${trace.token}                RF_nativePrint("%10.4f", ensembleSRGptr[j][k][i]);
+    ${trace.token}              }
+    ${trace.token}              RF_nativePrint("\n");
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\nEnsemble CIF:  Event %10d \n", j);
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", i);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}            for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+    ${trace.token}              RF_nativePrint("%10d", k);
+    ${trace.token}              for (i=1; i <= obsSize; i++) {
+    ${trace.token}                RF_nativePrint("%10.4f", ensembleCIFptr[j][k][i]);
+    ${trace.token}              }
+    ${trace.token}              RF_nativePrint("\n");
+    ${trace.token}            }
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\nEnsemble MRT:  Event %10d \n", j);
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", i);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10.4f", ensembleMRTptr[j][i]);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}          }
+    ${trace.token}        }
+    ${trace.token}      }    
+    ${trace.token}      else {
+    ${trace.token}        if (RF_rTargetFactorCount > 0) {
+    ${trace.token}          RF_nativePrint("\nEnsemble CLS:  \n");
+    ${trace.token}          RF_nativePrint("          ");
+    ${trace.token}          for (i=1; i <= obsSize; i++) {
+    ${trace.token}            RF_nativePrint("%10d", i);
+    ${trace.token}          }
+    ${trace.token}          for (j = 1; j <= RF_rTargetFactorCount; j++) {
+    ${trace.token}            RF_nativePrint("\nTarget:   %10d \n", RF_rTargetFactor[j]);
+    ${trace.token}            for (k=1; k <= RF_rFactorSize[RF_rFactorMap[RF_rTargetFactor[j]]]; k++) {
+    ${trace.token}              RF_nativePrint("%10d", k);
+    ${trace.token}              for (i=1; i <= obsSize; i++) {
+    ${trace.token}                RF_nativePrint("%10.4f", ensembleCLSptr[j][k][i]);
+    ${trace.token}              }
+    ${trace.token}              RF_nativePrint("\n");
+    ${trace.token}            }
+    ${trace.token}          }
+    ${trace.token}        }
+    ${trace.token}        if (RF_rTargetNonFactorCount > 0) {
+    ${trace.token}          RF_nativePrint("\nEnsemble RGR:  \n");
+    ${trace.token}          RF_nativePrint("          ");
+    ${trace.token}          for (i=1; i <= obsSize; i++) {
+    ${trace.token}            RF_nativePrint("%10d", i);
+    ${trace.token}          }
+    ${trace.token}          for (j = 1; j <= RF_rTargetNonFactorCount; j++) {
+    ${trace.token}            RF_nativePrint("\nTarget:   %10d \n", RF_rTargetNonFactor[j]);
+    ${trace.token}            RF_nativePrint("          ");
+    ${trace.token}            for (i=1; i <= obsSize; i++) {
+    ${trace.token}              RF_nativePrint("%10.4f", ensembleRGRptr[j][i]);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}          }
+    ${trace.token}          if (final) {
+    ${trace.token}          if (RF_opt & OPT_QUANTLE) {
+    ${trace.token}          RF_nativePrint("\nEnsemble QNT:  \n");
+    ${trace.token}          RF_nativePrint("                             ");
+    ${trace.token}          for (i=1; i <= obsSize; i++) {
+    ${trace.token}            RF_nativePrint("%10d", i);
+    ${trace.token}          }
+    ${trace.token}          for (j = 1; j <= RF_rTargetNonFactorCount; j++) {
+    ${trace.token}            RF_nativePrint("\nTarget:   %10d \n", RF_rTargetNonFactor[j]);
+    ${trace.token}            for (k=1; k <= RF_quantileSize; k++) {
+    ${trace.token}              RF_nativePrint("%10d (phi = %10.4f)", k, RF_quantile[k]);
+    ${trace.token}              for (i=1; i <= obsSize; i++) {
+    ${trace.token}                RF_nativePrint("%10.4f", ensembleQNTptr[j][k][i]);
+    ${trace.token}              }
+    ${trace.token}              RF_nativePrint("\n");
+    ${trace.token}            }
+    ${trace.token}          }
+    ${trace.token}          }
+    ${trace.token}          }
+    ${trace.token}        }
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\nRF-SRC:  Ensemble outputs finalized. \n");
+    ${trace.token}    }
     if (oobFlag == TRUE) {
       oobFlag = FALSE;
     }
@@ -663,6 +924,9 @@ void normalizeEnsembleEstimates(char mode, char final) {
       fullFlag = FALSE;
     }
   }  
+  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nnormalizeEnsembleEstimates() EXIT ...\n");
+  ${trace.token}  }
 }
 char getPerfFlag (char mode, uint serialTreeID) {
   char result;
@@ -687,6 +951,9 @@ char getPerfFlag (char mode, uint serialTreeID) {
 }
 void getVariablesUsed(uint treeID, Node *parent, uint *varUsedVector) {
   SplitInfo *info;
+  ${trace.token}  if (getTraceFlag(0) & OUTP_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetVariablesUsed() ENTRY ...\n");
+  ${trace.token}  }
   if (RF_tLeafCount[treeID] > 0) {
     if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
       info = parent -> splitInfo;
@@ -695,5 +962,8 @@ void getVariablesUsed(uint treeID, Node *parent, uint *varUsedVector) {
       getVariablesUsed(treeID, parent -> right, varUsedVector);
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & OUTP_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetVariablesUsed() EXIT ...\n");
+  ${trace.token}  }
   return;
 }

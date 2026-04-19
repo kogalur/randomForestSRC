@@ -22,10 +22,12 @@
   refitting on the test set.
 
   The same saved learner bank can also be used to score new data for
-  out-of-distribution (OOD) behavior. Each selected target is reconstructed
-  from its saved conditional learner and compared with the observed value.
-  Target-wise discrepancies are calibrated against a training reference saved
-  in the manifest, preferably from out-of-bag predictions computed during fit.
+  out-of-distribution (OOD) behavior. Note that OOD scores are available
+  even when new data have missing values.  Each selected target is
+  reconstructed from its saved conditional learner and compared with the
+  observed value.  Target-wise discrepancies are calibrated against a
+  training reference calculated from out-of-bag predictions computed
+  during the training.
 
   If the training data are complete and \code{target.mode = "all"},
   the initial training-data imputation step is skipped and the
@@ -49,7 +51,8 @@ impute.learn.rfsrc(formula, data,
   keep.models = is.null(out.dir),
   keep.ximp = FALSE,
   save.on.fit = !is.null(out.dir),
-  save.ood = TRUE)
+  save.ood = TRUE,
+  weight = NULL)
 
 save.impute.learn.rfsrc(object, path, wipe = TRUE, verbose = TRUE)
 
@@ -70,6 +73,9 @@ impute.ood.rfsrc(object, newdata,
   eps = 1e-3,
   cache.learners = c("all", "session", "none"),
   weight = NULL,
+  aggregate = c("bounded.product",  "weighted.mean",
+    "weighted.lp", "weighted.lp.log", "top.k"),
+  aggregate.args = list(),
   return.details = FALSE,
   verbose = TRUE,
   ...)
@@ -83,7 +89,7 @@ impute.ood.rfsrc(object, newdata,
   \item{data}{Training data. Variables that are not real-valued are
     coerced to factors before fitting when possible; otherwise fitting
     stops with an error. Rows and columns that are entirely missing are
-    dropped before the training schema is recorded.}
+    dropped before the training begins.}
 
   \item{ntree, nodesize, nsplit, nimpute, fast, blocks,
     max.iter, ytry, always.use, verbose}{Arguments passed to
@@ -160,10 +166,15 @@ impute.ood.rfsrc(object, newdata,
   \item{save.on.fit}{If \code{TRUE} and \code{out.dir} is supplied,
     writes the imputer to disk during fitting.}
 
-  \item{save.ood}{If \code{TRUE}, computes and stores an OOD reference
-    in \code{object$manifest$ood}. The reference is built during
-    training from target-wise out-of-bag reconstruction discrepancies
-    and a row-level aggregate using the default equal target weights.}
+  \item{save.ood}{If \code{TRUE}, computes and stores an OOD reference.
+    The reference is built during training from target-wise out-of-bag
+    reconstruction discrepancies, their target-wise calibrated training
+    scores, and a default row-level weighted mean using the saved OOD
+    target weights. If no \code{weight} is supplied at fit time, equal
+    target weights are used. The saved target-wise training-score matrix
+    allows \code{impute.ood} to rebuild a calibrated row-level
+    percentile for arbitrary target subsets, test-time weight overrides,
+    and alternate row aggregates besides the weighted mean.}
 
   \item{object}{An object returned by \code{impute.learn} or
     \code{load.impute.learn}.}
@@ -174,9 +185,9 @@ impute.ood.rfsrc(object, newdata,
 
   \item{targets}{Optional subset of target variables to load, update,
     or score. Unknown names are ignored with a warning. For
-    \code{impute.ood}, the row-level percentile calibration stored in
-    the manifest is only directly reusable when the original saved OOD
-    target set is scored.}
+    \code{impute.ood}, row-level percentile calibration is rebuilt for
+    the requested target subset from the saved target-wise training OOD
+    scores whenever those scores are available in the manifest.}
 
   \item{lazy}{If \code{TRUE}, saved learners are loaded only when they
     are needed. If \code{FALSE}, all saved learners are loaded at once.}
@@ -208,17 +219,49 @@ impute.ood.rfsrc(object, newdata,
     the saved learner bank is typically reused once for predictor-side
     completion and again for target reconstruction.}
 
-  \item{weight}{Optional nonnegative target weights used by
-    \code{impute.ood} when aggregating calibrated target scores into a
-    row-level score. If omitted, the saved default weights from the
-    manifest are used, or equal weights if no defaults are available.}
+  \item{weight}{Optional nonnegative target weights used for row-level OOD
+    aggregation. In \code{impute.learn}, these weights define the
+    default row-level OOD weighting scheme stored in the manifest. In
+    \code{impute.ood}, they define the active row-level weighting scheme
+    for the current scoring call. If supplied as a named vector, entries
+    are matched to targets by name; omitted targets are set to zero, and
+    extra names are ignored. If omitted in \code{impute.ood}, the saved
+    training-time OOD weights are used automatically. Because the fit
+    stores target-wise training OOD scores, \code{score.percentile} can
+    be recalibrated automatically for test-time weight overrides rather
+    than being limited to the original training-time weights.}
+
+  \item{aggregate}{Row-level aggregation metric used by
+    \code{impute.ood} to combine calibrated target-wise OOD scores.  The
+    default \code{"bounded.product"} applies a weighted product of
+    the form \eqn{1-\prod_j (1-u_j+\varepsilon)^{\tilde w_j}} where
+    \eqn{u_j} are row level calibrated scores for target feature
+    \eqn{j}.  \code{"weighted.mean"} is the weighted
+    average. \code{"weighted.lp"} applies a weighted Minkowski \eqn{L_p}
+    aggregation to the calibrated target scores.
+    \code{"weighted.lp.log"} first applies the tail-stretching transform
+    \eqn{-\log(1-u_j+\varepsilon)} to each calibrated target score
+    \eqn{u_j} and then applies the weighted \eqn{L_p}
+    aggregation. \code{"top.k"} averages only the \eqn{k} largest
+    scoreable target scores among the positively weighted targets.  When
+    the fit stores target-wise training OOD scores,
+    \code{score.percentile} is rebuilt for the requested aggregate as
+    well as the requested targets and weights.}
+
+  \item{aggregate.args}{Optional list of tuning arguments for
+    \code{aggregate}. Recognized entries are \code{p} for
+    \code{"weighted.lp"} and \code{"weighted.lp.log"}, \code{k}
+    (or \code{top.k}) for \code{"top.k"}, and \code{eps} for
+    \code{"weighted.lp.log"} and \code{"bounded.product"}. The
+    default values are \code{p = 2}, \code{k = 1}, and
+    \code{eps = 1e-12}. Unknown entries are ignored with a warning.}
 
   \item{return.details}{If \code{TRUE}, \code{impute.ood} returns the
     per-target discrepancy and calibrated target-score matrices and a
     row-by-variable unseen-level mask in the diagnostics.}
 }
 \details{
-  This functionality fits a predictive imputer in two stages.
+  A predictive imputer is calculated in two stages.
 
   The training data are first normalized to a data frame. Variables
   that are not real-valued are coerced to factors when possible;
@@ -281,24 +324,41 @@ impute.ood.rfsrc(object, newdata,
   mismatch score and ordered factors fall back to a scaled rank
   distance.
 
-  \code{impute.ood} first completes the predictor side of \code{newdata}
-  using the same iterative sweep method of
-  \code{predict.impute.learn}. It then reconstructs each requested
-  target directly from its saved learner and compares the reconstruction
-  with the observed value. Raw target discrepancies are converted to
-  target-wise OOD scores using the saved target-specific training
-  references, which places continuous and factor targets on a common
-  scale.
+  The row-level OOD calibration stored at fit time is built by
+  aggregating the target-wise training scores with a weighted mean using
+  \code{weight}. If \code{weight} is omitted at fit time, all saved OOD
+  targets receive weight 1. If a named vector is supplied, entries are
+  matched by target name, omitted saved OOD targets receive weight 0,
+  and the resulting weighting scheme is carried forward in the manifest
+  for later deployment-time scoring.
 
-  The row-level OOD score is the weighted mean of those calibrated
-  target-wise scores over the targets that are both observed and
-  scoreable for that row. A second component, \code{score.percentile},
-  is returned when the saved row-level training reference can be used.
-  That percentile is directly reusable only when the original saved OOD
-  target set is scored with the default saved weights. If a different
-  target subset or different weights are used, the weighted mean score
-  is still returned but the saved row-level percentile is left
-  unavailable.
+  \code{impute.ood} first completes the predictor side of \code{newdata}
+  using the same harmonization, initialization, and iterative sweep
+  logic used by \code{predict.impute.learn}. It then reconstructs each
+  requested target directly from its saved learner and compares the
+  reconstruction with the observed value. Raw target discrepancies are
+  converted to target-wise OOD scores using the saved target-specific
+  training references, which places continuous and factor targets on a
+  common scale.
+
+  The row-level OOD score combines those calibrated target-wise scores
+  over the targets that are both observed and scoreable for that row. By
+  default, \code{impute.ood} uses a bounded product rule, but the row
+  aggregate can be changed to weighted mean, a weighted \eqn{L_p} rule,
+  a log-tail weighted \eqn{L_p} rule, or a top-\eqn{k} rule. This makes
+  it possible to explore row scores that are more sensitive to sparse
+  but severe coordinate shifts.  By default, \code{impute.ood} reuses
+  the same OOD weights saved during \code{impute.learn}, so a pipeline
+  can fix its weighting scheme once upstream and carry it forward
+  automatically.
+
+  A second component, \code{score.percentile}, is obtained by rebuilding
+  the row-level training reference from the saved target-wise training
+  OOD scores using the requested target subset, the active weight
+  vector, and the active row aggregate. This means percentile
+  calibration remains available when the user leaves the saved weights
+  in place, overrides them at test time, scores only a subset of the
+  saved OOD targets, or experiments with alternate row aggregates.
 
   Unseen factor levels are tracked row-wise during harmonization.
   Because such values are immediate anomalies relative to the training
@@ -313,8 +373,10 @@ impute.ood.rfsrc(object, newdata,
   contains a manifest, optionally the fitted full-sweep learners,
   optionally the completed training data, and optionally a path to the
   saved imputer on disk. If \code{save.ood = TRUE}, the manifest also
-  contains an \code{ood} component storing compact target-wise and
-  row-wise OOD references.
+  contains an \code{ood} component storing compact target-wise OOD
+  references, the saved row-by-target training OOD score matrix used for
+  later percentile recalibration, and the default OOD aggregation
+  weights.
 
   \code{load.impute.learn} returns an object of the same class.
 
@@ -329,13 +391,18 @@ impute.ood.rfsrc(object, newdata,
   \code{c("impute.ood.rfsrc", "impute.ood")}. It is a list with the
   following components:
   \itemize{
-    \item \code{score}: the row-level weighted mean of calibrated
-      target-wise OOD scores. Larger values indicate greater
-      out-of-distribution behavior.
+    \item \code{score}: the row-level aggregate of calibrated
+      target-wise OOD scores under the requested \code{aggregate} and
+      \code{weight}. Larger values indicate greater
+      out-of-distribution behavior. For \code{aggregate = "weighted.lp.log"},
+      this raw score is on a positive unbounded scale.
     \item \code{score.percentile}: the percentile of \code{score}
-      relative to the saved row-level training reference when that
-      calibration is valid for the requested targets and weights;
-      otherwise \code{NA}.
+      relative to a row-level training reference rebuilt from the saved
+      target-wise training OOD scores for the requested targets,
+      weights, and row aggregate. For legacy fitted objects that do not
+      contain those saved
+      training scores, the original saved row-level reference is used
+      when possible; otherwise \code{NA}.
     \item \code{targets.used}: the number of weighted targets that
       contributed to each row-level score.
     \item \code{target.score}: optional matrix of target-wise calibrated
@@ -345,8 +412,9 @@ impute.ood.rfsrc(object, newdata,
       \code{return.details = TRUE}.
     \item \code{info}: a list of diagnostics including harmonization
       details, row-wise unseen-factor flags, learner-loading
-      information, whether the saved row-level calibration was used, and
-      any target-specific issues.
+      information, the active row aggregate and its arguments, whether
+      the saved row-level calibration was used, and any target-specific
+      issues.
   }
 }
 \author{
@@ -391,6 +459,9 @@ head(test.imp)
 
 ## OOD scoring is most informative when every deployment-time
 ## variable can be reconstructed, so target.mode = "all" is recommended.
+## Optional named OOD weights can also be supplied here. Any omitted
+## targets receive weight 0, and the saved weights are reused
+## automatically later by impute.ood().
 ood.fit <- impute.learn(
   data = train,
   ntree = 25,
@@ -406,13 +477,12 @@ ood <- impute.ood(ood.fit, test, return.details = TRUE, verbose = FALSE)
 head(ood$score)
 head(ood$score.percentile)
 
-
-## example where test data has unseen levels for a factor
-test.mod <- test
-levels(test.mod$Month) <- c(levels(test.mod$Month), "fake")
-test.mod$Month[sample(seq_len(nrow(test.mod)), 10)] <- "fake"
-print(impute.ood(ood.fit, test.mod)$score)
-
+## try a more spike-sensitive row aggregate
+ood.lp <- impute.ood(ood.fit, test,
+                     aggregate = "weighted.lp",
+                     aggregate.args = list(p = 4),
+                     verbose = FALSE)
+head(ood.lp$score.percentile)
 }
 
 \dontrun{

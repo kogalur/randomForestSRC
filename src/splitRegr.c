@@ -11,6 +11,7 @@
 #include "splitRegr.h"
 #include "splitUtil.h"
 #include "nrutil.h"
+${trace.token} #include "error.h"
 char regressionXwghtSplitCur (uint       treeID,
                               Node      *parent,
                               SplitInfoMax *splitInfoMax,
@@ -33,6 +34,9 @@ char regressionXwghtSplitCur (uint       treeID,
   char preliminaryResult, result;
   double delta;
   uint j, k;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nregressionXwghtSplitCur(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   mwcpSizeAbsolute       = 0;     
   indxx = NULL;
   preliminaryResult = getPreSplitResult(treeID,
@@ -149,6 +153,14 @@ char regressionXwghtSplitCur (uint       treeID,
                              priorMembrIter,
                              & currentMembrIter);
           rghtSize = nonMissMembrSize - leftSize;
+          ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+          ${trace.token}    RF_nativePrint("\nNon-miss Node Size:  %10d, Non-miss Left Size:  %10d, Non-miss Right Size:  %10d", nonMissMembrSize, leftSize, rghtSize);
+          ${trace.token}  }
+          ${trace.token}        if (getTraceFlag(treeID) & TURN_OFF_TRACE) {
+          ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+          ${trace.token}            RF_nativePrint("\n PriorIter:     %10d  CurrentIter:   %10d", priorMembrIter, currentMembrIter);
+          ${trace.token}          }
+          ${trace.token}        }
           if ((leftSize != 0) && (rghtSize != 0)) {
             if (factorFlag == TRUE) {
               switch (RF_splitRule) {
@@ -220,6 +232,31 @@ char regressionXwghtSplitCur (uint       treeID,
               delta = leftTemp1 + rghtTemp1;
               break;
             }
+            ${trace.token}          if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+            ${trace.token}            if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+            ${trace.token}              RF_nativePrint("\nVirtual (non-miss) Membership:  ");
+            ${trace.token}              if (factorFlag) {
+            ${trace.token}                for (k = 1; k <= nonMissMembrSize; k++) {
+            ${trace.token}                  if (localSplitIndicator[   nonMissMembrIndx[k]  ] == LEFT) {
+            ${trace.token}                    RF_nativePrint("\n %10d %10d %10d %12.4f %12.4f --> LEFT ", k, nonMissMembrIndx[k],  repMembrIndx[nonMissMembrIndx[k]], observation[ repMembrIndx[nonMissMembrIndx[k]] ], RF_response[treeID][1][  repMembrIndx[nonMissMembrIndx[k]]  ]);
+            ${trace.token}                  }
+            ${trace.token}                  else {
+            ${trace.token}                    RF_nativePrint("\n %10d %10d %10d %12.4f %12.4f --> RGHT ", k, nonMissMembrIndx[k],  repMembrIndx[nonMissMembrIndx[k]], observation[ repMembrIndx[nonMissMembrIndx[k]] ], RF_response[treeID][1][  repMembrIndx[nonMissMembrIndx[k]]  ]);
+            ${trace.token}                  }
+            ${trace.token}                }
+            ${trace.token}              }
+            ${trace.token}              else {
+            ${trace.token}                for (k = 1; k <= nonMissMembrSize; k++) {
+            ${trace.token}                  if (localSplitIndicator[   nonMissMembrIndx[indxx[k]]  ] == LEFT) {
+            ${trace.token}                    RF_nativePrint("\n %10d %10d %10d %12.4f %12.4f --> LEFT ", k, nonMissMembrIndx[indxx[k]],  repMembrIndx[nonMissMembrIndx[indxx[k]]], observation[ repMembrIndx[nonMissMembrIndx[indxx[k]]] ], RF_response[treeID][1][  repMembrIndx[nonMissMembrIndx[indxx[k]]]  ]);
+            ${trace.token}                  }
+            ${trace.token}                  else {
+            ${trace.token}                    RF_nativePrint("\n %10d %10d %10d %12.4f %12.4f --> RGHT ", k, nonMissMembrIndx[indxx[k]],  repMembrIndx[nonMissMembrIndx[indxx[k]]], observation[ repMembrIndx[nonMissMembrIndx[indxx[k]]] ], RF_response[treeID][1][  repMembrIndx[nonMissMembrIndx[indxx[k]]]  ]);
+            ${trace.token}                  }
+            ${trace.token}                }
+            ${trace.token}              }
+            ${trace.token}            }
+            ${trace.token}          }
           }
           else {
             delta = RF_nativeNaN;
@@ -228,17 +265,37 @@ char regressionXwghtSplitCur (uint       treeID,
             if(RF_nativeIsNaN(deltaMax)) {
               deltaMax = delta;
               indexMax = j;
+              ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+              ${trace.token}      RF_nativePrint("\n\nVirtual Split Statistics Updated: \n");
+              ${trace.token}      RF_nativePrint("  SplitParm  SplitValIdx        Delta \n");
+              ${trace.token}      RF_nativePrint(" %10d %12d %12.4f \n", covariate, indexMax, deltaMax);
+              ${trace.token}    }
             }
             else {
               if ((delta - deltaMax) > EPSILON) {
                 deltaMax = delta;
                 indexMax = j;
+                ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+                ${trace.token}      RF_nativePrint("\n\nVirtual Split Statistics Updated: \n");
+                ${trace.token}      RF_nativePrint("  SplitParm  SplitValIdx        Delta \n");
+                ${trace.token}      RF_nativePrint(" %10d %12d %12.4f \n", covariate, indexMax, deltaMax);
+                ${trace.token}    }
               }
               else {
+                ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+                ${trace.token}      RF_nativePrint("\n\nVirtual Split Statistics Not Updated: \n");
+                ${trace.token}      RF_nativePrint("  SplitParm  SplitValIdx        Delta \n");
+                ${trace.token}      RF_nativePrint(" %10d %12d %12.4f \n", covariate, j, delta);
+                ${trace.token}    }
               }
             }
           }
           else {
+            ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+            ${trace.token}      RF_nativePrint("\n\nVirtual Split Statistics Not Updated: \n");
+            ${trace.token}      RF_nativePrint("  SplitParm  SplitValIdx        Delta \n");
+            ${trace.token}      RF_nativePrint(" %10d %12d %12.4f \n", covariate, j, delta);
+            ${trace.token}    }
           }
           if (factorFlag == FALSE) {
             priorMembrIter = currentMembrIter - 1;
@@ -277,5 +334,9 @@ char regressionXwghtSplitCur (uint       treeID,
                   multImpFlag,
                   FALSE);  
   result = summarizeSplitResult(splitInfoMax);
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nregressionXwghtSplitCur(%10d) result:  %10d", treeID, result);
+  ${trace.token}    RF_nativePrint("\nregressionXwghtSplitCur(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return result;
 }

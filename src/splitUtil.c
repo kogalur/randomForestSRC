@@ -20,6 +20,12 @@ char getPreSplitResultGeneric (uint      treeID,
   uint i, r;
   char mResponseFlag;
   char result;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetPreSplitResultGeneric(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\n  called with   rep size:  %10d", parent -> repMembrSize);
+  ${trace.token}  }
   result = TRUE;
   if (result) {
     if (parent -> repMembrSize >= (2 * RF_nodeSize)) {
@@ -27,6 +33,10 @@ char getPreSplitResultGeneric (uint      treeID,
     }
     else {
       result = FALSE;
+      ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+      ${trace.token}      RF_nativePrint("\nLess than twice the minimum number of replicates encountered.  ");
+      ${trace.token}      RF_nativePrint("\nNode will not be split.  \n");
+      ${trace.token}    }
     }
   }
   if (result) {
@@ -39,6 +49,10 @@ char getPreSplitResultGeneric (uint      treeID,
       }
       else {
         result = FALSE;
+        ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+        ${trace.token}      RF_nativePrint("\nMaximum node depth encountered.  ");
+        ${trace.token}      RF_nativePrint("\nNode will not be split.  \n");
+        ${trace.token}    }
       }
     }
   }
@@ -46,6 +60,9 @@ char getPreSplitResultGeneric (uint      treeID,
     if ((RF_mRecordSize == 0) || multImpFlag || !(RF_optHigh & OPT_MISS_SKIP) || multVarFlag) {
       parent -> nonMissMembrSizeStatic = parent -> repMembrSize;
       parent -> nonMissMembrIndxStatic = RF_identityMembershipIndex;
+      ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+      ${trace.token}      RF_nativePrint("\nNon-miss membership index assuming identity mapping.  ");
+      ${trace.token}    }
     }
     else {
       parent -> nonMissMembrIndxStatic = uivector(1, parent -> repMembrSize);
@@ -106,6 +123,12 @@ char getPreSplitResultGeneric (uint      treeID,
             }
           }
         }
+        ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+        ${trace.token}      if (!result) {
+        ${trace.token}        RF_nativePrint("\nNode purity encountered.  ");
+        ${trace.token}        RF_nativePrint("\nNode will not be split.  \n");
+        ${trace.token}      }
+        ${trace.token}    }
         free_uivector(evntProp, 1, RF_eventTypeSize + 1);
       }
       else {
@@ -129,6 +152,9 @@ char getPreSplitResultGeneric (uint      treeID,
   }
   parent -> nonMissMembrIndx = parent -> nonMissMembrIndxStatic;
   parent -> nonMissMembrSize  = parent -> nonMissMembrSizeStatic;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetPreSplitResultGeneric(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return result;
 }
 char getPreSplitResultNoMiss (uint      treeID,
@@ -137,6 +163,12 @@ char getPreSplitResultNoMiss (uint      treeID,
                               char      multVarFlag) {
   uint i;
   char result;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetPreSplitResultNoMiss(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\n  called with   rep size:  %10d", parent -> repMembrSize);
+  ${trace.token}  }
   result = TRUE;
   if (result) {
     if (parent -> repMembrSize >= (2 * RF_nodeSize)) {
@@ -144,6 +176,10 @@ char getPreSplitResultNoMiss (uint      treeID,
     }
     else {
       result = FALSE;
+      ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+      ${trace.token}      RF_nativePrint("\nLess than twice the minimum number of replicates encountered.  ");
+      ${trace.token}      RF_nativePrint("\nNode will not be split.  \n");
+      ${trace.token}    }
     }
   }
   if (result) {
@@ -156,6 +192,10 @@ char getPreSplitResultNoMiss (uint      treeID,
       }
       else {
         result = FALSE;
+        ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+        ${trace.token}      RF_nativePrint("\nMaximum node depth encountered.  ");
+        ${trace.token}      RF_nativePrint("\nNode will not be split.  \n");
+        ${trace.token}    }
       }
     }
   }
@@ -203,6 +243,12 @@ char getPreSplitResultNoMiss (uint      treeID,
             }
           }
         }
+        ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+        ${trace.token}      if (!result) {
+        ${trace.token}        RF_nativePrint("\nNode purity encountered.  ");
+        ${trace.token}        RF_nativePrint("\nNode will not be split.  \n");
+        ${trace.token}      }
+        ${trace.token}    }
         free_uivector(evntProp, 1, RF_eventTypeSize + 1);
       }
       else {
@@ -221,12 +267,18 @@ char getPreSplitResultNoMiss (uint      treeID,
   }
   parent -> nonMissMembrIndx = parent -> nonMissMembrIndxStatic;
   parent -> nonMissMembrSize  = parent -> nonMissMembrSizeStatic;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetPreSplitResultNoMiss(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return result;
 }
 void unstackPreSplit (char      preliminaryResult,
                       Node     *parent,
                       char      multImpFlag,
                       char      multVarFlag) {
+  ${trace.token}  if (getTraceFlag(0) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackPreSplit() ENTRY ...\n");
+  ${trace.token}  }
   if (preliminaryResult) {
     if (!((RF_mRecordSize == 0) || multImpFlag || !(RF_optHigh & OPT_MISS_SKIP) || multVarFlag)) {
       free_uivector(parent -> nonMissMembrIndxStatic, 1, parent -> repMembrSize);
@@ -234,23 +286,49 @@ void unstackPreSplit (char      preliminaryResult,
   }
   else {
   }
+  ${trace.token}  if (getTraceFlag(0) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackPreSplit() EXIT ...\n");
+  ${trace.token}  }
 }
 void stackSplitPreliminary(uint     nodeSize,
                            char   **localSplitIndicator,
                            double **splitVector) {
+  ${trace.token}  if (getTraceFlag(0) & SPLT_MED_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & !TURN_OFF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nstackSplitPreliminary() ENTRY ...\n");
+  ${trace.token}    }
+  ${trace.token}  }
   *localSplitIndicator = cvector(1, nodeSize);
   *splitVector = dvector(1, nodeSize);
+  ${trace.token}  if (getTraceFlag(0) & SPLT_MED_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & !TURN_OFF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nstackSplitPreliminary() EXIT ...\n");
+  ${trace.token}    }
+  ${trace.token}  }
 }
 void unstackSplitPreliminary(uint    nodeSize,
                              char   *localSplitIndicator,
                              double *splitVector) {
+  ${trace.token}  if (getTraceFlag(0) & SPLT_MED_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & !TURN_OFF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nunstackSplitPreliminary() ENTRY ...\n");
+  ${trace.token}    }
+  ${trace.token}  }
   free_cvector(localSplitIndicator, 1, nodeSize);
   free_dvector(splitVector, 1, nodeSize);
+  ${trace.token}  if (getTraceFlag(0) & SPLT_MED_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & !TURN_OFF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nunstackSplitPreliminary() EXIT ...\n");
+  ${trace.token}    }
+  ${trace.token}  }
 }
 DistributionObj *stackRandomCovariatesGeneric(uint treeID, Node *parent) {
   uint actualWeightType;
   uint *augmentationSize;
   char *permissible;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackRandomCovariatesGeneric(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   DistributionObj *obj = makeDistributionObjRaw();
   actualWeightType = RF_xWeightType;
   augmentationSize    = NULL;
@@ -264,15 +342,24 @@ DistributionObj *stackRandomCovariatesGeneric(uint treeID, Node *parent) {
   obj -> weightSorted        = RF_xWeightSorted;
   obj -> densityAllocSize    = RF_xWeightDensitySize;
   initializeCDFNew(treeID, obj);
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackRandomCovariatesGeneric(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return obj;
 }
 void unstackRandomCovariatesGeneric(uint treeID, DistributionObj *obj) {
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackRandomCovariatesGeneric(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   if (obj -> augmentationSize != NULL) {
     free_uivector(obj -> augmentationSize, 1, 2);
     obj -> augmentationSize = NULL;
   }
   discardCDFNew(treeID, obj);
   freeDistributionObjRaw(obj);
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackRandomCovariatesGeneric(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
 }
 char selectRandomCovariatesGeneric(uint     treeID,
                                    Node     *parent,
@@ -281,20 +368,35 @@ char selectRandomCovariatesGeneric(uint     treeID,
                                    uint     *covariate,
                                    uint     *covariateCount) {
   char xVarFound;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nselectRandomCovariatesGeneric(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   (*covariate) = UINT_MAX;
   xVarFound = FALSE;
   *factorFlag = FALSE;
   while ( ((*covariateCount) < RF_mtry) && ((*covariate) != 0) && (xVarFound == FALSE)) {
     (*covariateCount) ++;
+    ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+    ${trace.token}        RF_nativePrint("\nCovariate counter:  %10d \n", (*covariateCount));
+    ${trace.token}      }
     *covariate = sampleFromCDFNew(ran1B, treeID, distributionObj);
     if (*covariate != 0) {
       updateCDFNew(treeID, distributionObj);
+      ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+      ${trace.token}        RF_nativePrint("\nCovariate:  %10d \n", *covariate);
+      ${trace.token}      }
       xVarFound = TRUE;
         if (RF_xType[*covariate] == 'C') {
           *factorFlag = TRUE;
+          ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+          ${trace.token}        RF_nativePrint("\nCandidate covariate %10d is a factor.", *covariate);
+          ${trace.token}      }
         }
     }  
   }  
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nselectRandomCovariatesGeneric(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return xVarFound;
 }
 uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
@@ -306,6 +408,9 @@ uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
   char mPredictorFlag;
   uint vectorSize;
   uint i, ii;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndConstructSplitVectorGenericPhase1(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   uint  *repMembrIndx = parent -> repMembrIndx;
   uint   repMembrSize = parent -> repMembrSize;
   uint  *nonMissMembrIndxStatic = parent -> nonMissMembrIndxStatic;
@@ -331,6 +436,19 @@ uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
       for (i = 1; i <= repMembrSize; i++) {
         nonMissSplit[i] = RF_observation[treeID][covariate][repMembrIndx[i]];
       }
+      ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+      ${trace.token}          RF_nativePrint("\nNote that all responses are inculded below, and not just the ytry targets:");
+      ${trace.token}        RF_nativePrint("\nReplicate:           indx    targ indx        covar       responses ->");
+      ${trace.token}        for (i = 1; i <= repMembrSize; i++) {
+      ${trace.token}          RF_nativePrint("\n               %10d %12d %12.4f",
+      ${trace.token}                    i,
+      ${trace.token}                    repMembrIndx[i],
+      ${trace.token}                    RF_observation[treeID][covariate][repMembrIndx[i]]);
+      ${trace.token}          for (uint r = 1; r<= RF_ySize; r++) {
+      ${trace.token}            RF_nativePrint(" %12.4f", RF_response[treeID][r][repMembrIndx[i]]);
+      ${trace.token}          }
+      ${trace.token}        }
+      ${trace.token}      }
   }
   else {
     offset = RF_ySize + covariate;
@@ -349,6 +467,19 @@ uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
         nonMissSplit[*nonMissMembrSize] = RF_observation[treeID][covariate][repMembrIndx[(*nonMissMembrIndx)[*nonMissMembrSize]]];
       }
     }  
+    ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+    ${trace.token}          RF_nativePrint("\nNote that all responses are inculded below, and not just the ytry targets:");
+    ${trace.token}          RF_nativePrint("\nReplicate:           indx    targ indx        covar         responses ->");
+    ${trace.token}          for (i = 1; i <= (*nonMissMembrSize); i++) {
+    ${trace.token}            RF_nativePrint("\n               %10d %12d %12.4f",
+    ${trace.token}                    i,
+    ${trace.token}                    repMembrIndx[(*nonMissMembrIndx)[i]],
+    ${trace.token}                    RF_observation[treeID][covariate][repMembrIndx[(*nonMissMembrIndx)[i]]]);
+    ${trace.token}            for (uint r = 1; r<= RF_ySize; r++) {
+    ${trace.token}              RF_nativePrint(" %12.4f", RF_response[treeID][r][repMembrIndx[(*nonMissMembrIndx)[i]]]);
+    ${trace.token}            }
+    ${trace.token}          }
+    ${trace.token}        }
   }  
   if ((*nonMissMembrSize) >= 2) {
     (*indxx) = uivector(1, repMembrSize);
@@ -363,7 +494,28 @@ uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
         splitVector[vectorSize] = nonMissSplit[(*indxx)[i]];
       }
     }
+    ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+    ${trace.token}        RF_nativePrint("\n\nNon-miss member size:        %10d ", (*nonMissMembrSize));
+    ${trace.token}        RF_nativePrint("\nPermissible split size:      %10d ", vectorSize);
+    ${trace.token}      }
     if(vectorSize >= 2) {
+      ${trace.token}        if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+      ${trace.token}          RF_nativePrint("\nCovariate accepted:          %10d \n", covariate);
+      ${trace.token}          RF_nativePrint("\nsplit points:       index        value");
+      ${trace.token}          for (i = 1; i <= vectorSize; i++) {
+      ${trace.token}            RF_nativePrint("\n               %10d %12.4f", i, splitVector[i]);
+      ${trace.token}          }
+      ${trace.token}          RF_nativePrint("\n");
+      ${trace.token}          RF_nativePrint("\nNon-miss Repl:       indx        indxx  unord value    ord value");
+      ${trace.token}          for (i = 1; i <= (*nonMissMembrSize); i++) {
+      ${trace.token}            RF_nativePrint("\n               %10d %12d %12.4f %12.4f ",
+      ${trace.token}                    i,
+      ${trace.token}                    (*indxx)[i],
+      ${trace.token}                    nonMissSplit[i],
+      ${trace.token}                    nonMissSplit[(*indxx)[i]]
+      ${trace.token}                   );
+      ${trace.token}          }
+      ${trace.token}        }
     }
     else {
       vectorSize = 0;
@@ -381,6 +533,9 @@ uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
         *nonMissMembrSize = 0;
         *nonMissMembrIndx = NULL;
       }
+    ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+    ${trace.token}        RF_nativePrint("\nCovariate rejected due to non-miss split being less than two (2):  %10d ", covariate);
+    ${trace.token}      }
     }
   }
   else {
@@ -389,6 +544,9 @@ uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
       (parent -> permissible)[covariate] = FALSE;
       parent -> permissibleReIndxFlag = TRUE;
     }
+    ${trace.token}        if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+    ${trace.token}          RF_nativePrint("\nCovariate rejected:  %10d \n", covariate);
+    ${trace.token}        }
     if ((RF_mRecordSize == 0) || (multImpFlag) || (!(RF_optHigh & OPT_MISS_SKIP))) {
       *nonMissMembrSize = 0;
       *nonMissMembrIndx = NULL;
@@ -400,6 +558,9 @@ uint stackAndConstructSplitVectorGenericPhase1 (uint     treeID,
     }
   }
   free_dvector(nonMissSplit, 1, repMembrSize);
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndConstructSplitVectorGenericPhase1(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return vectorSize;
 }
 uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
@@ -420,6 +581,9 @@ uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
   uint offset;
   uint splitLength;
   uint relativePair;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndConstructSplitVectorGenericPhase2(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   repMembrSize = parent -> repMembrSize;
   splitLength = 0;  
   (*splitVectorPtr) = NULL;  
@@ -429,12 +593,18 @@ uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
     RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
     RF_nativeExit();
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\n(TreeID %10d):  Constructing split vector for (parameter, of size):  (%10d, %10d) \n", treeID, covariate, vectorSize);
+  ${trace.token}  }
   if (*factorFlag) {
     if(RF_factorList[treeID][vectorSize] == NULL) {
       RF_factorList[treeID][vectorSize] = makeFactor(vectorSize, FALSE);
     }
     factorSizeAbsolute = RF_xFactorSize[RF_xFactorMap[covariate]];
     *mwcpSizeAbsolute = RF_factorList[treeID][factorSizeAbsolute] -> mwcpSize;
+    ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+    ${trace.token}    RF_nativePrint("\n(%10d):  (Absolute Factor Size, Absolute MWCP Size):  (%10d, %10d)", treeID, factorSizeAbsolute, *mwcpSizeAbsolute);
+    ${trace.token}    }
     if (RF_splitRule == RAND_SPLIT) {
       splitLength = 1 + 1;
       *deterministicSplitFlag = FALSE;
@@ -452,6 +622,22 @@ uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
         }
         if (*deterministicSplitFlag == FALSE) {
           splitLength = repMembrSize + 1;
+          ${trace.token}          if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+          ${trace.token}            if (vectorSize <= MAX_EXACT_LEVEL) {
+          ${trace.token}              RF_nativePrint("\n(%10d):  Factor override to random (pSplit, nsplit, ndSize):  (%10d, %10d, %10d) \n",
+          ${trace.token}                      treeID,
+          ${trace.token}                      *((uint*) RF_factorList[treeID][vectorSize] -> complementaryPairCount),
+          ${trace.token}                      RF_nsplit,
+          ${trace.token}                      repMembrSize);
+          ${trace.token}            }
+          ${trace.token}            else {
+          ${trace.token}              RF_nativePrint("\n(%10d):  Factor override to random (pSplit, nsplit, ndSize):  (%24.0f, %10d, %10d) \n",
+          ${trace.token}                      treeID,
+          ${trace.token}                      *((double*) RF_factorList[treeID][vectorSize] -> complementaryPairCount),
+          ${trace.token}                      RF_nsplit,
+          ${trace.token}                      repMembrSize);
+          ${trace.token}            }
+          ${trace.token}          }
         }
         else {
           splitLength = *((uint*) RF_factorList[treeID][vectorSize] -> complementaryPairCount) + 1;
@@ -463,6 +649,12 @@ uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
           if (*((uint*) RF_factorList[treeID][vectorSize] -> complementaryPairCount) <= ((RF_nsplit <= repMembrSize) ? RF_nsplit : repMembrSize)) {
             splitLength = *((uint*) RF_factorList[treeID][vectorSize] -> complementaryPairCount) + 1;
             *deterministicSplitFlag = TRUE;
+            ${trace.token}            if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+            ${trace.token}              RF_nativePrint("\nFactor override to determ (pSplit, nsplit, ndSize):  (%10d, %10d, %10d) \n",
+            ${trace.token}                      *((uint*) RF_factorList[treeID][vectorSize] -> complementaryPairCount),
+            ${trace.token}                      RF_nsplit,
+            ${trace.token}                      repMembrSize);
+            ${trace.token}            }
           }
         }
         if (*deterministicSplitFlag == FALSE) {
@@ -512,6 +704,12 @@ uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
           splitLength = vectorSize;
           (*splitVectorPtr) = splitVector;
           *deterministicSplitFlag = TRUE;
+          ${trace.token}          if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+          ${trace.token}            RF_nativePrint("\nContinuous override to determ (pSplit, nsplit, ndSize):  (%10d, %10d, %10d) \n",
+          ${trace.token}                    vectorSize,
+          ${trace.token}                    RF_nsplit,
+          ${trace.token}                    repMembrSize);
+          ${trace.token}          }
         }
         else {
           splitLength = RF_nsplit + 1;
@@ -526,6 +724,9 @@ uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
         ((double*) (*splitVectorPtr))[1]  = splitVector[(uint) ceil(ran1B(treeID) * ((vectorSize - 1) * 1.0))];
       }
       else {
+        ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+        ${trace.token}    RF_nativePrint("\nConstructing SWOR of (populated) length:  %10d - 1 \n", splitLength);
+        ${trace.token}  }
         sworVector = uivector(1, vectorSize);
         sworVectorSize = vectorSize - 1;
         for (j = 1; j <= sworVectorSize; j++) {
@@ -542,6 +743,12 @@ uint stackAndConstructSplitVectorGenericPhase2 (uint     treeID,
       }
     }
   }  
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndConstructSplitVectorGenericPhase2(%10d) length:  %10d", treeID, splitLength);
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndConstructSplitVectorGenericPhase2(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return splitLength;
 }
 void unstackSplitVectorGeneric(uint   treeID,
@@ -554,6 +761,9 @@ void unstackSplitVectorGeneric(uint   treeID,
                                void  *splitVectorPtr,
                                char   multImpFlag,
                                uint  *indxx) {
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackSplitVectorGeneric(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   if (splitLength > 0) {
     if (factorFlag == TRUE) {
       free_uivector(splitVectorPtr, 1, splitLength * mwcpSizeAbsolute);
@@ -575,6 +785,9 @@ void unstackSplitVectorGeneric(uint   treeID,
       free_uivector(parent -> nonMissMembrIndx, 1, parent -> nonMissMembrSizeStatic);
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackSplitVectorGeneric(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
 }
 uint virtuallySplitNodeGeneric(uint  treeID,
                                Node *parent,
@@ -592,6 +805,22 @@ uint virtuallySplitNodeGeneric(uint  treeID,
   uint nonMissMembrSize;
   char daughterFlag;
   char iterFlag;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}  RF_nativePrint("\nvirtuallySplitNodeGeneric(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    if (factorFlag == TRUE) {
+  ${trace.token}      RF_nativePrint("\nVirtually splitting on vector element with factor (index, binary words (hex)):  ");
+  ${trace.token}      RF_nativePrint("( %10d, ", offset);
+  ${trace.token}      for (uint k = mwcpSizeAbsolute; k >= 1; k--) {
+  ${trace.token}        RF_nativePrint("%8x", ((uint*) splitVectorPtr + ((offset - 1) * mwcpSizeAbsolute))[k]);
+  ${trace.token}      }
+  ${trace.token}      RF_nativePrint(")");
+  ${trace.token}    }
+  ${trace.token}    else {
+  ${trace.token}      RF_nativePrint("\nVirtually splitting on vector element with real (index, value):  ( %10d, %12.4f) \n", offset, ((double*) splitVectorPtr)[offset]);
+  ${trace.token}    }
+  ${trace.token}  }
   iterFlag = TRUE;
   repMembrIndx = parent -> repMembrIndx;
   nonMissMembrIndx = parent -> nonMissMembrIndx;
@@ -599,6 +828,18 @@ uint virtuallySplitNodeGeneric(uint  treeID,
   *currentMembrIter = priorMembrIter;
   while (iterFlag) {
     (*currentMembrIter) ++;
+    ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+    ${trace.token}        if (getTraceFlag(treeID) | TURN_OFF_TRACE) {
+    ${trace.token}          RF_nativePrint("\nCurrent   (indx):  %10d ", *currentMembrIter);
+    ${trace.token}          if (factorFlag != TRUE) {
+    ${trace.token}            RF_nativePrint("\nCurrent  (indxx):  %10d ", indxx[*currentMembrIter]);
+    ${trace.token}            RF_nativePrint("\nCurrent (nmmIdx):  %10d ", nonMissMembrIndx[indxx[*currentMembrIter]]);
+    ${trace.token}          }
+    ${trace.token}          else {    
+    ${trace.token}            RF_nativePrint("\nCurrent (nmmIdx):  %10d ", nonMissMembrIndx[*currentMembrIter]);
+    ${trace.token}          }
+    ${trace.token}        }
+    ${trace.token}      }
     if (factorFlag == TRUE) {
       daughterFlag = splitOnFactor((uint)  observation[    repMembrIndx[nonMissMembrIndx[*currentMembrIter]]     ],
                                    (uint*) splitVectorPtr + ((offset - 1) * mwcpSizeAbsolute));
@@ -606,6 +847,16 @@ uint virtuallySplitNodeGeneric(uint  treeID,
       if ((*currentMembrIter) == nonMissMembrSize) {
         iterFlag = FALSE;
       }
+      ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+      ${trace.token}        if (getTraceFlag(treeID) | TURN_OFF_TRACE) {
+      ${trace.token}          if (daughterFlag == LEFT) {
+      ${trace.token}            RF_nativePrint("\nMember of LEFT Daughter (index):  %10d %10d %10d %12.4f", *currentMembrIter, nonMissMembrIndx[*currentMembrIter], repMembrIndx[nonMissMembrIndx[*currentMembrIter]], observation[ repMembrIndx[nonMissMembrIndx[*currentMembrIter]] ]);
+      ${trace.token}          }
+      ${trace.token}          else {
+      ${trace.token}            RF_nativePrint("\nMember of RGHT Daughter (index):  %10d %10d %10d %12.4f", *currentMembrIter, nonMissMembrIndx[*currentMembrIter], repMembrIndx[nonMissMembrIndx[*currentMembrIter]], observation[ repMembrIndx[nonMissMembrIndx[*currentMembrIter]] ]);
+      ${trace.token}          }
+      ${trace.token}        }
+      ${trace.token}      }
     }
     else {
       if ((((double*) splitVectorPtr)[offset] - observation[   repMembrIndx[nonMissMembrIndx[indxx[*currentMembrIter]]]    ]) >= 0.0) {
@@ -616,28 +867,66 @@ uint virtuallySplitNodeGeneric(uint  treeID,
         iterFlag = FALSE;
       }
       localSplitIndicator[     nonMissMembrIndx[indxx[*currentMembrIter]]   ] = daughterFlag;
+      ${trace.token}      if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+      ${trace.token}        if (getTraceFlag(treeID) | TURN_OFF_TRACE) {
+      ${trace.token}          if (daughterFlag == LEFT) {
+      ${trace.token}            RF_nativePrint("\nMember of LEFT Daughter (index):  %10d %10d %10d %10d %12.4f", *currentMembrIter, indxx[*currentMembrIter], nonMissMembrIndx[indxx[*currentMembrIter]], repMembrIndx[nonMissMembrIndx[indxx[*currentMembrIter]]], observation[ repMembrIndx[nonMissMembrIndx[indxx[*currentMembrIter]]] ]);
+      ${trace.token}          }
+      ${trace.token}          else {
+      ${trace.token}            RF_nativePrint("\nMember of RGHT Daughter (index):  %10d %10d %10d %10d %12.4f", *currentMembrIter, indxx[*currentMembrIter], nonMissMembrIndx[indxx[*currentMembrIter]], repMembrIndx[nonMissMembrIndx[indxx[*currentMembrIter]]], observation[ repMembrIndx[nonMissMembrIndx[indxx[*currentMembrIter]]] ]);
+      ${trace.token}          }
+      ${trace.token}        }
+      ${trace.token}      }
     }
     if (daughterFlag == LEFT) {
       (*leftSize) ++;
     }
   }  
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nLeft Size:  %10d, Right Size:  %10d", *leftSize, nonMissMembrSize - *leftSize);
+  ${trace.token}  }
   if ((*leftSize == 0) || (*leftSize == nonMissMembrSize)) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Left or Right Daughter of size zero:  (%10d, %10d)", *leftSize, nonMissMembrSize);
     RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
     RF_nativeExit();
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nvirtuallySplitNodeGeneric(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return (*leftSize);
 }
 char summarizeSplitResult(SplitInfoMax *splitInfoMax) {
   char result;
+  ${trace.token}  uint k;
+  ${trace.token}  if (getTraceFlag(0) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nsummarizeSplitResult() ENTRY ...\n");
+  ${trace.token}  }
   if (!RF_nativeIsNaN(splitInfoMax -> deltaMax)) {
     splitInfoMax -> splitStatistic = splitInfoMax -> deltaMax;
     result = TRUE;
+    ${trace.token}    if (getTraceFlag(0) & SPLT_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\nBest Split Statistics: \n");
+    ${trace.token}      RF_nativePrint("  SplitParm        Delta \n");
+    ${trace.token}      RF_nativePrint(" %10d %12.4f \n", splitInfoMax -> splitParameterMax, splitInfoMax -> deltaMax);
+    ${trace.token}      if (RF_xType[splitInfoMax -> splitParameterMax] == 'C') {
+    ${trace.token}        RF_nativePrint(" at MWCPsize= %2d, mwcp= ", splitInfoMax -> splitValueMaxFactSize);
+    ${trace.token}        for (k = splitInfoMax -> splitValueMaxFactSize; k >= 1; k--) {
+    ${trace.token}          RF_nativePrint("%8x ", splitInfoMax -> splitValueMaxFactPtr[k]);
+    ${trace.token}        }
+    ${trace.token}        RF_nativePrint("\n");
+    ${trace.token}      }
+    ${trace.token}      else {
+    ${trace.token}        RF_nativePrint(" at %12.4f \n", splitInfoMax -> splitValueMaxCont);
+    ${trace.token}      }
+    ${trace.token}    }
   }
   else {
     result = FALSE;
   }
+  ${trace.token}  if (getTraceFlag(0) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nsummarizeSplitResult(%1d) EXIT ...\n", result);
+  ${trace.token}  }
   return result;
 }
 char updateMaximumSplitGeneric(uint    treeID,
@@ -653,6 +942,9 @@ char updateMaximumSplitGeneric(uint    treeID,
                                SplitInfoMax *splitInfoMax) {
   char flag;
   uint k;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateMaximumSplitGeneric() ENTRY ...\n");
+  ${trace.token}  }
   if(RF_nativeIsNaN(delta)) {
     flag = FALSE;
   }
@@ -673,6 +965,14 @@ char updateMaximumSplitGeneric(uint    treeID,
   if (flag) {
     splitInfoMax -> deltaMax = delta;
     splitInfoMax -> splitParameterMax = covariate;
+    ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\n\nRunning Split Statistics Updated: \n");
+    ${trace.token}      RF_nativePrint("  SplitParm  SplitValIdx        Delta \n");
+    ${trace.token}      RF_nativePrint(" %10d %12d %12.4f \n", covariate, index, splitInfoMax -> deltaMax);
+    ${trace.token}    }
+      ${trace.token}      if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+      ${trace.token}        RF_nativePrint(" with nominal x-var");
+      ${trace.token}      }
     if (factorFlag == TRUE) {
       if (splitInfoMax -> splitValueMaxFactSize > 0) {
         if (splitInfoMax -> splitValueMaxFactSize != mwcpSizeAbsolute) {
@@ -690,6 +990,13 @@ char updateMaximumSplitGeneric(uint    treeID,
         (splitInfoMax -> splitValueMaxFactPtr)[k] =
           ((uint*) splitVectorPtr + ((index - 1) * (splitInfoMax -> splitValueMaxFactSize)))[k];
       }
+      ${trace.token}      if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+      ${trace.token}        RF_nativePrint(" at MWCPsize= %2d, mwcp= ", splitInfoMax -> splitValueMaxFactSize);
+      ${trace.token}        for (k = splitInfoMax -> splitValueMaxFactSize; k >= 1; k--) {
+      ${trace.token}          RF_nativePrint("%8x ", (splitInfoMax -> splitValueMaxFactPtr)[k]);
+      ${trace.token}        }
+      ${trace.token}        RF_nativePrint("\n");
+      ${trace.token}      }
     }
     else {
       if (splitInfoMax -> splitValueMaxFactSize > 0) {
@@ -700,10 +1007,21 @@ char updateMaximumSplitGeneric(uint    treeID,
       else {
       }
       splitInfoMax -> splitValueMaxCont = ((double*) splitVectorPtr)[index];
+      ${trace.token}      if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+      ${trace.token}        RF_nativePrint(" at continuous point %12.4f \n", splitInfoMax -> splitValueMaxCont);
+      ${trace.token}      }
     }
   }
   else {
+    ${trace.token}    if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\n\nRunning Split Statistics NOT Updated: \n");
+    ${trace.token}      RF_nativePrint("  SplitParm  SplitValIdx        Delta     DeltaMax\n");
+    ${trace.token}      RF_nativePrint(" %10d %12d %12.4f %12.4f\n", covariate, index, delta, splitInfoMax -> deltaMax);
+    ${trace.token}    }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateMaximumSplitGeneric() EXIT ...\n");
+  ${trace.token}  }
   return flag;
 }
 void getReweightedRandomPair (uint    treeID,
@@ -712,6 +1030,9 @@ void getReweightedRandomPair (uint    treeID,
                               double *absoluteLevel,
                               uint   *result) {
   uint randomGroupIndex;
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetReweightedRandomPair() ENTRY ...\n");
+  ${trace.token}  }
   if(RF_factorList[treeID][relativeFactorSize] == NULL) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Factor not allocated for size:  %10d", relativeFactorSize);
@@ -719,12 +1040,21 @@ void getReweightedRandomPair (uint    treeID,
     RF_nativeExit();
   }
   randomGroupIndex = (uint) ceil(ran1B(treeID) * ((RF_factorList[treeID][relativeFactorSize] -> cardinalGroupCount) * 1.0));
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nRandomly Selected Group Index:  %10d", randomGroupIndex);
+  ${trace.token}  }
   createRandomBinaryPair(treeID, relativeFactorSize, absoluteFactorSize, randomGroupIndex, absoluteLevel, result);
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetReweightedRandomPair() EXIT ...\n");
+  ${trace.token}  }
 }
 void getRandomPair (uint treeID, uint relativeFactorSize, uint absoluteFactorSize, double *absoluteLevel, uint *result) {
   uint randomGroupIndex;
   double randomValue;
   uint k;
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetRandomPair() ENTRY ...\n");
+  ${trace.token}  }
   if(RF_factorList[treeID][relativeFactorSize] == NULL) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Factor not allocated for size:  %10d", relativeFactorSize);
@@ -742,16 +1072,33 @@ void getRandomPair (uint treeID, uint relativeFactorSize, uint absoluteFactorSiz
       cdf[k] = ((double*) RF_factorList[treeID][relativeFactorSize] -> cardinalGroupSize)[k];
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nFactor (relativeFactorSize, cardinalGroupCount):  (%10d, %10d) \n", relativeFactorSize, RF_factorList[treeID][relativeFactorSize] -> cardinalGroupCount);
+  ${trace.token}  }
   for (k=2; k <= RF_factorList[treeID][relativeFactorSize] -> cardinalGroupCount; k++) {
     cdf[k] += cdf[k-1];
   }
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nUpdated CDF based on cardinal group size:  ");
+  ${trace.token}    RF_nativePrint("\n     index          cdf");
+  ${trace.token}    for (k=1; k <= RF_factorList[treeID][relativeFactorSize] -> cardinalGroupCount; k++) {
+  ${trace.token}      RF_nativePrint("\n%10d  %12f", k, cdf[k]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
   randomValue = ceil((ran1B(treeID) * cdf[RF_factorList[treeID][relativeFactorSize] -> cardinalGroupCount]));
   randomGroupIndex = 1;
   while (randomValue > cdf[randomGroupIndex]) {
     randomGroupIndex ++;
   }
   free_dvector(cdf, 1, RF_factorList[treeID][relativeFactorSize] -> cardinalGroupCount);
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nRandomly Selected Group Index:  %10d", randomGroupIndex);
+  ${trace.token}  }
   createRandomBinaryPair(treeID, relativeFactorSize, absoluteFactorSize, randomGroupIndex, absoluteLevel, result);
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetRandomPair() EXIT ...\n");
+  ${trace.token}  }
 }
 void createRandomBinaryPair(uint    treeID,
                             uint    relativeFactorSize,
@@ -763,6 +1110,14 @@ void createRandomBinaryPair(uint    treeID,
   uint mwcpSizeAbsolute;
   uint offset, levelSize, levelIndex;
   uint k;
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ncreateRandomBinaryPair() ENTRY ...\n");
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrelativeSize absoluteSize   groupIndex ");
+  ${trace.token}    RF_nativePrint("\n%12d %12d %12d", relativeFactorSize, absoluteFactorSize, groupIndex);
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
   levelIndex = 0;  
   mwcpSizeAbsolute = RF_factorList[treeID][absoluteFactorSize] -> mwcpSize;
   uint *levelVector = uivector(1, relativeFactorSize);
@@ -779,18 +1134,47 @@ void createRandomBinaryPair(uint    treeID,
     levelVector[levelIndex] = levelVector[levelSize];
     levelSize --;
   }
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nAbsolute Levels:  ");
+  ${trace.token}    RF_nativePrint("\n     index      level");
+  ${trace.token}    for (k=1; k <= relativeFactorSize; k++) {
+  ${trace.token}      RF_nativePrint("\n%10d  %10d", k, (uint) absoluteLevel[k]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}    RF_nativePrint("\nRandomly Selected Levels Prior to Remapping:  ");
+  ${trace.token}    RF_nativePrint("\n     index      level");
+  ${trace.token}    for (k=1; k <= groupIndex; k++) {
+  ${trace.token}      RF_nativePrint("\n%10d  %10d", k, randomLevel[k]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
   for (k = 1; k <= groupIndex; k++) {
     randomLevel[k] = (uint) absoluteLevel[randomLevel[k]];
   }
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nRandomly Selected Levels After Remapping:  ");
+  ${trace.token}    RF_nativePrint("\n     index      level");
+  ${trace.token}    for (k=1; k <= groupIndex; k++) {
+  ${trace.token}      RF_nativePrint("\n%10d  %10d", k, randomLevel[k]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
   for (offset = 1; offset <= mwcpSizeAbsolute; offset++) {
     pair[offset] = 0;
   }
   for (k = 1; k <= groupIndex; k++) {
     mwcpLevelIdentifier = (randomLevel[k] >> (3 + ulog2(sizeof(uint)))) + ((randomLevel[k] & (MAX_EXACT_LEVEL - 1)) ? 1 : 0);
+    ${trace.token}    if (getTraceFlag(treeID) & FACT_HGH_TRACE) {
+    ${trace.token}      RF_nativePrint("\n MWCP Level Identifier:   %10d ", mwcpLevelIdentifier);
+    ${trace.token}      RF_nativePrint("\n upower() bit:  %10d ", randomLevel[k] - ((mwcpLevelIdentifier - 1) * MAX_EXACT_LEVEL) - 1 );
+    ${trace.token}    }
     pair[mwcpLevelIdentifier] += upower(2, randomLevel[k] - ((mwcpLevelIdentifier - 1) * MAX_EXACT_LEVEL) - 1 );
   }
   free_uivector(levelVector, 1, relativeFactorSize);
   free_uivector(randomLevel, 1, groupIndex);
+  ${trace.token}  if (getTraceFlag(treeID) & FACT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ncreateRandomBinaryPair() EXIT ...\n");
+  ${trace.token}  }
 }
 void convertRelToAbsBinaryPair(uint    treeID,
                                uint    relativeFactorSize,
@@ -802,7 +1186,24 @@ void convertRelToAbsBinaryPair(uint    treeID,
   uint mwcpSizeAbsolute;
   uint coercedAbsoluteLevel;
   uint k, offset;
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nconvertRelToAbsBinaryPair() ENTRY ...\n");
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrelativeSize absoluteSize      relPair");
+  ${trace.token}    RF_nativePrint("\n%12d %12d %12x", relativeFactorSize, absoluteFactorSize, relativePair);
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
   mwcpSizeAbsolute = RF_factorList[treeID][absoluteFactorSize] -> mwcpSize;
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nAbsolute Levels:  ");
+  ${trace.token}    RF_nativePrint("\n     index      level");
+  ${trace.token}    for (k=1; k <= relativeFactorSize; k++) {
+  ${trace.token}      RF_nativePrint("\n%10d  %10d", k, (uint) absoluteLevel[k]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}    RF_nativePrint("\nRelative Pair:  %8x \n", relativePair);
+  ${trace.token}  }
   for (offset = 1; offset <= mwcpSizeAbsolute; offset++) {
     pair[offset] = 0;
   }
@@ -811,7 +1212,14 @@ void convertRelToAbsBinaryPair(uint    treeID,
       coercedAbsoluteLevel = (uint) absoluteLevel[k];
       mwcpLevelIdentifier = (coercedAbsoluteLevel >> (3 + ulog2(sizeof(uint)))) + ((coercedAbsoluteLevel & (MAX_EXACT_LEVEL - 1)) ? 1 : 0);
       pair[mwcpLevelIdentifier] += upower(2, coercedAbsoluteLevel - ((mwcpLevelIdentifier - 1) * MAX_EXACT_LEVEL) - 1 );
+      ${trace.token}      if (getTraceFlag(0) & FACT_HGH_TRACE) {
+      ${trace.token}        RF_nativePrint("\n MWCP Level Identifier:   %10d ", mwcpLevelIdentifier);
+      ${trace.token}        RF_nativePrint("\n upower() bit:  %10d ", coercedAbsoluteLevel - ((mwcpLevelIdentifier - 1) * MAX_EXACT_LEVEL) - 1);
+      ${trace.token}      }
     }
     relativePair = relativePair >> 1;
   }
+  ${trace.token}  if (getTraceFlag(0) & FACT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nconvertRelToAbsBinaryPair() EXIT ...\n");
+  ${trace.token}  }
 }

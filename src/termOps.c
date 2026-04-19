@@ -50,9 +50,21 @@ Terminal *makeTerminal(void) {
   parent -> ibgMembrSizeAlloc = 0;
   parent -> ibgMembrSize      = 0;
   parent -> ibgMembrIndx      = NULL;
+  ${trace.token}  if (getTraceFlag(0) & TURN_OFF_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & FORK_DEF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nmakeTerminal TerminalInfo:  %20x", parent);
+  ${trace.token}      getTerminalInfo(parent);
+  ${trace.token}    }
+  ${trace.token}  }
   return parent;
 }
 void freeTerminal(Terminal        *parent) {
+  ${trace.token}  if (getTraceFlag(0) | TURN_OFF_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & NODE_DEF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nfreeTerminal TerminalInfo:  %20x", parent);
+  ${trace.token}      getTerminalInfo(parent);
+  ${trace.token}    }
+  ${trace.token}  }
   unstackTermLMIIndex(parent);
   if ((RF_timeIndex > 0) && (RF_statusIndex > 0)) {
     freeTerminalNodeSurvivalStructuresIntermediate(parent);
@@ -74,8 +86,18 @@ void freeTerminal(Terminal        *parent) {
     }
   }
   free_gblock(parent, (size_t) sizeof(Terminal));
+  ${trace.token}  if (getTraceFlag(0) | TURN_OFF_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & NODE_DEF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nfreeTerminal() EXIT ... \n");
+  ${trace.token}    }
+  ${trace.token}  }
 }
 void freeTerminalNodeLocalSurvivalStructures(Terminal *tTerm) {
+  ${trace.token}  if (getTraceFlag(0) & FORK_DEF_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & TURN_OFF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nfreeTerminalNodeLocalSurvivalStructures() info:  %20x", tTerm);
+  ${trace.token}    }
+  ${trace.token}  }
   unstackLocalRatio(tTerm);
   unstackLocalSurvival(tTerm);
   unstackLocalNelsonAalen(tTerm);
@@ -86,15 +108,30 @@ void freeTerminalNodeLocalSurvivalStructures(Terminal *tTerm) {
   unstackEventTimeIndex(tTerm);
 }
 void freeTerminalNodeSurvivalStructuresIntermediate(Terminal *tTerm) {
+  ${trace.token}  if (getTraceFlag(0) & TURN_OFF_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & FORK_DEF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nfreeTerminalNodeSurvivalStructuresIntermediate() info:  %20x", tTerm);
+  ${trace.token}    }
+  ${trace.token}  }
   unstackSurvival(tTerm);
   unstackNelsonAalen(tTerm);
   unstackCSH(tTerm);
   unstackCIF(tTerm);
 }
 void freeTerminalNodeSurvivalStructuresFinal(Terminal *tTerm) {
+  ${trace.token}  if (getTraceFlag(0) & TURN_OFF_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & FORK_DEF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nfreeTerminalNodeSurvivalStructuresFinal() info:  %20x", tTerm);
+  ${trace.token}    }
+  ${trace.token}  }
   unstackMortality(tTerm);
 }
 void freeTerminalNodeNonSurvivalStructures(Terminal *tTerm) {
+  ${trace.token}  if (getTraceFlag(0) | TURN_OFF_TRACE) {
+  ${trace.token}   if (getTraceFlag(0) & NODE_DEF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nfreeTerminalNodeNonSurvivalStructures() info:  %20x", tTerm);
+  ${trace.token}    }
+  ${trace.token}  }
   unstackMultiClassProb(tTerm);
   unstackMeanResponse(tTerm);
   unstackMemberStream(tTerm);
@@ -551,6 +588,12 @@ void stackTermLMIIndex(Terminal *tTerm, unsigned int size) {
   }
   tTerm -> lmiIndex = uivector(1, tTerm -> lmiAllocSize);
   tTerm -> lmiValue = dvector(1, tTerm -> lmiAllocSize);
+  ${trace.token}  if (getTraceFlag(0) & TURN_OFF_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & NODE_DEF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nstackTermLMIIndex() info:  %20x", tTerm);
+  ${trace.token}      RF_nativePrint("\n  tTerm -> lmiAllocSize:  %10d", tTerm -> lmiAllocSize);
+  ${trace.token}    }
+  ${trace.token}  }
 }
 void unstackTermLMIIndex(Terminal *tTerm) {
   if(tTerm -> lmiAllocSize > 0) {
@@ -563,4 +606,10 @@ void unstackTermLMIIndex(Terminal *tTerm) {
       tTerm ->lmiSize = 0;
     }
   }
+  ${trace.token}  if (getTraceFlag(0) | TURN_OFF_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & NODE_DEF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nunstackTermLMIIndex() info:  %20x", tTerm);
+  ${trace.token}      RF_nativePrint("\n  tTerm -> lmiAllocSize:  %10d", tTerm -> lmiAllocSize);
+  ${trace.token}    }
+  ${trace.token}  }
 }

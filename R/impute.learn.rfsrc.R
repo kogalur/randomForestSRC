@@ -15,7 +15,8 @@ impute.learn.rfsrc <- function(formula, data,
                                keep.models = is.null(out.dir),
                                keep.ximp = FALSE,
                                save.on.fit = !is.null(out.dir),
-                               save.ood = TRUE) {
+                               save.ood = TRUE,
+                               weight = NULL) {
   target.mode <- match.arg(target.mode)
   persist.on.fit <- !is.null(out.dir) && isTRUE(save.on.fit)
   if (isTRUE(save.on.fit) && is.null(out.dir)) {
@@ -253,36 +254,59 @@ impute.learn.rfsrc <- function(formula, data,
       valid.ood.targets <- c(valid.ood.targets, yname)
     }
     if (length(valid.ood.targets) > 0L) {
+      saved.weight <- .resolve.ood.weight(
+        valid.ood.targets,
+        weight = weight,
+        warn.extra = FALSE
+      )
       target.score.train <- do.call(cbind, lapply(valid.ood.targets, function(yname) {
         .eval.ood.reference(ood.delta[[yname]], target.reference[[yname]])
       }))
       colnames(target.score.train) <- valid.ood.targets
-      default.weight <- setNames(rep(1, length(valid.ood.targets)), valid.ood.targets)
-      row.score.train <- .aggregate.ood.row(target.score.train, default.weight)
+      row.score.train <- .aggregate.ood.row(
+        target.score.train,
+        weight = saved.weight,
+        aggregate = "weighted.mean",
+        aggregate.args = list()
+      )
       row.reference <- .make.ood.reference(row.score.train)
+      row.reference.targets <- valid.ood.targets
+      row.reference.weight <- saved.weight
+      row.reference.aggregate <- "weighted.mean"
+      row.reference.aggregate.args <- list()
     }
     else {
-      default.weight <- setNames(numeric(0), character(0))
+      saved.weight <- setNames(numeric(0), character(0))
+      target.score.train <- matrix(numeric(0), nrow = nrow(train.data), ncol = 0L,
+                                   dimnames = list(NULL, character(0)))
       row.reference <- NULL
+      row.reference.targets <- character(0)
+      row.reference.weight <- setNames(numeric(0), character(0))
+      row.reference.aggregate <- "weighted.mean"
+      row.reference.aggregate.args <- list()
     }
     ood <- list(
-      version = "1.0",
       reference = "oob",
       aggregate = "weighted.mean",
+      aggregate.args = list(),
       target.metric = c(
         numeric = "absolute.error",
         factor = "negative.log.probability",
         fallback = "misclass.or.rank.distance"
       ),
       targets = valid.ood.targets,
-      weight = default.weight,
+      weight = saved.weight,
       target.reference = target.reference,
+      train.target.score = target.score.train,
       row.reference = row.reference,
+      row.reference.targets = row.reference.targets,
+      row.reference.weight = row.reference.weight,
+      row.reference.aggregate = row.reference.aggregate,
+      row.reference.aggregate.args = row.reference.aggregate.args,
       issues = ood.issues
     )
   }
   manifest <- list(
-    version = "1.2",
     created.at = format(Sys.time(), tz = "UTC", usetz = TRUE),
     formula = if (missing(formula)) NULL else paste(deparse(formula), collapse = ""),
     formula.scope = "initial imputation stage only",
@@ -446,6 +470,12 @@ impute.ood.rfsrc <- function(object, newdata,
                              eps = 1e-3,
                              cache.learners = c("all", "session", "none"),
                              weight = NULL,
+                             aggregate = c("bounded.product",
+                                           "weighted.mean",
+                                           "weighted.lp",
+                                           "weighted.lp.log",
+                                           "top.k"),
+                             aggregate.args = list(),
                              return.details = FALSE,
                              verbose = TRUE,
                              ...) {
@@ -494,6 +524,7 @@ impute.ood.rfsrc <- function(object, newdata,
     stop("No requested targets have a saved OOD reference.", call. = FALSE)
   }
   weight <- .resolve.ood.weight(use.targets, weight, default = ood.ref$weight)
+  aggregate.spec <- .canonicalize.ood.aggregate(aggregate, aggregate.args)
   completed.data <- prep$data
   n <- nrow(completed.data)
   target.delta <- matrix(NA_real_, nrow = n, ncol = length(use.targets),
@@ -573,32 +604,88 @@ impute.ood.rfsrc <- function(object, newdata,
       gc()
     }
   }
-  score <- .aggregate.ood.row(target.score[, use.targets, drop = FALSE], weight)
+  score <- .aggregate.ood.row(
+    target.score[, use.targets, drop = FALSE],
+    weight = weight,
+    aggregate = aggregate.spec$name,
+    aggregate.args = aggregate.spec$args
+  )
   weight.mask <- matrix(rep(weight > 0, each = n), nrow = n)
   targets.used <- rowSums(is.finite(target.score[, use.targets, drop = FALSE]) & weight.mask)
   score.percentile <- rep(NA_real_, n)
   row.reference.used <- FALSE
+  row.reference.mode <- NULL
   row.reference.reason <- NULL
-  same.targets <- setequal(use.targets, ood.ref$targets %||% character(0)) &&
-    length(use.targets) == length(ood.ref$targets %||% character(0))
-  same.weight <- .same.ood.weight(use.targets, weight, ood.ref$weight)
-  if (!is.null(ood.ref$row.reference) && isTRUE(same.targets) && isTRUE(same.weight)) {
-    score.percentile <- .eval.ood.reference(score, ood.ref$row.reference)
+  row.reference.n.train <- 0L
+  rebuilt.row.reference <- .rebuild.ood.row.reference(
+    train.target.score = ood.ref$train.target.score,
+    targets = use.targets,
+    weight = weight,
+    saved.targets = ood.ref$targets %||% character(0),
+    aggregate = aggregate.spec$name,
+    aggregate.args = aggregate.spec$args
+  )
+  if (!is.null(rebuilt.row.reference$reference)) {
+    score.percentile <- .eval.ood.reference(score, rebuilt.row.reference$reference)
     row.reference.used <- TRUE
+    row.reference.mode <- "recomputed.from.train.target.score"
+    row.reference.n.train <- rebuilt.row.reference$n.finite %||% 0L
   }
   else {
-    if (is.null(ood.ref$row.reference)) {
-      row.reference.reason <- "No saved row-level OOD reference is available."
+    row.reference.reason <- rebuilt.row.reference$reason
+    row.reference.targets <- ood.ref$row.reference.targets
+    row.reference.weight <- ood.ref$row.reference.weight
+    row.reference.aggregate <- ood.ref$row.reference.aggregate %||% ood.ref$aggregate %||% "weighted.mean"
+    row.reference.aggregate.args <- ood.ref$row.reference.aggregate.args %||% ood.ref$aggregate.args %||% list()
+    has.row.reference.meta <- !is.null(row.reference.targets) && !is.null(row.reference.weight)
+    same.targets <- isTRUE(has.row.reference.meta) &&
+      setequal(use.targets, row.reference.targets %||% character(0)) &&
+      length(use.targets) == length(row.reference.targets %||% character(0))
+    same.weight <- isTRUE(has.row.reference.meta) &&
+      .same.ood.weight(use.targets, weight, row.reference.weight)
+    same.aggregate <- .same.ood.aggregate(
+      aggregate = aggregate.spec$name,
+      aggregate.args = aggregate.spec$args,
+      ref.aggregate = row.reference.aggregate,
+      ref.aggregate.args = row.reference.aggregate.args
+    )
+    if (!is.null(ood.ref$row.reference) && isTRUE(same.targets) &&
+        isTRUE(same.weight) && isTRUE(same.aggregate)) {
+      score.percentile <- .eval.ood.reference(score, ood.ref$row.reference)
+      row.reference.used <- TRUE
+      row.reference.mode <- "saved.row.reference"
+      row.reference.n.train <- ood.ref$row.reference$n %||% 0L
+      row.reference.reason <- NULL
     }
-    else if (!isTRUE(same.targets)) {
-      row.reference.reason <- "Saved row-level OOD calibration requires scoring the original target set."
-    }
-    else if (!isTRUE(same.weight)) {
-      row.reference.reason <- "Saved row-level OOD calibration requires the default target weights."
+    else if (is.null(row.reference.reason)) {
+      if (is.null(ood.ref$row.reference)) {
+        row.reference.reason <- "No saved row-level OOD reference is available."
+      }
+      else if (!isTRUE(has.row.reference.meta)) {
+        row.reference.reason <- paste(
+          "Saved row-level OOD calibration is legacy and lacks the",
+          "training target-score matrix needed for arbitrary test-time",
+          "weight and row-aggregate recalibration. Refit with the updated",
+          "imputer to enable score.percentile for all target subsets,",
+          "weights, and row aggregates."
+        )
+      }
+      else if (!isTRUE(same.targets)) {
+        row.reference.reason <- "Saved row-level OOD calibration requires scoring the original target set."
+      }
+      else if (!isTRUE(same.weight)) {
+        row.reference.reason <- "Saved row-level OOD calibration requires the saved row-reference target weights."
+      }
+      else if (!isTRUE(same.aggregate)) {
+        row.reference.reason <- "Saved row-level OOD calibration requires the saved row-reference aggregate."
+      }
     }
   }
   if (length(unseen.rows) > 0L && any(unseen.rows)) {
-    score[unseen.rows] <- 1
+    score[unseen.rows] <- .max.ood.aggregate.value(
+      aggregate = aggregate.spec$name,
+      aggregate.args = aggregate.spec$args
+    )
     if (isTRUE(row.reference.used)) {
       score.percentile[unseen.rows] <- 1
     }
@@ -613,6 +700,8 @@ impute.ood.rfsrc <- function(object, newdata,
     info = list(
       targets = use.targets,
       weight = weight,
+      aggregate = aggregate.spec$name,
+      aggregate.args = aggregate.spec$args,
       added.columns = prep$info$added.columns,
       dropped.extra.columns = prep$info$dropped.extra.columns,
       unseen.levels = prep$info$unseen.levels,
@@ -622,6 +711,8 @@ impute.ood.rfsrc <- function(object, newdata,
       n.disk.loads = length(unique(disk.load.targets)),
       disk.load.targets = unique(disk.load.targets),
       row.reference.used = row.reference.used,
+      row.reference.mode = row.reference.mode,
+      row.reference.n.train = row.reference.n.train,
       row.reference.reason = row.reference.reason,
       target.issues = target.issues
     )
@@ -635,7 +726,6 @@ impute.ood.rfsrc <- function(object, newdata,
 impute.ood <- impute.ood.rfsrc
 print.impute.learn.rfsrc <- function(x, ...) {
   cat("Predictive imputer (randomForestSRC)\n")
-  cat("  version:       ", x$manifest$version, "\n", sep = "")
   cat("  imputation:    ", x$manifest$train.imputation %||% "<unknown>", "\n", sep = "")
   cat("  training rows: ", x$manifest$n.train, "\n", sep = "")
   cat("  training cols: ", x$manifest$p.train, "\n", sep = "")

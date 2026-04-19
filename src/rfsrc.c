@@ -43,6 +43,9 @@ void rfsrc(char mode, int seedValue) {
   uint r;
   uint b, p;
   uint seedValueLC;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\nNative code rfsrc() nominal entry:  @PROJECT_BUILD@ \n");
+  ${trace.token}  }
   seedValueLC    = 0; 
   if (seedValue >= 0) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
@@ -94,6 +97,9 @@ void rfsrc(char mode, int seedValue) {
     RF_numThreads = (RF_numThreads < omp_get_max_threads()) ? (RF_numThreads) : (omp_get_max_threads());
   }
 #endif
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    printParameters(mode);
+  ${trace.token}  }
   stackIncomingArrays(mode);
   stackPreDefinedCommonArrays(mode,
                               &RF_nodeMembership,  
@@ -124,6 +130,9 @@ void rfsrc(char mode, int seedValue) {
     stackClassificationArrays(mode);
   }
   RF_perfBlockCount = (uint) floor(((double) RF_ntree) / RF_perfBlock);
+  ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}      RF_nativePrint("\nPerfBlockCount = %10d", RF_perfBlockCount);
+  ${trace.token}    }
   freeNode = & freeNodeGeneric;
   switch (mode) {
   case RF_GROW:
@@ -220,8 +229,17 @@ void rfsrc(char mode, int seedValue) {
       mwcpOffset[j] = 0;
     }
     previousTreeID = b = 0;
+    ${trace.token}    if (getTraceFlag(0) & SUMM_HGH_TRACE) {
+    ${trace.token}      RF_nativePrint("\nRF-SRC:  Incoming Forest Record (partial):  \n");
+    ${trace.token}      RF_nativePrint("\n    treeID     nodeID     nodeSZ");
+    ${trace.token}      RF_nativePrint("     parmID     mwcpSZ \n");
+    ${trace.token}    }
     for (ulong ui = 1; ui <= RF_totalNodeCount; ui++) {
       if ((RF_treeID_[ui] > 0) && (RF_treeID_[ui] <= RF_ntree)) {
+        ${trace.token}    if (getTraceFlag(0) & SUMM_HGH_TRACE) {
+        ${trace.token}      RF_nativePrint("%10d %10d %10d", RF_treeID_[ui], RF_nodeID_[ui], RF_nodeSZ_[ui]);
+        ${trace.token}      RF_nativePrint(" %10d %10d \n", RF_parmID_[1][ui], RF_mwcpSZ_[1][ui]);
+        ${trace.token}    }
         if (RF_treeID_[ui] != previousTreeID) {
           previousTreeID = RF_restoreTreeID[++b] = RF_treeID_[ui];
           RF_restoreTreeOffset[RF_treeID_[ui]] = ui;
@@ -257,6 +275,14 @@ void rfsrc(char mode, int seedValue) {
     for (b = 1; b <= RF_ntree; b++) {
       RF_totalTerminalCount += (ulong) RF_tLeafCount[b];
     }
+    ${trace.token}    if (getTraceFlag(0) & SUMM_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\nSummarized Node and MWCP[1] counts for restore process:  ");
+    ${trace.token}      RF_nativePrint("\n     index     treeID    leafCNT    nodeCNT    treeOFS mwcpOFS[1] \n");
+    ${trace.token}      for (b = 1; b <= RF_ntree; b++) {
+    ${trace.token}        RF_nativePrint("%10d %10d %10d %10lu %10lu %10lu \n", 
+    ${trace.token}        b, RF_restoreTreeID[b], RF_tLeafCount[b], RF_nodeCount[b], RF_restoreTreeOffset[b], RF_restoreMWCPoffset[1][b]);
+    ${trace.token}      }
+    ${trace.token}    }
     break;
   }
   getConditionalClassificationIndex = &getConditionalClassificationIndexGrow;
@@ -353,11 +379,23 @@ void rfsrc(char mode, int seedValue) {
       randomSetUChain(b, -seedValueLC);
     }
     if (RF_opt & OPT_VIMP) {
+      ${trace.token}    if (getTraceFlag(0) & SUMM_MED_TRACE) {
+      ${trace.token}      RF_nativePrint("\n !GROW MODE VIMP Option Comparison: (now, saved) = (%10d, %10d",
+      ${trace.token}      (RF_opt & (OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)),
+      ${trace.token}      (RF_optLoGrow & (OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)));
+      ${trace.token}    }
       if ( (RF_opt & (OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)) ==
            (RF_optLoGrow & (OPT_VIMP | OPT_VIMP_JOIN | OPT_VIMP_TYP1 | OPT_VIMP_TYP2)) )  {
         for (p = 1; p <= bnpSize; p++) {
           randomSetChainVimp(p , RF_seedVimp_[p]);
         }
+        ${trace.token}    if (getTraceFlag(0) & SUMM_MED_TRACE) {
+        ${trace.token}      RF_nativePrint("\n !GROW MODE VIMP Seed:");
+        ${trace.token}      RF_nativePrint("\n      x-var       seed");
+        ${trace.token}      for (p = 1; p <= bnpSize; p++) {
+        ${trace.token}        RF_nativePrint("\n %10d %10d", p, RF_seedVimp_[p]);
+        ${trace.token}      }
+        ${trace.token}    }
       }
       else {
         for (p = 1; p <= bnpSize; p++) {
@@ -384,6 +422,11 @@ void rfsrc(char mode, int seedValue) {
         RF_nativePrint("\nImpute Iteration:  %6d", r);
       }
     }
+    ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}      if (mode == RF_GROW) {
+    ${trace.token}        RF_nativePrint("\nStart of impute iteration:  %10d", r);
+    ${trace.token}      }
+    ${trace.token}    }
     if (r == RF_nImpute) {
       if (mode == RF_GROW) {
         if (RF_opt & OPT_SEED) {
@@ -420,6 +463,8 @@ void rfsrc(char mode, int seedValue) {
     RF_serialTreeID = 0;
     RF_ensbUpdtCount = 0;
     RF_serialBlockID = 0;
+    ${trace.token}    setTraceFlag(getTraceFlag(0), 0);
+    ${memor.token}    setTraceFlag(getTraceFlag(0), 0);
     if (getUserTraceFlag()) {
       RF_userTimeStart = time(NULL);
       RF_userTimeSplit = RF_userTreeID = 0;
@@ -446,14 +491,88 @@ void rfsrc(char mode, int seedValue) {
           }
         }
       }
+      ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+      ${trace.token}    RF_nativePrint("\nFinal Tree Leaf Counts:  ");
+      ${trace.token}    RF_nativePrint("\n         tree    leafCount");
+      ${trace.token}    for (b = 1; b <= RF_ntree; b++) {
+      ${trace.token}      RF_nativePrint("\n %12d %12d", b, RF_tLeafCount[b]);
+      ${trace.token}    }
+      ${trace.token}    RF_nativePrint("\n");
+      ${trace.token}  }
+      ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+      ${trace.token}    RF_nativePrint("\nTrees rejected:  %10d ", RF_rejectedTreeCount);
+      ${trace.token}    RF_nativePrint("\nTrees stumped:   %10d ", RF_stumpedTreeCount);
+      ${trace.token}    RF_nativePrint("\nTrees valid:     %10d ", RF_validTreeCount);
+      ${trace.token}    RF_nativePrint("\nTrees (total):   %10d \n", RF_ntree);
+      ${trace.token}  }
       if (RF_opt & OPT_PROX) {
         finalizeProximity(mode);
+        ${trace.token}  if (getTraceFlag(0) & SUMM_HGH_TRACE) {
+        ${trace.token}      uint size;
+        ${trace.token}      switch (mode) {
+        ${trace.token}      case RF_PRED:
+        ${trace.token}        size = RF_fobservationSize;
+        ${trace.token}        break;
+        ${trace.token}      default:
+        ${trace.token}        size = RF_observationSize;
+        ${trace.token}        break;
+        ${trace.token}      }
+        ${trace.token}      RF_nativePrint("\nProximity Matrix:  \n");
+        ${trace.token}      uint k = 0;
+        ${trace.token}      for (uint i = 1; i <= size; i++) {
+        ${trace.token}        k += i - 1;
+        ${trace.token}        for (uint j = 1; j <= i; j++) {
+        ${trace.token}          RF_nativePrint("%20.4f ", RF_proximity_[k + j]);
+        ${trace.token}        }
+        ${trace.token}        RF_nativePrint("\n");
+        ${trace.token}      }
+        ${trace.token}  }
       }
       if (RF_optHigh & OPT_DIST) {
         finalizeDistance(mode);
+        ${trace.token}  if (getTraceFlag(0) & SUMM_HGH_TRACE) {
+        ${trace.token}      uint size;
+        ${trace.token}      switch (mode) {
+        ${trace.token}      case RF_PRED:
+        ${trace.token}        size = RF_fobservationSize;
+        ${trace.token}        break;
+        ${trace.token}      default:
+        ${trace.token}        size = RF_observationSize;
+        ${trace.token}        break;
+        ${trace.token}      }
+        ${trace.token}      RF_nativePrint("\nDistance Matrix:  \n");
+        ${trace.token}      uint k = 0;
+        ${trace.token}      for (uint i = 1; i <= size; i++) {
+        ${trace.token}        k += i - 1;
+        ${trace.token}        for (uint j = 1; j <= i; j++) {
+        ${trace.token}          RF_nativePrint("%20.4f ", RF_distance_[k + j]);
+        ${trace.token}        }
+        ${trace.token}        RF_nativePrint("\n");
+        ${trace.token}      }
+        ${trace.token}  }
       }
       if (RF_optHigh & OPT_WGHT) {
         finalizeWeight(mode);
+        ${trace.token}  if (getTraceFlag(0) & SUMM_HGH_TRACE) {
+        ${trace.token}    if (RF_optHigh & OPT_WGHT) {
+        ${trace.token}      uint size;
+        ${trace.token}      switch (mode) {
+        ${trace.token}      case RF_PRED:
+        ${trace.token}        size = RF_fobservationSize;
+        ${trace.token}        break;
+        ${trace.token}      default:
+        ${trace.token}        size = RF_observationSize;
+        ${trace.token}        break;
+        ${trace.token}      }
+        ${trace.token}      RF_nativePrint("\nWeight Matrix:  \n");
+        ${trace.token}      for (uint i = 1; i <= size; i++) {
+        ${trace.token}        for (uint j = 1; j <= RF_observationSize; j++) {
+        ${trace.token}          RF_nativePrint("%20.4f ", RF_weightPtr[i][j]);
+        ${trace.token}        }
+        ${trace.token}        RF_nativePrint("\n");
+        ${trace.token}      }
+        ${trace.token}    }
+        ${trace.token}  }
       }  
       stackForestObjectsOutput(mode);
       writeForestObjectsOutput(mode);
@@ -472,6 +591,8 @@ void rfsrc(char mode, int seedValue) {
       }
       stackTNQualitativeObjectsUnknownMembership(mode, & RF_OMBR_ID_, & RF_IMBR_ID_);
     }  
+    ${trace.token}    setTraceFlag(getTraceFlag(0), 0);
+    ${memor.token}    setTraceFlag(getTraceFlag(0), 0);
     if (RF_opt & OPT_MISS_OUT) {
       switch (mode) {
       case RF_PRED:
@@ -559,10 +680,22 @@ void rfsrc(char mode, int seedValue) {
         }
       }
     }
+    ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}      RF_nativePrint("\nEnd of impute iteration:  %10d", r);
+    ${trace.token}    }
+    ${trace.token}    if (getTraceFlag(0) & SUMM_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\n");
+    ${trace.token}      for (uint bb = 1; b <= RF_ntree; b++) {
+    ${trace.token}        RF_nativePrint("\n Parallel treeID:  %10d %10d", bb, RF_serialTreeIndex[bb]);
+    ${trace.token}      }
+    ${trace.token}    }
     if (getUserTraceFlag()) {
       RF_nativePrint("\n\n");
     }
   }  
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\n");
+  ${trace.token}  }
   if (RF_validTreeCount > 0) {
     if (RF_opt & OPT_VIMP) {
       finalizeVimpPerformance(mode);
@@ -617,6 +750,23 @@ void rfsrc(char mode, int seedValue) {
       }
       else {
       }
+      ${trace.token}      if (getTraceFlag(0) & SUMM_MED_TRACE) {
+      ${trace.token}        RF_nativePrint("\nPredictor Split Depths by Individual: \n");
+      ${trace.token}        RF_nativePrint("\nFirst index (tree) only: \n");
+      ${trace.token}        RF_nativePrint("\n   predictor   individual -->");
+      ${trace.token}        RF_nativePrint("\n             ");
+      ${trace.token}        for (uint i = 1; i <= RF_observationSize; i++) {
+      ${trace.token}          RF_nativePrint("%12d ", i);
+      ${trace.token}        }
+      ${trace.token}        RF_nativePrint("\n");
+      ${trace.token}        for (uint j = 1; j <= RF_xSize; j++) {
+      ${trace.token}          RF_nativePrint("%12d ", j);
+      ${trace.token}          for (uint i = 1; i <= RF_observationSize; i++) {
+      ${trace.token}            RF_nativePrint("%12.4f ", RF_splitDepthPtr[1][j][i]);
+      ${trace.token}          }
+      ${trace.token}          RF_nativePrint("\n");
+      ${trace.token}        }
+      ${trace.token}      }
     }
   }  
   else {
@@ -633,6 +783,29 @@ void rfsrc(char mode, int seedValue) {
     RF_nativePrint("\nRF-SRC:  *** WARNING *** ");
     RF_nativePrint("\nRF-SRC:  Insufficient trees for analysis.  \n");
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_HGH_TRACE) {
+  ${trace.token}    if (mode == RF_GROW) {
+  ${trace.token}      if (RF_opt & OPT_TREE) {
+  ${trace.token}        RF_nativePrint("\nForest Node Count:  %10d", RF_totalNodeCount);
+  ${trace.token}        RF_nativePrint("\nOutgoing Forest Record:  (NON-greedy only !");
+  ${trace.token}        RF_nativePrint("\n    offset     treeID     nodeID     nodeSZ   blnodeID   brnodeID     parmID       contPT     mwcpSZ    fsrecID\n");
+  ${trace.token}        for (ulong ui = 1; ui <= RF_totalNodeCount; ui++) {
+  ${trace.token}          RF_nativePrint("%10ld %10d %10d %10d %10d %10d %10d %12.2f %10d %10d\n", ui, RF_treeID_[ui], RF_nodeID_[ui], RF_nodeSZ_[ui], RF_blnodeID_[ui], RF_brnodeID_[ui], RF_parmID_[1][ui], RF_contPT_[1][ui], RF_mwcpSZ_[1][ui], RF_fsrecID_[1][ui]);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}        RF_nativePrint("\nOutgoing Forest Record (MWCP):  ");
+  ${trace.token}        RF_nativePrint("\n     index       mwcpPT \n");
+  ${trace.token}        ulong r = 0;
+  ${trace.token}        for (uint i = 1; i <= RF_ntree; i++) {
+  ${trace.token}          for (uint j = 1; j <= RF_mwcpCT_[1][i]; j++) {
+  ${trace.token}            r++;
+  ${trace.token}            RF_nativePrint("%10d %12d \n",r, RF_mwcpPT_[1][r]);
+  ${trace.token}          }
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}  }
   switch (mode) {
   case RF_GROW:
     freeSplitRuleObj(RF_splitRuleObj);
@@ -680,4 +853,8 @@ void rfsrc(char mode, int seedValue) {
   unstackLocksOpenMP(mode);
 #endif
   unstackFactorArrays(mode);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\nNative code rfsrc() nominal exit:  @PROJECT_BUILD@ \n");
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
 }

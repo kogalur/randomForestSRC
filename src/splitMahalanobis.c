@@ -13,11 +13,15 @@
 #include "regression.h"
 #include "svdUtil.h"
 #include "nrutil.h"
+${trace.token} #include "error.h"
 char mahalanobis (uint       treeID,
                   Node      *parent,
                   SplitInfoMax *splitInfoMax,
                   GreedyObj    *greedyMembr,
                   char       multImpFlag) {
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nmahalanobis(%10d) ENTRY ...\n", treeID);
+  ${trace.token}  }
   uint     covariate;
   uint     covariateCount;
   double  *splitVector;
@@ -99,6 +103,14 @@ char mahalanobis (uint       treeID,
       leftCenteredT = dmatrix(1, 1, 1, impureIdxCount);
       rghtCenteredT = dmatrix(1, 1, 1, impureIdxCount);
       elStar = dmatrix(1, repMembrSize, 1, impureIdxCount);
+      ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+      ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+      ${trace.token}              RF_nativePrint("\nMean of responses:       index   response");
+      ${trace.token}              for (uint rr = 1; rr <= impureIdxCount; rr++) {
+      ${trace.token}                RF_nativePrint("\n                    %10d %10.4f", impureIdx[rr], mean[impureIdx[rr]]);
+      ${trace.token}              }
+      ${trace.token}            }
+      ${trace.token}          }
       for (i = 1; i <= repMembrSize; i++) {
         for (uint rr = 1; rr <= impureIdxCount; rr++) {
           r = impureIdx[rr];
@@ -119,11 +131,57 @@ char mahalanobis (uint       treeID,
         qStar = NULL;
       }
       else {
+        ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+        ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+        ${trace.token}              RF_nativePrint("\n elStar (of dim n x r'):  ");
+        ${trace.token}              matrixPrint(elStar, repMembrSize, impureIdxCount);
+        ${trace.token}            }
+        ${trace.token}          }
         elStarTranspose = matrixTrans(elStar, repMembrSize, impureIdxCount);
+        ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+        ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+        ${trace.token}              RF_nativePrint("\n elStarTranspose (of dim r' x n):  ");
+        ${trace.token}              matrixPrint(elStarTranspose, impureIdxCount, repMembrSize);
+        ${trace.token}            }
+        ${trace.token}          }
         qStar = matrixMult(elStarTranspose, elStar, impureIdxCount, repMembrSize, impureIdxCount);
+        ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+        ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+        ${trace.token}              RF_nativePrint("\n qStar (of dim r' x r'):  ");
+        ${trace.token}              matrixPrint(qStar, impureIdxCount, impureIdxCount);
+        ${trace.token}            }
+        ${trace.token}          }
         svdcmp(qStar, impureIdxCount, impureIdxCount, &u, &w, &v);
+        ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+        ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+        ${trace.token}              RF_nativePrint("\n SVD Check of qStar (qStar =? u x w x v):  ");
+        ${trace.token}              svdchk(qStar, impureIdxCount, impureIdxCount, u, w, v);
+        ${trace.token}            }
+        ${trace.token}          }
         qStarPlus = svdinv(u, w, v, impureIdxCount, impureIdxCount, impureIdxCount);
+        ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+        ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+        ${trace.token}            if (qStarPlus != NULL) {
+        ${trace.token}              RF_nativePrint("\n qStar x qStarPlus (of dim r' x r'):  ");
+        ${trace.token}              double **qStarChk = matrixMult(qStar, qStarPlus, impureIdxCount, impureIdxCount, impureIdxCount);
+        ${trace.token}              matrixPrint(qStarChk, impureIdxCount, impureIdxCount);
+        ${trace.token}              RF_nativePrint("\n qStarPlus x qStar (of dim r' x r'):  ");
+        ${trace.token}              double **qStarChk2 = matrixMult(qStarPlus, qStar, impureIdxCount, impureIdxCount, impureIdxCount);
+        ${trace.token}              matrixPrint(qStarChk2, impureIdxCount, impureIdxCount);
+        ${trace.token}              free_dmatrix(qStarChk, 1, impureIdxCount, 1, impureIdxCount);
+        ${trace.token}              free_dmatrix(qStarChk2, 1, impureIdxCount, 1, impureIdxCount);
+        ${trace.token}            }
+        ${trace.token}            }
+        ${trace.token}          }
       }
+      ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+      ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+      ${trace.token}            if (qStarPlus != NULL) {
+      ${trace.token}              RF_nativePrint("\n qStarPlus (of dim r' x r'):  ");
+      ${trace.token}              matrixPrint(qStarPlus, impureIdxCount, impureIdxCount);
+      ${trace.token}            }
+      ${trace.token}            }
+      ${trace.token}          }
       double deltaMax;
       uint   indexMax;
       covariateCount = 0;
@@ -177,6 +235,14 @@ char mahalanobis (uint       treeID,
                                priorMembrIter,
                                & currentMembrIter);
             rghtSize = repMembrSize - leftSize;
+            ${trace.token}   if (getTraceFlag(treeID) & SPLT_MED_TRACE) {
+            ${trace.token}     RF_nativePrint("\nNon-miss Node Size:  %10d, Non-miss Left Size:  %10d, Non-miss Right Size:  %10d", repMembrSize, leftSize, rghtSize);
+            ${trace.token}   }
+            ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+            ${trace.token}            if (getTraceFlag(treeID) & TURN_OFF_TRACE) {
+            ${trace.token}              RF_nativePrint("\n PriorIter:     %10d  CurrentIter:   %10d", priorMembrIter, currentMembrIter);
+            ${trace.token}            }
+            ${trace.token}          }
             if ((leftSize != 0) && (rghtSize != 0)) {
               delta        = 0.0;
               deltaPartial = 0.0;
@@ -198,10 +264,26 @@ char mahalanobis (uint       treeID,
                     }
                   }
                 }
+                ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+                ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+                ${trace.token}              RF_nativePrint("\nLeft and Right Response Means:       index   response       left      right");
+                ${trace.token}            }
+                ${trace.token}          }
                 for (uint rr = 1; rr <= impureIdxCount; rr++) {
                   leftMean[rr] = leftMean[rr] / leftSize;
                   rghtMean[rr] = rghtMean[rr] / rghtSize;
                 }
+                ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+                ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+                ${trace.token}              for (uint rr = 1; rr <= impureIdxCount; rr++) {
+                ${trace.token}                RF_nativePrint("\n                                %10d %10d %10.4f %10.4f",
+                ${trace.token}                rr,
+                ${trace.token}                impureIdx[rr],
+                ${trace.token}                leftMean[rr],
+                ${trace.token}                rghtMean[rr]);
+                ${trace.token}              }
+                ${trace.token}            }
+                ${trace.token}          }
                 partialLeft = partialRght = 0.0;
                 for (i = 1; i <= repMembrSize; i++) {
                   if (localSplitIndicator[i] == LEFT) {
@@ -228,6 +310,12 @@ char mahalanobis (uint       treeID,
                   free_dmatrix(tempResult2, 1, 1, 1, 1);
                 }  
                 deltaPartial = ( ((double) leftSize / repMembrSize) * partialLeft) + ( ((double) rghtSize / repMembrSize) * partialRght);
+                ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+                ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+                ${trace.token}              RF_nativePrint("\nMahalanobis Internals:                left                right                  sum");
+                ${trace.token}              RF_nativePrint("\n                      %20.8f %20.8f %20.8f", ( ((double) leftSize / repMembrSize) * partialLeft), ( ((double) rghtSize / repMembrSize) * partialRght), deltaPartial);
+                ${trace.token}            }
+                ${trace.token}          }
                 delta = 1.0 - (deltaPartial / impureIdxCount);
               }
               else {
@@ -253,6 +341,21 @@ char mahalanobis (uint       treeID,
                   r = impureIdx[rr];
                   partialLeft = pow (sumLeft[r], 2.0) / (leftSize * variance[r]);
                   partialRght = pow (sumRght[r], 2.0) / (rghtSize * variance[r]);
+                  ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+                  ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+                  ${trace.token}              RF_nativePrint("\nPartial Delta (Regr): leftSize   rghtSize       mean   variance     sumLFT     sumRGT partialLFT partialRGT        sum");
+                  ${trace.token}              RF_nativePrint("\n                    %10d %10d %10.4f %10.4f %10.4f %10.4f %10.4f %10.4f %10.4f",
+                  ${trace.token}                       leftSize,
+                  ${trace.token}                       rghtSize,
+                  ${trace.token}                       mean[r],
+                  ${trace.token}                       variance[r],
+                  ${trace.token}                       sumLeft[r],
+                  ${trace.token}                       sumRght[r],
+                  ${trace.token}                       partialLeft,
+                  ${trace.token}                       partialRght,
+                  ${trace.token}                       partialLeft+partialRght);
+                  ${trace.token}            }
+                  ${trace.token}          }
                   delta = partialLeft + partialRght;
                 }
               }
@@ -272,6 +375,19 @@ char mahalanobis (uint       treeID,
                 }
               }
             }
+            ${trace.token}          if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+            ${trace.token}            if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+            ${trace.token}              RF_nativePrint("\nVirtual (non-miss) Membership:  ");
+            ${trace.token}              for (uint k = 1; k <= repMembrSize; k++) {
+            ${trace.token}                if (localSplitIndicator[ indxx[k] ] == LEFT) {
+            ${trace.token}                  RF_nativePrint("\n %10d %10d %10d %12.4f %12.4f --> LEFT ", k, indxx[k], repMembrIndx[indxx[k]], observation[ repMembrIndx[indxx[k]] ], RF_response[treeID][1][  repMembrIndx[indxx[k]]  ]);
+            ${trace.token}                }
+            ${trace.token}                else {
+            ${trace.token}                  RF_nativePrint("\n %10d %10d %10d %12.4f %12.4f --> RGHT ", k, indxx[k], repMembrIndx[indxx[k]], observation[ repMembrIndx[indxx[k]] ], RF_response[treeID][1][  repMembrIndx[indxx[k]]  ]);
+            ${trace.token}                }
+            ${trace.token}              }
+            ${trace.token}            }
+            ${trace.token}          }
             if (factorFlag == FALSE) {
               priorMembrIter = currentMembrIter - 1;
             }
@@ -330,5 +446,9 @@ char mahalanobis (uint       treeID,
                   multImpFlag,
                   TRUE);  
   result = summarizeSplitResult(splitInfoMax);
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nmahalanobis(%10d) result:  %10d", treeID, result);
+  ${trace.token}    RF_nativePrint("\nmahalanobis(%10d) EXIT ...\n", treeID);
+  ${trace.token}  }
   return result;
 }

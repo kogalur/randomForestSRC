@@ -10,6 +10,7 @@
 
 #include "random.h"
 #include "nrutil.h"
+${trace.token} #include "error.h"
 #define IA      16807
 #define IM      2147483647
 #define AM      (1.0/IM)
@@ -36,6 +37,9 @@ int      *seed1CValue;
 int      *seed1DValue;
 void randomStack(uint bSize, uint bnpSize) {
   uint b, p;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomStack() ENTRY ...\n");
+  ${trace.token}  }
   ran1A_iy = ivector(1, bSize);
   ran1A_iv = imatrix(1, bSize, 1, NTAB);
   ran1B_iy = ivector(1, bSize);
@@ -54,8 +58,14 @@ void randomStack(uint bSize, uint bnpSize) {
     }
     seed1DValue = ivector(1, bnpSize);
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomStack() EXIT ...\n");
+  ${trace.token}  }
 }
 void randomUnstack(uint bSize, uint bnpSize) {
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomUnstack() ENTRY ...\n");
+  ${trace.token}  }
   free_ivector(ran1A_iy, 1, bSize);
   free_imatrix(ran1A_iv, 1, bSize, 1, NTAB);
   free_ivector(ran1B_iy, 1, bSize);
@@ -67,29 +77,56 @@ void randomUnstack(uint bSize, uint bnpSize) {
     free_imatrix(ran1D_iv, 1, bnpSize, 1, NTAB);
     free_ivector(seed1DValue, 1, bnpSize);
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomUnstack() EXIT ...\n");
+  ${trace.token}  }
 }
 void randomSetChainParallel(uint b, int value) {
+  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomSetChainParallel():      %10d : %20d", b, value);
+  ${trace.token}  }
   seed1AValue[b] = value;
 }
 void randomSetUChainParallel(uint b, int value) {
+  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomSetUChainParallel():     %10d : %20d", b, value);
+  ${trace.token}  }
   seed1BValue[b] = value;
 }
 void randomSetUChainParallelVimp(uint b, int value) {
+  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomSetUChainParallelVimp():  %10d : %20d", b, value);
+  ${trace.token}  }
   seed1CValue[b] = value;
 }
 void randomSetChainParallelVimp(uint p, int value) {
+  ${trace.token}  if (getTraceFlag(p) & RAND_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomSetChainParallelVimp():  %10d : %20d", p, value);
+  ${trace.token}  }
   seed1DValue[p] = value;
 }
 void randomSetChainSerial(uint b, int value) {
+  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomSetChainSerial():        %10d : %20d", b, value);
+  ${trace.token}  }
   seed1AValue[1] = value;
 }
 void randomSetUChainSerial(uint b, int value) {
+  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomSetUChainSerial():       %10d : %20d", b, value);
+  ${trace.token}  }
   seed1BValue[1] = value;
 }
 void randomSetUChainSerialVimp(uint b, int value) {
+  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomSetUChainSerialVimp():    %10d : %20d", b, value);
+  ${trace.token}  }
   seed1CValue[1] = value;
 }
 void randomSetChainSerialVimp(uint p, int value) {
+  ${trace.token}  if (getTraceFlag(p) & RAND_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\nrandomSetUChainSerialVimp():    %10d : %20d", p, value);
+  ${trace.token}  }
   seed1DValue[1] = value;
 }
 int randomGetChainParallel(uint b) {

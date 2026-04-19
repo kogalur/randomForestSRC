@@ -32,8 +32,20 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
   char result;
   uint offset;
   uint i;
+  ${trace.token}  uint ibgSampleSize;
+  ${trace.token}  if (getTraceFlag(b) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\nTree ran1A():  %20d", randomGetChain(b));
+  ${trace.token}    RF_nativePrint("\nTree ran1B():  %20d", randomGetUChain(b));
+  ${trace.token}  }
 #ifdef _OPENMP
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\n Hello from thread %d of %d", omp_get_thread_num(), omp_get_num_threads());
+  ${trace.token}    RF_nativePrint("\n Parallel treeID:  %10d ", b);
+  ${trace.token}  }
 #endif
+  ${trace.token}    if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}      RF_nativePrint("\nAllocating for treeID:  %10d", b);
+  ${trace.token}    }
   RF_root[b] = makeNode((mode == RF_GROW) ? RF_xSize : 0);
   for (i = 1; i <= RF_root[b] -> xSize; i++) {
     RF_root[b] -> permissible[i] = TRUE;
@@ -80,6 +92,9 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
   RF_root[b] -> nodeID = 1;
   RF_maxDepth[b] = 0;
   bootMembrIndxIter = 0;
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nBootstrap sample:  %10d ", b);
+  ${trace.token}  }
   for (i = 1; i <= RF_observationSize; i++) {
     RF_root[b] -> allMembrIndx[i] = i;
     RF_nodeMembership[b][i] = RF_root[b];
@@ -115,6 +130,9 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
   }
   switch (mode) {
   case RF_GROW:
+    ${trace.token}      if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}        RF_nativePrint("\nStart of growTree():  (MI iter %10d, tree %10d)", r, b);
+    ${trace.token}      }
     RF_tLeafCount[b] = 0;
     rmbrIterator = ambrIterator = 0;
     result = growTree (r,
@@ -131,6 +149,23 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
     else {
       RF_nodeCount[b] = 1;
     }
+    ${trace.token}    if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}      RF_nativePrint("\nEnd of grow tree:  (MII r, treeID) = (%10d, %10d)", r, b);
+    ${trace.token}      RF_nativePrint("\nTotal node count:  %10d", RF_nodeCount[b]);
+    ${trace.token}      RF_nativePrint("\nTotal leaf count:  %10d", RF_tLeafCount[b]);
+    ${trace.token}    }
+    ${trace.token}    if (getTraceFlag(b) & SUMM_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\nTerminal Object Pointers:  %10d", b);
+    ${trace.token}      RF_nativePrint("\n       index              address       nodeID       termID\n");
+    ${trace.token}      LeafLinkedObj *leafLinkedPtr;
+    ${trace.token}      leafLinkedPtr = RF_leafLinkedObjHead[b] -> fwdLink;
+    ${trace.token}      i = 0;
+    ${trace.token}      while (leafLinkedPtr != NULL) {
+    ${trace.token}        i++;
+    ${trace.token}        RF_nativePrint("%12d %20x %12d %12d \n", i, leafLinkedPtr, (leafLinkedPtr -> nodePtr) -> nodeID, (leafLinkedPtr -> termPtr) -> nodeID);
+    ${trace.token}        leafLinkedPtr = leafLinkedPtr -> fwdLink;
+    ${trace.token}      }
+    ${trace.token}    }
     break;
   default:
     if (mode == RF_PRED) {
@@ -139,8 +174,30 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
         RF_fnodeMembership[b][i] = RF_root[b];
       }
     }
+    ${trace.token}     if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}       RF_nativePrint("\nStart of restore process:  (%10d, %10d)", r, b);
+    ${trace.token}     }
+    ${trace.token}     if (getTraceFlag(b) & SPLT_DEF_TRACE) {
+    ${trace.token}        RF_nativePrint("\nIncoming Tree Record (partial):  ");
+    ${trace.token}        RF_nativePrint("\n    offset     treeID     nodeID   brnodeID");
+    ${trace.token}        RF_nativePrint("     parmID     mwcpSZ \n");
+    ${trace.token}      }
+    ${trace.token}      if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}        RF_nativePrint("\nStart of restore tree:  %10d", b);
+    ${trace.token}      }
     restoreTree(mode, b, RF_root[b]);
+    ${trace.token}      if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}        RF_nativePrint("\nEnd of restoreTree():  %10d", b);
+    ${trace.token}        RF_nativePrint("\nTotal node count:  %10d", RF_nodeCount[b]);
+    ${trace.token}        RF_nativePrint("\nTotal leaf count:  %10d", RF_tLeafCount[b]);
+    ${trace.token}      }
+    ${trace.token}      if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}        RF_nativePrint("\nBeginning of test (and/or) train Membership Restoration:  (%10d, %10d)", r, b);
+    ${trace.token}      }
     rmbrIterator = ambrIterator = 0;
+    ${trace.token}      if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}        RF_nativePrint("\nStart of test (and/or) train Node Membership Restoration:  (%10d, %10d)", r, b);
+    ${trace.token}      }
     result = restoreNodeMembership(mode,
                                    TRUE,
                                    b,
@@ -154,6 +211,26 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
                                    & bootMembrIndxIter,
                                    & rmbrIterator,
                                    & ambrIterator);
+    ${trace.token}      if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}        RF_nativePrint("\nEnd of restoreNodeMembership():  %10d", b);
+    ${trace.token}        RF_nativePrint("\nTotal node count:  %10d", RF_nodeCount[b]);
+    ${trace.token}        RF_nativePrint("\nTotal leaf count:  %10d", RF_tLeafCount[b]);
+    ${trace.token}      }
+    ${trace.token}      if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+    ${trace.token}        RF_nativePrint("\nEnd of test (and/or) train Node Membership Restoration:  (%10d, %10d)", r, b);
+    ${trace.token}      }
+    ${trace.token}    if (getTraceFlag(b) & SUMM_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\nTerminal Object Pointers:  %10d", b);
+    ${trace.token}      RF_nativePrint("\n       index        leafLinkedPtr        nodeID       termID\n");
+    ${trace.token}      LeafLinkedObj *leafLinkedPtr;
+    ${trace.token}      leafLinkedPtr = RF_leafLinkedObjHead[b] -> fwdLink;
+    ${trace.token}      i = 0;
+    ${trace.token}      while (leafLinkedPtr != NULL) {
+    ${trace.token}        i++;
+    ${trace.token}        RF_nativePrint("%12d %20x %12d %12d \n", i, leafLinkedPtr, (leafLinkedPtr -> nodePtr) -> nodeID, (leafLinkedPtr -> termPtr) -> nodeID);
+    ${trace.token}        leafLinkedPtr = leafLinkedPtr -> fwdLink;
+    ${trace.token}      }
+    ${trace.token}    }
     break;
   }
   if (result) {
@@ -164,6 +241,7 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
       RF_tTermList[b][(leafLinkedPtr -> termPtr) -> nodeID] = leafLinkedPtr -> termPtr;
       leafLinkedPtr = leafLinkedPtr -> fwdLink;
     }
+    ${trace.token}  ibgSampleSize = RF_observationSize - RF_oobSize[b];
     if (mode != RF_PRED) {
       if (RF_mRecordSize > 0) {
         for (i = 1; i <= RF_mRecordSize; i++) {
@@ -189,6 +267,40 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
         }
       }
     }
+    ${trace.token}    if (getTraceFlag(b) & SUMM_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\n\nFinal Bootstrap Information:  ");
+    ${trace.token}      RF_nativePrint("\n  orgIndex       flag \n");
+    ${trace.token}      RF_nativePrint("\n  orgIndex   bootFlag    oobFlag  bootCount \n");
+    ${trace.token}      for (i = 1; i <= RF_observationSize; i++) {
+    ${trace.token}        RF_nativePrint("%10d %10d %10d %10d \n", i, RF_bootMembershipFlag[b][i], RF_oobMembershipFlag[b][i], RF_bootMembershipCount[b][i]);
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\nIBG Size:  %10d ",   ibgSampleSize);
+    ${trace.token}      RF_nativePrint("\nOOB Size:  %10d \n", RF_oobSize[b]);
+    ${trace.token}      RF_nativePrint("\nFinal (Terminal Object) Membership (in-bag data):  %10d", b);
+    ${trace.token}      RF_nativePrint("\n        index         leaf");
+    ${trace.token}      for (i = 1; i <= RF_ibgSize[b]; i++) {
+    ${trace.token}        RF_nativePrint("\n %12d %12d", i, RF_tTermMembership[b][RF_ibgMembershipIndex[b][i]] -> nodeID);
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\nFinal (Terminal Object) Membership (oob data):  %10d", b);
+    ${trace.token}      RF_nativePrint("\n        index         leaf");
+    ${trace.token}      for (i = 1; i <= RF_oobSize[b]; i++) {
+    ${trace.token}        RF_nativePrint("\n %12d %12d", i, RF_tTermMembership[b][RF_oobMembershipIndex[b][i]]-> nodeID);
+    ${trace.token}      }
+    ${trace.token}      if (RF_optHigh & OPT_FENS) {
+    ${trace.token}        RF_nativePrint("\nFinal (Terminal Object) Membership (all data):  %10d", b);
+    ${trace.token}        RF_nativePrint("\n        index         leaf");
+    ${trace.token}        for (i=1; i <= RF_observationSize; i++) {
+    ${trace.token}          RF_nativePrint("\n %12d %12d", i, RF_tTermMembership[b][i] -> nodeID);
+    ${trace.token}        }
+    ${trace.token}      }
+    ${trace.token}      if (mode == RF_PRED) {
+    ${trace.token}        RF_nativePrint("\nFinal PRED Membership (all data):  %10d", b);
+    ${trace.token}        RF_nativePrint("\n     index       leaf\n");
+    ${trace.token}        for (i=1; i <=  RF_fobservationSize; i++) {
+    ${trace.token}          RF_nativePrint("%10d %10d \n", i, RF_fnodeMembership[b][i] -> nodeID);
+    ${trace.token}        }
+    ${trace.token}      }
+    ${trace.token}    }
   }  
   if (r == RF_nImpute) {
     if (mode == RF_GROW) {
@@ -203,6 +315,9 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
       }  
     }  
   }  
+  ${trace.token}    if (getTraceFlag(b) & SUMM_MED_TRACE) {
+  ${trace.token}      RF_nativePrint("\nDe-allocating for treeID:  %10d", b);
+  ${trace.token}    }
   unstackShadow(mode, b);
   unstackFactorInSitu(b);
   if (mode == RF_PRED) {
@@ -230,9 +345,15 @@ void acquireTreeGeneric(char mode, uint r, uint b) {
       }
     }  
   }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nEnd of acquisition:  (%10d, %10d)", r, b);
+  ${trace.token}  }
 }
 void finalizeWeight(char mode) {
   uint    obsSize;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfinalizeWeight() ENTRY ...\n");
+  ${trace.token}  }
   switch (mode) {
   case RF_PRED:
     obsSize = RF_fobservationSize;
@@ -241,6 +362,29 @@ void finalizeWeight(char mode) {
     obsSize = RF_observationSize;
     break;
   }
+  ${trace.token}  if((RF_optHigh & OPT_WGHT_IBG) && (RF_optHigh & OPT_WGHT_OOB)) {
+  ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}      RF_nativePrint("\n  Weight:  FULL  \n");
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  else {
+  ${trace.token}    if((RF_optHigh & OPT_WGHT_IBG)  && !(RF_optHigh & OPT_WGHT_OOB)) {
+  ${trace.token}      if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}        RF_nativePrint("\n  Weight:  IBG  \n");
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    else if(!(RF_optHigh & OPT_WGHT_IBG)  && (RF_optHigh & OPT_WGHT_OOB)) {
+  ${trace.token}      if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}        RF_nativePrint("\n  Weight:  OOB  \n");
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    else {
+  ${trace.token}      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+  ${trace.token}      RF_nativeError("\nRF-SRC:  Illegal finalizeWeight() call.");
+  ${trace.token}      RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+  ${trace.token}      RF_nativeExit();
+  ${trace.token}    }
+  ${trace.token}  }
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(RF_numThreads)
 #endif
@@ -256,6 +400,9 @@ void finalizeWeight(char mode) {
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfinalizeWeight() EXIT ...\n");
+  ${trace.token}  }
 }
 void updateWeight(char mode, uint b) {
   uint     **utTermMembership;
@@ -265,10 +412,16 @@ void updateWeight(char mode, uint b) {
   uint   gMembershipSize,   iMembershipSize;
   uint  *bootMembershipCount;
   uint  mtnmFlag;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateWeight() ENTRY ...\n");
+  ${trace.token}  }
   gMembershipIndex = NULL;
   gMembershipSize  = 0;
   gtTermMembership = NULL;
   if((RF_optHigh & OPT_WGHT_IBG) && (RF_optHigh & OPT_WGHT_OOB)) {
+    ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}    RF_nativePrint("\n  Weight:  FULL  \n");
+    ${trace.token}  }
     switch (mode) {
     case RF_PRED:
       gMembershipSize = RF_fobservationSize;
@@ -284,11 +437,17 @@ void updateWeight(char mode, uint b) {
   }
   else {
     if((RF_optHigh & OPT_WGHT_IBG)  && !(RF_optHigh & OPT_WGHT_OOB)) {
+      ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}    RF_nativePrint("\n  Weight:  IBG  \n");
+      ${trace.token}  }
       gMembershipSize  = RF_observationSize;
       gMembershipIndex = RF_identityMembershipIndex;
       gtTermMembership = RF_tTermMembership[b];
     }
     else if(!(RF_optHigh & OPT_WGHT_IBG)  && (RF_optHigh & OPT_WGHT_OOB)) {
+      ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}    RF_nativePrint("\n  Weight:  OOB  \n");
+      ${trace.token}  }
       gMembershipIndex = RF_oobMembershipIndex[b];
       gMembershipSize  = RF_oobSize[b];
       gtTermMembership = RF_tTermMembership[b];
@@ -364,9 +523,15 @@ void updateWeight(char mode, uint b) {
 #endif
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateWeight() EXIT ...\n");
+  ${trace.token}  }
 }
 void finalizeProximity(char mode) {
   uint  obsSize;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfinalizeProximity() ENTRY ...\n");
+  ${trace.token}  }
   switch (mode) {
   case RF_PRED:
     obsSize = RF_fobservationSize;
@@ -375,6 +540,29 @@ void finalizeProximity(char mode) {
     obsSize = RF_observationSize;
     break;
   }
+  ${trace.token}  if((RF_opt & OPT_PROX_IBG) && (RF_opt & OPT_PROX_OOB)) {
+  ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}      RF_nativePrint("\n  Proximity:  FULL  \n");
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  else {
+  ${trace.token}    if((RF_opt & OPT_PROX_IBG)  && !(RF_opt & OPT_PROX_OOB)) {
+  ${trace.token}      if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}        RF_nativePrint("\n  Proximity:  IBG  \n");
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    else if(!(RF_opt & OPT_PROX_IBG)  && (RF_opt & OPT_PROX_OOB)) {
+  ${trace.token}      if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}        RF_nativePrint("\n  Proximity:  OOB  \n");
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    else {
+  ${trace.token}      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+  ${trace.token}      RF_nativeError("\nRF-SRC:  Illegal finalizeProximity() call.");
+  ${trace.token}      RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+  ${trace.token}      RF_nativeExit();
+  ${trace.token}    }
+  ${trace.token}  }
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(RF_numThreads)
 #endif
@@ -388,6 +576,9 @@ void finalizeProximity(char mode) {
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfinalizeProximity() EXIT ...\n");
+  ${trace.token}  }
 }
 void updateProximity(char mode, uint b) {
   uint     **utTermMembership;
@@ -396,9 +587,15 @@ void updateProximity(char mode, uint b) {
   uint  *membershipIndex;
   uint   membershipSize;
   uint  mtnmFlag;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateProximity() ENTRY ...\n");
+  ${trace.token}  }
   membershipSize  = 0;  
   membershipIndex = NULL;  
   if((RF_opt & OPT_PROX_IBG) && (RF_opt & OPT_PROX_OOB)) {
+    ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}    RF_nativePrint("\n  Proximity:  FULL  \n");
+    ${trace.token}  }
     switch (mode) {
     case RF_PRED:
       membershipSize = RF_fobservationSize;
@@ -414,10 +611,16 @@ void updateProximity(char mode, uint b) {
   }
   else {
     if((RF_opt & OPT_PROX_IBG)  && !(RF_opt & OPT_PROX_OOB)) {
+      ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}    RF_nativePrint("\n  Proximity:  IBG  \n");
+      ${trace.token}  }
       membershipIndex = RF_ibgMembershipIndex[b];
       membershipSize  = RF_ibgSize[b];
     }
     else if(!(RF_opt & OPT_PROX_IBG)  && (RF_opt & OPT_PROX_OOB)) {
+      ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}    RF_nativePrint("\n  Proximity:  OOB  \n");
+      ${trace.token}  }
       membershipIndex = RF_oobMembershipIndex[b];
       membershipSize  = RF_oobSize[b];
     }
@@ -470,9 +673,15 @@ void updateProximity(char mode, uint b) {
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateProximity() EXIT ...\n");
+  ${trace.token}  }
 }
 void finalizeDistance(char mode) {
   uint  obsSize;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfinalizeDistance() ENTRY ...\n");
+  ${trace.token}  }
   switch (mode) {
   case RF_PRED:
     obsSize = RF_fobservationSize;
@@ -481,6 +690,29 @@ void finalizeDistance(char mode) {
     obsSize = RF_observationSize;
     break;
   }
+  ${trace.token}  if((RF_optHigh & OPT_DIST_IBG) && (RF_optHigh & OPT_DIST_OOB)) {
+  ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}      RF_nativePrint("\n  Distance:  FULL  \n");
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  else {
+  ${trace.token}    if((RF_optHigh & OPT_DIST_IBG)  && !(RF_optHigh & OPT_DIST_OOB)) {
+  ${trace.token}      if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}        RF_nativePrint("\n  Distance:  IBG  \n");
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    else if(!(RF_optHigh & OPT_DIST_IBG)  && (RF_optHigh & OPT_DIST_OOB)) {
+  ${trace.token}      if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}        RF_nativePrint("\n  Distance:  OOB  \n");
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    else {
+  ${trace.token}      RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+  ${trace.token}      RF_nativeError("\nRF-SRC:  Illegal finalizeDistance() call.");
+  ${trace.token}      RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+  ${trace.token}      RF_nativeExit();
+  ${trace.token}    }
+  ${trace.token}  }
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(RF_numThreads)
 #endif
@@ -494,6 +726,9 @@ void finalizeDistance(char mode) {
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nfinalizeDistance() EXIT ...\n");
+  ${trace.token}  }
 }
 void updateDistance(char mode, uint b) {
   uint     **utTermMembership;
@@ -502,9 +737,15 @@ void updateDistance(char mode, uint b) {
   uint  *membershipIndex;
   uint   membershipSize;
   uint  mtnmFlag;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateDistance() ENTRY ...\n");
+  ${trace.token}  }
   membershipSize  = 0;  
   membershipIndex = NULL;  
   if((RF_optHigh & OPT_DIST_IBG) && (RF_optHigh & OPT_DIST_OOB)) {
+    ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}    RF_nativePrint("\n  Distance:  FULL  \n");
+    ${trace.token}  }
     switch (mode) {
     case RF_PRED:
       membershipSize = RF_fobservationSize;
@@ -520,10 +761,16 @@ void updateDistance(char mode, uint b) {
   }
   else {
     if((RF_optHigh & OPT_DIST_IBG)  && !(RF_optHigh & OPT_DIST_OOB)) {
+      ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}    RF_nativePrint("\n  Distance:  IBG  \n");
+      ${trace.token}  }
       membershipIndex = RF_ibgMembershipIndex[b];
       membershipSize  = RF_ibgSize[b];
     }
     else if(!(RF_optHigh & OPT_DIST_IBG)  && (RF_optHigh & OPT_DIST_OOB)) {
+      ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}    RF_nativePrint("\n  Distance:  OOB  \n");
+      ${trace.token}  }
       membershipIndex = RF_oobMembershipIndex[b];
       membershipSize  = RF_oobSize[b];
     }
@@ -569,22 +816,49 @@ void updateDistance(char mode, uint b) {
           shallowNodeMembership = iNodeMembership;
           deepEdgeCount = & jEdgeCount;
         }
+        ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+        ${trace.token}      RF_nativePrint("\n  Distance : CaseID (i, j) = (%10d, %10d)", ii, jj);
+        ${trace.token}      RF_nativePrint("\n  Distance : NodeID (i, j) = (%10d, %10d)", iNodeMembership -> nodeID, jNodeMembership -> nodeID);
+        ${trace.token}      RF_nativePrint("\n  Distance : Depth  (i, j) = (%10d, %10d)", iNodeMembership -> depth, jNodeMembership -> depth);
+        ${trace.token}    }
         while ((deepNodeMembership -> depth) > (shallowNodeMembership -> depth)) {
           deepNodeMembership = deepNodeMembership -> parent;
           (*deepEdgeCount) ++;
+          ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+          ${trace.token}      RF_nativePrint("\n  Distance : Parsing deeper backwards : depth = %10d", deepNodeMembership -> depth);
+          ${trace.token}    }
         }
         while (deepNodeMembership != shallowNodeMembership) {
           deepNodeMembership = deepNodeMembership -> parent;
           shallowNodeMembership = shallowNodeMembership -> parent;
           iEdgeCount ++;
           jEdgeCount ++;
+          ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+          ${trace.token}      RF_nativePrint("\n  Distance : Parsing both backwards : depth = (%10d, %10d)", deepNodeMembership -> depth, shallowNodeMembership -> depth);
+          ${trace.token}    }
         }
         if (iDepthCount > 0) { 
+          ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+          ${trace.token}      if (iEdgeCount == 0) {
+          ${trace.token}        if (jEdgeCount == 0) { 
+          ${trace.token}          RF_nativePrint("\n  Distance : Concurrent node membership : pair = (%10d, %10d)", ii, jj);
+          ${trace.token}        }
+          ${trace.token}        else {
+          ${trace.token}          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+          ${trace.token}          RF_nativeError("\nRF-SRC:  Inconsistent edge counts in updateDistance().  Both must be zero.");
+          ${trace.token}          RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+          ${trace.token}          RF_nativeExit();
+          ${trace.token}        }
+          ${trace.token}      }
+          ${trace.token}    }
           realDistance = (double) (iEdgeCount + jEdgeCount) / (iDepthCount + jDepthCount);
         }
         else {
           realDistance = 0;
         }
+        ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+        ${trace.token}      RF_nativePrint("\n  Distance : Real Increment: %10f \n", realDistance);
+        ${trace.token}    }
         rfsrc_omp_atomic_update(&RF_distancePtr[ii][jj], realDistance);
       }
     }
@@ -623,24 +897,54 @@ void updateDistance(char mode, uint b) {
               shallowNodeMembership = iNodeMembership;
               deepEdgeCount = & jEdgeCount;
             }
+            ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+            ${trace.token}      RF_nativePrint("\n  Distance : CaseID (i, j) = (%10d, %10d)", ii, jj);
+            ${trace.token}      RF_nativePrint("\n  Distance : NodeID (i, j) = (%10d, %10d)", iNodeMembership -> nodeID, jNodeMembership -> nodeID);
+            ${trace.token}      RF_nativePrint("\n  Distance : Depth  (i, j) = (%10d, %10d)", iNodeMembership -> depth, jNodeMembership -> depth);
+            ${trace.token}    }
             while ((deepNodeMembership -> depth) > (shallowNodeMembership -> depth)) {
               deepNodeMembership = deepNodeMembership -> parent;
               (*deepEdgeCount) ++;
+              ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+              ${trace.token}      RF_nativePrint("\n  Distance : Parsing deeper backwards : depth = %10d", deepNodeMembership -> depth);
+              ${trace.token}    }
             }
             while (deepNodeMembership != shallowNodeMembership) {
               deepNodeMembership = deepNodeMembership -> parent;
               shallowNodeMembership = shallowNodeMembership -> parent;
               iEdgeCount ++;
               jEdgeCount ++;
+              ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+              ${trace.token}      RF_nativePrint("\n  Distance : Parsing both backwards : depth = (%10d, %10d)", deepNodeMembership -> depth, shallowNodeMembership -> depth);
+              ${trace.token}    }
             }
             if (iDepthCount > 0) { 
+              ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+              ${trace.token}      if (iEdgeCount == 0) {
+              ${trace.token}        if (jEdgeCount == 0) { 
+              ${trace.token}          RF_nativePrint("\n  Distance : Concurrent node membership : pair = (%10d, %10d)", ii, jj);
+              ${trace.token}        }
+              ${trace.token}        else {
+              ${trace.token}          RF_nativeError("\nRF-SRC:  *** ERROR *** ");
+              ${trace.token}          RF_nativeError("\nRF-SRC:  Inconsistent edge counts in updateDistance().  Both must be zero.");
+              ${trace.token}          RF_nativeError("\nRF-SRC:  Please Contact Technical Support.");
+              ${trace.token}          RF_nativeExit();
+              ${trace.token}        }
+              ${trace.token}      }
+              ${trace.token}    }
               realDistance = (double) (iEdgeCount + jEdgeCount) / (iDepthCount + jDepthCount);
             }
             else {
               realDistance = 0;
             }
+            ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+            ${trace.token}      RF_nativePrint("\n  Distance : Real Current : %10f \n", realDistance);
+            ${trace.token}    }
             if (realDistance < minDistance) {
               minDistance = realDistance;
+              ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+              ${trace.token}      RF_nativePrint("\n  Distance : Real Minimum Update: %10f \n", minDistance);
+              ${trace.token}    }
               if (minDistance == 0) {
                 goto distMarginal;
               }
@@ -649,10 +953,16 @@ void updateDistance(char mode, uint b) {
         }
       distMarginal:
         continue;
+        ${trace.token}    if (getTraceFlag(0) & ENSB_LOW_TRACE) {
+        ${trace.token}      RF_nativePrint("\n  Distance : Minimum Distance: %10f \n", minDistance);
+        ${trace.token}    }
         rfsrc_omp_atomic_update(&RF_distancePtr[ii][jj], minDistance);
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nupdateDistance() EXIT ...\n");
+  ${trace.token}  }
 }
 void updateSplitDepth(uint treeID, Node *rootPtr, uint maxDepth) {
   Node  *parent;
@@ -676,6 +986,28 @@ void updateSplitDepth(uint treeID, Node *rootPtr, uint maxDepth) {
       RF_nativeExit();
     }
     localSplitDepth = dvector(1, RF_xSize);
+    ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+    ${trace.token}    RF_nativePrint("\nTerminal Node Predictor Split Depths for Tree:  %10d", treeID);
+    ${trace.token}    RF_nativePrint("\n      leaf      count     splits --> \n");
+    ${trace.token}    LeafLinkedObj *leafLinkedPtr;
+    ${trace.token}    leafLinkedPtr = RF_leafLinkedObjHead[treeID] -> fwdLink;
+    ${trace.token}    while (leafLinkedPtr != NULL) {
+    ${trace.token}      k = 0;
+    ${trace.token}      parent = leafLinkedPtr -> nodePtr;
+    ${trace.token}      if (parent != NULL) {
+    ${trace.token}        k++;    
+    ${trace.token}        RF_nativePrint("%10d %10d ", parent -> nodeID, parent -> depth);
+    ${trace.token}        for (j = 1; j <= parent -> depth; j++) {
+    ${trace.token}          RF_nativePrint("%10d ", (parent -> splitDepth)[j]);
+    ${trace.token}        }
+    ${trace.token}      }
+    ${trace.token}      else {
+    ${trace.token}        RF_nativePrint("%10d ", k);
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\n");
+    ${trace.token}      leafLinkedPtr = leafLinkedPtr -> fwdLink;
+    ${trace.token}    }
+    ${trace.token}  }
     for (i = 1; i <= RF_observationSize; i++) {
       for (j = 1; j <= RF_xSize; j++) {
         localSplitDepth[j] = RF_nativeNaN;
@@ -710,6 +1042,9 @@ void updateSplitDepth(uint treeID, Node *rootPtr, uint maxDepth) {
     free_dvector(localSplitDepth, 1, RF_xSize);
     freeSplitPath(treeID);
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nRF-SRC:  SplitDepth update complete.");
+  ${trace.token}  }
 }
 char pruneBranch(uint obsSize,
                  uint treeID,
@@ -719,6 +1054,9 @@ char pruneBranch(uint obsSize,
                  uint ptnCurrent) {
   char pruneFlag;
   uint i, j;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\npruneBranch() ENTRY ...\n");
+  ${trace.token}  }
   pruneFlag = TRUE;
   double *varianceAtDepth =  dvector(1, nadCount);
   uint   *vadSortedIndex  = uivector(1, nadCount);
@@ -728,6 +1066,9 @@ char pruneBranch(uint obsSize,
   indexx(nadCount, varianceAtDepth, vadSortedIndex);
   j = nadCount;
   while ((j >= 1) && pruneFlag) {
+    ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+    ${trace.token}    RF_nativePrint("\n  Node pseudo-terminated at index:  %10d", vadSortedIndex[j]);
+    ${trace.token}  }
     nodesAtDepth[vadSortedIndex[j]] -> pseudoTerminal = TRUE;
     (nodesAtDepth[vadSortedIndex[j]] -> left)  -> pseudoTerminal = FALSE;
     (nodesAtDepth[vadSortedIndex[j]] -> right) -> pseudoTerminal = FALSE;
@@ -745,6 +1086,9 @@ char pruneBranch(uint obsSize,
   }
   free_dvector(varianceAtDepth, 1, nadCount);
   free_uivector(vadSortedIndex, 1, nadCount);
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\npruneBranch() EXIT ...\n");
+  ${trace.token}  }
   return pruneFlag;
 }
 uint pruneTree(uint obsSize, uint treeID, uint ptnTarget) {
@@ -754,6 +1098,9 @@ uint pruneTree(uint obsSize, uint treeID, uint ptnTarget) {
   uint   tagDepth;
   char   pruneFlag;
   uint   i;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\npruneTree() ENTRY ...\n");
+  ${trace.token}  }
   if (ptnTarget < 1) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Illegal target PTN count in pruneTree():  %10d", ptnTarget);
@@ -770,13 +1117,35 @@ uint pruneTree(uint obsSize, uint treeID, uint ptnTarget) {
   ptnCurrent = RF_tLeafCount[treeID];
   tagDepth = getMaximumDepth(RF_root[treeID]) - 1;
   pruneFlag = (ptnCurrent > ptnTarget) && (tagDepth > 0);
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\n  Prune flag:   %10d", pruneFlag);
+  ${trace.token}    RF_nativePrint("\n  PTN Current:  %10d", ptnCurrent);
+  ${trace.token}    RF_nativePrint("\n  PTN Target:   %10d", ptnTarget);
+  ${trace.token}    RF_nativePrint("\n  Maximum depth for tree %10d:  %10d", treeID, tagDepth);
+  ${trace.token}  }
   while (pruneFlag) {
     for (i = 1; i <= RF_tLeafCount[treeID]; i++) {
       nodesAtDepth[i] = NULL;
     }
     nadCount = 0;
     getNodesAtDepth(RF_root[treeID], tagDepth, nodesAtDepth, &nadCount);
+    ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+    ${trace.token}    RF_nativePrint("\n  Nodes at depth %10d:  %10d", tagDepth, nadCount);
+    ${trace.token}  }
+    ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+    ${trace.token}    RF_nativePrint("\n  PTN Current:  %10d", ptnCurrent);
+    ${trace.token}  }
+    ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+    ${trace.token}    RF_nativePrint("\nDiagnostic Tree Output before pruning:  ");
+    ${trace.token}    RF_nativePrint("\n    treeID     nodeID     parmID        depth     ptnFlg \n");
+    ${trace.token}    printTreeInfo(treeID, RF_root[treeID]);
+    ${trace.token}  }
     pruneFlag = pruneBranch(obsSize, treeID, nodesAtDepth, nadCount, ptnTarget, ptnCurrent);
+    ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+    ${trace.token}    RF_nativePrint("\nDiagnostic Tree Output after pruning:  ");
+    ${trace.token}    RF_nativePrint("\n    treeID     nodeID     parmID        depth     ptnFlg \n");
+    ${trace.token}    printTreeInfo(treeID, RF_root[treeID]);
+    ${trace.token}  }
     if(pruneFlag) {
       ptnCurrent -= nadCount;
       tagDepth --;
@@ -786,10 +1155,16 @@ uint pruneTree(uint obsSize, uint treeID, uint ptnTarget) {
     }
   }
   free_new_vvector(nodesAtDepth, 1, RF_tLeafCount[treeID], NRUTIL_NPTR);
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\npruneTree() EXIT ...\n");
+  ${trace.token}  }
   return ptnCurrent;
 }
 void stackAuxiliary(char mode, uint b) {
   uint obsSize;
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAuxiliary() ENTRY ...\n");
+  ${trace.token}  }
   RF_nodeMembership[b] = (Node **) new_vvector(1, RF_observationSize, NRUTIL_NPTR);
   RF_bootMembershipFlag[b] = cvector(1, RF_observationSize);
   RF_oobMembershipFlag[b] = cvector(1, RF_observationSize);
@@ -811,9 +1186,15 @@ void stackAuxiliary(char mode, uint b) {
   if (RF_optHigh & OPT_MEMB_PRUN) {
     RF_pNodeMembership[b] = (Node **) new_vvector(1, obsSize, NRUTIL_NPTR);
   }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAuxiliary() Exit ...\n");
+  ${trace.token}  }
 }
 void unstackAuxiliary(char mode, uint b) {
   uint obsSize;
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackAuxiliary() ENTRY ...\n");
+  ${trace.token}  }
   free_new_vvector(RF_nodeMembership[b], 1, RF_observationSize, NRUTIL_NPTR);
   free_cvector(RF_bootMembershipFlag[b], 1, RF_observationSize);
   free_cvector(RF_oobMembershipFlag[b], 1, RF_observationSize);
@@ -835,12 +1216,29 @@ void unstackAuxiliary(char mode, uint b) {
   if (RF_optHigh & OPT_MEMB_PRUN) {
     free_new_vvector(RF_pNodeMembership[b], 1, obsSize, NRUTIL_NPTR);
   }
+  ${trace.token}  if (getTraceFlag(b) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackAuxiliary() Exit ...\n");
+  ${trace.token}  }
 }
 void printPseudoTNInfo(char mode, uint b) {
   uint i;
   RF_pNodeList[b] = (Node **) new_vvector(1, RF_pLeafCount[b] + 1, NRUTIL_NPTR);
   i = 0;
   getPTNodeList(RF_root[b], RF_pNodeList[b], &i);
+  ${trace.token}     if (getTraceFlag(b) & SUMM_MED_TRACE) {
+  ${trace.token}       uint obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
+  ${trace.token}       RF_nativePrint("\nPseudo-Terminal Node Pointers:  %10d", b);
+  ${trace.token}       RF_nativePrint("\n       index         leaf       nodeID\n");
+  ${trace.token}       for (i = 1; i <=  RF_pLeafCount[b]; i++) {
+  ${trace.token}         RF_nativePrint("%12d %12x %12d \n", i, RF_pNodeList[b][i], RF_pNodeList[b][i] -> nodeID);
+  ${trace.token}       }
+  ${trace.token}   
+  ${trace.token}       RF_nativePrint("\nFinal Pseudo-Membership (all data):  %10d", b);
+  ${trace.token}       RF_nativePrint("\n       index         node         leaf\n");
+  ${trace.token}       for (i = 1; i <=  obsSize; i++) {
+  ${trace.token}         RF_nativePrint("%12d %12x %12d \n", i, RF_pNodeMembership[b][i], RF_pNodeMembership[b][i] -> nodeID);
+  ${trace.token}       }
+  ${trace.token}     }
   free_new_vvector(RF_pNodeList[b], 1, RF_pLeafCount[b] + 1, NRUTIL_NPTR);
 }      
 void getPTNodeList(Node    *parent,
@@ -858,6 +1256,9 @@ void getPTNodeList(Node    *parent,
 void getSplitPath(uint treeID, Node *parent) {
   Node *reversePtr;
   uint i;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetSplitPath() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_opt & (OPT_SPLDPTH_1 | OPT_SPLDPTH_2))) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Call to calculate split depth without the option being active.");
@@ -879,6 +1280,9 @@ void getSplitPath(uint treeID, Node *parent) {
       reversePtr = reversePtr -> parent;
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetSplitPath() EXIT ...\n");
+  ${trace.token}  }
 }
 void freeSplitPath(uint treeID) {
   LeafLinkedObj *leafLinkedPtr;
@@ -900,6 +1304,11 @@ uint getMaximumDepth(Node *parent) {
 }
 void getNodesAtDepth(Node *parent, uint tagDepth, Node **nodesAtDepth, uint *nadCount) {
   char recurseFlag;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & TURN_OFF_TRACE) {
+  ${trace.token}      RF_nativePrint("\ngetNodesAtDepth() ENTRY ...\n");
+  ${trace.token}    }
+  ${trace.token}  }
   recurseFlag = TRUE;
   if (tagDepth == parent -> depth) {
     if (parent -> splitInfo != NULL) {
@@ -917,4 +1326,9 @@ void getNodesAtDepth(Node *parent, uint tagDepth, Node **nodesAtDepth, uint *nad
     getNodesAtDepth(parent ->  left, tagDepth, nodesAtDepth, nadCount);
     getNodesAtDepth(parent -> right, tagDepth, nodesAtDepth, nadCount);
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+  ${trace.token}    if (getTraceFlag(0) & TURN_OFF_TRACE) {
+  ${trace.token}      RF_nativePrint("\ngetNodesAtDepth() EXIT ...\n");
+  ${trace.token}    }
+  ${trace.token}  }
 }

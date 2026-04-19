@@ -62,6 +62,13 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
     RF_numThreads = (RF_numThreads < omp_get_max_threads()) ? (RF_numThreads) : (omp_get_max_threads());
   }
 #endif
+  ${trace.token}  setTraceFlag(traceFlag, 0);
+  ${memor.token}  setTraceFlag(traceFlag, 0);
+  ${stack.token}  setMaxMemoryAllocation(0);
+  ${stack.token}  setMinMemoryAllocation(0);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\nNative code rfsrc() nominal entry:  @PROJECT_BUILD@ \n");
+  ${trace.token}  }
   if (sizeIJ > 0) {
     rowI        = (uint*) INTEGER(sexp_rowI); rowI--;
     rowJ        = (uint*) INTEGER(sexp_rowJ); rowJ--;
@@ -89,6 +96,31 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
   for (i = 1; i <= p; i++) {
     xMatrix[i] = (x + ((i-1) * n) - 1);
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nIncoming matrix:  ");
+  ${trace.token}    RF_nativePrint("\n           p");
+  ${trace.token}    RF_nativePrint("          n->");
+  ${trace.token}    for (i = 1; i <= p - 1; i++) {
+  ${trace.token}      RF_nativePrint(" %12s", " ");
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n            ");
+  ${trace.token}    for (i = 1; i <= p; i++) {
+  ${trace.token}      RF_nativePrint(" %12d", i);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}    for (j = 1; j <= n; j++) {
+  ${trace.token}      RF_nativePrint("%12d", j);
+  ${trace.token}      for (i = 1; i <= p; i++) {
+  ${trace.token}        RF_nativePrint(" %12.4f", xMatrix[i][j]);
+  ${trace.token}      }
+  ${trace.token}      RF_nativePrint("\n");
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\nAssumed or Incoming [rowI] [rowJ]:  ");
+  ${trace.token}    RF_nativePrint("\n       index         rowI         rowJ");
+  ${trace.token}    for (k = 1; k <= size; k++) {
+  ${trace.token}      RF_nativePrint("\n  %12d %12d %12d", k, rowI[k], rowJ[k]);
+  ${trace.token}    }
+  ${trace.token}  }
 #ifdef _OPENMP
 #pragma omp parallel for num_threads(RF_numThreads)
 #endif
@@ -103,8 +135,15 @@ SEXP rfsrcDistance(SEXP sexp_metricType,
     free_uivector(rowJ, 1, size);
   }
   unstackAuxiliaryInfoAndList(FALSE, RF_snpAuxiliaryInfoList, RF_stackCount);
+  ${stack.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${stack.token}    memoryCheck();
+  ${stack.token}  }
   R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\nNative code rfsrc() nominal exit:  @PROJECT_BUILD@ \n");
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
   return RF_sexpVector[RF_OUTP_ID];
 }
 double euclidean(uint n, uint p, uint i, uint j, double **x) {

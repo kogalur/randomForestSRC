@@ -25,6 +25,9 @@ void getAtRiskAndEventCount(uint       treeID,
   uint i, j, k;
   uint ii;
   char eventFlag;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetAtRiskAndEventCount() ENTRY ...\n");
+  ${trace.token}  }
   if ( !(RF_opt & OPT_BOOT_TYP1) && (RF_opt & OPT_BOOT_TYP2) ) {
     membershipIndex = allMembrIndx;
     membershipSize = parent -> membrCount = allMembrSize;
@@ -128,12 +131,49 @@ void getAtRiskAndEventCount(uint       treeID,
       (parent -> eventTimeIndex)[j] = tempEventTimeIndex[j];
     }
     free_uivector(tempEventTimeIndex, 1, RF_masterTimeSize);
+    ${trace.token}        if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+    ${trace.token}          if (getTraceFlag(treeID) & TURN_OFF_TRACE) {
+    ${trace.token}            RF_nativePrint("\nNode Specific At Risk and Event Counts for (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+    ${trace.token}            RF_nativePrint("Mstr Time ");
+    ${trace.token}            for (i=1; i <= RF_masterTimeSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", i);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}            RF_nativePrint("At Risk   ");
+    ${trace.token}            for (i=1; i <= RF_masterTimeSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", (parent -> atRiskCount)[i]);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}            for (j=1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}              RF_nativePrint("Ev %7d", j);
+    ${trace.token}              for (i=1; i <= RF_masterTimeSize; i++) {
+    ${trace.token}                RF_nativePrint("%10d", (parent -> eventCount)[j][i]);
+    ${trace.token}              }
+    ${trace.token}              RF_nativePrint("\n");
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\nEv Tm Idx ");
+    ${trace.token}            for (i=1; i <= parent -> eTimeSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", i);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n          ");
+    ${trace.token}            for (i=1; i <= parent -> eTimeSize; i++) {
+    ${trace.token}              RF_nativePrint("%10d", (parent -> eventTimeIndex)[i]);
+    ${trace.token}            }
+    ${trace.token}            RF_nativePrint("\n");
+    ${trace.token}          }
+    ${trace.token}        }
   }
   else {
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetAtRiskAndEventCount() EXIT ...\n");
+  ${trace.token}  }
 }
 void getLocalRatio(uint treeID, Terminal *parent) {
   uint j, q;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalRatio() ENTRY ...\n");
+  ${trace.token}  }
   if (parent -> membrCount > 0) {
     if(parent -> eTimeSize > 0) {
       stackLocalRatio(parent, RF_eventTypeSize, parent -> eTimeSize);
@@ -156,10 +196,31 @@ void getLocalRatio(uint treeID, Terminal *parent) {
         }
       }
     }
+    ${trace.token}      if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+    ${trace.token}        RF_nativePrint("\nNode specific local ratios:  [RF_eventTypeSize] x [nodeEventTimeSize] for:  (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+    ${trace.token}        RF_nativePrint("              mTimIdx       time ");
+    ${trace.token}        for (j=1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}          RF_nativePrint("%10d ", j);
+    ${trace.token}        }
+    ${trace.token}        RF_nativePrint("\n");
+    ${trace.token}        for (q=1; q <= parent -> eTimeSize; q++) {
+    ${trace.token}          RF_nativePrint("%10d %10d %10.4f ", q, (parent -> eventTimeIndex)[q], RF_masterTime[(parent -> eventTimeIndex)[q]]);
+    ${trace.token}          for (j=1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}            RF_nativePrint("%10.4f ", (parent -> localRatio)[j][q]);
+    ${trace.token}          }
+    ${trace.token}          RF_nativePrint("\n");
+    ${trace.token}        }
+    ${trace.token}      }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalRatio() EXIT ...\n");
+  ${trace.token}  }
 }
 void getLocalSurvival(uint treeID, Terminal *parent) {
   uint j, q;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalSurvival() ENTRY ...\n");
+  ${trace.token}  }
   if(parent -> eTimeSize > 0) {
     stackLocalSurvival(parent, parent -> eTimeSize);
     for (q = 1; q <= parent -> eTimeSize; q++) {
@@ -172,10 +233,24 @@ void getLocalSurvival(uint treeID, Terminal *parent) {
     for (q = 2; q <= parent -> eTimeSize; q++) {
       (parent -> localSurvival)[q] *= (parent -> localSurvival)[q-1];
     }
+    ${trace.token}      if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+    ${trace.token}        RF_nativePrint("\nNode specific local survival function of length [parent -> eTimeSize] for:  (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+    ${trace.token}        RF_nativePrint("              mTimIdx       time   survival \n");
+    ${trace.token}        for (q = 1; q <= parent -> eTimeSize; q++) {
+    ${trace.token}          RF_nativePrint("%10d %10d %10.4f %10.4f \n", q, (parent -> eventTimeIndex)[q], RF_masterTime[(parent -> eventTimeIndex)[q]], (parent -> localSurvival)[q]);
+    ${trace.token}        }
+    ${trace.token}      }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalSurvival() EXIT ...\n");
+  ${trace.token}  }
 }
 void getLocalNelsonAalen(uint treeID, Terminal *parent) {
   uint q;
+  ${trace.token}  uint j;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalNelsonAalen() ENTRY ...\n");
+  ${trace.token}  }
   if (parent -> eTimeSize > 0) {
     stackLocalNelsonAalen(parent, parent -> eTimeSize);
     for (q = 1; q <= parent -> eTimeSize; q++) {
@@ -185,9 +260,28 @@ void getLocalNelsonAalen(uint treeID, Terminal *parent) {
       (parent -> localNelsonAalen)[q] += (parent -> localNelsonAalen)[q-1];
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+  ${trace.token}    if (getTraceFlag(treeID) & TURN_OFF_TRACE) {
+  ${trace.token}        RF_nativePrint("\nLocal Nelson-Aalen estimator for (tree, leaf):  (%10d, %10d) \n", treeID, parent -> nodeID);
+  ${trace.token}        for (j=1; j <= parent -> eTimeSize; j++) {
+  ${trace.token}          RF_nativePrint("%10d", j);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}        for (j=1; j <= parent -> eTimeSize; j++) {
+  ${trace.token}          RF_nativePrint("%10.4f", parent -> localNelsonAalen[j]);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalNelsonAalen() EXIT ...\n");
+  ${trace.token}  }
 }
 void getLocalCSH(uint treeID, Terminal *parent) {
   uint j, q;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalCSH() ENTRY ...\n");
+  ${trace.token}  }
     if (parent -> eTimeSize > 0) {
       stackLocalCSH(parent, RF_eventTypeSize, parent -> eTimeSize);
       for (j = 1; j <= RF_eventTypeSize; j++) {
@@ -198,10 +292,31 @@ void getLocalCSH(uint treeID, Terminal *parent) {
           (parent -> localCSH)[j][q] += (parent -> localCSH)[j][q-1];
         }
       }
+      ${trace.token}      if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+      ${trace.token}        RF_nativePrint("\nNode specific local CSH:  [RF_eventTypeSize] x [nodeEventTimeSize] for:  (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+      ${trace.token}        RF_nativePrint("              mTimIdx       time ");
+      ${trace.token}        for (j=1; j <= RF_eventTypeSize; j++) {
+      ${trace.token}          RF_nativePrint("%10d ", j);
+      ${trace.token}        }
+      ${trace.token}        RF_nativePrint("\n");
+      ${trace.token}        for (q=1; q <= parent -> eTimeSize; q++) {
+      ${trace.token}          RF_nativePrint("%10d %10d %10.4f ", q, (parent -> eventTimeIndex)[q], RF_masterTime[(parent -> eventTimeIndex)[q]]);
+      ${trace.token}          for (j=1; j <= RF_eventTypeSize; j++) {
+      ${trace.token}            RF_nativePrint("%10.4f ", (parent -> localCSH)[j][q]);
+      ${trace.token}          }
+      ${trace.token}          RF_nativePrint("\n");
+      ${trace.token}        }
+      ${trace.token}      }
     }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalCSH() EXIT ...\n");
+  ${trace.token}  }
 }
 void getLocalCIF(uint treeID, Terminal *parent) {
   uint j, q;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalCIF() ENTRY ...\n");
+  ${trace.token}  }
   if(parent -> eTimeSize > 0) {
     stackLocalCIF(parent, RF_eventTypeSize, parent -> eTimeSize);
     for (j = 1; j <= RF_eventTypeSize; j++) {
@@ -213,7 +328,25 @@ void getLocalCIF(uint treeID, Terminal *parent) {
         (parent -> localCIF)[j][q] += (parent -> localCIF)[j][q-1];
       }
     }
+    ${trace.token}      if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+    ${trace.token}        RF_nativePrint("\nNode specific local CIF:  [RF_eventTypeSize] x [nodeEventTimeSize] for:  (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+    ${trace.token}        RF_nativePrint("              mTimIdx       time ");
+    ${trace.token}        for (j=1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}          RF_nativePrint("%10d ", j);
+    ${trace.token}        }
+    ${trace.token}        RF_nativePrint("\n");
+    ${trace.token}        for (q=1; q <= parent -> eTimeSize; q++) {
+    ${trace.token}          RF_nativePrint("%10d %10d %10.4f ", q, (parent -> eventTimeIndex)[q], RF_masterTime[(parent -> eventTimeIndex)[q]]);
+    ${trace.token}          for (j=1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}            RF_nativePrint("%10.4f ", (parent -> localCIF)[j][q]);
+    ${trace.token}          }
+    ${trace.token}          RF_nativePrint("\n");
+    ${trace.token}        }
+    ${trace.token}      }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetLocalCIF() EXIT ...\n");
+  ${trace.token}  }
 }
 void mapLocalToTimeInterest(uint      treeID,
                             Terminal *parent,
@@ -222,14 +355,24 @@ void mapLocalToTimeInterest(uint      treeID,
   uint itIndex, etIndex, lookAheadIndex;
   char mapFlag, transitFlag;
   uint j;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nmapTimeInterest() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_opt & OPT_COMP_RISK)) {
     if ((parent -> eTimeSize) > 0) {
       itIndex = 1;
       etIndex = 1;
       mapFlag = TRUE;
+      ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+      ${trace.token}    RF_nativePrint("\n Map:  (treeID, nodeID) = (%10d, %10d)", treeID, parent -> nodeID);
+      ${trace.token}    RF_nativePrint("\n Size: (itSize, etSize) = (%10d, %10d)", RF_sortedTimeInterestSize, parent -> eTimeSize);
+      ${trace.token}  }
       while(mapFlag) {
         if (RF_timeInterest[itIndex] < RF_masterTime[(parent -> eventTimeIndex)[etIndex]] ) {
           if (itIndex > 1) {
+            ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+            ${trace.token}  RF_nativePrint("\n Flat-Line index:   (%10d, %10d) (%10.4f, %10.4f)", itIndex, etIndex, RF_timeInterest[itIndex], RF_masterTime[(parent -> eventTimeIndex)[etIndex]]);
+            ${trace.token}  }
             ((double *) genericGlobal)[itIndex] = ((double *) genericGlobal)[itIndex-1];
           }
           itIndex++;
@@ -239,6 +382,9 @@ void mapLocalToTimeInterest(uint      treeID,
           transitFlag = TRUE;
           while (transitFlag) {
             if (RF_timeInterest[itIndex] >= RF_masterTime[(parent -> eventTimeIndex)[lookAheadIndex]] ) {
+              ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+              ${trace.token}  RF_nativePrint("\n Transition index:  (%10d, %10d) (%10.4f, %10.4f)", itIndex, lookAheadIndex, RF_timeInterest[itIndex], RF_masterTime[(parent -> eventTimeIndex)[lookAheadIndex]]);
+              ${trace.token}  }
               ((double *) genericGlobal)[itIndex] = ((double *) genericLocal)[lookAheadIndex];
               lookAheadIndex++;
               if (lookAheadIndex > (parent -> eTimeSize)) {
@@ -254,6 +400,9 @@ void mapLocalToTimeInterest(uint      treeID,
         }
         if(etIndex > (parent -> eTimeSize)) {
           while(itIndex <= RF_sortedTimeInterestSize) {
+            ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+            ${trace.token}  RF_nativePrint("\n Tail index:        (%10d,           ) (%10.4f,           )", itIndex, RF_timeInterest[itIndex]);
+            ${trace.token}  }
             ((double *) genericGlobal)[itIndex] = ((double *) genericGlobal)[itIndex-1];
             itIndex++;
           }
@@ -269,9 +418,16 @@ void mapLocalToTimeInterest(uint      treeID,
       itIndex = 1;
       etIndex = 1;
       mapFlag = TRUE;
+      ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+      ${trace.token}    RF_nativePrint("\n Map:  (treeID, nodeID) = (%10d, %10d)", treeID, parent -> nodeID);
+      ${trace.token}    RF_nativePrint("\n Size: (itSize, etSize) = (%10d, %10d)", RF_sortedTimeInterestSize, parent -> eTimeSize);
+      ${trace.token}  }
       while(mapFlag) {
         if (RF_timeInterest[itIndex] < RF_masterTime[(parent -> eventTimeIndex)[etIndex]] ) {
           if (itIndex > 1) {
+            ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+            ${trace.token}  RF_nativePrint("\n Flat-Line index:   (%10d, %10d) (%10.4f, %10.4f)", itIndex, etIndex, RF_timeInterest[itIndex], RF_masterTime[(parent -> eventTimeIndex)[etIndex]]);
+            ${trace.token}  }
             for (j = 1; j <= RF_eventTypeSize; j++) {
               ((double **) genericGlobal)[j][itIndex] = ((double **) genericGlobal)[j][itIndex-1];
             }
@@ -283,6 +439,9 @@ void mapLocalToTimeInterest(uint      treeID,
           transitFlag = TRUE;
           while (transitFlag) {
             if (RF_timeInterest[itIndex] >= RF_masterTime[(parent -> eventTimeIndex)[lookAheadIndex]] ) {
+              ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+              ${trace.token}  RF_nativePrint("\n Transition index:  (%10d, %10d) (%10.4f, %10.4f)", itIndex, lookAheadIndex, RF_timeInterest[itIndex], RF_masterTime[(parent -> eventTimeIndex)[lookAheadIndex]]);
+              ${trace.token}  }
               for (j = 1; j <= RF_eventTypeSize; j++) {
                 ((double **) genericGlobal)[j][itIndex] = ((double **) genericLocal)[j][lookAheadIndex];
               }
@@ -300,6 +459,9 @@ void mapLocalToTimeInterest(uint      treeID,
         }
         if(etIndex > (parent -> eTimeSize)) {
           while(itIndex <= RF_sortedTimeInterestSize) {
+            ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
+            ${trace.token}  RF_nativePrint("\n Tail index:        (%10d,           ) (%10.4f,           )", itIndex, RF_timeInterest[itIndex]);
+            ${trace.token}  }
               for (j = 1; j <= RF_eventTypeSize; j++) {
                 ((double **) genericGlobal)[j][itIndex] = ((double **) genericGlobal)[j][itIndex-1];
               }
@@ -312,9 +474,15 @@ void mapLocalToTimeInterest(uint      treeID,
       }
     }    
   }  
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nmapTimeInterest() EXIT ...\n");
+  ${trace.token}  }
 }
 void getSurvival(uint treeID, Terminal *parent) {
   uint k;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetSurvival() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_optHigh & OPT_TERM_INCG)) {
     stackSurvival(parent, RF_sortedTimeInterestSize);
     for (k = 1; k <= RF_sortedTimeInterestSize; k++) {
@@ -331,9 +499,26 @@ void getSurvival(uint treeID, Terminal *parent) {
       (parent -> survival)[k] = RF_TN_SURV_ptr[treeID][parent -> nodeID][k];
     }
   }
+  ${trace.token}      if (getTraceFlag(treeID) & ENSB_LOW_TRACE) {
+  ${trace.token}      if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+  ${trace.token}        RF_nativePrint("\nNode specific non-local survival function [RF_sortedTimeInterestSize] x [RF_tLeafCount[treeID]] for:  (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+  ${trace.token}        RF_nativePrint("                 time ");
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}        for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+  ${trace.token}          RF_nativePrint("%10d %10.4f %10.4f", k, RF_timeInterest[k], (parent -> survival)[k]);
+  ${trace.token}          RF_nativePrint("\n");
+  ${trace.token}        }
+  ${trace.token}      }
+  ${trace.token}      }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetSurvival() EXIT ...\n");
+  ${trace.token}  }
 }
 void getNelsonAalen(uint treeID, Terminal *parent) {
   uint k;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetNelsonAalen() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_optHigh & OPT_TERM_INCG)) {
     stackNelsonAalen(parent, RF_sortedTimeInterestSize);
     for (k = 1; k <= RF_sortedTimeInterestSize; k++) {
@@ -350,9 +535,28 @@ void getNelsonAalen(uint treeID, Terminal *parent) {
       (parent -> nelsonAalen)[k] = RF_TN_NLSN_ptr[treeID][parent -> nodeID][k];
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & ENSB_LOW_TRACE) {
+  ${trace.token}    if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+  ${trace.token}      RF_nativePrint("\nNelson-Aalen estimator matrix for (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+  ${trace.token}      for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+  ${trace.token}        RF_nativePrint("%10d", k);
+  ${trace.token}      }
+  ${trace.token}      RF_nativePrint("\n");  
+  ${trace.token}      for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+  ${trace.token}          RF_nativePrint("%10.4f", parent -> nelsonAalen[k]);
+  ${trace.token}      }
+  ${trace.token}      RF_nativePrint("\n");
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetNelsonAalen() EXIT ...\n");
+  ${trace.token}  }
 }
 void getCSH(uint treeID, Terminal *parent) {
   uint j, k;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetCSH() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_optHigh & OPT_TERM_INCG)) {
     stackCSH(parent, RF_eventTypeSize, RF_sortedTimeInterestSize);
     for (j=1; j <= RF_eventTypeSize; j++) {
@@ -373,9 +577,32 @@ void getCSH(uint treeID, Terminal *parent) {
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & ENSB_LOW_TRACE) {
+  ${trace.token}    if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+  ${trace.token}        RF_nativePrint("\nNode specific non-local CSH:  [RF_eventTypeSize] x [nodeEventTimeSize] for:  (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+  ${trace.token}        RF_nativePrint("                 time ");
+  ${trace.token}        for (j=1; j <= RF_eventTypeSize; j++) {
+  ${trace.token}          RF_nativePrint("%10d ", j);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}        for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+  ${trace.token}          RF_nativePrint("%10d %10.4f ", k, RF_timeInterest[k]);
+  ${trace.token}          for (j=1; j <= RF_eventTypeSize; j++) {
+  ${trace.token}            RF_nativePrint("%10.4f ", (parent -> CSH)[j][k]);
+  ${trace.token}          }
+  ${trace.token}          RF_nativePrint("\n");
+  ${trace.token}        }
+  ${trace.token}      }
+  ${trace.token}      }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetCSH() EXIT ...\n");
+  ${trace.token}  }
 }
 void getCIF(uint treeID, Terminal *parent) {
   uint j, k;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetCIF() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_optHigh & OPT_TERM_INCG)) {
     stackCIF(parent, RF_eventTypeSize, RF_sortedTimeInterestSize);
     for (j=1; j <= RF_eventTypeSize; j++) {
@@ -396,9 +623,32 @@ void getCIF(uint treeID, Terminal *parent) {
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & ENSB_LOW_TRACE) {
+  ${trace.token}    if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+  ${trace.token}        RF_nativePrint("\nNode specific non-local CIF:  [RF_eventTypeSize] x [nodeEventTimeSize] for:  (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+  ${trace.token}        RF_nativePrint("                 time ");
+  ${trace.token}        for (j=1; j <= RF_eventTypeSize; j++) {
+  ${trace.token}          RF_nativePrint("%10d ", j);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}        for (k=1; k <= RF_sortedTimeInterestSize; k++) {
+  ${trace.token}          RF_nativePrint("%10d %10.4f ", k, RF_timeInterest[k]);
+  ${trace.token}          for (j=1; j <= RF_eventTypeSize; j++) {
+  ${trace.token}            RF_nativePrint("%10.4f ", (parent -> CIF)[j][k]);
+  ${trace.token}          }
+  ${trace.token}          RF_nativePrint("\n");
+  ${trace.token}        }
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetCIF() EXIT ...\n");
+  ${trace.token}  }
 }
 void getMortality(uint treeID, Terminal *parent) {
   uint j, q;
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetMortality() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_optHigh & OPT_TERM_INCG)) {
     stackMortality(parent, RF_eventTypeSize);
     for (j = 1; j <= RF_eventTypeSize; j++) {
@@ -423,4 +673,20 @@ void getMortality(uint treeID, Terminal *parent) {
       (parent -> mortality)[j] = RF_TN_MORT_ptr[treeID][parent -> nodeID][j];
     }
   }
+  ${trace.token}      if (getTraceFlag(treeID) & ENSB_LOW_TRACE) {
+  ${trace.token}      if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
+  ${trace.token}        RF_nativePrint("\nNode specific mortality:  [RF_eventTypeSize] for:  (tree, leaf) = (%10d, %10d)  \n", treeID, parent -> nodeID);
+  ${trace.token}        for (j=1; j <= RF_eventTypeSize; j++) {
+  ${trace.token}          RF_nativePrint("%10d ", j);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}        for (j=1; j <= RF_eventTypeSize; j++) {
+  ${trace.token}          RF_nativePrint("%10.4f ", (parent -> mortality)[j]);
+  ${trace.token}        }
+  ${trace.token}        RF_nativePrint("\n");
+  ${trace.token}      }
+  ${trace.token}      }
+  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetMortality() EXIT ...\n");
+  ${trace.token}  }
 }

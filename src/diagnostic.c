@@ -135,6 +135,9 @@ void getRawNodeSize(uint  type,
   Node   ***nodeMembershipPtr;
   uint      bootMembrSize;
   uint i;
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetRawNodeSize() ENTRY ...\n");
+  ${trace.token}  }
   obsSize           = 0;     
   nodeMembershipPtr = NULL;  
   switch (type) {
@@ -160,12 +163,73 @@ void getRawNodeSize(uint  type,
       allMembrIndx[++(*allMembrSize)] = i;
     }
   }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\nParent Replicate Count:  %10d \n", *repMembrSize);
+  ${trace.token}    RF_nativePrint("\nReplicate Absolute Index for Parent Node: \n");
+  ${trace.token}    RF_nativePrint("\n       idx  rMembrIndx     \n");
+  ${trace.token}    for (i=1; i <= (*repMembrSize); i++) {
+  ${trace.token}      RF_nativePrint("%10d %10d \n", i, repMembrIndx[i]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\nParent Absolute Count:  %10d \n", *allMembrSize);
+  ${trace.token}    RF_nativePrint("\nAbsolute Absolute Index for Parent Node: \n");
+  ${trace.token}    RF_nativePrint("\n       idx  aMembrIndx     \n");
+  ${trace.token}    for (i=1; i <= (*allMembrSize); i++) {
+  ${trace.token}      RF_nativePrint("%10d %10d \n", i, allMembrIndx[i]);
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(treeID) & SPLT_HGH_TRACE) {
+  ${trace.token}    RF_nativePrint("\ngetRawNodeSize() EXIT ...\n");
+  ${trace.token}  }
 }
 void printTreeInfo(uint treeID, Node *parent) {
+  ${trace.token}      if (getTraceFlag(treeID)) {
+  ${trace.token}        RF_nativePrint("%10d %10d %10d %10d \n", treeID, parent -> nodeID, parent -> depth, parent -> pseudoTerminal);
+  ${trace.token}      }
   if (((parent -> left) != NULL) && ((parent -> right) != NULL)) {
     printTreeInfo(treeID, parent ->  left);
     printTreeInfo(treeID, parent -> right);
   }
 }
 void printParameters(char mode) {
+  ${trace.token}    switch (mode) {
+  ${trace.token}    case RF_PRED:
+  ${trace.token}      RF_nativePrint("\nMode is PRED.");
+  ${trace.token}      RF_nativePrint("\nNumber of PRED individuals:  %10d", RF_fobservationSize);
+  ${trace.token}      break;
+  ${trace.token}    case RF_REST:
+  ${trace.token}      RF_nativePrint("\nMode is REST.");
+  ${trace.token}      RF_nativePrint("\nNumber of REST individuals:  %10d", RF_observationSize);
+  ${trace.token}      break;
+  ${trace.token}    case RF_PART:
+  ${trace.token}      RF_nativePrint("\nMode is PART.");
+  ${trace.token}      RF_nativePrint("\nNumber of PART individuals:  %10d", RF_observationSize);
+  ${trace.token}      break;
+  ${trace.token}    default:
+  ${trace.token}      RF_nativePrint("\nMode is GROW.");
+  ${trace.token}      RF_nativePrint("\nSplit rule is:               %10d", RF_splitRule);
+  ${trace.token}      RF_nativePrint("\nValue of nsplit is:          %10d", RF_nsplit);
+  ${trace.token}      RF_nativePrint("\nMinimum node size is:        %10d", RF_nodeSize);
+  ${trace.token}      RF_nativePrint("\nMaximum node depth is:       %10d", RF_nodeDepth);
+  ${trace.token}      RF_nativePrint("\nValue of mtry is             %10d", RF_mtry);
+  ${trace.token}      RF_nativePrint("\nValue of bootstrap size is   %10d", RF_bootstrapSize);
+  ${trace.token}      RF_nativePrint("\nNumber of GROW individuals:  %10d", RF_observationSize);
+  ${trace.token}      RF_nativePrint("\nNumber of impute iterations: %10d", RF_nImpute);
+  ${trace.token}      break;
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\nIncoming options lo:     0x  %10x", RF_opt);
+  ${trace.token}    RF_nativePrint("\nIncoming options hi:     0x  %10x", RF_optHigh);
+  ${trace.token}    RF_nativePrint("\nNumber of predictors:        %10d", RF_xSize);
+  ${trace.token}    RF_nativePrint("\nNumber of trees in forest:   %10d \n", RF_ntree);
+  ${trace.token}    testEndianness();
+  ${trace.token}    int endian = 1;
+  ${trace.token}    if (*(char *) &endian == 1) {
+  ${trace.token}      RF_nativePrint("\nSystem is little-endian.  ");
+  ${trace.token}    }
+  ${trace.token}    else {
+  ${trace.token}      RF_nativePrint("\nSystem is big-endian.  ");
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\nSize of (int)    is:  %10d   ", sizeof(int));
+  ${trace.token}    RF_nativePrint("\nSize of (long)   is:  %10d   ", sizeof(long));
+  ${trace.token}    RF_nativePrint("\nSize of (double) is:  %10d \n", sizeof(double));
+  ${trace.token}    RF_nativePrint("\nNumber of threads:  %10d \n", RF_numThreads);
 }

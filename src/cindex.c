@@ -13,6 +13,7 @@
 #include "nativeUtil.h"
 #include "survivalE.h"
 #include "error.h"
+${trace.token} #include "error.h"
 SEXP rfsrcCIndex(SEXP sexp_traceFlag,
                  SEXP sexp_fastFlag,
                  SEXP sexp_size,
@@ -37,6 +38,13 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
     "",              
     "err"            
   };
+  ${trace.token}  setTraceFlag(traceFlag, 0);
+  ${memor.token}  setTraceFlag(traceFlag, 0);
+  ${stack.token}  setMaxMemoryAllocation(0);
+  ${stack.token}  setMinMemoryAllocation(0);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\nNative code rfsrc() nominal entry:  @PROJECT_BUILD@ \n");
+  ${trace.token}  }
   if (sexp_weight != R_NilValue) {
     weight = REAL(sexp_weight); weight--;
   }
@@ -64,8 +72,15 @@ SEXP rfsrcCIndex(SEXP sexp_traceFlag,
                             denom,
                             weight);
   unstackAuxiliaryInfoAndList(FALSE, RF_snpAuxiliaryInfoList, RF_stackCount);
+  ${stack.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${stack.token}    memoryCheck();
+  ${stack.token}  }
   R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\nNative code rfsrc() nominal exit:  @PROJECT_BUILD@ \n");
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
   return RF_sexpVector[RF_OUTP_ID];
 }
 SEXP rfsrcCIndexFenwick(SEXP sexp_traceFlag,
@@ -92,6 +107,13 @@ SEXP rfsrcCIndexFenwick(SEXP sexp_traceFlag,
     "",              
     "err"            
   };
+  ${trace.token}  setTraceFlag(traceFlag, 0);
+  ${memor.token}  setTraceFlag(traceFlag, 0);
+  ${stack.token}  setMaxMemoryAllocation(0);
+  ${stack.token}  setMinMemoryAllocation(0);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\nNative code rfsrc() nominal entry:  @PROJECT_BUILD@ \n");
+  ${trace.token}  }
   if (eventType == 0) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Parameter verification failed.");
@@ -132,8 +154,15 @@ SEXP rfsrcCIndexFenwick(SEXP sexp_traceFlag,
                                            eventType);
   }
   unstackAuxiliaryInfoAndList(FALSE, RF_snpAuxiliaryInfoList, RF_stackCount);
+  ${stack.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${stack.token}    memoryCheck();
+  ${stack.token}  }
   R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${trace.token}    RF_nativePrint("\n\nNative code rfsrc() nominal exit:  @PROJECT_BUILD@ \n");
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}  }
   return RF_sexpVector[RF_OUTP_ID];
 }
 SEXP rfsrcTestSEXP(SEXP sexp_size) {
@@ -151,6 +180,9 @@ SEXP rfsrcTestSEXP(SEXP sexp_size) {
   v = (char*) stackAndProtect(RF_GROW, &RF_nativeIndex, NATIVE_TYPE_CHARACTER, 2, size, 0, sexpString[2], NULL, 1, size);
   v --;
   unstackAuxiliaryInfoAndList(FALSE, RF_snpAuxiliaryInfoList, RF_stackCount);
+  ${stack.token}  if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+  ${stack.token}    memoryCheck();
+  ${stack.token}  }
   R_ReleaseObject(RF_sexpVector[RF_OUTP_ID]);
   R_ReleaseObject(RF_sexpVector[RF_STRG_ID]);
   return RF_sexpVector[RF_OUTP_ID];

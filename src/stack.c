@@ -19,6 +19,9 @@ void stackAndInitializeTimeAndSubjectArrays(char mode) {
   uint i, j;
   uint leadingIndex;
   uint adjObsSize;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndInitializeTimeAndSubjectArrays() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_opt & OPT_ANON)) {
     RF_masterTime  = dvector(1, RF_observationSize);
     RF_masterTimeIndexIn  = uivector(1, RF_observationSize);
@@ -42,6 +45,15 @@ void stackAndInitializeTimeAndSubjectArrays(char mode) {
     for (i= RF_masterTimeSize + 1; i <= adjObsSize; i++) {
       RF_masterTime[i] = 0;
     }
+    ${trace.token}    if (getTraceFlag(0) & SUMM_MED_TRACE) {
+    ${trace.token}      RF_nativePrint("\n\nSorted Unique Master Times:  \n");
+    ${trace.token}      for (i=1; i <= RF_masterTimeSize; i++) {
+    ${trace.token}        RF_nativePrint("%10d %20.10f \n", i, RF_masterTime[i]);
+    ${trace.token}      }
+    ${trace.token}    }
+    ${trace.token}    if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+    ${trace.token}      RF_nativePrint("\nInitialization of master time data complete.");
+    ${trace.token}    }
   }
   if (!(RF_opt & OPT_IMPU_ONLY)) {
     qksort(RF_timeInterest, RF_timeInterestSize);
@@ -63,16 +75,40 @@ void stackAndInitializeTimeAndSubjectArrays(char mode) {
     for (i = RF_sortedTimeInterestSize + 1; i <= RF_timeInterestSize; i++) {
       RF_timeInterest[i] = 0;
     }
+    ${trace.token}      if (getTraceFlag(0) & SUMM_MED_TRACE) {
+    ${trace.token}        RF_nativePrint("\n\nSorted Unique Times of Interest:  \n");
+    ${trace.token}        for (i=1; i <= RF_sortedTimeInterestSize; i++) {
+    ${trace.token}          RF_nativePrint("%10d %20.10f \n", i, RF_timeInterest[i]);
+    ${trace.token}        }
+    ${trace.token}      }
+    ${trace.token}      if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+    ${trace.token}        RF_nativePrint("\nInitialization of time interest data complete.");
+    ${trace.token}      }
   }  
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackAndInitializeTimeAndSubjectArrays() EXIT ...\n");
+  ${trace.token}  }
 }
 void unstackTimeAndSubjectArrays(char mode) {
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackTimeAndSubjectArrays() EXIT ...\n");
+  ${trace.token}  }
   if (!(RF_opt & OPT_ANON)) {
     free_dvector(RF_masterTime, 1, RF_observationSize);
     free_uivector(RF_masterTimeIndexIn, 1, RF_observationSize);
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackTimeAndSubjectArrays() EXIT ...\n");
+  ${trace.token}  }
 }
 void stackFactorArrays(char mode) {
   uint i, k;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackFactorArrays() ENTRY ...\n");
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nStacking y-variables:  \n");
+  ${trace.token}  }
   stackFactorGeneric(TRUE,
                      RF_ySize,
                      RF_rType,
@@ -83,6 +119,9 @@ void stackFactorArrays(char mode) {
                      &RF_rNonFactorMap,
                      &RF_rNonFactorCount,
                      &RF_rNonFactorIndex);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nStacking x-variables:  \n");
+  ${trace.token}  }
   stackFactorGeneric(FALSE,
                      RF_xSize,
                      RF_xType,
@@ -175,6 +214,9 @@ void stackFactorArrays(char mode) {
       }
     }  
   }  
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackFactorArrays() EXIT ...\n");
+  ${trace.token}  }
 }
 void stackFactorGeneric(char    respFlag,
                         uint    size,
@@ -187,6 +229,9 @@ void stackFactorGeneric(char    respFlag,
                         uint   *nonfactorCount,
                         uint  **p_nonfactorIndex) {
   uint i, j;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackFactorArraysGeneric() ENTRY ...\n");
+  ${trace.token}  }
   if (size > 0) {
     *p_factorMap    = uivector(1, size);
     *p_nonfactorMap = uivector(1, size);
@@ -214,6 +259,20 @@ void stackFactorGeneric(char    respFlag,
           (*p_factorIndex)[++j] = i;
         }
       }
+      ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}      RF_nativePrint("\nFactor Mapping (zero means non-factor):  ");
+      ${trace.token}      RF_nativePrint("\n     index  resp/pred \n");
+      ${trace.token}      for (j = 1; j <= size; j++) {
+      ${trace.token}        RF_nativePrint("%10d %10d \n", j, (*p_factorMap)[j]);
+      ${trace.token}      }
+      ${trace.token}    }
+      ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}      RF_nativePrint("\nFactor Indices:  ");
+      ${trace.token}      RF_nativePrint("\n     index  resp/pred \n");
+      ${trace.token}      for (j = 1; j <= *factorCount; j++) {
+      ${trace.token}        RF_nativePrint("%10d %10d \n", j, (*p_factorIndex)[j]);
+      ${trace.token}      }
+      ${trace.token}    }
       *p_factorSize = uivector(1, *factorCount);
     }
     if (*nonfactorCount > 0) {
@@ -224,14 +283,34 @@ void stackFactorGeneric(char    respFlag,
           (*p_nonfactorIndex)[++j] = i;
         }
       }
+      ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}      RF_nativePrint("\nNon-Factor Mapping:  ");
+      ${trace.token}      RF_nativePrint("\n     index  resp/pred \n");
+      ${trace.token}      for (j = 1; j <= size; j++) {
+      ${trace.token}        RF_nativePrint("%10d %10d \n", j, (*p_nonfactorMap)[j]);
+      ${trace.token}      }
+      ${trace.token}    }
+      ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}      RF_nativePrint("\nNon-Factor Indcies:  ");
+      ${trace.token}      RF_nativePrint("\n     index  resp/pred \n");
+      ${trace.token}      for (j = 1; j <= *nonfactorCount; j++) {
+      ${trace.token}        RF_nativePrint("%10d %10d \n", j, (*p_nonfactorIndex)[j]);
+      ${trace.token}      }
+      ${trace.token}    }
     }
   }
   else {
     *factorCount    = 0;
     *nonfactorCount = 0;
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackFactorArraysGeneric() EXIT ...\n");
+  ${trace.token}  }
 }
 void unstackFactorArrays(char mode) {
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackFactorArrays() ENTRY ...\n");
+  ${trace.token}  }
   if (RF_ySize > 0) {
     free_uivector(RF_rFactorMap, 1, RF_ySize);
     if (RF_rFactorCount > 0) {
@@ -271,11 +350,17 @@ void unstackFactorArrays(char mode) {
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackFactorArrays() EXIT ...\n");
+  ${trace.token}  }
 }
 char stackMissingArraysPhase1(char mode) {
   char result;
   char mFlag;
   uint i, j;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackMissingArraysPhase1() ENTRY ...\n");
+  ${trace.token}  }
   result = TRUE;
   if (!(RF_opt & OPT_ANON)) {
     if (!(RF_optHigh & OPT_DATA_PASG)) {
@@ -407,6 +492,9 @@ char stackMissingArraysPhase1(char mode) {
       RF_mStatusFlag = RF_mTimeFlag = RF_mResponseFlag = RF_mPredictorFlag = FALSE;
       RF_mRecordSize = 0;
       RF_mRecordMap = NULL;
+      ${trace.token}      if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+      ${trace.token}        RF_nativePrint("\nMissing data analysis of GROW complete -- given a pass by the R-code.");
+      ${trace.token}      }
     }
     else {
       RF_mRecordMap = uivector(1, RF_observationSize);
@@ -416,6 +504,9 @@ char stackMissingArraysPhase1(char mode) {
                                     RF_observationIn);
       if (RF_mRecordSize == 0) {
         RF_mStatusFlag = RF_mTimeFlag = RF_mResponseFlag = RF_mPredictorFlag = FALSE;
+        ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+        ${trace.token}      RF_nativePrint("\nMissing data analysis of GROW complete -- none found.");
+        ${trace.token}    }
       }
       else {
         RF_optHigh = RF_optHigh & (~OPT_MEMB_INCG);
@@ -455,6 +546,9 @@ char stackMissingArraysPhase1(char mode) {
             RF_observation[i] = NULL;
           }
         }
+        ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+        ${trace.token}      RF_nativePrint("\nMissing data analysis of GROW complete -- some found.");
+        ${trace.token}    }
       }  
     }  
   }  
@@ -560,6 +654,9 @@ char stackMissingArraysPhase1(char mode) {
       RF_fmStatusFlag = RF_fmTimeFlag = RF_fmResponseFlag = RF_fmPredictorFlag = FALSE;
       RF_fmRecordSize = 0;
       RF_fmRecordMap = NULL;
+      ${trace.token}      if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+      ${trace.token}        RF_nativePrint("\nMissing data analysis of PRED complete -- given a pass by the R-code.");
+      ${trace.token}      }
     }
     else {
     RF_fmRecordMap = uivector(1, RF_fobservationSize);
@@ -569,6 +666,9 @@ char stackMissingArraysPhase1(char mode) {
                                  RF_fobservationIn);
     if (RF_fmRecordSize == 0) {
       RF_fmStatusFlag = RF_fmTimeFlag = RF_fmResponseFlag = RF_fmPredictorFlag = FALSE;
+      ${trace.token}      if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+      ${trace.token}        RF_nativePrint("\nMissing data analysis of PRED complete -- none found.");
+      ${trace.token}      }
     }  
     else {
       if (RF_opt & OPT_ANON) {
@@ -613,9 +713,15 @@ char stackMissingArraysPhase1(char mode) {
           }
         }
       }
+      ${trace.token}      if (getTraceFlag(0) & SUMM_DEF_TRACE) {
+      ${trace.token}        RF_nativePrint("\nMissing data analysis of PRED complete -- some found.");
+      ${trace.token}      }
     }  
     }  
   }  
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackMissingArraysPhase1() EXIT ...\n");
+  ${trace.token}  }
   return result;
 }
 char stackMissingArraysPhase2(char mode) {
@@ -624,6 +730,9 @@ char stackMissingArraysPhase2(char mode) {
   char dualUseFlag;
   uint recordSize;
   uint i, j;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackMissingArraysPhase2() ENTRY ...\n");
+  ${trace.token}  }
   result = TRUE;
   if (RF_opt & OPT_ANON) {
     result = FALSE;
@@ -682,11 +791,17 @@ char stackMissingArraysPhase2(char mode) {
   else {
     RF_opt = RF_opt & (~OPT_MISS_OUT);    
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackMissingArraysPhase2() EXIT ...\n");
+  ${trace.token}  }
   return result;
 }
 void unstackMissingArrays(char mode) {
   char dualUseFlag;
   uint recordSize;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackMissingArrays() ENTRY ...\n");
+  ${trace.token}  }
   if (!(RF_opt & OPT_ANON)) {  
     free_new_vvector(RF_response, 1, RF_ntree, NRUTIL_DPTR2);
     if (RF_ySize > 0) {
@@ -770,6 +885,9 @@ void unstackMissingArrays(char mode) {
       free_cmatrix(RF_dmRecordBootFlag, 1, RF_ntree, 1, recordSize);
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackMissingArrays() EXIT ...\n");
+  ${trace.token}  }
 }
 void stackMissingSignatures(uint     obsSize,
                             uint     rspSize,
@@ -790,6 +908,9 @@ void stackMissingSignatures(uint     obsSize,
                             char    *pRF_mResponseFlag,
                             char    *pRF_mPredictorFlag) {
   uint i, j, p;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackMissingSignatures() ENTRY ...\n");
+  ${trace.token}  }
   if (recordSize < 1) {
     RF_nativePrint("\nRF-SRC:  *** ERROR *** ");
     RF_nativePrint("\nRF-SRC:  Attempt to allocate for missingness in its absence.");
@@ -881,6 +1002,61 @@ void stackMissingSignatures(uint     obsSize,
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & MISS_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nIndex of Individuals with any Missing Outcomes or Predictors:  ");
+  ${trace.token}    RF_nativePrint("\n    mIndex   orgIndex \n");
+  ${trace.token}    for (i = 1; i <= recordSize; i++) {
+  ${trace.token}      RF_nativePrint("%10d %10d \n", i, (*p_recordIndex)[i]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\nIncoming Indices of Missing Outcomes and Predictors:  ");
+  ${trace.token}    RF_nativePrint("\n   element      index \n");
+  ${trace.token}    for (i = 1; i <= (*p_pIndexSize); i++) {
+  ${trace.token}      RF_nativePrint("%10d %10d \n", i, (*p_pIndex)[i]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\nIncoming Signatures of Missing Outcomes and Predictors:  ");
+  ${trace.token}    RF_nativePrint("\n       index");
+  ${trace.token}    RF_nativePrint("  outc/resp->");
+  ${trace.token}    if (rspSize > 0) {
+  ${trace.token}      for (i = 1; i <= rspSize - 1; i++) {
+  ${trace.token}        RF_nativePrint(" %12s", " ");
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint(" predictors->");
+  ${trace.token}    for (i = 1; i <= RF_xSize - 1; i++) {
+  ${trace.token}      RF_nativePrint(" %12s", " ");
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n            ");
+  ${trace.token}    if (rspSize > 0) {
+  ${trace.token}      for (i = 1; i <= RF_ySize; i++) {
+  ${trace.token}        RF_nativePrint(" %12c", RF_rType[i]);
+  ${trace.token}      }
+  ${trace.token}    }
+  ${trace.token}    for (i = 1; i <= RF_xSize; i++) {
+  ${trace.token}      RF_nativePrint(" %12d", i);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}    for (i = 1; i <= recordSize; i++) {
+  ${trace.token}      RF_nativePrint("%12d", (*p_recordIndex)[i]);
+  ${trace.token}      for (j=1; j <= rspSize + RF_xSize; j++) {
+  ${trace.token}        RF_nativePrint(" %12d", (*p_pSign)[j][i]);
+  ${trace.token}      }
+  ${trace.token}      RF_nativePrint("\n");
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\nLinking of response/outcome factor data structures to missing data structures:  ");
+  ${trace.token}    RF_nativePrint("\n       index  mrFactorIdx \n");
+  ${trace.token}    for (i = 1; i <= (*pRF_mrFactorSize); i++) {
+  ${trace.token}      RF_nativePrint("%12d %12d \n", i, (*pRF_mrFactorIndex)[i]);
+  ${trace.token}    }
+  ${trace.token}    RF_nativePrint("\n");
+  ${trace.token}    RF_nativePrint("\nLinking of predictor factor data structures to missing data structures:  ");
+  ${trace.token}    RF_nativePrint("\n       index  mxFactorIdx \n");
+  ${trace.token}    for (i = 1; i <= (*pRF_mxFactorSize); i++) {
+  ${trace.token}      RF_nativePrint("%12d %12d \n", i, (*pRF_mxFactorIndex)[i]);
+  ${trace.token}    }
+  ${trace.token}  }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackMissingSignatures() EXIT ...\n");
+  ${trace.token}  }
 }
 void unstackMissingSignatures(uint      rspSize,
                               uint      recordSize,
@@ -892,6 +1068,9 @@ void unstackMissingSignatures(uint      rspSize,
                               uint     *mrFactorIndex,
                               uint      mxFactorSize,
                               uint     *mxFactorIndex) {
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackMissingSignatures() ENTRY ...\n");
+  ${trace.token}  }
   if (recordSize == 0) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Attempt to deallocate for missingness in its absence.");
@@ -905,10 +1084,26 @@ void unstackMissingSignatures(uint      rspSize,
     free_uivector(mrFactorIndex, 1, rspSize);
   }
   free_uivector(mxFactorIndex, 1, RF_xSize);
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nunstackMissingSignatures() EXIT ...\n");
+  ${trace.token}  }
 }
 void initializeFactorArrays(char mode) {
   uint j;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ninitializeFactorArrays() ENTRY ...\n");
+  ${trace.token}  }
   if (RF_rFactorCount + RF_xFactorCount > 0) {
+    ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}    if (RF_rFactorCount > 0) {
+    ${trace.token}      RF_nativePrint("\nIncoming GROW y-variable distinct factor levels actually encountered in data:  ");
+    ${trace.token}      RF_nativePrint("\n      index     Levels");
+    ${trace.token}      for (j = 1; j <= RF_rFactorCount; j++) {
+    ${trace.token}        RF_nativePrint("\n %10d %10d", RF_rFactorIndex[j], RF_rLevelsCnt[j]);
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\n\n");
+    ${trace.token}    }
+    ${trace.token}  }
     RF_rMaxFactorLevel = 0;
     for (j = 1; j <= RF_rFactorCount; j++) {
       RF_rFactorSize[j] = RF_rLevelsMax[RF_rFactorIndex[j]];
@@ -916,6 +1111,16 @@ void initializeFactorArrays(char mode) {
         RF_rMaxFactorLevel = RF_rFactorSize[j];
       }
     }
+    ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}    if (RF_xFactorCount > 0) {
+    ${trace.token}      RF_nativePrint("\nIncoming GROW x-variable distinct factor levels actually encountered in data:  ");
+    ${trace.token}      RF_nativePrint("\n      index     Levels");
+    ${trace.token}      for (j = 1; j <= RF_xFactorCount; j++) {
+    ${trace.token}        RF_nativePrint("\n %10d %10d", RF_xFactorIndex[j], RF_xLevelsCnt[j]);
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\n\n");
+    ${trace.token}    }
+    ${trace.token}  }
     RF_xMaxFactorLevel = 0;
     for (j = 1; j <= RF_xFactorCount; j++) {
       RF_xFactorSize[j] = RF_xLevelsMax[RF_xFactorIndex[j]];
@@ -924,11 +1129,32 @@ void initializeFactorArrays(char mode) {
       }
     }
     RF_maxFactorLevel = (RF_xMaxFactorLevel > RF_rMaxFactorLevel) ? RF_xMaxFactorLevel : RF_rMaxFactorLevel;
+    ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}    if (RF_rFactorCount > 0) {
+    ${trace.token}      RF_nativePrint("\nIncoming GROW y-variable factor levels continued:  ");
+    ${trace.token}      RF_nativePrint("\n      index     Levels        MaxTheoLevels");
+    ${trace.token}      for (j = 1; j <= RF_rFactorCount; j++) {
+    ${trace.token}        RF_nativePrint("\n %10d %10d %20d", RF_rFactorIndex[j], RF_rLevelsCnt[j], RF_rFactorSize[j]);
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\n\n");
+    ${trace.token}    }
+    ${trace.token}    if (RF_xFactorCount > 0) {
+    ${trace.token}      RF_nativePrint("\nIncoming GROW x-variable factor levels continued:  ");
+    ${trace.token}      RF_nativePrint("\n      index     Levels        MaxTheoLevels");
+    ${trace.token}      for (j = 1; j <= RF_xFactorCount; j++) {
+    ${trace.token}        RF_nativePrint("\n %10d %10d %20d", RF_xFactorIndex[j], RF_xLevelsCnt[j], RF_xFactorSize[j]);
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\n\n");
+    ${trace.token}    }
+    ${trace.token}  }
     RF_factorList = (Factor ***) new_vvector(1, RF_ntree, NRUTIL_FPTR2);
     for (j = 1; j <= RF_ntree; j++) {
       RF_factorList[j] = NULL;
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\ninitializeFactorArrays() EXIT ...\n");
+  ${trace.token}  }
 }
 char stackCompetingArrays(char mode) {
   uint obsSize;
@@ -940,6 +1166,10 @@ char stackCompetingArrays(char mode) {
   char statusFlag;
   uint *eventCounter;
   uint i, j;
+  ${trace.token}  uint n;
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackCompetingArrays() ENTRY ...\n");
+  ${trace.token}  }
   if (RF_statusIndex == 0) {
     RF_nativeError("\nRF-SRC:  *** ERROR *** ");
     RF_nativeError("\nRF-SRC:  Attempt to stack competing risk structures in the absence of SURV data.");
@@ -999,6 +1229,13 @@ char stackCompetingArrays(char mode) {
     for (j = 1; j <= RF_eventTypeSize; j++) {
       RF_eventTypeIndex[RF_eventType[j]] = j;
     }
+    ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}      RF_nativePrint("\nEvent Type Index Mapping:  \n");
+    ${trace.token}      for (j = 1; j <= RF_eventType[RF_eventTypeSize]; j++) {
+    ${trace.token}        RF_nativePrint("%10d %10d \n", j, RF_eventTypeIndex[j]);
+    ${trace.token}      }
+    ${trace.token}      RF_nativePrint("\nNumber in GROW data missing status: %10d \n", RF_mStatusSize);
+    ${trace.token}    }
   }
   switch (mode) {
   case RF_GROW:
@@ -1042,6 +1279,14 @@ char stackCompetingArrays(char mode) {
         RF_nativeError("\nRF-SRC:  Competing risk weight elements are all zero. \n");
         RF_nativeExit();
       }
+      ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}    RF_nativePrint("\nIncoming CR Weights:  ");
+      ${trace.token}    RF_nativePrint("\n     index       weight");
+      ${trace.token}    for (j=1; j <= RF_eventTypeSize; j++) {
+      ${trace.token}      RF_nativePrint("\n%10d  %12.4f", j, RF_crWeight[j]);
+      ${trace.token}    }
+      ${trace.token}    RF_nativePrint("\n");
+      ${trace.token}  }
     }
     break;
   default:
@@ -1152,6 +1397,16 @@ char stackCompetingArrays(char mode) {
     for (j = 1; j <= RF_eventTypeSize; j++) {
       RF_eIndividualIn[j] = uivector(1, RF_eIndividualSize[j] + RF_mStatusSize + 1);
     }
+    ${trace.token} if (getTraceFlag(0) & SUMM_MED_TRACE) {
+    ${trace.token}   RF_nativePrint("\nNon-missing Event Type Subset Sizes: \n");
+    ${trace.token}   for (j=1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}     RF_nativePrint("%10d %10d %10d \n", j, RF_eventType[j], RF_eIndividualSize[j]);
+    ${trace.token}   }
+    ${trace.token}   RF_nativePrint("\nMaximum (allocated - 1) Event Type Subset Sizes: \n");
+    ${trace.token}   for (j=1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}     RF_nativePrint("%10d %10d %10d \n", j, RF_eventType[j], RF_eIndividualSize[j] + RF_mStatusSize);
+    ${trace.token}   }
+    ${trace.token} }
     eventCounter = uivector(1, RF_eventTypeSize);
     for (j = 1; j <= RF_eventTypeSize; j++) {
       eventCounter[j] = 0;
@@ -1198,7 +1453,25 @@ char stackCompetingArrays(char mode) {
       }
     }
     free_uivector(eventCounter, 1, RF_eventTypeSize);
+    ${trace.token} if (getTraceFlag(0) & SUMM_MED_TRACE) {
+    ${trace.token}   RF_nativePrint("\nEvent Type Subsets: \n");
+    ${trace.token}   RF_nativePrint("          ");
+    ${trace.token}   for (n=1; n <= obsSize; n++) {
+    ${trace.token}     RF_nativePrint("%10d", n);
+    ${trace.token}   }
+    ${trace.token}   RF_nativePrint("\n");
+    ${trace.token}   for (j=1; j <= RF_eventTypeSize; j++) {
+    ${trace.token}     RF_nativePrint("%10d", j);
+    ${trace.token}     for (n=1; n <= RF_eIndividualSize[j]; n++) {
+    ${trace.token}       RF_nativePrint("%10d", RF_eIndividualIn[j][n]);
+    ${trace.token}     }
+    ${trace.token}     RF_nativePrint("\n");
+    ${trace.token}   }
+    ${trace.token} }
   }  
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\nstackCompetingArrays() EXIT ...\n");
+  ${trace.token} }
   return TRUE;
 }
 void getEventInfo(char mode) {
@@ -1211,6 +1484,9 @@ void getEventInfo(char mode) {
   uint leadingIndex;
   uint i, j;
   uint jgrow;
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\ngetEventInfo() ENTRY ...\n");
+  ${trace.token} }
   if (RF_statusIndex == 0) {
     RF_nativeError("\nRF-SRC: *** ERROR *** ");
     RF_nativeError("\nRF-SRC: Attempt to stack competing risk structures in the absence of SURV data.");
@@ -1270,6 +1546,9 @@ void getEventInfo(char mode) {
       }
     }
   }
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\nMissing Event Type Count: %10d \n", RF_mStatusSize);
+  ${trace.token} }
   if (mode == RF_PRED) {
     if(eventTypeSizeLocal > 0) {
       hpsortui(eventTypeLocal, eventTypeSizeLocal);
@@ -1284,6 +1563,13 @@ void getEventInfo(char mode) {
     }
     if (eventTypeSizeLocal > 0) {
       RF_feventTypeSize = eventTypeSizeLocal;
+      ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+      ${trace.token}   RF_nativePrint("\n\nSorted Unique Event Types:  \n");
+      ${trace.token}   for (uint j=1; j <= RF_feventTypeSize; j++) {
+      ${trace.token}     RF_nativePrint("%10d %10d \n", j, eventTypeLocal[j]);
+      ${trace.token}   }
+      ${trace.token}   RF_nativePrint("\nUnique Event Type Count:  %10d ", RF_feventTypeSize);
+      ${trace.token} }
     }
     else {
       RF_feventTypeSize = 0;
@@ -1324,10 +1610,16 @@ void getEventInfo(char mode) {
     }
   }
   free_uivector(eventTypeLocal, 1, obsSize);
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\ngetEventInfo() EXIT ...\n");
+  ${trace.token} }
 }
 void unstackCompetingArrays(char mode) {
   char eventSubsetFlag;
   uint j;
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\nunstackCompetingArrays() ENTRY ...\n");
+  ${trace.token} }
     if (RF_statusIndex == 0) {
       RF_nativeError("\nRF-SRC: *** ERROR *** ");
       RF_nativeError("\nRF-SRC: Attempt to unstack competing risk structures in the absence of SURV data.");
@@ -1370,11 +1662,17 @@ void unstackCompetingArrays(char mode) {
       free_new_vvector(RF_eIndividualIn, 1, RF_eventTypeSize, NRUTIL_UPTR);
       free_uivector(RF_eIndividualSize, 1, RF_eventTypeSize);
     }  
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\nunstackCompetingArrays() EXIT ...\n");
+  ${trace.token} }
 }
 char stackClassificationArrays(char mode) {
   uint  minorityClassID, minorityClassCnt;
   uint  majorityClassID, majorityClassCnt;
   uint i, j, k;
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\nstackClassificationArrays() ENTRY ...\n");
+  ${trace.token} }
   if (RF_rFactorCount == 0) {
     RF_nativeError("\nRF-SRC: *** ERROR *** ");
     RF_nativeError("\nRF-SRC: Attempt to stack classification structures in the absence of CLAS data.");
@@ -1400,6 +1698,26 @@ char stackClassificationArrays(char mode) {
       RF_nativeExit();
     }
   }
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\nResp Factor sizes (theoretical max level):  ");
+  ${trace.token}   RF_nativePrint("\nIndex:  ");
+  ${trace.token}   for (k = 1; k <= RF_rFactorCount; k++) {
+  ${trace.token}     RF_nativePrint(" %10d", k);
+  ${trace.token}   }
+  ${trace.token}   RF_nativePrint("\n        ");
+  ${trace.token}   for (k = 1; k <= RF_rFactorCount; k++) {  
+  ${trace.token}     RF_nativePrint(" %10d", RF_rLevelsMax[RF_rFactorIndex[k]]);
+  ${trace.token}   }
+  ${trace.token}   RF_nativePrint("\n");
+  ${trace.token}   RF_nativePrint("\nResp Factor levels (actually encountered):  ");
+  ${trace.token}   RF_nativePrint("\n     Factor     Levels ->  ");  
+  ${trace.token}   for (k = 1; k <= RF_rFactorCount; k++) {  
+  ${trace.token}     RF_nativePrint("\n %10d", k);
+  ${trace.token}     for (i = 1; i <= RF_rLevelsCnt[k]; i++) {
+  ${trace.token}       RF_nativePrint(" %10d", RF_rLevels[k][i]);
+  ${trace.token}     }
+  ${trace.token}   }
+  ${trace.token} }
   
   /*
   RF_rLevels = (uint **) copy2DObject(RF_rLevelsJNIE, NATIVE_TYPE_INTEGER, &RF_nat2DInfoListSize);
@@ -1441,6 +1759,12 @@ char stackClassificationArrays(char mode) {
     for (j = 1; j <= RF_classLevelSize[k]; j++) {
       RF_classLevelIndex[k][RF_classLevel[k][j]] = j;
     }
+    ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+    ${trace.token}   RF_nativePrint("\nClass Level Index Mapping: \n");
+    ${trace.token}   for (j = 1; j <= RF_classLevel[k][RF_classLevelSize[k]]; j++) {
+    ${trace.token}     RF_nativePrint("%10d %10d \n", j, RF_classLevelIndex[k][j]);
+    ${trace.token}   }
+    ${trace.token} }
   }  
   if (RF_opt & OPT_PERF) {
     if (RF_opt & OPT_CLAS_RFQ) {
@@ -1460,6 +1784,18 @@ char stackClassificationArrays(char mode) {
             totalCount ++;
           }
         }
+        ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+        ${trace.token}     RF_nativePrint("\nIncoming Level Counts:");
+        ${trace.token}     RF_nativePrint("\n      Level");
+        ${trace.token}     for (i = 1; i <= RF_rFactorSize[j]; i++) {
+        ${trace.token}        RF_nativePrint(" %10d", i);
+        ${trace.token}     }
+        ${trace.token}     RF_nativePrint("\n           ");
+        ${trace.token}     for (i = 1; i <= RF_rFactorSize[j]; i++) {        
+        ${trace.token}       RF_nativePrint(" %10d", levelCount[i]);
+        ${trace.token}     }
+        ${trace.token}     RF_nativePrint("\n");        
+        ${trace.token}  }
         minorityClassCnt = levelCount[1];
         minorityClassID = 1;
         for (k = 1; k <= RF_rFactorSize[j]; k++) {
@@ -1481,8 +1817,19 @@ char stackClassificationArrays(char mode) {
         }
         RF_rFactorMajority[j] = majorityClassID;
         RF_rFactorThreshold[j] = (double) levelCount[RF_rFactorMinority[j]] / totalCount;
+        ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+        ${trace.token}     RF_nativePrint("\nIncoming Minority Threshold Ratio:");
+        ${trace.token}     RF_nativePrint("\n FactorIdx[%10d]:   %10.4f \n", j, RF_rFactorThreshold[j]);
+        ${trace.token}  }
         free_uivector(levelCount, 1, RF_rFactorSize[j]);
       }
+      ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+      ${trace.token}     RF_nativePrint("\nStatic Minority Class Definitions:");
+      ${trace.token}     RF_nativePrint("\n     Factor   Minority   Majority");
+      ${trace.token}     for (j = 1; j <= RF_rFactorCount; j++) {
+      ${trace.token}       RF_nativePrint("\n %10d %10d %10d \n", j, RF_rFactorMinority[j], RF_rFactorMajority[j]);
+      ${trace.token}     }
+      ${trace.token}  }
     }
     for (j = 1; j <= RF_rFactorCount; j++) {
       if (RF_rFactorSize[j] == 2) {
@@ -1499,16 +1846,25 @@ char stackClassificationArrays(char mode) {
           if (!RF_nativeIsNaN(RF_fresponseIn[RF_rFactorIndex[k]][i])) {
             if ((uint) RF_fresponseIn[RF_rFactorIndex[k]][i] > RF_rFactorSize[k]) {
               RF_rFactorSizeTest[k] = (uint) RF_fresponseIn[RF_rFactorIndex[k]][i];
+              ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
+              ${trace.token}     RF_nativePrint("\nUnseen level in indv %10d for compressed factor %10d:  (train vs. test)  %10d %10d", i, k, RF_rFactorSize[k], RF_rFactorSizeTest[k]);
+              ${trace.token}  }
             }
           }
         }
       }
     }
   }
+  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}    RF_nativePrint("\nstackClassificationArrays() EXIT ...\n");
+  ${trace.token}  }
   return TRUE;
 }
 void unstackClassificationArrays(char mode) {
   uint k;
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\nunstackClassificationArrays() ENTRY ...\n");
+  ${trace.token} }
   if (RF_rFactorCount == 0) {
     RF_nativeError("\nRF-SRC: *** ERROR *** ");
     RF_nativeError("\nRF-SRC: Attempt to unstack classification structures in the absence of CLAS data.");
@@ -1535,4 +1891,7 @@ void unstackClassificationArrays(char mode) {
   if (mode == RF_PRED) {
     free_uivector(RF_rFactorSizeTest, 1, RF_rFactorCount);
   }
+  ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
+  ${trace.token}   RF_nativePrint("\nunstackClassificationArrays() EXIT ...\n");
+  ${trace.token} }
 }
