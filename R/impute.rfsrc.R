@@ -3,7 +3,8 @@ impute.rfsrc <- function(formula, data,
                          nimpute = 2, fast = FALSE, blocks,                         
                          mf.q, max.iter = 10, eps = 0.01,
                          ytry = NULL, always.use = NULL, verbose = TRUE,
-                         full.sweep = FALSE,      ## NEW: optional final sweep
+                         full.sweep = FALSE,      ## optional final sweep
+                         restore.integer = TRUE,
                          ...)
 {
   ##--------------------------------------------------------------
@@ -14,6 +15,10 @@ impute.rfsrc <- function(formula, data,
   ## terminate if there is no data
   if (missing(data)) {
     stop("data is missing")
+  }
+  ## must be a data frame
+  if (!is.data.frame(data)) {
+    stop("'data' must be a data frame.", call. = FALSE)
   }
   ## identify the missing data
   ## if none/all: return the data
@@ -61,6 +66,11 @@ impute.rfsrc <- function(formula, data,
   p <- ncol(data)
   n <- nrow(data)
   all.var.names <- colnames(data)
+  ## integer-valued numeric columns are detected before imputation
+  ## contaminates their support.  Actual integer columns are restored
+  ## as integer vectors; numeric columns with integer support remain
+  ## numeric but have imputed values rounded to the integer grid.
+  integer.support <- .integer.support.map(data)
   ## mforest details
   if (missing(mf.q)) {
     mforest <- FALSE
@@ -164,6 +174,8 @@ impute.rfsrc <- function(formula, data,
                            nimpute = 1,
                            fast = fast), dots.rough))$data
     data$zZ999Zz <- NULL
+    data <- .restore.integer.data(data, integer.support,
+                                  restore.integer = restore.integer)
     diff.err <- Inf
     check <- TRUE
     var.grp <- cv.folds(p0, K)
@@ -281,6 +293,8 @@ impute.rfsrc <- function(formula, data,
   ##
   ##--------------------------------------------------------------
   if (isTRUE(full.sweep)) {
+    data <- .restore.integer.data(data, integer.support,
+                                  restore.integer = restore.integer)
     ## identify row indices of original missing values for each variable
     x.na.sweep <- lapply(1:ncol(which.na), function(k) {
       idx <- which(which.na[, k])
@@ -333,12 +347,16 @@ impute.rfsrc <- function(formula, data,
         cat("full.sweep: completed (", length(sweep.vars), " variables)\n", sep = "")
       }
     }
+    data <- .restore.integer.data(data, integer.support,
+                                  restore.integer = restore.integer)
   }
   ##--------------------------------------------------------------
   ##
   ## return the imputed data
   ##
   ##--------------------------------------------------------------
+  data <- .restore.integer.data(data, integer.support,
+                                restore.integer = restore.integer)
   invisible(data)
 }
 impute <- impute.rfsrc

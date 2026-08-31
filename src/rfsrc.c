@@ -175,6 +175,9 @@ void rfsrc(char mode, int seedValue) {
     RF_splitRuleObj = makeSplitRuleObj(RF_splitRule);
     break;
   default:
+    if ((mode == RF_PRED) && (RF_optHigh & OPT_DIST) && (RF_optHigh & OPT_DIST_IBG) && (RF_optHigh & OPT_DIST_OOB)) {
+      RF_optHigh = RF_optHigh & (~OPT_JIT_TOP);
+    }
     acquireTree = &acquireTreeGeneric;
     antiMembership = &antiMembershipGeneric;
     randomMembership = &randomMembershipGeneric;
@@ -506,50 +509,78 @@ void rfsrc(char mode, int seedValue) {
       ${trace.token}    RF_nativePrint("\nTrees (total):   %10d \n", RF_ntree);
       ${trace.token}  }
       if (RF_opt & OPT_PROX) {
-        finalizeProximity(mode);
+        if ((mode == RF_PRED) && (RF_opt & OPT_PROX_IBG) && (RF_opt & OPT_PROX_OOB)) {
+          finalizeProximityHybrid(mode);
         ${trace.token}  if (getTraceFlag(0) & SUMM_HGH_TRACE) {
-        ${trace.token}      uint size;
-        ${trace.token}      switch (mode) {
-        ${trace.token}      case RF_PRED:
-        ${trace.token}        size = RF_fobservationSize;
-        ${trace.token}        break;
-        ${trace.token}      default:
-        ${trace.token}        size = RF_observationSize;
-        ${trace.token}        break;
-        ${trace.token}      }
         ${trace.token}      RF_nativePrint("\nProximity Matrix:  \n");
-        ${trace.token}      uint k = 0;
-        ${trace.token}      for (uint i = 1; i <= size; i++) {
-        ${trace.token}        k += i - 1;
-        ${trace.token}        for (uint j = 1; j <= i; j++) {
-        ${trace.token}          RF_nativePrint("%20.4f ", RF_proximity_[k + j]);
+        ${trace.token}      for (uint i = 1; i <= RF_fobservationSize; i++) {
+        ${trace.token}        for (uint j = 1; j <= RF_observationSize; j++) {
+        ${trace.token}          RF_nativePrint("%20.4f ", RF_proximityPtr[i][j]);
         ${trace.token}        }
         ${trace.token}        RF_nativePrint("\n");
         ${trace.token}      }
         ${trace.token}  }
+        }
+        else {
+          finalizeProximity(mode);
+          ${trace.token}  if (getTraceFlag(0) & SUMM_HGH_TRACE) {
+          ${trace.token}      uint size;
+          ${trace.token}      switch (mode) {
+          ${trace.token}      case RF_PRED:
+          ${trace.token}        size = RF_fobservationSize;
+          ${trace.token}        break;
+          ${trace.token}      default:
+          ${trace.token}        size = RF_observationSize;
+          ${trace.token}        break;
+          ${trace.token}      }
+          ${trace.token}      RF_nativePrint("\nProximity Matrix:  \n");
+          ${trace.token}      uint k = 0;
+          ${trace.token}      for (uint i = 1; i <= size; i++) {
+          ${trace.token}        k += i - 1;
+          ${trace.token}        for (uint j = 1; j <= i; j++) {
+          ${trace.token}          RF_nativePrint("%20.4f ", RF_proximity_[k + j]);
+          ${trace.token}        }
+          ${trace.token}        RF_nativePrint("\n");
+          ${trace.token}      }
+          ${trace.token}  }
+        }
       }
       if (RF_optHigh & OPT_DIST) {
-        finalizeDistance(mode);
+        if ((mode == RF_PRED) && (RF_optHigh & OPT_DIST_IBG) && (RF_optHigh & OPT_DIST_OOB)) {
+          finalizeDistanceHybrid(mode);
         ${trace.token}  if (getTraceFlag(0) & SUMM_HGH_TRACE) {
-        ${trace.token}      uint size;
-        ${trace.token}      switch (mode) {
-        ${trace.token}      case RF_PRED:
-        ${trace.token}        size = RF_fobservationSize;
-        ${trace.token}        break;
-        ${trace.token}      default:
-        ${trace.token}        size = RF_observationSize;
-        ${trace.token}        break;
-        ${trace.token}      }
         ${trace.token}      RF_nativePrint("\nDistance Matrix:  \n");
-        ${trace.token}      uint k = 0;
-        ${trace.token}      for (uint i = 1; i <= size; i++) {
-        ${trace.token}        k += i - 1;
-        ${trace.token}        for (uint j = 1; j <= i; j++) {
-        ${trace.token}          RF_nativePrint("%20.4f ", RF_distance_[k + j]);
+        ${trace.token}      for (uint i = 1; i <= RF_fobservationSize; i++) {
+        ${trace.token}        for (uint j = 1; j <= RF_observationSize; j++) {
+        ${trace.token}          RF_nativePrint("%20.4f ", RF_distancePtr[i][j]);
         ${trace.token}        }
         ${trace.token}        RF_nativePrint("\n");
         ${trace.token}      }
         ${trace.token}  }
+        }
+        else {
+          finalizeDistance(mode);
+          ${trace.token}  if (getTraceFlag(0) & SUMM_HGH_TRACE) {
+          ${trace.token}      uint size;
+          ${trace.token}      switch (mode) {
+          ${trace.token}      case RF_PRED:
+          ${trace.token}        size = RF_fobservationSize;
+          ${trace.token}        break;
+          ${trace.token}      default:
+          ${trace.token}        size = RF_observationSize;
+          ${trace.token}        break;
+          ${trace.token}      }
+          ${trace.token}      RF_nativePrint("\nDistance Matrix:  \n");
+          ${trace.token}      uint k = 0;
+          ${trace.token}      for (uint i = 1; i <= size; i++) {
+          ${trace.token}        k += i - 1;
+          ${trace.token}        for (uint j = 1; j <= i; j++) {
+          ${trace.token}          RF_nativePrint("%20.4f ", RF_distance_[k + j]);
+          ${trace.token}        }
+          ${trace.token}        RF_nativePrint("\n");
+          ${trace.token}      }
+          ${trace.token}  }
+        }
       }
       if (RF_optHigh & OPT_WGHT) {
         finalizeWeight(mode);

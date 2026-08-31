@@ -563,28 +563,28 @@ matplot(v.obj$time.interest, 100 * t(v.obj$survival.oob[1:10, ]),
 ## using function "plot.survival" 
 plot.survival(v.obj, subset = 1:10)
 
-## obtain Brier score using KM and RSF censoring distribution estimators
-bs.km <- get.brier.survival(v.obj, cens.model = "km")$brier.score
-bs.rsf <- get.brier.survival(v.obj, cens.model = "rfsrc")$brier.score
+## Brier and AUCT helpers with pointwise intervals
+## see plot.survival for more details
+brier.obj <- get.brier.survival(v.obj, conf.int = TRUE)
+head(brier.obj$brier.score)
+auct.obj <- get.auct.survival(v.obj, conf.int = TRUE)
+head(auct.obj$auct.score)
 
-## plot the brier score
-plot(bs.km, type = "s", col = 2)
-lines(bs.rsf, type ="s", col = 4)
-legend("topright", legend = c("cens.model = km", "cens.model = rfsrc"), fill = c(2,4))
+## Brier and AUCT curves with confidence bands
+## see plot.survival for more details
+plotBrierAUC(v.obj, xlim = c(0, 600))
+plotBrierAUC(v.obj, plots = "brier", xlim = c(0, 600))
+plotBrierAUC(v.obj, plots = "auct", xlim = c(0, 600))
 
 ## plot CRPS (continuous rank probability score) as function of time
 ## here's how to calculate the CRPS for every time point
 trapz <- randomForestSRC:::trapz
 time <- v.obj$time.interest
-crps.km <- sapply(1:length(time), function(j) {
-  trapz(time[1:j], bs.km[1:j, 2] / diff(range(time[1:j])))
+bscore <- brier.obj$brier.score
+crps <- sapply(1:length(time), function(j) {
+  trapz(time[1:j], bscore[1:j, 2] / diff(range(time[1:j])))
 })
-crps.rsf <- sapply(1:length(time), function(j) {
-  trapz(time[1:j], bs.rsf[1:j, 2] / diff(range(time[1:j])))
-})
-plot(time, crps.km, ylab = "CRPS", type = "s", col = 2)
-lines(time, crps.rsf, type ="s", col = 4)
-legend("bottomright", legend=c("cens.model = km", "cens.model = rfsrc"), fill=c(2,4))
+plot(time, crps, ylab = "CRPS", type = "s", lwd = 2)
 
 
 ## fast nodesize optimization for veteran data

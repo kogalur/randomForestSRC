@@ -58,9 +58,9 @@ generic.predict.rfsrc <-
   }
   ## verify other key options
   outcome <- match.arg(outcome, c("train", "test"))
-  proximity <- match.arg(as.character(proximity), c(FALSE, TRUE, "inbag", "oob", "all"))
+  proximity <- match.arg(as.character(proximity), c(FALSE, TRUE, "inbag", "oob", "all", "hybrid"))
   forest.wt <- match.arg(as.character(forest.wt), c(FALSE, TRUE, "inbag", "oob", "all"))  
-  distance <- match.arg(as.character(distance), c(FALSE, TRUE, "inbag", "oob", "all"))
+  distance <- match.arg(as.character(distance), c(FALSE, TRUE, "inbag", "oob", "all", "hybrid"))
   ## set restore.mode and the ensemble option
   ## newdata missing --> restore.mode = TRUE
   ## outcome = "test" --> restore.mode = FALSE for R-processing but switched later for C-code function call
@@ -152,7 +152,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("3.6.2", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("3.7.0", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
@@ -758,41 +758,59 @@ generic.predict.rfsrc <-
     if (restore.mode) {
       prox.n <- n
     }
-      else {
+    else {
         prox.n <- n.newdata
-      }
-    proximity.out <- matrix(0, prox.n, prox.n)
-    count <- 0
-    for (k in 1:prox.n) {
-      proximity.out[k,1:k] <- nativeOutput$proximity[(count+1):(count+k)]
-      proximity.out[1:k,k] <- proximity.out[k,1:k]
-      count <- count + k
+    }
+    ## Are we conducting hybrid proximity?
+    if (proximity == "hybrid") {
+        proximity.out <- matrix(nativeOutput$proximity,
+                                nrow = n.newdata,
+                                ncol = n,
+                                byrow = TRUE)
+    }
+    else {
+        proximity.out <- matrix(0, prox.n, prox.n)
+        count <- 0
+        for (k in 1:prox.n) {
+            proximity.out[k,1:k] <- nativeOutput$proximity[(count+1):(count+k)]
+            proximity.out[1:k,k] <- proximity.out[k,1:k]
+            count <- count + k
+        }
     }
     nativeOutput$proximity <- NULL
   }
-    else {
+  else {
       proximity.out <- NULL
-    }
+  }
   ## distance
   if (distance != FALSE) {
     if (restore.mode) {
       dist.n <- n
     }
-      else {
-        dist.n <- n.newdata
+    else {
+      dist.n <- n.newdata
+    }
+    ## Are we conducting hybrid distance?
+    if (distance == "hybrid") {
+      distance.out <- matrix(nativeOutput$distance,
+                             nrow = n.newdata,
+                             ncol = n,
+                             byrow = TRUE)
+    }
+    else {
+      distance.out <- matrix(0, dist.n, dist.n)
+      count <- 0
+      for (k in 1:dist.n) {
+        distance.out[k,1:k] <- nativeOutput$distance[(count+1):(count+k)]
+        distance.out[1:k,k] <- distance.out[k,1:k]
+        count <- count + k
       }
-    distance.out <- matrix(0, dist.n, dist.n)
-    count <- 0
-    for (k in 1:dist.n) {
-      distance.out[k,1:k] <- nativeOutput$distance[(count+1):(count+k)]
-      distance.out[1:k,k] <- distance.out[k,1:k]
-      count <- count + k
     }
     nativeOutput$distance <- NULL
   }
-    else {
-      distance.out <- NULL
-    }
+  else {
+    distance.out <- NULL
+  }
   ## forest weight matrix
   if (forest.wt != FALSE) {
     if (restore.mode) {

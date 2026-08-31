@@ -1151,21 +1151,39 @@ void stackDefinedOutputObjects(char      mode,
     ${trace.token}    }
   }
   if (RF_opt & OPT_PROX) {
-    localSize = ((ulong) (obsSize + 1) * obsSize) >> 1;
-    *pRF_proximity = (double*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_PROX_ID, localSize, 0, RF_sexpString[RF_PROX_ID], NULL, 1, localSize);
-    RF_proximityDen = dvector(1, localSize);
-    (*pRF_proximity) --;
-    RF_proximityPtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
-    RF_proximityDenPtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
-    RF_proximityPtr[1] = *pRF_proximity;
-    RF_proximityDenPtr[1] = RF_proximityDen;    
-    RF_proximityPtr[1][1] = RF_proximityDenPtr[1][1] = 0.0;
-    for (i = 2; i <= obsSize; i++) {
-      RF_proximityPtr[i] = RF_proximityPtr[i-1] + i - 1;
-      RF_proximityDenPtr[i] = RF_proximityDenPtr[i-1] + i - 1;
-      for (j = 1; j <= i; j++) {
-        RF_proximityPtr[i][j] = 0.0;
-        RF_proximityDenPtr[i][j] = 0.0;
+    if ( !((mode == RF_PRED) && (RF_opt & OPT_PROX_IBG) && (RF_opt & OPT_PROX_OOB)) ) {
+      localSize = ((ulong) (obsSize + 1) * obsSize) >> 1;
+      *pRF_proximity = (double*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_PROX_ID, localSize, 0, RF_sexpString[RF_PROX_ID], NULL, 1, localSize);
+      RF_proximityDen = dvector(1, localSize);
+      (*pRF_proximity) --;
+      RF_proximityPtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
+      RF_proximityDenPtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
+      RF_proximityPtr[1] = *pRF_proximity;
+      RF_proximityDenPtr[1] = RF_proximityDen;    
+      RF_proximityPtr[1][1] = RF_proximityDenPtr[1][1] = 0.0;
+      for (i = 2; i <= obsSize; i++) {
+        RF_proximityPtr[i] = RF_proximityPtr[i-1] + i - 1;
+        RF_proximityDenPtr[i] = RF_proximityDenPtr[i-1] + i - 1;
+        for (j = 1; j <= i; j++) {
+          RF_proximityPtr[i][j] = 0.0;
+          RF_proximityDenPtr[i][j] = 0.0;
+        }
+      }
+    }
+    else {
+      localSize = (ulong) (RF_fobservationSize * RF_observationSize);
+      *pRF_proximity = (double*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_PROX_ID, localSize, 0, RF_sexpString[RF_PROX_ID], NULL, 1, localSize);
+      RF_proximityDen = dvector(1, localSize);
+      (*pRF_proximity) --;
+      RF_proximityPtr = (double **) new_vvector(1, RF_fobservationSize, NRUTIL_DPTR);
+      RF_proximityDenPtr = (double **) new_vvector(1, RF_fobservationSize, NRUTIL_DPTR);
+      for (i = 1; i <= RF_fobservationSize; i++) {
+        RF_proximityPtr[i] = *pRF_proximity + (RF_observationSize * (i - 1));
+        RF_proximityDenPtr[i] = RF_proximityDen + (RF_observationSize * (i - 1));
+        for (j = 1; j <= RF_observationSize; j++) {
+          RF_proximityPtr[i][j] = 0.0;
+          RF_proximityDenPtr[i][j] = 0.0;
+        }
       }
     }
     ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
@@ -1173,21 +1191,39 @@ void stackDefinedOutputObjects(char      mode,
     ${trace.token}    }
   }
   if (RF_optHigh & OPT_DIST) {
-    localSize = ((ulong) (obsSize + 1) * obsSize) >> 1;
-    *pRF_distance = (double*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_DIST_ID, localSize, 0, RF_sexpString[RF_DIST_ID], NULL, 1, localSize);
-    RF_distanceDen = dvector(1, localSize);
-    (*pRF_distance) --;
-    RF_distancePtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
-    RF_distanceDenPtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
-    RF_distancePtr[1] = *pRF_distance;
-    RF_distanceDenPtr[1] = RF_distanceDen;    
-    RF_distancePtr[1][1] = RF_distanceDenPtr[1][1] = 0.0;
-    for (i = 2; i <= obsSize; i++) {
-      RF_distancePtr[i] = RF_distancePtr[i-1] + i - 1;
-      RF_distanceDenPtr[i] = RF_distanceDenPtr[i-1] + i - 1;
-      for (j = 1; j <= i; j++) {
-        RF_distancePtr[i][j] = 0.0;
-        RF_distanceDenPtr[i][j] = 0.0;
+    if ( !((mode == RF_PRED) && (RF_optHigh & OPT_DIST_IBG) && (RF_optHigh & OPT_DIST_OOB)) ) {
+      localSize = ((ulong) (obsSize + 1) * obsSize) >> 1;
+      *pRF_distance = (double*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_DIST_ID, localSize, 0, RF_sexpString[RF_DIST_ID], NULL, 1, localSize);
+      RF_distanceDen = dvector(1, localSize);
+      (*pRF_distance) --;
+      RF_distancePtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
+      RF_distanceDenPtr = (double **) new_vvector(1, obsSize, NRUTIL_DPTR);
+      RF_distancePtr[1] = *pRF_distance;
+      RF_distanceDenPtr[1] = RF_distanceDen;
+      RF_distancePtr[1][1] = RF_distanceDenPtr[1][1] = 0.0;
+      for (i = 2; i <= obsSize; i++) {
+        RF_distancePtr[i] = RF_distancePtr[i-1] + i - 1;
+        RF_distanceDenPtr[i] = RF_distanceDenPtr[i-1] + i - 1;
+        for (j = 1; j <= i; j++) {
+          RF_distancePtr[i][j] = 0.0;
+          RF_distanceDenPtr[i][j] = 0.0;
+        }
+      }
+    }
+    else {
+      localSize = (ulong) (RF_fobservationSize * RF_observationSize);
+      *pRF_distance = (double*) stackAndProtect(mode, &RF_nativeIndex, NATIVE_TYPE_NUMERIC, RF_DIST_ID, localSize, 0, RF_sexpString[RF_DIST_ID], NULL, 1, localSize);
+      RF_distanceDen = dvector(1, localSize);
+      (*pRF_distance) --;
+      RF_distancePtr = (double **) new_vvector(1, RF_fobservationSize, NRUTIL_DPTR);
+      RF_distanceDenPtr = (double **) new_vvector(1, RF_fobservationSize, NRUTIL_DPTR);
+      for (i = 1; i <= RF_fobservationSize; i++) {
+        RF_distancePtr[i] = *pRF_distance + (RF_observationSize * (i - 1));
+        RF_distanceDenPtr[i] = RF_distanceDen + (RF_observationSize * (i - 1));
+        for (j = 1; j <= RF_observationSize; j++) {
+          RF_distancePtr[i][j] = 0.0;
+          RF_distanceDenPtr[i][j] = 0.0;
+        }
       }
     }
     ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
@@ -1816,19 +1852,35 @@ void unstackDefinedOutputObjects(char mode) {
     ${trace.token}    }
   }
   if (RF_opt & OPT_PROX) {
-    localSize = ((obsSize + 1)  * obsSize) >> 1;
-    free_dvector(RF_proximityDen, 1, localSize);
-    free_new_vvector(RF_proximityPtr, 1, obsSize, NRUTIL_DPTR);
-    free_new_vvector(RF_proximityDenPtr, 1, obsSize, NRUTIL_DPTR);
+    if ( !((mode == RF_PRED) && (RF_opt & OPT_PROX_IBG) && (RF_opt & OPT_PROX_OOB)) ) {
+      localSize = ((obsSize + 1)  * obsSize) >> 1;
+      free_dvector(RF_proximityDen, 1, localSize);
+      free_new_vvector(RF_proximityPtr, 1, obsSize, NRUTIL_DPTR);
+      free_new_vvector(RF_proximityDenPtr, 1, obsSize, NRUTIL_DPTR);
+    }
+    else {
+      localSize = (ulong) (RF_fobservationSize * RF_observationSize);
+      free_dvector(RF_proximityDen, 1, localSize);
+      free_new_vvector(RF_proximityPtr, 1, RF_fobservationSize, NRUTIL_DPTR);
+      free_new_vvector(RF_proximityDenPtr, 1, RF_fobservationSize, NRUTIL_DPTR);
+    }
     ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
     ${trace.token}      RF_nativePrint("\nDe-allocating for OPT PROX complete. \n");
     ${trace.token}    }
   }
   if (RF_optHigh & OPT_DIST) {
-    localSize = ((obsSize + 1)  * obsSize) >> 1;
-    free_dvector(RF_distanceDen, 1, localSize);
-    free_new_vvector(RF_distancePtr, 1, obsSize, NRUTIL_DPTR);
-    free_new_vvector(RF_distanceDenPtr, 1, obsSize, NRUTIL_DPTR);
+    if ( !((mode == RF_PRED) && (RF_optHigh & OPT_DIST_IBG) && (RF_optHigh & OPT_DIST_OOB)) ) {
+      localSize = ((obsSize + 1)  * obsSize) >> 1;
+      free_dvector(RF_distanceDen, 1, localSize);
+      free_new_vvector(RF_distancePtr, 1, obsSize, NRUTIL_DPTR);
+      free_new_vvector(RF_distanceDenPtr, 1, obsSize, NRUTIL_DPTR);
+    }
+    else {
+      localSize = (ulong) (RF_fobservationSize * RF_observationSize);
+      free_dvector(RF_distanceDen, 1, localSize);
+      free_new_vvector(RF_distancePtr, 1, RF_fobservationSize, NRUTIL_DPTR);
+      free_new_vvector(RF_distanceDenPtr, 1, RF_fobservationSize, NRUTIL_DPTR);
+    }
     ${trace.token}    if (getTraceFlag(0) & SUMM_LOW_TRACE) {
     ${trace.token}      RF_nativePrint("\nDe-allocating for OPT DIST complete. \n");
     ${trace.token}    }

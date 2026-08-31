@@ -129,12 +129,10 @@ void processDefaultPredict(void) {
       }
     }
     if (RF_opt & OPT_PROX) {
-      RF_opt = RF_opt | OPT_PROX_IBG;
-      RF_opt = RF_opt | OPT_PROX_OOB;
+      RF_optHigh = RF_optHigh & (~OPT_JIT_TOP);
     }
     if (RF_optHigh & OPT_DIST) {
-      RF_optHigh = RF_optHigh | OPT_DIST_IBG;
-      RF_optHigh = RF_optHigh | OPT_DIST_OOB;
+      RF_optHigh = RF_optHigh & (~OPT_JIT_TOP);
     }
     if (RF_optHigh & OPT_WGHT) {
       RF_optHigh = RF_optHigh | OPT_WGHT_IBG;

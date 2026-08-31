@@ -43,9 +43,16 @@
   
   \item{perf.type}{Optional metric for prediction, VIMP, and error. Currently used for classification and multivariate classification. Choices: \code{"misclass"} (default), \code{"brier"}, and \code{"gmean"}.}
   
-  \item{proximity}{Whether to compute the proximity matrix for test observations. Options include \code{"inbag"}, \code{"oob"}, \code{"all"}, \code{TRUE}, or \code{FALSE}. Not all options are valid in all contexts; \code{TRUE} is the safest choice.}
+  \item{proximity}{Whether to compute a proximity matrix. Options include
+    \code{"inbag"}, \code{"oob"}, \code{"all"}, \code{"hybrid"},
+    \code{TRUE}, or \code{FALSE}. With \code{newdata}, \code{"hybrid"}
+    compares test observations (rows) with original training observations
+    (columns). Hybrid mode is valid only when \code{newdata} is supplied
+    with the default \code{outcome = "train"}.}
   
-  \item{distance}{Whether to compute the distance matrix. Options are the same as for \code{proximity}.}
+  \item{distance}{Whether to compute the distance matrix. Options are the
+    same as for \code{proximity}. Hybrid mode uses the same rectangular
+    test-by-training layout.}
   
   \item{forest.wt}{Whether to compute the forest weight matrix. Options are the same as for \code{proximity}.}
   
@@ -75,6 +82,13 @@ Predicted values are obtained by "dropping" the test data down the trained fores
 
 If no test data is supplied, the function uses the original training data and enters "restore" mode. This allows users to extract outputs from the trained forest that were not requested during the original grow call.
 
+When \code{newdata} is supplied, non-hybrid proximity and distance matrices
+compare test observations with one another. Setting either option to
+\code{"hybrid"} instead compares each retained test observation with each
+retained original training observation, producing an \code{ntest} by
+\code{ntrain} matrix without constructing a square matrix over the combined
+data. Hybrid mode should not be combined with \code{marginal.xvar}.
+
 If \code{outcome = "test"}, predictions are computed using y-outcomes from the test data (which must include outcome values). Terminal node statistics are recalculated using these outcomes, while the tree topology remains fixed from training. Error rates and VIMP are then computed by bootstrapping the test set and applying out-of-bagging to maintain unbiased estimates.
 
 Set \code{csv = TRUE} to return case-specific VIMP, and \code{cse = TRUE} to return case-specific error rates. These apply to all families except survival. Both options can also be used at training time.
@@ -93,7 +107,11 @@ An object of class \code{(rfsrc, predict)}, which is a list with the following c
   \item{xvar}{Data frame of test set predictor variables.}
   \item{xvar.names}{Character vector of predictor variable names.}
   \item{leaf.count}{Vector of length \code{ntree} giving the number of terminal nodes per tree.}
-  \item{proximity}{Proximity matrix computed on the test data.}
+  \item{proximity}{Proximity matrix computed on the test data. In hybrid
+    mode, rows correspond to retained test observations and columns correspond
+    to retained original training observations.}
+  \item{distance}{Distance matrix. Hybrid mode uses the same test-by-training
+    layout as hybrid proximity.}
   \item{forest}{The trained forest object.}
   \item{forest.wt}{Forest weight matrix for test cases.}
   \item{ptn.membership}{Matrix of pruned terminal node membership. Only returned if \code{ptn.count > 0}.}
@@ -175,6 +193,25 @@ veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ])
 veteran.pred <- predict(veteran.grow, veteran[-train, ])
 print(veteran.grow)
 print(veteran.pred)
+
+## ------------------------------------------------------------
+## hybrid proximity and distance
+## - rows are test cases; columns are training cases
+## ------------------------------------------------------------
+
+data(mtcars)
+hybrid.train <- mtcars[1:24, ]
+hybrid.test <- mtcars[25:32, ]
+hybrid.obj <- rfsrc(mpg ~ ., data = hybrid.train, ntree = 50)
+
+hybrid.proximity <- predict(hybrid.obj, hybrid.test,
+                            proximity = "hybrid")$proximity
+hybrid.distance <- predict(hybrid.obj, hybrid.test,
+                           distance = "hybrid")$distance
+
+## Both matrices have 8 test rows and 24 training columns.
+print(dim(hybrid.proximity))
+print(dim(hybrid.distance))
 
 
 ## ------------------------------------------------------------

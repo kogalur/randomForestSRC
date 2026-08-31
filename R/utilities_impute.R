@@ -1,3 +1,77 @@
+.integer.support.info <- function(x,
+                                  tol = sqrt(.Machine$double.eps),
+                                  frac.cut = 1) {
+  if (inherits(x, c("Date", "POSIXt", "difftime")) || is.factor(x)) {
+    return(list(
+      restore = FALSE,
+      storage.integer = FALSE,
+      integer.frac = NA_real_
+    ))
+  }
+  if (is.integer(x)) {
+    return(list(
+      restore = TRUE,
+      storage.integer = TRUE,
+      integer.frac = 1
+    ))
+  }
+  if (!is.numeric(x)) {
+    return(list(
+      restore = FALSE,
+      storage.integer = FALSE,
+      integer.frac = NA_real_
+    ))
+  }
+  z <- as.numeric(x)
+  z <- z[!is.na(z) & is.finite(z)]
+  if (length(z) == 0L) {
+    return(list(
+      restore = FALSE,
+      storage.integer = FALSE,
+      integer.frac = NA_real_
+    ))
+  }
+  scale <- pmax(1, abs(z))
+  frac <- mean(abs(z - round(z)) <= tol * scale)
+  list(
+    restore = isTRUE(frac >= frac.cut),
+    storage.integer = FALSE,
+    integer.frac = frac
+  )
+}
+.integer.support.map <- function(data,
+                                 tol = sqrt(.Machine$double.eps),
+                                 frac.cut = 1) {
+  out <- lapply(data, .integer.support.info, tol = tol, frac.cut = frac.cut)
+  names(out) <- names(data)
+  out
+}
+.restore.integer.vector <- function(x, info, restore.integer = TRUE) {
+  if (!isTRUE(restore.integer) || !isTRUE(info$restore)) {
+    return(x)
+  }
+  z <- as.numeric(x)
+  ok <- !is.na(z) & is.finite(z)
+  z[ok] <- round(z[ok])
+  if (isTRUE(info$storage.integer)) {
+    out <- rep(NA_integer_, length(z))
+    out[ok] <- as.integer(z[ok])
+    return(out)
+  }
+  z
+}
+.restore.integer.data <- function(data, integer.support, restore.integer = TRUE) {
+  if (!isTRUE(restore.integer) || is.null(integer.support) || length(integer.support) == 0L) {
+    return(data)
+  }
+  for (nm in intersect(names(integer.support), names(data))) {
+    info <- integer.support[[nm]]
+    if (isTRUE(info$restore)) {
+      data[[nm]] <- .restore.integer.vector(data[[nm]], info, restore.integer = TRUE)
+    }
+  }
+  data
+}
 assign.impute.mean <- function(data, impute.mean) {
   cn <- colnames(data)
   p  <- length(cn)

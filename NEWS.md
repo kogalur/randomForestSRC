@@ -1,5 +1,47 @@
-# randomForestSRC 3.6.2
+# randomForestSRC 3.7.0
 
+## Survival prediction performance
+
+* Expanded `get.brier.survival()` to support user-selected prediction
+  horizons, optional pointwise confidence intervals, and optional retention
+  of the subject-by-time IPCW loss matrix. The censoring distribution is
+  estimated from the full grow data, while predictions are scored against
+  their correctly aligned grow or test outcomes.
+
+* Added `get.auct.survival()` for cumulative/dynamic time-dependent AUC using
+  the time-specific risk `1 - S(t)`. The implementation uses efficient
+  weighted rank calculations, gives half credit to ties, and returns case and
+  control counts together with IPCW effective sample sizes and maximum
+  normalized weights.
+
+* Added `plotBrierAUC()`, a base-R helper for plotting Brier and AUC(t) curves
+  with optional pointwise confidence bands. No new package dependencies are
+  required.
+
+* Added fixed-fit conditional standard errors. Brier-score uncertainty uses
+  the delete-one jackknife of subject-level IPCW losses, which is equivalent
+  to the empirical influence-value calculation when predictions and
+  censoring weights are held fixed. AUC(t) uncertainty uses a stratified
+  delete-one jackknife that separately deletes cases and controls and
+  renormalizes the remaining IPCW weights; with equal weights it reduces to
+  the ordinary DeLong variance.
+
+* Corrected `plot.survival()` and the underlying Brier calculations for
+  prediction objects. Test predictions are now paired with test outcomes,
+  arbitrary subsets retain their proper outcome alignment, and prediction
+  objects without outcomes are limited to survival-curve displays rather
+  than incorrectly calculating Brier score or CRPS.
+
+* Restored compatibility with reduced objects returned by
+  `rfsrc.fast(..., forest = FALSE)` for the default Kaplan--Meier censoring
+  model. Requests for `cens.model = "rfsrc"` now give an informative error
+  when stored grow or evaluation covariates are unavailable.
+
+* New `hybrid` proxmity and distance that compares test observations (rows)
+  with original training observations.
+
+# randomForestSRC 3.6.2
+    
 ## New features
 
 - `impute.learn()` now supports training-time storage of OOD calibration objects through `save.ood = TRUE` (default), allowing deployment pipelines to return row-level anomaly summaries in addition to imputed values.

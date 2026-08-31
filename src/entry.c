@@ -181,7 +181,12 @@ SEXP rfsrcGrow(SEXP traceFlag,
     }
   }
   RF_xWeightStat          = REAL(xWeightStat);  RF_xWeightStat--;
-  RF_yWeight              = REAL(yWeight);  RF_yWeight--;
+  if (yWeight != R_NilValue) {
+    RF_yWeight              = REAL(yWeight);  RF_yWeight--;
+  }
+  else {
+    RF_yWeight = NULL;
+  }
   RF_xWeight              = REAL(xWeight);  RF_xWeight--;
   RF_timeInterestSize = INTEGER(VECTOR_ELT(timeInterest, 0))[0];
   if (VECTOR_ELT(timeInterest, 1) != R_NilValue) {

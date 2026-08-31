@@ -162,7 +162,7 @@ void stackFactorArrays(char mode) {
     }
     */    
     /*
-    RF_xLevels = (uint **) copyXDObject(RF_xLevelsPYTH, &RF_natXDInfoListSize);
+    RF_xLevels = (uint **) copyXDObject2D(RF_xLevelsPYTH, &RF_natXDInfoListSize);
     for (k = 1; k <= RF_xFactorCount; k++) {
       if (RF_xLevelsCnt[k] > 0) {
       }
@@ -326,7 +326,15 @@ void unstackFactorArrays(char mode) {
   if (RF_xFactorCount > 0) {
     free_uivector(RF_xFactorIndex, 1, RF_xFactorCount);
     free_uivector(RF_xFactorSize, 1, RF_xFactorCount);
+    
     free_new_vvector(RF_xLevels, 1, RF_xFactorCount, NRUTIL_UPTR);  
+    
+    /*
+    RF_xLevels = NULL;
+    */
+    /*
+    RF_xLevels = NULL;
+    */
   }
   free_uivector(RF_xNonFactorMap, 1, RF_xSize);
   if (RF_xNonFactorCount > 0) {
@@ -744,7 +752,7 @@ char stackMissingArraysPhase2(char mode) {
       }
       else {
         RF_nativeError("\nRF-SRC:  *** ERROR *** ");
-        RF_nativeError("\nRF-SRC:  An anonymous forest with missingness in the test data requires the JITT flag to be asserted");
+        RF_nativeError("\nRF-SRC:  An anonymous forest with missingness in the test data requires the JIT flag to be asserted");
         RF_nativeError("\nRF-SRC:  Please adjust your script accordingly.");
         RF_nativeExit();
       }      
@@ -1698,6 +1706,37 @@ char stackClassificationArrays(char mode) {
       RF_nativeExit();
     }
   }
+  
+  /*
+  RF_rLevels = (uint **) copy2DObject(RF_rLevelsJNIE, NATIVE_TYPE_INTEGER, &RF_nat2DInfoListSize);
+  for (k = 1; k <= RF_rFactorCount; k++) {
+    if (RF_rLevelsCnt[k] > 0) {
+      RF_classLevelSize[k] = RF_rLevelsCnt[k];
+      RF_classLevel[k] = RF_rLevels[k];
+    }
+    else {
+      RF_nativeError("\nRF-SRC: *** ERROR *** ");
+      RF_nativeError("\nRF-SRC: Inconsistent zero-level count in factor:  compressed-index = %10d, y-index = %10d", k, RF_rFactorIndex[k]);
+      RF_nativeError("\nRF-SRC: Please Contact Technical Support.");
+      RF_nativeExit();
+    }
+  }
+  */
+  /*
+  RF_rLevels = (uint **) copyXDObject2D(RF_rLevelsPYTH, &RF_natXDInfoListSize);
+  for (k = 1; k <= RF_rFactorCount; k++) {
+    if (RF_rLevelsCnt[k] > 0) {
+      RF_classLevelSize[k] = RF_rLevelsCnt[k];
+      RF_classLevel[k] = RF_rLevels[k];
+    }
+    else {
+      RF_nativeError("\nRF-SRC: *** ERROR *** ");
+      RF_nativeError("\nRF-SRC: Inconsistent zero-level count in factor:  compressed-index = %10d, y-index = %10d", k, RF_rFactorIndex[k]);
+      RF_nativeError("\nRF-SRC: Please Contact Technical Support.");
+      RF_nativeExit();
+    }
+  }
+  */
   ${trace.token} if (getTraceFlag(0) & SUMM_LOW_TRACE) {
   ${trace.token}   RF_nativePrint("\nResp Factor sizes (theoretical max level):  ");
   ${trace.token}   RF_nativePrint("\nIndex:  ");
@@ -1718,37 +1757,6 @@ char stackClassificationArrays(char mode) {
   ${trace.token}     }
   ${trace.token}   }
   ${trace.token} }
-  
-  /*
-  RF_rLevels = (uint **) copy2DObject(RF_rLevelsJNIE, NATIVE_TYPE_INTEGER, &RF_nat2DInfoListSize);
-  for (k = 1; k <= RF_rFactorCount; k++) {
-    if (RF_rLevelsCnt[k] > 0) {
-      RF_classLevelSize[k] = RF_rLevelsCnt[k];
-      RF_classLevel[k] = RF_rLevels[k];
-    }
-    else {
-      RF_nativeError("\nRF-SRC: *** ERROR *** ");
-      RF_nativeError("\nRF-SRC: Inconsistent zero-level count in factor:  compressed-index = %10d, y-index = %10d", k, RF_rFactorIndex[k]);
-      RF_nativeError("\nRF-SRC: Please Contact Technical Support.");
-      RF_nativeExit();
-    }
-  }
-  */
-  /*
-  RF_rLevels = (uint **) copyXDObject(RF_xLevelsPYTH, &RF_natXDInfoListSize);
-  for (k = 1; k <= RF_rFactorCount; k++) {
-    if (RF_rLevelsCnt[k] > 0) {
-      RF_classLevelSize[k] = RF_rLevelsCnt[k];
-      RF_classLevel[k] = RF_rLevels[k];
-    }
-    else {
-      RF_nativeError("\nRF-SRC: *** ERROR *** ");
-      RF_nativeError("\nRF-SRC: Inconsistent zero-level count in factor:  compressed-index = %10d, y-index = %10d", k, RF_rFactorIndex[k]);
-      RF_nativeError("\nRF-SRC: Please Contact Technical Support.");
-      RF_nativeExit();
-    }
-  }
-  */
   RF_classLevelIndex = (uint **) new_vvector(1, RF_rFactorCount, NRUTIL_UPTR);
   for (k = 1; k <= RF_rFactorCount; k++) {
     RF_rFactorMinorityFlag[k] = FALSE;

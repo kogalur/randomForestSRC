@@ -72,17 +72,51 @@
 .build.schema <- function(data) {
   out <- lapply(names(data), function(nm) {
     x <- data[[nm]]
+    integer.info <- .integer.support.info(x)
     list(
       class = class(x),
       is.factor = is.factor(x),
       ordered = is.ordered(x),
       levels = if (is.factor(x)) levels(x) else NULL,
       is.integer = is.integer(x),
-      is.numeric = .is.real.valued(x)
+      is.numeric = .is.real.valued(x),
+      integer.support = isTRUE(integer.info$restore),
+      integer.storage = isTRUE(integer.info$storage.integer),
+      integer.frac = integer.info$integer.frac
     )
   })
   names(out) <- names(data)
   out
+}
+.normalize.schema.integer.support <- function(schema) {
+  if (is.null(schema) || length(schema) == 0L) {
+    return(schema)
+  }
+  for (nm in names(schema)) {
+    sc <- schema[[nm]]
+    if (!is.list(sc)) next
+    if (is.null(sc$integer.storage)) {
+      sc$integer.storage <- isTRUE(sc$is.integer)
+    }
+    if (is.null(sc$integer.support)) {
+      sc$integer.support <- isTRUE(sc$is.integer)
+    }
+    if (is.null(sc$integer.frac)) {
+      sc$integer.frac <- if (isTRUE(sc$is.integer)) 1 else NA_real_
+    }
+    schema[[nm]] <- sc
+  }
+  schema
+}
+.schema.restores.integer <- function(sc) {
+  is.list(sc) && (isTRUE(sc$integer.support) || isTRUE(sc$is.integer))
+}
+.schema.integer.info <- function(sc) {
+  list(
+    restore = .schema.restores.integer(sc),
+    storage.integer = isTRUE(sc$is.integer) || isTRUE(sc$integer.storage),
+    integer.frac = sc$integer.frac %||% (if (isTRUE(sc$is.integer)) 1 else NA_real_)
+  )
 }
 .as.numeric.safe <- function(x) {
   if (is.factor(x)) {
@@ -152,12 +186,52 @@
     return(out)
   }
   if (is.character(deployment.xvars)) {
+    unknown <- setdiff(deployment.xvars, all.names)
+    if (length(unknown) > 0L) {
+      warning("Ignoring deployment.xvars predictors not found in training data: ",
+              paste(unknown, collapse = ", "),
+              call. = FALSE)
+    }
     xvars <- intersect(all.names, deployment.xvars)
     out <- lapply(targets, function(y) setdiff(xvars, y))
     names(out) <- targets
     return(out)
   }
   if (is.list(deployment.xvars)) {
+    nms <- names(deployment.xvars)
+    if (is.null(nms) || length(nms) != length(deployment.xvars) ||
+        any(is.na(nms) | !nzchar(nms))) {
+      stop("'deployment.xvars' supplied as a list must be named by target variable.",
+           call. = FALSE)
+    }
+    dup <- unique(nms[duplicated(nms)])
+    if (length(dup) > 0L) {
+      stop("'deployment.xvars' contains duplicated target names: ",
+           paste(dup, collapse = ", "),
+           call. = FALSE)
+    }
+    extra.targets <- setdiff(nms, targets)
+    if (length(extra.targets) > 0L) {
+      warning("Ignoring deployment.xvars entries for non-target variables: ",
+              paste(extra.targets, collapse = ", "),
+              call. = FALSE)
+    }
+    bad.entries <- names(deployment.xvars)[vapply(deployment.xvars, function(x) {
+      !(is.null(x) || is.character(x))
+    }, logical(1))]
+    if (length(bad.entries) > 0L) {
+      stop("Each 'deployment.xvars' list entry must be NULL or a character vector. ",
+           "Problem entries: ", paste(bad.entries, collapse = ", "),
+           call. = FALSE)
+    }
+    listed.predictors <- unique(unlist(deployment.xvars[intersect(nms, targets)],
+                                       use.names = FALSE))
+    unknown <- setdiff(listed.predictors, all.names)
+    if (length(unknown) > 0L) {
+      warning("Ignoring deployment.xvars predictors not found in training data: ",
+              paste(unknown, collapse = ", "),
+              call. = FALSE)
+    }
     out <- lapply(targets, function(y) {
       xvars <- deployment.xvars[[y]]
       if (is.null(xvars)) {
@@ -170,6 +244,465 @@
   }
   stop("'deployment.xvars' must be NULL, a character vector, or a named list.",
        call. = FALSE)
+}
+.normalize.impute.learn.manifest <- function(manifest) {
+  if (is.null(manifest$spec.version)) {
+    manifest$spec.version <- 1L
+  }
+  if (is.null(manifest$supervised) || !is.list(manifest$supervised)) {
+    manifest$supervised <- list(enabled = FALSE)
+  }
+  if (is.null(manifest$supervised$enabled)) {
+    manifest$supervised$enabled <- FALSE
+  }
+  manifest$schema <- .normalize.schema.integer.support(manifest$schema)
+  if (is.null(manifest$supervised$response.schema)) {
+    manifest$supervised$response.schema <- NULL
+  }
+  else {
+    manifest$supervised$response.schema <- .normalize.schema.integer.support(
+      manifest$supervised$response.schema
+    )
+  }
+  if (is.null(manifest$predictor.map.raw)) {
+    manifest$predictor.map.raw <- manifest$predictor.map
+  }
+  manifest
+}
+.is.supervised.manifest <- function(manifest) {
+  is.list(manifest$supervised) && isTRUE(manifest$supervised$enabled)
+}
+.get.rfsrc.internal <- function(name) {
+  fn <- get0(name, mode = "function")
+  if (!is.null(fn)) {
+    return(fn)
+  }
+  ns <- tryCatch(
+    asNamespace("randomForestSRC"),
+    error = function(e) NULL
+  )
+  if (is.null(ns) || !exists(name, envir = ns, inherits = FALSE)) {
+    return(NULL)
+  }
+  get(name, envir = ns, inherits = FALSE)
+}
+.parse.formula.terms <- function(formula, data, arg.name = "formula") {
+  tt <- tryCatch(
+    stats::terms(formula, data = data, keep.order = TRUE),
+    error = function(e) e
+  )
+  if (inherits(tt, "error")) {
+    stop("Failed to parse '", arg.name, "': ", conditionMessage(tt),
+         call. = FALSE)
+  }
+  tt
+}
+.make.supervised.formula.env <- function(parent = environment()) {
+  if (is.null(parent)) {
+    parent <- baseenv()
+  }
+  env <- new.env(parent = parent)
+  surv.fun <- get0("Surv", envir = parent, mode = "function", inherits = TRUE)
+  if (is.null(surv.fun)) {
+    surv.fun <- tryCatch(
+      get("Surv", envir = asNamespace("survival"), inherits = FALSE),
+      error = function(e) NULL
+    )
+  }
+  if (!is.null(surv.fun)) {
+    env$Surv <- surv.fun
+  }
+  multivar.fun <- .get.rfsrc.internal("Multivar")
+  if (!is.null(multivar.fun)) {
+    env$Multivar <- multivar.fun
+  }
+  env$cbind <- base::cbind
+  env
+}
+.project.supervised.formula <- function(supervised.formula, data, train.names,
+                                        arg.name = "supervised.formula") {
+  tt <- .parse.formula.terms(supervised.formula, data = data, arg.name = arg.name)
+  xvar.names <- attr(tt, "term.labels") %||% character(0)
+  if (length(xvar.names) == 0L) {
+    stop("'", arg.name, "' must include at least one predictor.", call. = FALSE)
+  }
+  if (!all(xvar.names %in% names(data))) {
+    bad <- setdiff(xvar.names, names(data))
+    stop(
+      "'", arg.name, "' must reference raw predictor columns in 'data'. ",
+      "Derived terms, interactions, and transformations are not currently supported. ",
+      "Problem terms: ", paste(bad, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  xvar.names <- intersect(xvar.names, train.names)
+  if (length(xvar.names) == 0L) {
+    stop("No retained predictor columns remain for '", arg.name,
+         "' after training preprocessing.", call. = FALSE)
+  }
+  lhs <- paste(deparse(supervised.formula[[2L]], width.cutoff = 500L), collapse = "")
+  stats::reformulate(
+    xvar.names,
+    response = lhs,
+    intercept = attr(tt, "intercept") %||% 1L,
+    env = .make.supervised.formula.env(environment(supervised.formula))
+  )
+}
+.parse.supervised.spec <- function(supervised.formula, data) {
+  if (is.null(supervised.formula)) {
+    return(list(enabled = FALSE))
+  }
+  if (!inherits(supervised.formula, "formula")) {
+    stop("'supervised.formula' must be a formula.", call. = FALSE)
+  }
+  data <- as.data.frame(data, stringsAsFactors = FALSE)
+  tt <- .parse.formula.terms(supervised.formula, data = data,
+                             arg.name = "supervised.formula")
+  response.pos <- attr(tt, "response") %||% 0L
+  if (response.pos != 1L) {
+    stop("'supervised.formula' must include a response on the left-hand side.",
+         call. = FALSE)
+  }
+  xvar.names <- attr(tt, "term.labels") %||% character(0)
+  if (length(xvar.names) == 0L) {
+    stop("'supervised.formula' must include at least one predictor.",
+         call. = FALSE)
+  }
+  if (!all(xvar.names %in% names(data))) {
+    bad <- setdiff(xvar.names, names(data))
+    stop(
+      "'supervised.formula' must reference raw predictor columns in 'data'. ",
+      "Derived terms, interactions, and transformations are not currently supported. ",
+      "Problem terms: ", paste(bad, collapse = ", "),
+      call. = FALSE
+    )
+  }
+  parser <- .get.rfsrc.internal("parseFormula")
+  parsed <- NULL
+  if (!is.null(parser)) {
+    parsed <- tryCatch(
+      parser(supervised.formula, data = data),
+      error = function(e) e
+    )
+    if (inherits(parsed, "error")) {
+      parsed <- NULL
+    }
+  }
+  if (is.null(parsed)) {
+    yvar.names <- all.vars(supervised.formula[[2L]])
+    subj.names <- character(0)
+    family.guess <- NA_character_
+  }
+  else {
+    yvar.names <- parsed$yvar.names %||% character(0)
+    subj.names <- parsed$subj.names %||% character(0)
+    family.guess <- parsed$family %||% NA_character_
+  }
+  response.names <- unique(c(subj.names, yvar.names))
+  if (length(response.names) == 0L) {
+    stop("Unable to resolve supervised response variables from 'supervised.formula'.",
+         call. = FALSE)
+  }
+  if (!all(response.names %in% names(data))) {
+    bad <- setdiff(response.names, names(data))
+    stop("The supervised response variables were not found in 'data': ",
+         paste(bad, collapse = ", "), call. = FALSE)
+  }
+  response.predictor.overlap <- intersect(response.names, xvar.names)
+  if (length(response.predictor.overlap) > 0L) {
+    stop("'supervised.formula' must not include supervised response variables ",
+         "on the right-hand side. Problem variables: ",
+         paste(response.predictor.overlap, collapse = ", "),
+         call. = FALSE)
+  }
+  y.data <- data[, response.names, drop = FALSE]
+  for (nm in names(y.data)) {
+    y.data[[nm]] <- .coerce.supported.column(y.data[[nm]], nm)
+  }
+  list(
+    enabled = TRUE,
+    formula = supervised.formula,
+    family.guess = family.guess,
+    xvar.names = xvar.names,
+    yvar.names = yvar.names,
+    subj.names = subj.names,
+    response.names = response.names,
+    x.data = data[, xvar.names, drop = FALSE],
+    y.data = y.data
+  )
+}
+.supervised.usable.rows <- function(ydata) {
+  out <- tryCatch(
+    stats::complete.cases(ydata),
+    error = function(e) e
+  )
+  if (inherits(out, "error")) {
+    ydf <- tryCatch(
+      as.data.frame(ydata, stringsAsFactors = FALSE),
+      error = function(e) e
+    )
+    if (inherits(ydf, "error")) {
+      stop("Failed to determine which supervised responses are observed: ",
+           conditionMessage(out), call. = FALSE)
+    }
+    out <- stats::complete.cases(ydf)
+  }
+  out
+}
+.parse.supervised.args <- function(supervised.args = list()) {
+  if (is.null(supervised.args)) {
+    supervised.args <- list()
+  }
+  if (!is.list(supervised.args)) {
+    stop("'supervised.args' must be a list.", call. = FALSE)
+  }
+  if (length(supervised.args) > 0L) {
+    arg.names <- names(supervised.args)
+    if (is.null(arg.names) || any(is.na(arg.names) | !nzchar(arg.names))) {
+      stop("'supervised.args' must be a named list.", call. = FALSE)
+    }
+    if (anyDuplicated(arg.names)) {
+      warning("Duplicate supervised.args entries were supplied; keeping the last occurrence for each name.",
+              call. = FALSE)
+      supervised.args <- supervised.args[!duplicated(arg.names, fromLast = TRUE)]
+    }
+  }
+  blocked <- intersect(names(supervised.args), c("formula", "data", "forest"))
+  if (length(blocked) > 0L) {
+    warning("Ignoring supervised.args entries controlled internally: ",
+            paste(blocked, collapse = ", "),
+            call. = FALSE)
+    supervised.args[blocked] <- NULL
+  }
+  supervised.args
+}
+.resolve.supervised.fit.meta <- function(supervised.fit, fallback = NULL) {
+  if (is.null(supervised.fit) || !is.list(supervised.fit)) {
+    stop("The supervised forest fit did not return a valid randomForestSRC object.",
+         call. = FALSE)
+  }
+  forest <- .resolve.predict.forest(supervised.fit)
+  family <- supervised.fit$family %||%
+    (if (!is.null(forest)) forest$family else NULL) %||%
+    (if (!is.null(fallback)) fallback$family.guess else NULL) %||%
+    NA_character_
+  xvar.names <- supervised.fit$xvar.names %||%
+    (if (!is.null(forest)) forest$xvar.names else NULL) %||%
+    (if (!is.null(fallback)) fallback$xvar.names else NULL)
+  yvar.names <- supervised.fit$yvar.names %||%
+    (if (!is.null(forest)) forest$yvar.names else NULL) %||%
+    (if (!is.null(fallback)) fallback$yvar.names else NULL)
+  if (is.null(xvar.names) || length(xvar.names) == 0L) {
+    stop("The supervised forest fit did not return 'xvar.names'.",
+         call. = FALSE)
+  }
+  if (is.null(yvar.names) || length(yvar.names) == 0L) {
+    stop("The supervised forest fit did not return 'yvar.names'.",
+         call. = FALSE)
+  }
+  list(
+    family = family,
+    xvar.names = xvar.names,
+    yvar.names = yvar.names
+  )
+}
+.infer.supervised.pred.n <- function(x) {
+  n <- x$n %||% NULL
+  if (!is.null(n) && length(n) == 1L && is.finite(n)) {
+    return(as.integer(n))
+  }
+  if (!is.null(x$xvar)) {
+    xdf <- tryCatch(as.data.frame(x$xvar, check.names = FALSE,
+                                  stringsAsFactors = FALSE),
+                    error = function(e) NULL)
+    if (!is.null(xdf)) {
+      return(nrow(xdf))
+    }
+  }
+  pred <- x$predicted %||% x$predicted.oob %||% NULL
+  if (!is.null(pred)) {
+    return(NROW(pred))
+  }
+  for (slot in c("classOutput", "regrOutput")) {
+    obj <- x[[slot]]
+    if (!is.null(obj) && length(obj) > 0L) {
+      for (nm in names(obj)) {
+        comp <- obj[[nm]]
+        if (!is.null(comp$predicted)) {
+          return(NROW(comp$predicted))
+        }
+        if (!is.null(comp$predicted.oob)) {
+          return(NROW(comp$predicted.oob))
+        }
+      }
+    }
+  }
+  0L
+}
+.patch.supervised.prediction.object <- function(x, family,
+                                                response.schema = NULL,
+                                                yvar.names = NULL) {
+  if (!(family %in% c("regr+", "class+", "mix+"))) {
+    return(x)
+  }
+  n <- .infer.supervised.pred.n(x)
+  if (n <= 0L) {
+    return(x)
+  }
+  y <- x$yvar %||% NULL
+  if (is.null(y)) {
+    if (is.null(response.schema) || length(response.schema) == 0L) {
+      return(x)
+    }
+    y <- .na.data.from.schema(response.schema, n)
+  }
+  else {
+    y <- tryCatch(
+      as.data.frame(y, check.names = FALSE, stringsAsFactors = FALSE),
+      error = function(e) NULL
+    )
+    if (is.null(y)) {
+      if (is.null(response.schema) || length(response.schema) == 0L) {
+        return(x)
+      }
+      y <- .na.data.from.schema(response.schema, n)
+    }
+    else if (!is.null(response.schema) && length(response.schema) > 0L) {
+      wanted <- names(response.schema)
+      extra.cols <- setdiff(names(y), wanted)
+      miss.cols <- setdiff(wanted, names(y))
+      if (length(extra.cols) > 0L) {
+        y <- y[, setdiff(names(y), extra.cols), drop = FALSE]
+      }
+      if (length(miss.cols) > 0L) {
+        y.miss <- .na.data.from.schema(response.schema[miss.cols], nrow(y))
+        y <- data.frame(y, y.miss, check.names = FALSE, stringsAsFactors = FALSE)
+      }
+      y <- y[, wanted, drop = FALSE]
+      y <- .restore.schema(y, response.schema, restore.integer = TRUE)
+    }
+  }
+  if (!is.null(yvar.names) && length(yvar.names) > 0L) {
+    have <- intersect(yvar.names, names(y))
+    if (length(have) == length(yvar.names)) {
+      y <- y[, yvar.names, drop = FALSE]
+    }
+  }
+  x$yvar <- y
+  if (!is.null(yvar.names) && length(yvar.names) > 0L) {
+    x$yvar.names <- yvar.names
+  }
+  x
+}
+.supervised.materialize.aux <- function(x, family, oob = FALSE,
+                                        response.schema = NULL,
+                                        yvar.names = NULL) {
+  x <- .patch.supervised.prediction.object(
+    x,
+    family = family,
+    response.schema = response.schema,
+    yvar.names = yvar.names
+  )
+  if (isTRUE(oob)) {
+    if (family %in% c("regr+", "class+", "mix+")) {
+      getter <- .get.rfsrc.internal("get.mv.predicted")
+      if (is.null(getter)) {
+        stop("get.mv.predicted() is required to materialize supervised multivariate predictions.",
+             call. = FALSE)
+      }
+      pred <- getter(x, oob = TRUE)
+    }
+    else {
+      pred <- x$predicted.oob
+    }
+  }
+  else {
+    if (family %in% c("regr+", "class+", "mix+")) {
+      getter <- .get.rfsrc.internal("get.mv.predicted")
+      if (is.null(getter)) {
+        stop("get.mv.predicted() is required to materialize supervised multivariate predictions.",
+             call. = FALSE)
+      }
+      pred <- getter(x)
+    }
+    else {
+      pred <- x$predicted
+    }
+  }
+  out <- tryCatch(
+    data.frame(predicted = pred, check.names = FALSE),
+    error = function(e) e
+  )
+  if (inherits(out, "error")) {
+    stop("Failed to materialize supervised predicted values: ",
+         conditionMessage(out), call. = FALSE)
+  }
+  out
+}
+.align.supervised.aux <- function(aux, expected.names = NULL) {
+  aux <- as.data.frame(aux, check.names = FALSE, stringsAsFactors = FALSE)
+  if (ncol(aux) == 0L) {
+    stop("The supervised prediction block has no columns.", call. = FALSE)
+  }
+  for (nm in names(aux)) {
+    aux[[nm]] <- .as.numeric.safe(aux[[nm]])
+  }
+  if (is.null(expected.names)) {
+    return(aux)
+  }
+  if (length(expected.names) != ncol(aux)) {
+    stop("The supervised prediction block produced ", ncol(aux),
+         " column(s), but ", length(expected.names),
+         " were learned during training.", call. = FALSE)
+  }
+  names(aux) <- expected.names
+  aux[, expected.names, drop = FALSE]
+}
+.fill.supervised.aux <- function(aux, init) {
+  aux <- as.data.frame(aux, check.names = FALSE, stringsAsFactors = FALSE)
+  if (length(aux) == 0L) {
+    return(aux)
+  }
+  for (nm in names(aux)) {
+    x <- .as.numeric.safe(aux[[nm]])
+    bad <- !is.finite(x)
+    if (any(bad)) {
+      x[bad] <- as.numeric(init[[nm]] %||% NA_real_)
+    }
+    aux[[nm]] <- x
+  }
+  aux
+}
+.augment.predictor.map <- function(targets, predictor.map.raw, aux.names = NULL) {
+  predictor.map.raw <- predictor.map.raw[targets]
+  if (is.null(aux.names) || length(aux.names) == 0L) {
+    return(predictor.map.raw)
+  }
+  out <- lapply(targets, function(target) {
+    unique(c(predictor.map.raw[[target]], aux.names))
+  })
+  names(out) <- targets
+  out
+}
+.fast.load.named <- function(name, root, label = "saved object", strict = TRUE) {
+  .check.fst()
+  out <- tryCatch(
+    fast.load(name, root),
+    error = function(e) e
+  )
+  if (inherits(out, "error")) {
+    msg <- paste0("Failed to load ", label, " from ",
+                  file.path(root, name), ": ",
+                  conditionMessage(out))
+    if (isTRUE(strict)) {
+      stop(msg, call. = FALSE)
+    }
+    return(list(model = NULL, error = msg))
+  }
+  if (isTRUE(strict)) {
+    return(out)
+  }
+  list(model = out, error = NULL)
 }
 .resolve.predict.forest <- function(model) {
   if (is.null(model)) return(NULL)
@@ -252,6 +785,12 @@
   required.cols <- manifest$columns
   added.cols <- setdiff(required.cols, names(newdata))
   extra.cols <- setdiff(names(newdata), required.cols)
+  response.cols <- character(0)
+  if (.is.supervised.manifest(manifest) &&
+      !is.null(manifest$supervised$response.schema)) {
+    response.cols <- intersect(names(manifest$supervised$response.schema), extra.cols)
+  }
+  other.extra.cols <- setdiff(extra.cols, response.cols)
   if (length(added.cols) > 0L) {
     for (nm in added.cols) {
       newdata[[nm]] <- NA
@@ -259,8 +798,13 @@
     .msg("Added missing columns to newdata: ", paste(added.cols, collapse = ", "),
          verbose = verbose)
   }
-  if (length(extra.cols) > 0L) {
-    .msg("Dropping extra columns from newdata: ", paste(extra.cols, collapse = ", "),
+  if (length(response.cols) > 0L) {
+    .msg("Dropping supervised response columns from newdata: ",
+         paste(response.cols, collapse = ", "),
+         verbose = verbose)
+  }
+  if (length(other.extra.cols) > 0L) {
+    .msg("Dropping extra columns from newdata: ", paste(other.extra.cols, collapse = ", "),
          verbose = verbose)
   }
   newdata <- newdata[, required.cols, drop = FALSE]
@@ -292,6 +836,7 @@
     data = newdata,
     added.cols = added.cols,
     extra.cols = extra.cols,
+    response.cols = response.cols,
     unseen.levels = unseen.levels,
     unseen.mask = as.data.frame(unseen.mask, stringsAsFactors = FALSE),
     unseen.rows = if (nrow(newdata) == 0L) logical(0) else rowSums(unseen.mask) > 0L
@@ -324,16 +869,13 @@
     if (isTRUE(sc$is.factor)) {
       data[[nm]] <- .coerce.factor.levels(data[[nm]], sc$levels, ordered = sc$ordered)
     }
-    else if (isTRUE(sc$is.integer)) {
+    else if (.schema.restores.integer(sc)) {
       x <- .as.numeric.from.schema(data[[nm]], sc)
-      if (isTRUE(restore.integer)) {
-        xi <- as.integer(round(x))
-        xi[is.na(x)] <- NA_integer_
-        data[[nm]] <- xi
-      }
-      else {
-        data[[nm]] <- x
-      }
+      data[[nm]] <- .restore.integer.vector(
+        x,
+        .schema.integer.info(sc),
+        restore.integer = restore.integer
+      )
     }
     else {
       data[[nm]] <- .as.numeric.from.schema(data[[nm]], sc)
@@ -341,12 +883,38 @@
   }
   data
 }
-.extract.prediction <- function(pred, family, target.schema) {
+.na.data.from.schema <- function(schema, nrow) {
+  if (is.null(schema) || length(schema) == 0L) {
+    return(data.frame())
+  }
+  out <- setNames(vector("list", length(schema)), names(schema))
+  for (nm in names(schema)) {
+    sc <- schema[[nm]]
+    if (isTRUE(sc$is.factor)) {
+      out[[nm]] <- factor(rep(NA_character_, nrow),
+                          levels = sc$levels,
+                          ordered = sc$ordered)
+    }
+    else if (isTRUE(sc$is.integer) || isTRUE(sc$integer.storage)) {
+      out[[nm]] <- rep(NA_integer_, nrow)
+    }
+    else {
+      out[[nm]] <- rep(NA_real_, nrow)
+    }
+  }
+  data.frame(out, check.names = FALSE, stringsAsFactors = FALSE)
+}
+.extract.prediction <- function(pred, family, target.schema,
+                                restore.integer = TRUE) {
   if (is.null(pred)) return(NULL)
   if (identical(family, "regr")) {
     out <- pred$predicted
-    if (isTRUE(target.schema$is.integer)) {
-      out <- as.integer(round(out))
+    if (.schema.restores.integer(target.schema)) {
+      out <- .restore.integer.vector(
+        out,
+        .schema.integer.info(target.schema),
+        restore.integer = restore.integer
+      )
     }
     return(out)
   }
@@ -380,8 +948,12 @@
     return(rep(NA_real_, length(observed)))
   }
   out <- pred$predicted
-  if (isTRUE(target.schema$is.integer)) {
-    out <- as.integer(round(out))
+  if (.schema.restores.integer(target.schema)) {
+    out <- .restore.integer.vector(
+      out,
+      .schema.integer.info(target.schema),
+      restore.integer = TRUE
+    )
   }
   obs <- .as.numeric.from.schema(observed, target.schema)
   est <- .as.numeric.from.schema(out, target.schema)
@@ -869,6 +1441,7 @@
   if (!inherits(object, "impute.learn.rfsrc")) {
     stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
   }
+  object$manifest <- .normalize.impute.learn.manifest(object$manifest)
   if (!is.null(targets)) {
     bad.targets <- setdiff(targets, object$manifest$targets)
     if (length(bad.targets) > 0L) {
@@ -889,8 +1462,55 @@
   original.missing <- as.data.frame(is.na(data[, use.targets, drop = FALSE]))
   names(original.missing) <- use.targets
   data <- .apply.init(data, object$manifest$init, object$manifest$schema)
-  ## makes working copy of `data` look more like the training x-schema before iterative sweep
-  data <- .restore.schema(data, object$manifest$schema, restore.integer = TRUE)
+  ## make the raw working copy respect the training x-schema before the sweep
+  data <- .restore.schema(data, object$manifest$schema,
+                          restore.integer = restore.integer)
+  working.data <- data
+  supervised.info <- list(enabled = FALSE)
+  if (.is.supervised.manifest(object$manifest)) {
+    sup.info <- .predict.get.supervised.model(object)
+    if (is.null(sup.info$model)) {
+      stop(sup.info$error %||% "The supervised forest could not be loaded.",
+           call. = FALSE)
+    }
+    aux <- tryCatch(
+      {
+        pred.newdata <- .conform.x.to.forest(
+          data,
+          sup.info$model,
+          ignore.levels = TRUE
+        )
+        pred <- predict(sup.info$model, pred.newdata)
+        aux <- .supervised.materialize.aux(
+          pred,
+          family = object$manifest$supervised$family,
+          oob = FALSE,
+          response.schema = object$manifest$supervised$response.schema,
+          yvar.names = object$manifest$supervised$yvar.names
+        )
+        aux <- .align.supervised.aux(
+          aux,
+          expected.names = object$manifest$supervised$aux.names
+        )
+        .fill.supervised.aux(aux, object$manifest$supervised$aux.init)
+      },
+      error = function(e) e
+    )
+    if (inherits(aux, "error")) {
+      stop("Failed to compute supervised auxiliary predictors for newdata: ",
+           conditionMessage(aux), call. = FALSE)
+    }
+    working.data <- data.frame(data, aux, check.names = FALSE)
+    supervised.info <- list(
+      enabled = TRUE,
+      family = object$manifest$supervised$family,
+      aux.names = names(aux),
+      n.aux = ncol(aux),
+      response.names = names(object$manifest$supervised$response.schema %||% list()),
+      dropped.response.columns = harmonized$response.cols,
+      loaded.from.disk = isTRUE(sup.info$loaded.from.disk)
+    )
+  }
   pass.history <- numeric(0)
   sweep.order <- object$manifest$sweep.order
   sweep.order <- sweep.order[sweep.order %in% use.targets]
@@ -915,8 +1535,7 @@
         disk.load.targets <- c(disk.load.targets, target)
       }
       if (is.null(mdl.info$model) && !is.null(mdl.info$error)) {
-        record_issue <- mdl.info$error
-        record.issue(target, record_issue)
+        record.issue(target, mdl.info$error)
       }
     }
   }
@@ -950,7 +1569,7 @@
           next
         }
         xvars <- object$manifest$predictor.map[[target]]
-        pred.df <- data[miss.idx, xvars, drop = FALSE]
+        pred.df <- working.data[miss.idx, xvars, drop = FALSE]
         pred.df <- .conform.x.to.forest(pred.df, mdl)
         pred <- tryCatch(
           predict(mdl, pred.df),
@@ -963,8 +1582,14 @@
                verbose = verbose)
           next
         }
-        values <- .extract.prediction(pred, info$family, object$manifest$schema[[target]])
+        values <- .extract.prediction(
+          pred,
+          info$family,
+          object$manifest$schema[[target]],
+          restore.integer = restore.integer
+        )
         data[miss.idx, target] <- values
+        working.data[miss.idx, target] <- values
         if (identical(cache.learners, "none") && is.null(object$models[[target]])) {
           rm(mdl)
           gc()
@@ -988,9 +1613,11 @@
   }
   data <- .restore.schema(data, object$manifest$schema,
                           restore.integer = restore.integer)
+  working.data[names(data)] <- data
   target.issues <- target.issues[lengths(target.issues) > 0L]
   list(
     data = data,
+    working.data = working.data,
     use.targets = use.targets,
     harmonized = harmonized,
     cache.learners = cache.learners,
@@ -1001,11 +1628,13 @@
       targets = use.targets,
       added.columns = harmonized$added.cols,
       dropped.extra.columns = harmonized$extra.cols,
+      dropped.response.columns = harmonized$response.cols,
       unseen.levels = harmonized$unseen.levels,
       unseen.rows = harmonized$unseen.rows,
       cache.learners = cache.learners,
       n.disk.loads = length(disk.load.targets),
       disk.load.targets = unique(disk.load.targets),
+      supervised = supervised.info,
       target.issues = target.issues
     )
   )
@@ -1034,6 +1663,7 @@
   if (!inherits(object, "impute.learn.rfsrc")) {
     stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
   }
+  object$manifest <- .normalize.impute.learn.manifest(object$manifest)
   if (!is.null(cache.env) && exists(target, envir = cache.env, inherits = FALSE)) {
     return(list(
       model = get(target, envir = cache.env, inherits = FALSE),
@@ -1072,4 +1702,47 @@
        loaded.from.disk = !is.null(mdl),
        cached = !is.null(cache.env) && !is.null(mdl),
        error = loaded$error)
+}
+.predict.get.supervised.model <- function(object) {
+  if (!inherits(object, "impute.learn.rfsrc")) {
+    stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
+  }
+  object$manifest <- .normalize.impute.learn.manifest(object$manifest)
+  if (!.is.supervised.manifest(object$manifest)) {
+    return(list(
+      model = NULL,
+      loaded.from.disk = FALSE,
+      enabled = FALSE,
+      error = NULL
+    ))
+  }
+  if (!is.null(object$supervised.model)) {
+    return(list(
+      model = object$supervised.model,
+      loaded.from.disk = FALSE,
+      enabled = TRUE,
+      error = NULL
+    ))
+  }
+  if (is.null(object$path)) {
+    return(list(
+      model = NULL,
+      loaded.from.disk = FALSE,
+      enabled = TRUE,
+      error = "The supervised forest is not available in memory and no saved imputer path is attached to 'object'."
+    ))
+  }
+  learner.root <- file.path(object$path, object$manifest$learner.root)
+  loaded <- .fast.load.named(
+    name = object$manifest$supervised$model.name,
+    root = learner.root,
+    label = "supervised forest",
+    strict = FALSE
+  )
+  list(
+    model = loaded$model,
+    loaded.from.disk = !is.null(loaded$model),
+    enabled = TRUE,
+    error = loaded$error
+  )
 }

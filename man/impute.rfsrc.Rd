@@ -14,13 +14,15 @@
   nimpute = 2, fast = FALSE, blocks,
   mf.q, max.iter = 10, eps = 0.01,
   ytry = NULL, always.use = NULL, verbose = TRUE,
-  full.sweep = FALSE,
+  full.sweep = FALSE, restore.integer = TRUE,
   ...)
 }
 \arguments{
-  \item{formula}{A symbolic model description. Can be omitted if
-    outcomes are unspecified or if distinction between outcomes and
-    predictors is unnecessary. Ignored for missForest.}
+  
+  \item{formula}{A symbolic model description used to specify on the fly
+    imputation.  Can be omitted for unsupervised imputation in settings
+    where the outcomes are unspecified or if distinction between
+    outcomes and predictors is unnecessary. Ignored for missForest.}
 
   \item{data}{A data frame containing variables to be imputed.}
 
@@ -66,6 +68,15 @@
     covariates; predictions are then written back only to the originally
     missing cells. This can improve self-consistency across variables at
     the cost of extra computation.}
+
+  \item{restore.integer}{If \code{TRUE}, variables that were integer
+    supported in the original data are restored to the integer grid after
+    imputation. This includes columns stored as R integers and numeric
+    columns whose observed finite training values are all integer-valued.
+    Numeric columns remain numeric; returned values are rounded
+    to integer support. Columns stored as R integers are returned as
+    integer vectors. Set to \code{FALSE} to retain the raw numeric forest
+    predictions.}
 
   \item{...}{Additional arguments passed to or from methods.
     Recognized advanced options include \code{full.sweep.options} (a
@@ -123,6 +134,13 @@
   \code{ntree = 500}, \code{nodesize = NULL}, \code{nsplit = 10}, and
   can be customized via \code{full.sweep.options} passed through
   \code{...}. This applies to both standard and missForest modes.
+
+  \item If \code{restore.integer = TRUE}, integer support is detected
+  from the original retained data before imputation begins. Restoration
+  is applied after the missForest rough-fix initialization, before and
+  after the optional final sweep, and once more before returning the
+  completed data. The missForest iterative updates themselves are not
+  rounded between variable or block updates.
 
   }
 }
