@@ -13,9 +13,22 @@ subsample.rfsrc <- function(obj,
 {
   ##--------------------------------------------------------------
   ##
-  ## coherence checks
+  ## Validate the saved grow object before replaying its forest settings.
   ##
   ##--------------------------------------------------------------
+  ## Validate the outer replicate count without changing the treatment of
+  ## a one-replicate bank (its sample-SD summaries remain unavailable).
+  if (!is.numeric(B) || length(B) != 1L || !is.finite(B) ||
+      B < 1 || B != floor(B) || B > .Machine$integer.max) {
+    stop("'B' must be a positive integer.", call. = FALSE)
+  }
+  B <- as.integer(B)
+  flags <- list(stratify = stratify, performance = performance,
+                performance.only = performance.only, joint = joint,
+                bootstrap = bootstrap, verbose = verbose)
+  for (nm in names(flags)) {
+    .subsample.check.flag(flags[[nm]], nm)
+  }
   ## incoming object must be a grow forest
   if (sum(inherits(obj, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2) {
     stop("This function only works for objects of class `(rfsrc, grow)'")
@@ -27,32 +40,35 @@ subsample.rfsrc <- function(obj,
     }
   }
   if (inherits(obj, "anonymous")) {
-    stop("this function does work with anonymous forests")
+    stop("this function does not work with anonymous forests")
   }
   ##--------------------------------------------------------------
   ##
-  ## is this a multivariate family?
+  ## Multivariate families use unstratified outer subsampling.
   ##
   ##--------------------------------------------------------------
   fmly <- obj$family
   mv.fmly <- fmly == "regr+" || fmly == "class+" || fmly == "mix+" 
   ##--------------------------------------------------------------
   ##
-  ## set the sample size
-  ## set subratio (if not supplied)
-  ## confirm subratio is appropriately set
+  ## Set the nominal outer subsample fraction.
+  ## This is distinct from the per-tree sampsize function used within
+  ## each newly grown forest. The realized row count is not saved here.
   ##
   ##--------------------------------------------------------------
   n <- obj$n
   if (is.null(subratio)) {
     subratio <- get.subsample.subratio(n)
   }
-  if (!bootstrap && (subratio < 0 || subratio > 1)) {
-    stop("subratio must be between 0 and 1")
+  if (!bootstrap && (!is.numeric(subratio) || length(subratio) != 1L ||
+                     !is.finite(subratio) || subratio <= 0 || subratio > 1)) {
+    stop("'subratio' must be a finite number greater than zero and at most one.",
+         call. = FALSE)
   }
   ##--------------------------------------------------------------
   ##
-  ## extract random forest parmaters
+  ## Collect the settings explicitly replayed in each subsample forest.
+  ## This list does not reconstruct every possible option in the grow call.
   ##
   ##--------------------------------------------------------------
   ## list of parameters to be obtained from the grow object
@@ -82,24 +98,24 @@ subsample.rfsrc <- function(obj,
   rf.prms$call <- formula(rf.prms$call)
   names(rf.prms)[names(rf.prms) == "call"] <- "formula"
   names(rf.prms)[names(rf.prms) == "cause.wt"] <- "cause"
-  ## subsamping cannot be applied when case weights are non-standard
+  ## The outer sampling scheme requires equal case weights.
   if (!all(diff(rf.prms$case.wt) == 0)) {
     stop("subsampling is not permitted on forests grown under non-standard case weights")
   }
-  ## everthing is OK - nuke the case weights
+  ## Equal case weights can be omitted from the new grow calls.
   rf.prms$case.wt <- NULL
   ## need time.interest if this is a survival object
   if (fmly == "surv" || fmly == "surv-CR") {
     rf.prms$ntime <- obj$time.interest
   }
-  ## nuke xvar and split weighting if they are standard
+  ## Omit uniform predictor/split weights; retain nonuniform weights.
   if (all(diff(rf.prms$xvar.wt) == 0)) {
     rf.prms$xvar.wt <- NULL
   }
   if (all(diff(rf.prms$split.wt) == 0)) {
     rf.prms$split.wt <- NULL
   }
-  ## nuke nodedepth if it's standard
+  ## Omit the nonpositive sentinel for unrestricted tree depth.
   if (rf.prms$nodedepth <= 0) {
     rf.prms$nodedepth <- NULL
   }
@@ -107,22 +123,23 @@ subsample.rfsrc <- function(obj,
   if (!bootstrap && rf.prms$bootstrap != "by.root") {
     stop("subsampling is not permitted on grow objects where sampling is not 'by.root'")
   }
-  ## for subsampling we need to determine the subsampling tree sample size
-  ## this is now handled by forest$sampsize which is a function
+  ## The saved sampsize function is evaluated on each smaller data set.
+  ## It specifies the within-forest tree sample size, not the outer sample.
   ## for double bootstrapping we do NOT allow custom sampling for grow object
   if (bootstrap && rf.prms$bootstrap != "by.root") {
     stop("double bootstrapping is only permitted for breiman (bootstrap) forests")
   }
   else {
-    ##everything is OK - set bootstrap parameter to NULL for later custom bootstrap
-    ## leave $samptype and $sampsize in place to be used for making double bootstrap
+    ## Remove the explicit bootstrap setting. Ordinary refits use the
+    ## grow default; bootsample() constructs its own sampling protocol.
+    ## Retain samptype and sampsize for both paths.
     rf.prms$bootstrap <- NULL
   }
-  ## use uno weights?
+  ## Reuse the choice of Uno weighting, not the original row-wise weights.
   rf.prms$use.uno <- !is.null(obj$forest$uno.weights)
   ##--------------------------------------------------------------
   ##
-  ## performance only?  (user is requesting generalization error only)
+  ## Performance-only requests suppress VIMP and append just the error row.
   ##
   ##--------------------------------------------------------------
   if (performance.only) {
@@ -132,7 +149,8 @@ subsample.rfsrc <- function(obj,
   }
   ##--------------------------------------------------------------
   ##
-  ## call the bootstrap subroutine if double bootstrap was requested
+  ## Delegate double-bootstrap generation to bootsample(). Its extraction
+  ## method receives the returned vmpB bank through extract.subsample().
   ##
   ##--------------------------------------------------------------
   if (bootstrap) {
@@ -151,15 +169,17 @@ subsample.rfsrc <- function(obj,
   }
   ##--------------------------------------------------------------
   ##
-  ## extract data from the previously grown forest
-  ## set the dimension, pull the feature names
+  ## Reconstruct the row-level data used in outer subsampling.
+  ## This uses the saved response/predictor tables before any VIMP restore.
   ##
   ##--------------------------------------------------------------
-  dta <- data.frame(obj$yvar, obj$xvar)
+  dta <- data.frame(obj$yvar, obj$xvar, check.names = FALSE)
   colnames(dta)[1:length(obj$yvar.names)] <- obj$yvar.names
   ##--------------------------------------------------------------
   ##
-  ## call vimp to extract importance if not available in original object
+  ## Establish full-data reference VIMP before generating replicates.
+  ## Existing VIMP fixes the importance type and block size. Otherwise
+  ## restore VIMP on the saved trees with the requested settings.
   ##
   ##--------------------------------------------------------------
   if (!performance.only) {
@@ -184,7 +204,8 @@ subsample.rfsrc <- function(obj,
   }
   ##--------------------------------------------------------------
   ##
-  ## call joint vimp - reference vimp value for pure noise settings
+  ## Optionally append a joint-VIMP row for the selected predictor group.
+  ## This does not replace the individual-VIMP rows.
   ##
   ##--------------------------------------------------------------
   if (joint && !performance.only) {
@@ -193,7 +214,8 @@ subsample.rfsrc <- function(obj,
   }
   ##--------------------------------------------------------------
   ##
-  ## obtain performance value - used for error rate confidence intervals
+  ## Optionally append the full-data performance statistic as row "err".
+  ## get.mv.error(..., pretty = FALSE) preserves outcome-specific columns.
   ##
   ##--------------------------------------------------------------
   if (performance) {
@@ -202,17 +224,19 @@ subsample.rfsrc <- function(obj,
   }
   ##----------------------------------------------------------
   ##
-  ## subsampling loop for calculating VIMP confidence regions
+  ## Grow a new forest on each outer subsample and retain its statistics.
+  ## Resampling is at the observation level, not over the saved trees.
   ##
   ##----------------------------------------------------------
-  vmpS <- lapply(1:B, function(b) {
+  .subsample.require.reference(vmp)
+  vmpS <- lapply(seq_len(B), function(b) {
     ## progress bar
     if (verbose && B > 1) {
       custom.progress.bar(b, B)
     }
-    ## draw the subsample
-    ## use stratified sampling for classification/CR if requested (default)
-    ## stratified sampling not allowed for mv-families
+    ## Stratify univariate classification by label and survival/competing
+    ## risks by status (including censoring). Other paths sample all rows.
+    ## Integer allocation within strata can omit very small strata.
     if (!mv.fmly && stratify) {
       if (fmly == "class") {
         pt <- make.strat.sample(obj$yvar, subratio)
@@ -227,9 +251,19 @@ subsample.rfsrc <- function(obj,
     else {
       pt <- sample(1:n, size = (n * subratio), replace = FALSE)
     }
-    ## calculate VMP on the subsampled data
-    rf.b <-  do.call("rfsrc",
-                     c(list(data = dta[pt,, drop = FALSE], importance = importance), rf.prms))
+    if (length(pt) == 0L) {
+      stop("The subsample is empty. Increase 'subratio'.", call. = FALSE)
+    }
+    sample.data <- dta[pt, , drop = FALSE]
+    ## Survival refits require at least one observed event after the existing
+    ## omission step. This check does not change the sampled rows, the quotas,
+    ## or missing-data handling, and is not applied to classification.
+    if (fmly == "surv" || fmly == "surv-CR") {
+      .subsample.check.events(sample.data, obj$yvar.names, b)
+    }
+    ## calculate VIMP on the subsampled data using the existing grow defaults
+    rf.b <- do.call("rfsrc",
+                    c(list(data = sample.data, importance = importance), rf.prms))
     vmp.b <- get.mv.vimp(rf.b, FALSE, FALSE)
     if (joint && !performance.only) {
       vmp.b.joint <- get.mv.vimp(get.subsample.joint.vimp(rf.b, rf.prms, xvar.names), FALSE, FALSE)
@@ -239,25 +273,14 @@ subsample.rfsrc <- function(obj,
       err.b <- get.mv.error(rf.b, FALSE, FALSE)
       vmp.b <- vimp.subsample.combine(vmp.b, err.b, "err")
     }
-    ## combine
-    rO.b <- lapply(1:length(vmp), function(j) {
-      vmp.j <- vmp[[j]]
-      vmp.b.j <- vmp.b[[j]]
-      vmp.mtx <- data.frame(matrix(NA, nrow(vmp.j), ncol(vmp.j)))
-      rownames(vmp.mtx) <- rownames(vmp.j)
-      colnames(vmp.mtx) <- colnames(vmp.j)
-      if (ncol(vmp.b.j) == ncol(vmp.j)) {
-        vmp.mtx[rownames(vmp.b.j), ] <- vmp.b.j
-        vmp.b.j <- vmp.mtx
-      }
-      vmp.b.j
-    })
-    names(rO.b) <- names(vmp)
-    rO.b
+    ## Match outcome, statistic-row, and class/event-column identities to
+    ## the full-data reference. Extra replicate rows cannot expand it.
+    .subsample.align.vimp(vmp, vmp.b)
   })
   ##------------------------------------------------------------------
   ##
-  ## return the goodies
+  ## Return the full-data reference and B replicate statistic tables.
+  ## Interval construction is deferred to extraction/printing/plotting.
   ##
   ##------------------------------------------------------------------
   rO <- list(rf = obj, vmp = vmp, vmpS = vmpS, subratio = subratio, performance.only = performance.only)

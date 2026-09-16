@@ -1,3 +1,104 @@
+# randomForestSRC 3.8.0
+
+## Quantile regression
+
+* Renamed the default `quantreg()` method from `"local"` to
+  `"exchangeable"`, retaining `"local"` as an alias. Exchangeable and
+  forest-weighted quantiles and moments are now calculated directly from
+  the saved residual distribution. They no longer depend on the `maxn`
+  reporting grid, and quantiles can extend beyond the training-response
+  range.
+
+* Added `get.pinball.error()` for scoring selected probability levels,
+  observations, and continuous outcomes without refitting. Added
+  `quantreg.tau` controls for printed losses and optional plot annotations.
+
+* Quantile plots now include an empirical training-response null CRPS
+  curve by default, controlled by `crps.null`. Graphical arguments in
+  `...` now customize the main panel; use the new `inset.args` argument
+  for the CRPS inset. Improved subset handling and preservation of
+  multipanel graphics layouts.
+
+* Fixed prediction-time quantile probability alignment and default
+  Greenwald--Khanna tolerances for singleton or repeated-singleton
+  probability requests. Improved handling of selected multivariate
+  responses, missing predictions, and singleton output dimensions.
+
+## Imputation and out-of-distribution scoring
+
+* Improved validation of imputation inputs and controls, support for
+  tabular data containers and non-syntactic column names, and column
+  alignment in blocked imputation.
+
+* Integer restoration now rounds only generated imputations, preserving
+  observed fractional values. Corrected detection of integer-supported
+  variables and avoided integer conversion when it would lose information.
+
+* Learned-imputer saving now stages and reads back learners before
+  replacing an existing destination. Added path and learner-layout checks,
+  protection against overwriting a full learner bank with a loaded subset,
+  and recovery handling for failed replacements.
+
+* Training now reports partially failed learner banks and stops when no
+  target learner succeeds. Prediction preserves previous fills when an
+  update fails and reports convergence and failed-update diagnostics.
+  Added support for empty deployment tables and reporting of numeric
+  conversion failures.
+
+* Corrected OOD scoring of invalid class probabilities and discrepancies
+  above the training reference. Improved numerical stability for extreme
+  aggregation weights and powers.
+
+## Partial dependence and subsampling
+
+* Fixed partial-dependence extraction for multivariate and mixed outcomes,
+  singleton dimensions, factor codes, and competing-risk event selection.
+  `plot.variable()` now returns `partial.summary` with means, standard
+  deviations, standard errors, and finite prediction counts. Standard
+  errors consistently use the empirical spread and available row count.
+
+* Improved graphical argument handling and cached partial-plot reuse,
+  together with axis limits, labels, and horizontal layouts in
+  `plot.subsample()`.
+
+* Corrected nonparametric VIMP p-values to use the same centered
+  subsampling distribution as confidence intervals. Subsampling and
+  double-bootstrap summaries now align outcomes, predictors, and
+  class/event columns by name and preserve unavailable statistics.
+  Fixed performance-only double bootstrapping when the original forest
+  already contains VIMP, and singleton-stratum sampling.
+
+## Survival and classification performance
+
+* Added a training-data Kaplan--Meier null Brier reference to
+  `plotBrierAUC()`, enabled by default through `brier.null = TRUE`.
+  The reference uses the same evaluation rows and censoring weights as
+  the forest score.
+
+* Added `threshold = "auto"` and `threshold = "bayes"` to
+  `get.imbalanced.performance()`. Improved probability-column alignment,
+  consistent exclusion of unavailable outcomes and predictions, and
+  handling of zero-valued F-scores and threshold optimization.
+
+* Corrected AUC and Brier handling when scores are unavailable, and
+  preserved available multivariate errors when another response has no
+  error output.
+
+## Compatibility and documentation
+
+* Quantile grow objects now store numerical training residuals as
+  `residual` and `residual.oob`, also retained in the saved forest,
+  with source metadata recorded separately. These replace the legacy
+  `yvar.grow` and `res.grow` fields.
+
+* Normalize data-frame subclasses before training and prediction.
+  Removed the `lsos` export.
+
+* Added dedicated help topics for classification performance,
+  multivariate extraction, and fast save/load utilities. Expanded
+  documentation for quantile regression, imputation, partial dependence,
+  subsampling, and plotting.
+
 # randomForestSRC 3.7.0
 
 ## Survival prediction performance

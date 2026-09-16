@@ -8,6 +8,10 @@ rfsrc.anonymous <- function(formula, data, forest = TRUE, ...)
   #if (any(is.na(data))) {
     #stop("missing values not allowed in anonymous mode")
   #}
+  ## make sure we have a plain data frame
+  if (!identical(class(data), "data.frame")) {
+    data <- as.data.frame(data, optional = TRUE)
+  }
   ##--------------------------------------------------------------
   ##
   ## extract additional options specified by user

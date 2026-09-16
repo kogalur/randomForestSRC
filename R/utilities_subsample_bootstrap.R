@@ -11,7 +11,7 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names,
   ## set the dimensions, pull the feature names
   ##
   ##--------------------------------------------------------------
-  dta <- data.frame(obj$yvar, obj$xvar)
+  dta <- data.frame(obj$yvar, obj$xvar, check.names = FALSE)
   colnames(dta)[1:length(obj$yvar.names)] <- obj$yvar.names
   n <- nrow(obj$xvar)
   ##--------------------------------------------------------------
@@ -19,8 +19,11 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names,
   ## call vimp to extract importance if not available in original object
   ##
   ##--------------------------------------------------------------
-  vmp <- get.mv.vimp(obj, FALSE, FALSE)
+  ## Error-only bootstrapping must not inherit predictor rows from a forest
+  ## that already contains VIMP. The parent function's local vmp is separate.
+  vmp <- NULL
   if (!performance.only) {
+    vmp <- get.mv.vimp(obj, FALSE, FALSE)
     if (is.null(vmp)) {
       if (verbose) cat("no importance found: calculating it now ...\n")
       obj <- vimp(obj, perf.type = rf.prms$perf.type, block.size = block.size, importance = importance)
@@ -39,7 +42,7 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names,
   ##--------------------------------------------------------------
   if (joint && !performance.only) {
     vmp.joint <- get.mv.vimp(get.subsample.joint.vimp(obj, rf.prms, xvar.names), FALSE, FALSE)
-    vmp <- vimp.subsample.combine(vmp, vmp.joint)
+    vmp <- vimp.subsample.combine(vmp, vmp.joint, "joint")
   }
   ##--------------------------------------------------------------
   ##
@@ -55,7 +58,8 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names,
   ## bootstrap loop for calculating VIMP confidence regions
   ##
   ##----------------------------------------------------------
-  vmpB <- lapply(1:B, function(b) {
+  .subsample.require.reference(vmp)
+  vmpB <- lapply(seq_len(B), function(b) {
     ## progress bar
     if (verbose && B > 1) {
       custom.progress.bar(b, B)
@@ -77,27 +81,15 @@ bootsample <- function(obj, rf.prms, B, block.size, joint, xvar.names,
     vmp.b <- get.mv.vimp(rf.b, FALSE, FALSE)
     if (joint && !performance.only) {
       vmp.b.joint <- get.mv.vimp(get.subsample.joint.vimp(rf.b, rf.prms, xvar.names), FALSE, FALSE)
-      vmp.b <- vimp.subsample.combine(vmp.b, vmp.b.joint)
+      vmp.b <- vimp.subsample.combine(vmp.b, vmp.b.joint, "joint")
     }
     if (performance) {
       err.b <- get.mv.error(rf.b, FALSE, FALSE)
       vmp.b <- vimp.subsample.combine(vmp.b, err.b, "err")
     }
     ## combine
-    rO.b <- lapply(1:length(vmp), function(j) {
-      vmp.j <- vmp[[j]]
-      vmp.b.j <- vmp.b[[j]]
-      vmp.mtx <- data.frame(matrix(NA, nrow(vmp.j), ncol(vmp.j)))
-      rownames(vmp.mtx) <- rownames(vmp.j)
-      colnames(vmp.mtx) <- colnames(vmp.j)
-      if (ncol(vmp.b.j) == ncol(vmp.j)) {
-        vmp.mtx[rownames(vmp.b.j), ] <- vmp.b.j
-        vmp.b.j <- vmp.mtx
-      }
-      vmp.b.j
-    })
-    names(rO.b) <- names(vmp)
-    rO.b
+    ## Use the same response/row/column alignment as ordinary subsampling.
+    .subsample.align.vimp(vmp, vmp.b)
   })
   ## return the potentially updated forest object
   ## return the vimp 
@@ -114,21 +106,14 @@ extract.bootsample <- function(obj, alpha = .05, target = 0, m.target = NULL, st
   if (!sum(c(grepl("rfsrc", class(obj))), grepl("bootsample", class(obj))) == 2) {
     stop("this must be a double-bootstrap object obtained by calling the 'subsample' function")
   }
-  ## coerce the (potentially) multivariate rf object
+  .subsample.check.extract(alpha, target, standardize, raw)
+  ## Select saved outcome statistics; no prediction is requested here.
   m.target <- get.univariate.target(obj$rf, m.target)
   obj$rf <- coerce.multivariate(obj$rf, m.target)
-  ## coerce the (potentially) multivariate vimp object
-  if (is.null(m.target)) {
-    obj$vmpB <- lapply(obj$vmpB, data.frame)
-  }
-  else {
-    obj$vmpB <- lapply(obj$vmpB, function(oo) {
-      oo[[m.target]]
-    })
-  }  
-  ## extract vimp
-  theta.boot <- get.subsample.standardize.vimp(obj$rf, rbind(sapply(obj$vmpB, "[[", 1 + target)), standardize)
-  rownames(theta.boot) <- rownames(obj$vmp[[1]][, 1 + target, drop = FALSE])
+  ## Use the selected outcome's reference names, not the first outcome's.
+  selected <- .subsample.extract.bank(obj$vmp, obj$vmpB, m.target, target)
+  theta.boot <- get.subsample.standardize.vimp(obj$rf, selected$replicates, standardize)
+  rownames(theta.boot) <- rownames(selected$reference)
   ## bootstrap VIMP
   vmp.boot <- rowMeans(theta.boot, na.rm = TRUE)
   ## bootstrap standard error

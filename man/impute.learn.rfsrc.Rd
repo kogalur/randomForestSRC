@@ -35,12 +35,13 @@
   
   If \code{supervised.formula} is supplied, the function also fits an
   internal supervised forest from the training data.  The supervised
-  forest plays no role in the training imputation but is used downstream
-  to create auxiliary variables which are appended as predictors which
-  can improve test-time imputation and OOD scoring. Users who want only
-  the basic unsupervised learned imputer and do not want test time
-  contamination from outcomes should leave \code{supervised.formula}
-  unspecified.
+  forest is fit after training imputation and provides auxiliary
+  predictors for test-time imputation and OOD scoring. The auxiliary
+  predictors use supervised information learned from the training
+  outcomes. Supervised outcomes supplied with new data are dropped and
+  are not used at deployment time. Leave \code{supervised.formula}
+  unspecified to use the learned imputer without these auxiliary
+  predictors.
   
 }
 \usage{
@@ -104,7 +105,12 @@ impute.ood.rfsrc(object, newdata,
     raw predictor block is taken from the right-hand side of
     \code{supervised.formula}, and \code{formula} is not used.}
 
-  \item{data}{Training data. Variables that are not real-valued are
+  \item{data}{Training data, converted to a plain data frame before
+    processing. Matrices, tibbles, and \code{data.table} objects can be
+    supplied. Column names must be unique and nonempty, each column
+    must be a vector, and numeric values must be finite or missing.
+    Bare vectors and nested matrix or list columns are not supported.
+    Variables that are not real-valued are
     coerced to factors before fitting when possible; otherwise fitting
     stops with an error. Rows and columns that are entirely missing are
     dropped before training begins. If \code{supervised.formula} is
@@ -117,17 +123,28 @@ impute.ood.rfsrc(object, newdata,
     max.iter, ytry, always.use, verbose}{Arguments passed to
     \code{impute} for the initial training-data imputation. The
     argument \code{full.sweep} is controlled internally and should not
-    be supplied. The same \code{verbose}, \code{max.predict.iter},
+    be supplied. \code{fast} is also forwarded to the saved target
+    learners and, unless overridden by \code{supervised.args}, to the
+    supervised forest. \code{verbose} controls progress throughout
+    training, prediction, and scoring. The same \code{verbose}, \code{max.predict.iter},
     \code{eps}, and \code{cache.learners} controls are also used by
-    \code{predict.impute.learn} and \code{impute.ood}.}
+    \code{predict.impute.learn} and \code{impute.ood}.
+    Iteration and forest-size controls must be scalar integers in their
+    permitted ranges; \code{max.iter} must be at least one.}
 
-  \item{mf.q}{Controls the imputation engine used by \code{impute}. If
-    \code{mf.q = 1}, training uses standard \code{missForest}. If
-    \code{mf.q > 1}, training uses the multivariate \code{missForest}
-    generalization. If \code{mf.q} is omitted, the training imputation
-    follows the default behavior of \code{impute}.}
+  \item{mf.q}{Controls the imputation engine used by \code{impute}.
+    With \code{mf.q = 1} and \code{always.use = NULL}, targets are
+    updated one at a time using \code{missForest}. Other positive
+    settings use the multivariate \code{missForest} generalization;
+    a fraction below one controls the proportion of missing-data
+    variables grouped as responses, and a value above one specifies
+    their requested group size. A non-\code{NULL} \code{always.use}
+    selects the multivariate branch, including an empty vector or a
+    vector with no matching column names. If \code{mf.q} is omitted,
+    training uses on-the-fly imputation. The selected method is recorded
+    in \code{manifest$train.imputation}.}
 
-  \item{eps}{Convergence threshold. In \code{impute.learn} this
+  \item{eps}{Finite nonnegative convergence threshold. In \code{impute.learn} this
     controls the initial training-data imputation. In
     \code{predict.impute.learn} and \code{impute.ood} it controls early
     stopping for the prediction-time sweep.}
@@ -143,8 +160,15 @@ impute.ood.rfsrc(object, newdata,
     \code{impute.learn}. The supervised forest is fit internally after
     the raw predictor block has been completed. Its training out-of-bag
     \code{predicted} values and test-time \code{predicted} values are
-    appended internally as auxiliary predictors.  These auxiliary
-    predictors are internal and are not expected in \code{newdata}.}
+    appended internally as auxiliary predictors. Training auxiliary
+    values use out-of-bag predictions when available, with ordinary
+    forest predictions and training means used as fallbacks. At
+    deployment, auxiliary values are computed once from the initialized
+    raw predictors and held fixed during the imputation passes.
+    Predictors must be raw column names; non-syntactic names can be
+    enclosed in backticks. Interactions and transformations are not
+    supported. These auxiliary predictors are internal and are not expected in
+    \code{newdata}.}
   
   \item{supervised.args}{Optional named list of arguments passed to the
     internal supervised \code{rfsrc} fit. Entries for \code{formula},
@@ -154,13 +178,16 @@ impute.ood.rfsrc(object, newdata,
     top-level arguments such as \code{fast} and internally supplied
     defaults such as \code{perf.type = "none"}.}
 
-  \item{full.sweep.options}{A \code{list} of options used when fitting
-    the full sweep after the training data have been imputed.
-    Recognized entries include \code{ntree}, \code{nodesize},
+  \item{full.sweep.options}{A named \code{list} of options used when fitting
+    saved target learners after initial training-data imputation.
+    Defaults are \code{ntree = 100}, \code{nodesize = NULL}, and
+    \code{nsplit = 10}, independently of the corresponding settings
+    used for initial imputation. Recognized entries include \code{ntree}, \code{nodesize},
     \code{nsplit}, \code{mtry}, \code{splitrule}, \code{bootstrap},
     \code{sampsize}, \code{samptype}, \code{perf.type}, \code{rfq},
     \code{save.memory}, \code{importance}, and \code{proximity}.
-    Unknown entries are ignored with a warning.}
+    Unknown entries are ignored with a warning. Duplicate names produce
+    a warning, and the last entry for each name is used.}
 
   \item{target.mode}{Determines which raw variables receive a saved
     full-sweep learner. The default \code{"missing.only"} saves
@@ -198,7 +225,10 @@ impute.ood.rfsrc(object, newdata,
   \item{learner.prefix, learner.root}{Names used when writing saved
     full-sweep learners to disk. If \code{supervised.formula} is
     supplied, the internal supervised forest is saved under the same
-    learner root.}
+    learner root. \code{learner.root} must be a relative directory path
+    within the imputer directory. \code{learner.prefix} must be a single
+    file-name component. Absolute paths and parent-directory components
+    are not allowed.}
 
   \item{out.dir}{Optional output directory. If supplied and
     \code{save.on.fit = TRUE}, the manifest and the saved full-sweep
@@ -207,8 +237,10 @@ impute.ood.rfsrc(object, newdata,
     \code{fast.save}. If \code{supervised.formula} is supplied, the
     internal supervised forest is also saved there.}
 
-  \item{wipe}{If \code{TRUE}, removes an existing output directory
-    before writing a new one.}
+  \item{wipe}{If \code{TRUE}, replaces an existing output directory
+    after the new imputer has been written and verified. If \code{FALSE},
+    unrelated existing files are retained. Saving uses a temporary
+    bundle and requires additional disk space.}
 
   \item{keep.models}{If \code{TRUE}, keeps the fitted full-sweep
     learners in memory in the returned object. At least one storage mode
@@ -237,23 +269,38 @@ impute.ood.rfsrc(object, newdata,
   \item{object}{An object returned by \code{impute.learn} or
     \code{load.impute.learn}.}
 
-  \item{path}{Directory containing a saved imputer. Save and load
-    operations require the \pkg{fst} package because learners are read
-    and written with \code{fast.save} and \code{fast.load}.}
+  \item{path}{Directory containing a saved imputer. Use a dedicated
+    directory rather than a filesystem root, home directory, working
+    directory, or an ancestor of these. A complete bank can be saved
+    back to its source path. Otherwise, source and destination directories
+    must not contain one another. An object loaded with a target subset
+    must be saved to a different directory. Save and load operations
+    require the \pkg{fst} package because learners are read and written
+    with \code{fast.save} and \code{fast.load}.}
 
   \item{targets}{Optional subset of target variables to load, update,
     or score. Unknown names are ignored with a warning. For
     \code{impute.ood}, row-level percentile calibration is rebuilt for
     the requested target subset from the saved target-wise training OOD
-    scores whenever those scores are available in the manifest.}
+    scores whenever those scores are available in the manifest.
+    A load-time subset limits which learners are available for predictor
+    completion. It can therefore differ from scoring a subset of a fully
+    loaded bank when other predictors are missing.}
 
   \item{lazy}{If \code{TRUE}, saved learners are loaded only when they
     are needed. If \code{FALSE}, all saved learners are loaded at once.
     If \code{supervised.formula} was used at fit time, the internal
     supervised forest follows the same lazy versus eager loading rule.}
 
-  \item{newdata}{New data to be imputed or scored. Missing columns are
-    added and extra columns are dropped to match the training schema.
+  \item{newdata}{New data to be imputed or scored, converted to a
+    plain data frame before processing. The column-name and vector-column
+    requirements for \code{data} also apply. Missing columns are added
+    and extra columns are dropped to match the training schema. A zero-row
+    table returns correctly typed empty output without calling forests.
+    Retained numeric values must be finite or missing. Nonmissing values
+    that cannot be converted to a required numeric type become missing
+    with a warning; their row indices are recorded in
+    \code{conversion.issues}.
     Unseen factor levels are converted to \code{NA} for harmonization,
     but they are also tracked row-wise. In supervised mode,
     \code{newdata} should contain only the raw predictor columns learned
@@ -272,14 +319,23 @@ impute.ood.rfsrc(object, newdata,
 
   \item{max.predict.iter}{Maximum number of full-sweep passes applied to
     \code{newdata} before the saved learner bank is used for OOD
-    reconstruction or returned prediction-time imputations.}
+    reconstruction or returned prediction-time imputations. Must be a
+    nonnegative integer. Zero performs initialization without iterative
+    target updates; OOD reconstruction is still performed.}
 
-  \item{restore.integer}{If \code{TRUE}, integer-supported variables
-    in the returned data are restored to the integer grid. This includes
-    columns stored as R integers and numeric columns whose observed
-    finite training values were all integer-valued. Numeric columns
-    remain numeric; returned values are rounded to integer support.
-    Columns stored as R integers are returned as integer vectors.
+  \item{restore.integer}{If \code{TRUE}, generated imputations in
+    integer-supported variables are rounded to the integer grid. This
+    includes columns stored as R integers and numeric columns whose
+    observed finite training values were all integer-valued. Observed
+    numeric values in \code{newdata} are preserved, including fractional
+    values, both as predictors during imputation and in the returned data.
+    Restoration applies to initialization values and model-based updates.
+    Numeric training columns retain numeric storage. Columns stored as
+    R integers during training are returned as integer vectors only when
+    every nonmissing completed value is exactly integral and within R's
+    integer range; otherwise numeric storage preserves observed fractions
+    and out-of-range values. Set to \code{FALSE} to retain unrounded
+    generated numeric values.
     Factor columns are always conformed back to the training schema.
     The package operates on real-valued and factor variables;
     inputs that are not real-valued are coerced to factors during
@@ -309,13 +365,14 @@ impute.ood.rfsrc(object, newdata,
   \item{aggregate}{Row-level aggregation metric used by
     \code{impute.ood} to combine calibrated target-wise OOD scores. The
     default \code{"bounded.product"} applies a weighted product of
-    the form \eqn{1-\prod_j (1-u_j+\varepsilon)^{\tilde w_j}} where
-    \eqn{u_j} are row level calibrated scores for target feature
-    \eqn{j}. \code{"weighted.mean"} is the weighted
+    the form \eqn{1-\prod_j \max(1-u_j,\varepsilon)^{\tilde w_j}},
+    where \eqn{u_j} is the calibrated score for target \eqn{j} and
+    \eqn{\tilde w_j} denotes weights normalized over the positively
+    weighted, scoreable targets in the row. \code{"weighted.mean"} is the weighted
     average. \code{"weighted.lp"} applies a weighted Minkowski \eqn{L_p}
     aggregation to the calibrated target scores.
     \code{"weighted.lp.log"} first applies the tail-stretching transform
-    \eqn{-\log(1-u_j+\varepsilon)} to each calibrated target score
+    \eqn{-\log\{\max(1-u_j,\varepsilon)\}} to each calibrated target score
     \eqn{u_j} and then applies the weighted \eqn{L_p}
     aggregation. \code{"top.k"} averages only the \eqn{k} largest
     scoreable target scores among the positively weighted targets. When
@@ -323,13 +380,13 @@ impute.ood.rfsrc(object, newdata,
     \code{score.percentile} is rebuilt for the requested aggregate as
     well as the requested targets and weights.}
 
-  \item{aggregate.args}{Optional list of tuning arguments for
+  \item{aggregate.args}{Optional named list of tuning arguments for
     \code{aggregate}. Recognized entries are \code{p} for
     \code{"weighted.lp"} and \code{"weighted.lp.log"}, \code{k}
     (or \code{top.k}) for \code{"top.k"}, and \code{eps} for
     \code{"weighted.lp.log"} and \code{"bounded.product"}. The
     default values are \code{p = 2}, \code{k = 1}, and
-    \code{eps = 1e-12}. Unknown entries are ignored with a warning.}
+    \code{eps = 1e-12}.}
 
   \item{return.details}{If \code{TRUE}, \code{impute.ood} returns the
     per-target discrepancy and calibrated target-score matrices and a
@@ -354,9 +411,10 @@ impute.ood.rfsrc(object, newdata,
   If the resulting training data contain missing values, the first stage
   uses \code{impute} as the imputation engine to complete the training
   data.  Options are specified exactly as in \code{impute}.  In
-  particular, \code{mf.q = 1} gives standard \code{missForest},
-  \code{mf.q > 1} gives the multivariate \code{missForest}
-  generalization, and if \code{mf.q} is omitted, on the fly imputation
+  particular, \code{mf.q = 1} with \code{always.use = NULL}
+  updates one target at a time, other positive settings give the
+  multivariate \code{missForest} generalization, and if \code{mf.q}
+  is omitted, on the fly imputation
   is used if \code{formula} is specified, otherwise default unsupervised
   imputation is used. If the training data are already complete and
   \code{target.mode = "all"}, this initial imputation step is skipped.
@@ -364,8 +422,10 @@ impute.ood.rfsrc(object, newdata,
   In the second stage, a full forest sweep is fit on the completed
   training data. For each target selected by \code{target.mode}, rows
   where that target was observed are used to fit a forest with that
-  target on the left-hand side and the selected deployment predictors on
-  the right-hand side are specified by \code{deployment.xvars}.
+  target on the left-hand side and the predictors selected by
+  \code{deployment.xvars} on the right-hand side. These saved forests
+  all use the same completed training table; fitting the learner bank
+  does not further update that table.
 
   By default, \code{deployment.xvars = NULL} allows every non-target
   column to be used as a predictor. This is convenient, but it can also
@@ -398,7 +458,16 @@ impute.ood.rfsrc(object, newdata,
   load operations. The explicit save method can write learners either
   from memory or by reloading them from an attached saved path. If
   \code{supervised.formula} is used, the internal supervised forest is
-  saved alongside the target-wise learner bank.
+  saved alongside the target-wise learner bank. Both training-time and
+  explicit saving write and read back the new learners before replacing
+  an existing destination. A failed staging operation leaves the previous
+  saved imputer unchanged. If replacement fails, restoration of the
+  previous directory is attempted; an unrecovered backup path is reported.
+
+  Training stops if every requested target learner fails. A partial bank
+  is returned with one summary warning when some learners succeed.
+  \code{manifest$learners} records each target's status and error,
+  and printing the imputer reports successful and unavailable learners.
 
   Prediction starts by matching \code{newdata} to the training schema,
   filling missing values with training means or modes, and then applying
@@ -406,10 +475,15 @@ impute.ood.rfsrc(object, newdata,
   \code{target.mode} are updated by saved learners. In supervised mode,
   this same test-time preparation first initializes the raw predictor
   table, then computes the internal auxiliary variables from the saved
-  supervised forest, and then runs the forest test-time sweep.
+  supervised forest, and then runs the forest test-time sweep. The
+  auxiliary predictors remain fixed throughout these passes.
   Supervised response columns, if present in \code{newdata} but not in
   the learned raw predictor block, are dropped before this step and play
-  no role at prediction or scoring time.
+  no role at prediction or scoring time. A target update requires one
+  valid prediction per requested row. Failed or unavailable predictions
+  retain the preceding imputed values and are recorded in
+  \code{target.issues}. A pass with no valid model updates is reported
+  separately from convergence.
 
   If \code{target.mode = "missing.only"}, a variable that was complete
   in training but missing in new data is initialized from the training
@@ -424,7 +498,10 @@ impute.ood.rfsrc(object, newdata,
   fitted learner is compared with the observed training value to form a
   target-wise reconstruction discrepancy. Continuous and integer targets
   use absolute reconstruction error. Factor targets use negative log
-  predictive probabilities.
+  predictive probabilities. Unavailable or invalid probabilities remain
+  missing discrepancies; a genuine zero probability is scored using
+  the probability floor. Each learner entry records \code{n.oob.finite}
+  and \code{n.oob.nonfinite} when OOD reference construction is enabled.
   
   The row-level OOD calibration stored at fit time is built by
   aggregating the target-wise training scores with a weighted mean using
@@ -442,7 +519,11 @@ impute.ood.rfsrc(object, newdata,
   \code{newdata}. If a scored raw target is missing in a row, that
   target does not contribute to that row's OOD score. Raw target
   discrepancies are converted to target-wise OOD scores using the saved
-  target-specific training references. In supervised mode, auxiliary
+  target-specific training references. Discrepancies strictly above a
+  nonempty reference's maximum, including positive infinity, receive its
+  largest stored probability. The existing convention for ties is retained,
+  including equality at the largest quantile. Missing discrepancies and
+  empty references remain unscored. In supervised mode, auxiliary
   variables participate as predictors in the reconstruction, but the
   supervised response itself is not used at deployment time.
 
@@ -490,13 +571,24 @@ impute.ood.rfsrc(object, newdata,
   \code{load.impute.learn} returns an object of the same class.
 
   \code{predict.impute.learn} returns a data frame with imputed values
-  overlaid on the raw predictor table. An attribute named
+  overlaid on the raw predictor table, retaining its row names. An attribute named
   \code{"impute.learn.info"} contains prediction-time diagnostics such
   as the number of sweep passes, pass-difference history, caching mode,
   disk-load counts, schema harmonization details, dropped supervised
   response columns when present, row-wise unseen-factor flags,
   supervised-auxiliary diagnostics when present, and any targets
   skipped because a learner was unavailable or a prediction failed.
+  \code{pass.updated.cells} and \code{pass.failed.cells} count accepted
+  updates and failed updates in each pass; \code{converged} and
+  \code{stopping.reason} distinguish convergence from initialization-only,
+  empty-input, iteration-limit, and failed-update stopping.
+  \code{conversion.issues} records the row indices of nonmissing values
+  that became missing during numeric conversion. In both prediction and
+  OOD diagnostics, \code{n.disk.loads} counts successful target-learner
+  load operations, including repeated loads with \code{cache.learners = "none"}.
+  \code{disk.load.targets} lists the distinct targets loaded. Supervised
+  forest loading is reported separately in \code{info$supervised} and is
+  not included in the target-learner count.
 
   \code{impute.ood} returns an object of class
   \code{c("impute.ood.rfsrc", "impute.ood")}. It is a list with the
@@ -505,8 +597,7 @@ impute.ood.rfsrc(object, newdata,
     \item \code{score}: the row-level aggregate of calibrated
       target-wise OOD scores under the requested \code{aggregate} and
       \code{weight}. Larger values indicate greater
-      out-of-distribution behavior. For \code{aggregate = "weighted.lp.log"},
-      this raw score is on a positive unbounded scale.
+      out-of-distribution behavior.
     \item \code{score.percentile}: the percentile of \code{score}
       relative to a row-level training reference rebuilt from the saved
       target-wise training OOD scores for the requested targets,
@@ -520,6 +611,17 @@ impute.ood.rfsrc(object, newdata,
     \item \code{target.delta}: optional matrix of raw target-wise
       reconstruction discrepancies, returned when
       \code{return.details = TRUE}.
+    \item \code{target.reconstruction}: when
+      \code{return.reconstruction = TRUE}, a data frame containing
+      the saved learners' predictions for the scored targets.
+    \item \code{reconstructed.data}: when
+      \code{return.reconstruction = TRUE}, the harmonized raw table
+      with scored targets replaced by their reconstructions. Other
+      columns retain their harmonized values before schema restoration.
+    \item \code{completed.data}: when both \code{return.details}
+      and \code{return.reconstruction} are \code{TRUE}, the raw
+      predictor table after prediction-time imputation. This is distinct
+      from the target reconstruction table.
     \item \code{info}: a list of diagnostics including harmonization
       details, dropped supervised response columns when present,
       row-wise unseen-factor flags, learner-loading information,

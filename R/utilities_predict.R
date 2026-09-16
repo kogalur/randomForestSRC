@@ -1,193 +1,199 @@
-## --------------------------------------------------------------------------------------------
-##
-## extraction function when partial=FALSE
-##
-## --------------------------------------------------------------------------------------------
-extract.pred <- function(obj, type, subset, time, m.target, target, oob = oob) {
-  ## coerce the (potentially) multivariate object if necessary.
-  obj <- coerce.multivariate(obj, m.target)
-  ## extract the sample size, assign the default subset
-  if (missing(subset)) {
-    subset <- 1:obj$n
-  }
-  n <- length(subset)
-  ## decide if OOB or in-bag values are requested
-  if (oob == FALSE) {
-    if (is.null(obj$predicted)) {
-      stop("inbag requested but inbag values are not available in the object")
+## ------------------------------------------------------------------
+## Shared R-side validation for partial and variable-plot extraction.
+## These helpers do not select native response slots or change forests.
+## ------------------------------------------------------------------
+.plot.variable.subset <- function(subset, n) {
+  if (is.null(subset)) return(seq_len(n))
+  if (is.logical(subset)) {
+    if (length(subset) != n) {
+      stop("a logical 'subset' must have one entry per stored observation")
     }
-    pred <- obj$predicted
-    surv <- obj$survival
-    chf <- obj$chf
-    cif <- obj$cif
+    subset <- which(subset)
   }
   else {
-    if (is.null(obj$predicted.oob)) {
-      stop("oob requested but oob values are not available in the object")
+    if (!is.numeric(subset) || !is.null(dim(subset))) {
+      stop("'subset' must be a numeric or logical vector")
     }
-    pred <- obj$predicted.oob
-    surv <- obj$survival.oob
-    chf <- obj$chf.oob
-    cif <- obj$cif.oob
+    subset <- subset[is.finite(subset)]
+    if (any(subset != floor(subset))) {
+      stop("numeric 'subset' entries must be integer row indices")
+    }
+    subset <- unique(subset[subset >= 1 & subset <= n])
   }
-  ## Survival and competing risk families.
-  if (grepl("surv", obj$family)) {
-    ## Competing risks:
-    if (obj$family == "surv-CR") {
-      ## Default is first event type.
-      if (missing(target)) target <- 1
-      type <- match.arg(type, c("years.lost", "cif", "chf"))
-      ## Get the index of the closest point of the grow time interest vector.
-      time.idx <-  max(which(obj$time.interest <= time))
-      return(switch(type,
-                    "years.lost" = pred[subset, target],
-                    "cif"        = cif[subset, time.idx, target],
-                    "chf"        = chf[subset, time.idx, target]
-                    ))
-    }
-    ## Right-censored:
-    else {
-      type <- match.arg(type, c("rel.freq", "mort", "chf", "surv"))
-      ## Get the index of the closest point of the grow time interest vector.
-      time.idx <-  max(which(obj$time.interest <= time))
-      return(switch(type,
-                    "rel.freq" = pred[subset]/max(n, na.omit(pred)),
-                    "mort"     = pred[subset],
-                    "chf"      = 100 * chf[subset, time.idx],
-                    "surv"     = 100 * surv[subset, time.idx]
-                    ))
-    }
-  }
-  ## The object has been coerced.  It will be univariate.
-  else {
-    if (obj$family == "class") {
-      type <- match.arg(type, c("bayes", "rfq", "prob"))
-      ## The default is first class label.
-      if (missing(target)) target <- 1
-      ## extract the subsetted values
-      prob <- pred[subset,, drop = FALSE]
-      y <- obj$yvar[subset]
-      ## rfq only permitted in two class problems
-      if (type == "rfq" && nlevels(y) != 2) {
-        type <- "bayes"
-      }
-      ## return the requested performance
-      return(switch(type,
-                    "bayes" =  get.bayes.rule(prob),
-                    "rfq"   =  get.gmean.rule(y, prob),
-                    "prob"  =  prob[, target]))
-    }
-    else {
-      return(pred[subset])
-    }
-  }
+  if (!length(subset)) stop("'subset' does not select any stored observations")
+  as.integer(subset)
 }
-## --------------------------------------------------------------------------------------------
-##
-## extraction function when partial=TRUE
-## Note that currently only one (1) time point is requested via the
-## plot.variable() R-wrapper.  Only one (1) is allowed.
-## Additional time points can be specified
-## using the partial.rfsrc() wrapper, and then extracted without any
-## additional calls to the native code.  The extract call
-## is limited to only one (1) time point on each call.
-## The same protocol holds for m.target.
-##
-## --------------------------------------------------------------------------------------------
-extract.partial.pred <- function(obj, type, subset, m.target, target) {
-  ## Survival families
-  if (grepl("surv", obj$family)) {
-    ## extract the sample size, assign the default subset
-    if (missing(subset)) {
-      subset <- 1:obj$n
-    }
-    n <- length(subset)
-    ## array dimension
-    time.idx <-  1
-    ## Competing risks:
-    if (obj$family == "surv-CR") {
-      ## Default is first event type.
-      if (missing(target)) target <- 1
-      type <- match.arg(type, c("years.lost", "cif", "chf"))
-      return(switch(type,
-                    "years.lost" = obj$survOutput[subset, target, ],
-                    "cif" = obj$survOutput[subset, time.idx, target, ],
-                    "chf" = obj$survOutput[subset, time.idx, target, ]
-                    ))
-    }
-    ## Right censored:
-      else {
-        if (type == "rel.freq") {
-          sz <- apply(obj$survOutput[subset, ], 2, function(x) {length(na.omit(x))})
-          rs <- t(apply(obj$survOutput[subset, ], 1, function(x) {x / sz}))
-        }
-        return(switch(type,
-                      "rel.freq" = rs,
-                      "mort"     = obj$survOutput[subset, ],
-                      "chf"      =  obj$survOutput[subset, time.idx, ],
-                      "surv"     =  obj$survOutput[subset, time.idx, ]
-                      ))
-      }
+## Resolve a class label or an array position, retaining the original order.
+.plot.variable.target <- function(target, labels, what = "target") {
+  if (is.null(target)) return(1L)
+  if (length(target) != 1L || is.na(target)) {
+    stop("'", what, "' must select one value")
   }
-    else {
-      ## Univariate and multivariate families:
-      ## The incoming partial object is always presented in a mulitvariate list, regardless of whether
-      ## the grow object was univariate or multivariate.  There is no coersion.  In a multivariate case,
-      ## m.target is coherent.  But in a univariate case, it will be NULL.  As a result, we
-      ## accomodate for the NULL case by grabbing the first (and actually only) valid output below, in
-      ## order to parse the multivariate list correctly.
-      ## We are either classification or regression but we don't know which yet.
-      regrClassTarget <- NULL
-      ## It doesn't matter whether we process regression or classification first.
-      ## But one and only one family will be processed.
-      if (is.null(regrClassTarget)) {
-        if (!is.null(obj$classOutput)) {
-          if (is.null(m.target)) {
-            ## Grab the first outcome!  It will exist, as this is the univariate case.
-            m.target <- names(obj$classOutput)[1]
-          }
-          regrClassTarget <- which(names(obj$classOutput) == m.target)
-          ## Classification.
-          if (length(regrClassTarget) > 0) {
-            if (length(regrClassTarget) > 1) {
-              ## Safety check in case m.target was incorrect coming into this routine.
-              stop("Invalid number of target outcomes specified in partial plot extraction.")
-            }
-            type <- match.arg(type, c("prob", "bayes"))
-            ## Default is first class label.
-            if (missing(target)) target <- 1
-            n <- dim(obj$classOutput[[regrClassTarget]])[1]
-            if (missing(subset)) subset <- 1:n
-            return(switch(type,
-                          "prob" = obj$classOutput[[regrClassTarget]][subset, 1 + target, ],
-                          "bayes" =  obj$classOutput[[regrClassTarget]][subset, 1, ]))
-          }
-        }
-      }
-      ## It doesn't matter whether we process regression or classification first.
-      ## But one and only one family will be processed.
-      if (is.null(regrClassTarget)) {
-        if (!is.null(obj$regrOutput)) {
-          if (is.null(m.target)) {
-            ## Grab the first outcome!  It will exist, as this is the univariate case.
-            m.target <- names(obj$regrOutput)[1]
-          }
-          regrClassTarget <- which (names(obj$regrOutput) == m.target)
-          ## Regression.
-          if (length(regrClassTarget) > 0) {
-            if (length(regrClassTarget) > 1) {            
-              ## Safety check in case m.target was incorrect coming into this routine.
-              stop("Invalid number of target outcomes specified in partial plot extraction.")
-            }
-            n <- dim(obj$classOutput[[regrClassTarget]])[1]
-            if (missing(subset)) subset <- 1:n
-            return(obj$regrOutput[[regrClassTarget]][subset, ])
-          }
-        }
-      }
-      ## If after parsing both classification and regression we have not found the target, we error.
-      if (is.null(regrClassTarget)) {
-        stop("Invalid target specified in partial plot extraction:  ", m.target)
-      }
+  if (is.character(target)) {
+    target <- match(match.arg(target, as.character(labels)), as.character(labels))
+  }
+  if (!is.numeric(target) || !is.finite(target) ||
+      target != floor(target) || target < 1L || target > length(labels)) {
+    stop("'", what, "' must be a valid label or an index from 1 to ", length(labels))
+  }
+  as.integer(target)
+}
+## A time-dependent output uses the last stored time at or before a request.
+## Do not call this for mortality or years lost, which have no time axis.
+.partial.time.index <- function(times, grid, name = "partial.time", single = FALSE) {
+  if (!is.numeric(grid) || !length(grid) || any(!is.finite(grid)) ||
+      is.unsorted(grid)) {
+    stop("the forest does not contain a valid ordered time.interest grid")
+  }
+  if (!is.numeric(times) || !is.null(dim(times)) || !length(times) ||
+      any(!is.finite(times)) || (single && length(times) != 1L)) {
+    stop("'", name, "' must contain ", if (single) "one finite time" else "finite evaluation times")
+  }
+  if (any(times < grid[1L])) {
+    stop("'", name, "' must not precede the first stored time (", grid[1L],
+         "). Select a time from the forest's time.interest grid.")
+  }
+  findInterval(times, grid)
+}
+## Drop only selected class/event/time axes, never the row or grid axes.
+.partial.matrix <- function(x, n, k) {
+  if (length(x) != n * k) {
+    stop("partial predictions do not match the observation and grid dimensions")
+  }
+  matrix(x, nrow = n, ncol = k)
+}
+## A partial object always keeps named lists, including univariate fits.
+.partial.response <- function(obj, m.target = NULL) {
+  values <- c(obj$classOutput, obj$regrOutput)
+  available <- names(values)[!vapply(values, is.null, logical(1L))]
+  if (!length(available)) stop("no response predictions are available in the partial object")
+  if (is.null(m.target)) {
+    candidates <- intersect(obj$yvar.names, available)
+    m.target <- if (length(candidates)) candidates[1L] else available[1L]
+  }
+  else {
+    if (!is.character(m.target) || length(m.target) != 1L || is.na(m.target)) {
+      stop("'m.target' must select one response name")
     }
+    m.target <- match.arg(m.target, available)
+  }
+  pdta <- values[[m.target]]
+  if (is.null(dim(pdta)) || !length(dim(pdta))) {
+    stop("partial response predictions do not have array dimensions")
+  }
+  list(name = m.target, values = pdta,
+       classification = m.target %in% names(obj$classOutput))
+}
+## ------------------------------------------------------------------
+## Extract ordinary predictions for marginal variable plots.
+## OOB selection remains strict: absent OOB output is not replaced by
+## full-ensemble predictions. Preserve the existing display scales.
+## ------------------------------------------------------------------
+extract.pred <- function(obj, type, subset, time, m.target, target, oob = TRUE) {
+  if (missing(m.target)) m.target <- NULL
+  m.target <- get.univariate.target(obj, m.target)
+  obj <- coerce.multivariate(obj, m.target)
+  subset <- .plot.variable.subset(if (missing(subset)) NULL else subset, obj$n)
+  n <- length(subset)
+  if (!is.logical(oob) || length(oob) != 1L || is.na(oob)) {
+    stop("'oob' must be TRUE or FALSE")
+  }
+  suffix <- if (oob) ".oob" else ""
+  pred <- obj[[paste0("predicted", suffix)]]
+  surv <- obj[[paste0("survival", suffix)]]
+  chf <- obj[[paste0("chf", suffix)]]
+  cif <- obj[[paste0("cif", suffix)]]
+  if (is.null(pred)) {
+    stop(if (oob) "oob requested but oob values are not available in the object" else
+           "inbag requested but inbag values are not available in the object")
+  }
+  target.arg <- if (missing(target)) NULL else target
+  if (obj$family == "surv-CR") {
+    type <- match.arg(type, c("years.lost", "cif", "chf"))
+    target <- .plot.variable.target(target.arg, seq_len(ncol(pred)))
+    if (type == "years.lost") return(pred[subset, target])
+    time.idx <- .partial.time.index(if (missing(time)) NULL else time,
+                                     obj$time.interest, "time", single = TRUE)
+    values <- if (type == "cif") cif else chf
+    if (is.null(values)) stop("requested survival predictions are unavailable")
+    return(as.vector(values[subset, time.idx, target, drop = FALSE]))
+  }
+  if (obj$family == "surv") {
+    type <- match.arg(type, c("rel.freq", "mort", "chf", "surv"))
+    if (type == "mort") return(pred[subset])
+    if (type == "rel.freq") return(pred[subset] / max(n, na.omit(pred)))
+    time.idx <- .partial.time.index(if (missing(time)) NULL else time,
+                                     obj$time.interest, "time", single = TRUE)
+    values <- if (type == "surv") surv else chf
+    if (is.null(values)) stop("requested survival predictions are unavailable")
+    ## Preserve the existing marginal survival/CHF percentage-scale output.
+    return(100 * as.vector(values[subset, time.idx, drop = FALSE]))
+  }
+  if (grepl("surv", obj$family)) stop("this survival family is not supported by variable plotting")
+  if (obj$family == "class") {
+    type <- match.arg(type, c("bayes", "rfq", "prob"))
+    prob <- pred[subset, , drop = FALSE]
+    y <- obj$yvar[subset]
+    if (type == "rfq" && nlevels(y) != 2L) type <- "bayes"
+    if (type == "bayes") return(get.bayes.rule(prob))
+    if (type == "rfq") return(get.gmean.rule(y, prob))
+    target <- .plot.variable.target(target.arg, colnames(prob))
+    return(prob[, target])
+  }
+  pred[subset]
+}
+## ------------------------------------------------------------------
+## Extract one response and one time from an already calculated partial
+## object. Every return is selected-observations by primary-grid-values.
+## Use get.partial.plot.data() for several stored times at once.
+## ------------------------------------------------------------------
+extract.partial.pred <- function(obj, type, subset, m.target, target) {
+  target.arg <- if (missing(target)) NULL else target
+  if (obj$family %in% c("surv", "surv-CR")) {
+    values <- obj$survOutput
+    if (is.null(values) || is.null(dim(values))) stop("partial survival predictions are unavailable")
+    n <- dim(values)[1L]
+    k <- tail(dim(values), 1L)
+    subset <- .plot.variable.subset(if (missing(subset)) NULL else subset, n)
+    if (obj$family == "surv-CR") {
+      type <- match.arg(type, c("years.lost", "cif", "chf"))
+      j <- if (type == "years.lost") dim(values)[2L] else dim(values)[3L]
+      target <- .plot.variable.target(target.arg, seq_len(j))
+      if (type == "years.lost") {
+        return(.partial.matrix(values[subset, target, , drop = FALSE], length(subset), k))
+      }
+      if (dim(values)[2L] != 1L) stop("extract.partial.pred() requires exactly one stored evaluation time")
+      return(.partial.matrix(values[subset, 1L, target, , drop = FALSE], length(subset), k))
+    }
+    type <- match.arg(type, c("rel.freq", "mort", "chf", "surv"))
+    if (type %in% c("mort", "rel.freq")) {
+      out <- .partial.matrix(values[subset, , drop = FALSE], length(subset), k)
+      if (type == "rel.freq") {
+        ## Preserve column-count scaling; unsupported columns remain NA.
+        out[!is.finite(out)] <- NA_real_
+        sz <- colSums(!is.na(out))
+        sz[sz == 0L] <- NA_integer_
+        out <- sweep(out, 2L, sz, "/")
+      }
+      return(out)
+    }
+    if (dim(values)[2L] != 1L) stop("extract.partial.pred() requires exactly one stored evaluation time")
+    return(.partial.matrix(values[subset, 1L, , drop = FALSE], length(subset), k))
+  }
+  if (grepl("surv", obj$family)) stop("this survival family is not supported by partial extraction")
+  response <- .partial.response(obj, if (missing(m.target)) NULL else m.target)
+  values <- response$values
+  n <- dim(values)[1L]
+  k <- tail(dim(values), 1L)
+  subset <- .plot.variable.subset(if (missing(subset)) NULL else subset, n)
+  if (response$classification) {
+    type <- match.arg(type, c("prob", "bayes"))
+    col <- 1L
+    if (type == "prob") {
+      labels <- dimnames(values)[[2L]][-1L]
+      col <- 1L + .plot.variable.target(target.arg, labels)
+    }
+    return(.partial.matrix(values[subset, col, , drop = FALSE], length(subset), k))
+  }
+  .partial.matrix(values[subset, , drop = FALSE], length(subset), k)
 }

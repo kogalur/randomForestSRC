@@ -7,6 +7,116 @@
   num <- as.numeric(num); den <- as.numeric(den)
   ifelse(den == 0, NA_real_, num / den)
 }
+## Convert the supported probability inputs to a two-column matrix ordered
+## as (negative, positive). For imbalance summaries, positive is the minority
+## class determined from the evaluation response, before excluding scores.
+.imbalanced.probability.matrix <- function(prob, n, class.labels, positive,
+                                           clamp = TRUE) {
+  if (is.data.frame(prob)) {
+    prob <- as.data.frame(prob, optional = TRUE)
+    numeric.columns <- vapply(prob, function(z) {
+      is.numeric(z) || is.logical(z)
+    }, logical(1L))
+    if (!all(numeric.columns)) {
+      stop("'prob' must contain numeric probabilities.", call. = FALSE)
+    }
+    prob <- as.matrix(prob)
+  }
+  d <- dim(prob)
+  if (is.null(d)) {
+    if (!(is.numeric(prob) || is.logical(prob)) || length(prob) != n) {
+      stop("'prob' must contain one numeric probability per response.",
+           call. = FALSE)
+    }
+    prob <- matrix(as.numeric(prob), nrow = n, ncol = 1L)
+  }
+  else if (length(d) != 2L || d[1L] != n || !(d[2L] %in% c(1L, 2L)) ||
+           !(is.numeric(prob) || is.logical(prob))) {
+    stop("'prob' must be a numeric vector or a one- or two-column ",
+         "matrix/data frame with one row per response.", call. = FALSE)
+  }
+  storage.mode(prob) <- "double"
+  prob[!is.finite(prob)] <- NA_real_
+  if (clamp) {
+    use <- is.finite(prob)
+    prob[use] <- pmin(pmax(prob[use], 0), 1)
+  }
+  if (ncol(prob) == 1L) {
+    ## A vector or one column always represents the positive class.
+    ## Its name is optional and does not change this convention.
+    p <- prob[, 1L]
+    prob <- cbind(1 - p, p)
+  }
+  else {
+    labs <- colnames(prob)
+    unnamed <- is.null(labs) ||
+      (all(!is.na(labs)) && all(!nzchar(labs)))
+    if (!unnamed) {
+      if (anyNA(labs) || anyDuplicated(labs) ||
+          !setequal(labs, class.labels)) {
+        stop("The two probability column names must match the response ",
+             "factor levels.", call. = FALSE)
+      }
+      prob <- prob[, match(class.labels, labs), drop = FALSE]
+    }
+    ## Unnamed columns retain response-factor level order.
+    prob <- prob[, c(setdiff(1:2, positive), positive), drop = FALSE]
+    if (clamp) {
+      complete <- rowSums(is.finite(prob)) == 2L
+      if (any(abs(rowSums(prob[complete, , drop = FALSE]) - 1) >
+              sqrt(.Machine$double.eps))) {
+        stop("Each finite row of two-column 'prob' must sum to one.",
+             call. = FALSE)
+      }
+    }
+  }
+  colnames(prob) <- c("0", "1")
+  prob
+}
+## Resolve class frequencies from the observed evaluation responses. The
+## threshold and random-score reference retain this population even when
+## some responses do not have usable probability predictions.
+.imbalanced.prepare <- function(yvar, prob) {
+  if (!is.factor(yvar) || length(levels(yvar)) != 2L) return(NULL)
+  frq <- table(yvar)
+  minority <- which.min(frq)
+  majority <- setdiff(1:2, minority)
+  n <- sum(frq)
+  pihat <- if (n > 0) as.numeric(frq[minority]) / n else NA_real_
+  y <- as.integer(yvar == levels(yvar)[minority])
+  prob.matx <- .imbalanced.probability.matrix(
+    prob, length(yvar), levels(yvar), minority)
+  ## One common scoring sample; unknown outcomes retain no artificial label.
+  use <- !is.na(y) & rowSums(is.finite(prob.matx)) == 2L
+  prob.matx <- prob.matx[use, , drop = FALSE]
+  list(y = factor(y[use], levels = c(0, 1)),
+       prob = prob.matx[, 2L], prob.matx = prob.matx,
+       frq = frq, minority = minority, majority = majority,
+       n = n, pihat = pihat)
+}
+## Validate one threshold while retaining the existing finite clamping rule.
+.imbalanced.threshold <- function(threshold, default) {
+  if (is.null(threshold)) return(default)
+  if (!is.numeric(threshold) || length(threshold) != 1L ||
+      !is.finite(threshold)) {
+    stop("'threshold' must be a single finite number.", call. = FALSE)
+  }
+  max(0, min(1, threshold))
+}
+## Harmonic means are zero when all component rates exist and any is zero.
+## An undefined component rate remains unavailable, rather than becoming zero.
+.imbalanced.harmonic <- function(...) {
+  rates <- cbind(...)
+  out <- rep(NA_real_, nrow(rates))
+  supported <- rowSums(!is.finite(rates) | rates < 0) == 0L
+  zero <- rowSums(rates == 0, na.rm = TRUE) > 0L
+  out[supported & zero] <- 0
+  use <- supported & !zero
+  if (any(use)) {
+    out[use] <- ncol(rates) / rowSums(1 / rates[use, , drop = FALSE])
+  }
+  out
+}
 get.imbalanced.performance <- function(obj,
                                        prob = NULL,
                                        threshold = NULL,
@@ -32,6 +142,21 @@ get.imbalanced.performance <- function(obj,
   if (!is.factor(yvar) || length(levels(yvar)) != 2) {
     return(NULL)
   }
+  ## Named rules select a cutoff; the workhorse retains the evaluation-based
+  ## minority definition and prevalence calculation used by threshold = NULL.
+  if (is.character(threshold)) {
+    if (length(threshold) != 1L || is.na(threshold) ||
+        !(threshold %in% c("auto", "bayes"))) {
+      stop("'threshold' must be NULL, \"auto\", \"bayes\", or a single finite number.",
+           call. = FALSE)
+    }
+    rfq <- FALSE
+    if (threshold == "auto" && inherits(obj, "rfsrc")) {
+      forest <- obj[["forest"]]
+      rfq <- is.list(forest) && isTRUE(forest[["rfq"]])
+    }
+    threshold <- if (rfq) NULL else 0.5
+  }
   ## compute
   perf.o <- get.imbalanced.performance.workhorse(
     yvar, prob,
@@ -56,50 +181,18 @@ get.imbalanced.performance.workhorse <- function (yvar, prob,
                                                   threshold = NULL,
                                                   confusion = FALSE,
                                                   robust = FALSE) {
-  ## not two-class -> NULL
-  if (!is.factor(yvar) || length(levels(yvar)) != 2) return(NULL)
-  ## recode to {0,1}: 0=majority, 1=minority
-  y.frq <- table(yvar)
-  if (length(y.frq) != 2 || any(is.na(y.frq))) return(NULL)
-  class.labels <- names(y.frq)
-  minority <- which.min(y.frq)
-  majority <- setdiff(1:2, minority)
-  n.eff    <- sum(y.frq)
-  pihat    <- as.numeric(y.frq[minority]) / n.eff
-  iratio   <- max(y.frq, na.rm = TRUE) / min(y.frq, na.rm = TRUE)
-  y <- rep(0, length(yvar))
-  y[yvar == class.labels[minority]] <- 1
-  y <- factor(y, levels = c(0,1))
-  ## map probabilities --> (majority, minority)
-##
-## Important: some callers may pass a 2-column *data.frame* of probabilities.
-## Downstream metrics (brier/auc/logloss) expect a numeric matrix and may
-## fail on data.frames (which are lists).  We coerce to a double matrix here.
-if (!is.null(ncol(prob)) && ncol(prob) == 2) {
-  prob.matx <- prob[, c(majority, minority), drop = FALSE]
-  ## coerce to numeric matrix (handles data.frame inputs robustly)
-  prob.matx <- as.matrix(prob.matx)
-  storage.mode(prob.matx) <- "double"
-  ## minority probability is the 2nd column after re-ordering
-  prob <- prob.matx[, 2]
-  ## clamp to [0,1]
-  prob <- pmin(pmax(prob, 0), 1)
-  prob.matx[, 2] <- prob
-  prob.matx[, 1] <- pmin(pmax(prob.matx[, 1], 0), 1)
-} else {
-  ## user supplied a vector / 1-col object => assume it is minority prob
-  if (is.data.frame(prob) && ncol(prob) == 1) {
-    prob <- prob[[1]]
-  }
-  prob <- as.numeric(prob)
-  prob <- pmin(pmax(prob, 0), 1)
-  prob.matx <- cbind(1 - prob, prob)
-  storage.mode(prob.matx) <- "double"
-}
-colnames(prob.matx) <- levels(y)
-  ## threshold
-  if (is.null(threshold)) threshold <- as.numeric(pihat) else threshold <- as.numeric(threshold)
-  threshold <- max(0, min(1, threshold))
+  dat <- .imbalanced.prepare(yvar, prob)
+  if (is.null(dat)) return(NULL)
+  y.frq <- dat$frq
+  minority <- dat$minority
+  majority <- dat$majority
+  n.eff <- dat$n
+  pihat <- dat$pihat
+  iratio <- if (n.eff > 0) max(y.frq) / min(y.frq) else NA_real_
+  y <- dat$y
+  prob <- dat$prob
+  prob.matx <- dat$prob.matx
+  threshold <- .imbalanced.threshold(threshold, pihat)
   ## confusion at threshold
   yhat <- factor(1 * (prob >= threshold), levels = c(0, 1))
   confusion.matx <- table(y, yhat)
@@ -119,10 +212,8 @@ colnames(prob.matx) <- levels(y)
       npv  <- .safe_div(TN, TN + FN)
     }
     misclass   <- (FP + FN) / N
-    F1         <- ifelse((prec + sens) > 0, 2 * (prec * sens) / (prec + sens), NA_real_)
-    F1mod      <- ifelse(all(is.finite(c(sens, spec, prec, npv))) &&
-                         all(c(sens, spec, prec, npv) > 0),
-                         4 / (1/sens + 1/spec + 1/prec + 1/npv), NA_real_)
+    F1         <- .imbalanced.harmonic(prec, sens)
+    F1mod      <- .imbalanced.harmonic(sens, spec, prec, npv)
     gmean      <- sqrt(sens * spec)
     F1gmean    <- (F1 + gmean) / 2
     F1modgmean <- (F1mod + gmean) / 2
@@ -130,14 +221,20 @@ colnames(prob.matx) <- levels(y)
     sens <- spec <- prec <- npv <- misclass <-
       F1 <- F1mod <- gmean <- F1gmean <- F1modgmean <- NA_real_
   }
-  ## probability-based metrics
-  brier       <- get.brier.error(y, prob.matx, normalized = FALSE)
-  brier.norm  <- get.brier.error(y, prob.matx)   # normalized per your function
-  auc         <- get.auc(y, prob.matx)
-  logloss     <- get.logloss(y, prob.matx)
-  prO         <- get.pr.auc(y, prob)             # vector or 1-col matrix is OK
-  pr.auc      <- prO[1]
-  pr.auc.rand <- prO[2]
+  ## Probability scores use the same observed-outcome/finite-prediction rows.
+  ## Keep the shared log-loss policy; it is not the rate-smoothing option.
+  if (N > 0) {
+    brier <- get.brier.error(y, prob.matx, normalized = FALSE)
+    brier.norm <- get.brier.error(y, prob.matx)
+    auc <- get.auc(y, prob.matx)
+    logloss <- get.logloss(y, prob.matx)
+    prO <- get.pr.auc(y, prob)
+    pr.auc <- prO[1L]
+    pr.auc.rand <- prO[2L]
+  }
+  else {
+    brier <- brier.norm <- auc <- logloss <- pr.auc <- pr.auc.rand <- NA_real_
+  }
   ## ------------------------------
   ## Analytical random baseline
   ## ------------------------------
@@ -237,12 +334,9 @@ print.imbalanced.performance <- function(x, digits = 4, show.confusion = TRUE, .
   .fmt_pct <- function(z) ifelse(is.na(z), NA, paste0(.fmt(z), " %"))
   rand <- attr(x, "rand")
   rand.metrics <- if (!is.null(rand)) rand$metrics else NULL
-  # prevalence pi (prefer prec.rand, else pr.auc.rand)
-  pi.hat <- if (!is.null(rand.metrics) && "prec.rand" %in% names(rand.metrics)) {
-    as.numeric(rand.metrics["prec.rand"])
-  } else {
-    .get("pr.auc.rand")
-  }
+  ## Observed prevalence uses response counts, not smoothed reference precision.
+  pi.hat <- .safe_div(.get("n.minority"),
+                      .get("n.majority") + .get("n.minority"))
   # header ----------------------------------------------------------
   cat("Imbalanced classification performance (model vs random baseline)\n")
   cat(sprintf(" n.majority = %s   n.minority = %s   iratio = %s   threshold = %s   prevalence  = %s\n\n",
@@ -251,11 +345,19 @@ print.imbalanced.performance <- function(x, digits = 4, show.confusion = TRUE, .
               .fmt(.get("iratio")),
               .fmt(.get("threshold")),
               .fmt(pi.hat)))
-  # metrics to display (grouped for readability)
-  rate_metrics   <- c("sens","spec","prec","npv","F1","F1mod","gmean","F1gmean","F1modgmean")
-  auc_metrics    <- c("auc","pr.auc")
-  error_metrics  <- c("misclass","brier","brier.norm","logloss")
-  all_metrics    <- c(rate_metrics, auc_metrics, error_metrics)
+  ## Metric direction is independent of the table in which a row appears.
+  ## +1 means larger is better; -1 means smaller is better.
+  direction <- c(sens = 1, spec = 1, prec = 1, npv = 1,
+                 F1 = 1, F1mod = 1, gmean = 1,
+                 F1gmean = 1, F1modgmean = 1,
+                 auc = 1, pr.auc = 1,
+                 misclass = -1, brier = -1, brier.norm = -1, logloss = -1)
+  all_metrics <- names(direction)
+  ## Display G-mean in both tables, but calculate its comparison only once.
+  rate_metrics <- c("sens", "spec", "prec", "npv", "F1", "F1mod",
+                    "gmean", "F1gmean", "F1modgmean")
+  overall_metrics <- c("gmean", "auc", "pr.auc", "misclass",
+                       "brier", "brier.norm", "logloss")
   # mapping to baseline names
   base_map <- stats::setNames(paste0(all_metrics, ".rand"), all_metrics)
   base_map["pr.auc"] <- "pr.auc.rand"  # special case lives in main list
@@ -271,15 +373,14 @@ print.imbalanced.performance <- function(x, digits = 4, show.confusion = TRUE, .
       NA_real_
     }
   })
-  # gains: higher-is-better vs lower-is-better
-  hib <- c(rate_metrics, auc_metrics)                   # higher is better
-  lib <- error_metrics                                  # lower is better
+  ## Positive Delta and Gain always mean improvement over the baseline.
+  ## Preserve the existing handling of zero and near-zero baselines.
   delta <- rep(NA_real_, length(all_metrics)); names(delta) <- all_metrics
   gain  <- delta
   for (m in all_metrics) {
     mv <- model_vals[[m]]; bv <- base_vals[[m]]
     if (is.na(mv) || is.na(bv)) next
-    if (m %in% lib) {
+    if (direction[[m]] < 0) {
       delta[m] <- bv - mv
       gain[m]  <- if (bv != 0) (bv - mv) / bv * 100 else NA_real_
     } else {
@@ -296,12 +397,14 @@ print.imbalanced.performance <- function(x, digits = 4, show.confusion = TRUE, .
     row.names = NULL,
     check.names = FALSE
   )
-  # visual grouping by inserting blank lines (printed as separate blocks)
-  print(df[df$Metric %in% rate_metrics,   , drop = FALSE], row.names = FALSE, right = TRUE)
-  cat("\n")
-  print(df[df$Metric %in% auc_metrics,    , drop = FALSE], row.names = FALSE, right = TRUE)
-  cat("\n")
-  print(df[df$Metric %in% error_metrics,  , drop = FALSE], row.names = FALSE, right = TRUE)
+  ## Reuse the same formatted rows so G-mean agrees exactly across tables.
+  cat("Classification rates and combined measures\n")
+  print(df[match(rate_metrics, df$Metric), , drop = FALSE],
+        row.names = FALSE, right = TRUE)
+  cat("\nOverall performance\n")
+  print(df[match(overall_metrics, df$Metric), , drop = FALSE],
+        row.names = FALSE, right = TRUE)
+  cat("\nPositive Delta and Gain indicate improvement over the random baseline.\n")
   # confusion matrices ---------------------------------------------
   if (show.confusion && is.list(x) && !is.null(x$confusion)) {
     cat("\nConfusion matrix (model):\n")
@@ -342,47 +445,19 @@ get.rfq.threshold <- function(y) {
 ###################################################################
 # internal: fast, vectorized sweep over thresholds (avoids mclapply)
 .get.imbalanced.optimize.sweep <- function(yvar, prob, thresholds) {
-  ## if this is not a two-class problem, return NULL
-  if (!is.factor(yvar) || length(levels(yvar)) != 2) {
-    return(NULL)
-  }
-  ## recode to {0,1}: 0=majority, 1=minority (same as get.imbalanced.performance.workhorse)
-  y.frq <- table(yvar)
-  if (length(y.frq) != 2 || any(is.na(y.frq))) {
-    return(NULL)
-  }
-  class.labels <- names(y.frq)
-  minority <- which.min(y.frq)
-  y <- rep.int(0L, length(yvar))
-  y[yvar == class.labels[minority]] <- 1L
-## extract minority probabilities (robust to matrices/data.frames/vectors)
-if (!is.null(ncol(prob))) {
-  if (ncol(prob) == 2) {
-    p <- prob[, minority]
-  } else if (ncol(prob) == 1) {
-    p <- prob[, 1]
-  } else {
-    ## unexpected column count: fall back to first column
-    p <- prob[, 1]
-  }
-} else {
-  p <- prob
-}
-p <- as.numeric(p)
-p <- pmin(pmax(p, 0), 1)
-  ## mimic table(y, factor(prob>=th)) behavior: drop NA probabilities
-  ok <- !is.na(p)
-  if (!any(ok)) {
+  dat <- .imbalanced.prepare(yvar, prob)
+  if (is.null(dat)) return(NULL)
+  y <- as.integer(as.character(dat$y))
+  p <- dat$prob
+  if (length(p) == 0L) {
     return(data.frame(
       threshold = thresholds,
-      gmean = NA_real_,
-      F1 = NA_real_,
-      F1mod = NA_real_,
-      F1modgmean = NA_real_
+      gmean = rep(NA_real_, length(thresholds)),
+      F1 = rep(NA_real_, length(thresholds)),
+      F1mod = rep(NA_real_, length(thresholds)),
+      F1modgmean = rep(NA_real_, length(thresholds))
     ))
   }
-  y <- y[ok]
-  p <- p[ok]
   ## sort by probability (ascending)
   o <- order(p)
   p <- p[o]
@@ -404,10 +479,8 @@ p <- pmin(pmax(p, 0), 1)
   spec <- .safe_div(TN, TN + FP)
   prec <- .safe_div(TP, TP + FP)
   npv  <- .safe_div(TN, TN + FN)
-  F1 <- ifelse((prec + sens) > 0, 2 * (prec * sens) / (prec + sens), NA_real_)
-  ok2 <- is.finite(sens) & is.finite(spec) & is.finite(prec) & is.finite(npv) &
-    (sens > 0) & (spec > 0) & (prec > 0) & (npv > 0)
-  F1mod <- ifelse(ok2, 4 / (1/sens + 1/spec + 1/prec + 1/npv), NA_real_)
+  F1 <- .imbalanced.harmonic(prec, sens)
+  F1mod <- .imbalanced.harmonic(sens, spec, prec, npv)
   gmean <- sqrt(sens * spec)
   F1modgmean <- (F1mod + gmean) / 2
   data.frame(
@@ -450,25 +523,39 @@ get.imbalanced.optimize <- function(obj,
   }
   ## check that measure requested is coherent
   measure <- match.arg(measure, c("gmean", "F1", "F1mod", "F1modgmean"))
-  thresholds <- seq(0, 1, length = ngrid)
+  if (!is.numeric(ngrid) || length(ngrid) != 1L || !is.finite(ngrid) ||
+      ngrid < 2 || ngrid != floor(ngrid) || ngrid > .Machine$integer.max) {
+    stop("'ngrid' must be an integer of at least two.", call. = FALSE)
+  }
+  thresholds <- seq(0, 1, length.out = as.integer(ngrid))
   ## fast, vectorized threshold sweep (avoids mclapply and is usually faster)
   sweep <- .get.imbalanced.optimize.sweep(yvar, prob, thresholds)
   if (is.null(sweep)) {
     return(NULL)
   }
-  best <- which.max(sweep[[measure]])
+  available <- which(is.finite(sweep[[measure]]))
+  if (length(available) == 0L) {
+    stop("No finite '", measure, "' values are available for threshold ",
+         "selection. Check the observed responses and probability predictions, ",
+         "or select another measure.", call. = FALSE)
+  }
+  ## Preserve the first maximum, including a valid optimum at zero.
+  best <- available[which.max(sweep[[measure]][available])]
   best.threshold <- sweep$threshold[best]
   if (plot.it) {
-    par(mfrow = c(2,2))
+    old.par <- par(no.readonly = TRUE)
+    on.exit(par(old.par), add = TRUE)
+    par(mfrow = c(2, 2))
     pt <- sweep$threshold < 3 * best.threshold
-    plot(sweep$threshold[pt], sweep$gmean[pt], xlab = "threshold", ylab = "gmean")
-    abline(v = best.threshold, lty = 2, col = "blue")
-    plot(sweep$threshold[pt], sweep$F1[pt], xlab = "threshold", ylab = "F1")
-    abline(v = best.threshold, lty = 2, col = "blue")
-    plot(sweep$threshold[pt], sweep$F1mod[pt], xlab = "threshold", ylab = "F1mod")
-    abline(v = best.threshold, lty = 2, col = "blue")
-    plot(sweep$threshold[pt], sweep$F1modgmean[pt], xlab = "threshold", ylab = "F1modgmean")
-    abline(v = best.threshold, lty = 2, col = "blue")
+    if (sum(pt) < 2L) pt <- rep(TRUE, nrow(sweep))
+    for (metric in c("gmean", "F1", "F1mod", "F1modgmean")) {
+      value <- sweep[[metric]][pt]
+      finite <- is.finite(value)
+      limits <- if (any(finite)) range(value[finite]) else c(0, 1)
+      plot(sweep$threshold[pt], value,
+           xlab = "threshold", ylab = metric, ylim = limits)
+      abline(v = best.threshold, lty = 2, col = "blue")
+    }
   }
   ## return full performance metrics at the optimal threshold (same as previous behavior)
   perf <- get.imbalanced.performance(yvar, prob, threshold = best.threshold)
@@ -487,25 +574,39 @@ get.imbalanced.optimize <- function(obj,
 ##
 ##
 ###################################################################
+## Direct PR callers may supply numeric score vectors, not just probabilities.
+## Preserve their scale and the positive=1 convention for already coded truth.
+## For other two-level factors, resolve the minority before recoding labels.
+.imbalanced.pr.input <- function(truth, yhat) {
+  if (is.factor(truth)) {
+    if (length(levels(truth)) != 2L) return(NULL)
+    labs <- levels(truth)
+    positive <- if (setequal(labs, c("0", "1"))) {
+      match("1", labs)
+    }
+    else {
+      which.min(table(truth))
+    }
+    y <- as.integer(truth == labs[positive])
+  }
+  else {
+    if (!is.atomic(truth) || !is.null(dim(truth)) ||
+        !all(is.na(truth) | truth %in% c(0, 1))) return(NULL)
+    labs <- c("0", "1")
+    positive <- 2L
+    y <- as.integer(truth)
+  }
+  scores <- .imbalanced.probability.matrix(
+    yhat, length(truth), labs, positive, clamp = FALSE)[, 2L]
+  use <- !is.na(y) & is.finite(scores)
+  list(positive = scores[use & y == 1L],
+       negative = scores[use & y == 0L])
+}
 get.pr.auc <- function(truth, yhat) {
-  ## failsafe (in case directly called)
-  if (is.factor(truth) && !(sum(levels(truth) == c(0, 1)) == 2)) {
-    y.frq <- table(truth)
-    class.labels <- names(y.frq)
-    minority <- which.min(y.frq)
-    majority <- setdiff(1:2, minority)
-    y <- rep(NA, length(truth))
-    y[truth==class.labels[minority]] <- 1
-    y[truth==class.labels[majority]] <- 0
-    truth <- y
-  }
-  ## if yhat is a matrix, extract probabilities for minority class
-  if (!is.null(ncol(yhat)) && ncol(yhat) == 2) {  
-    yhat <- yhat[, which.min(table(truth))]  
-  }
-  ## create pr (x,y) data
-  x <- yhat[truth == 1]
-  y <- yhat[truth == 0]
+  dat <- .imbalanced.pr.input(truth, yhat)
+  if (is.null(dat)) return(c(NA_real_, NA_real_))
+  x <- dat$positive
+  y <- dat$negative
   rO <- c(NA, NA)
   if (length(x) > 0 && length(y) > 0) {
     ## precision recall with random baseline
@@ -517,24 +618,10 @@ get.pr.auc <- function(truth, yhat) {
   rO
 }
 get.pr.curve <- function(truth, yhat) {
-  ## failsafe (in case directly called)
-  if (is.factor(truth) && !(sum(levels(truth) == c(0, 1)) == 2)) {
-    y.frq <- table(truth)
-    class.labels <- names(y.frq)
-    minority <- which.min(y.frq)
-    majority <- setdiff(1:2, minority)
-    y <- rep(NA, length(truth))
-    y[truth==class.labels[minority]] <- 1
-    y[truth==class.labels[majority]] <- 0
-    truth <- y
-  }
-  ## if yhat is a matrix, extract probabilities for minority class
-  if (!is.null(ncol(yhat)) && ncol(yhat) == 2) {  
-    yhat <- yhat[, which.min(table(truth))]  
-  }
-  ## create pr (x,y) data
-  x <- yhat[truth == 1]
-  y <- yhat[truth == 0]
+  dat <- .imbalanced.pr.input(truth, yhat)
+  if (is.null(dat)) return(NULL)
+  x <- dat$positive
+  y <- dat$negative
   rO <- NULL
   if (length(x) > 0 && length(y) > 0) {
     ## precision recall with random baseline
@@ -637,7 +724,7 @@ get.pr.workhorse <- function(scores.class0, scores.class1 = scores.class0, weigh
     else {
       m <- min.curve
     }
-    m <- m[order(m[, 1], -m[, 3], decreasing = T), ]
+    m <- m[order(m[, 1], -m[, 3], decreasing = T), , drop = FALSE]
     m <- rbind(c(1, m[1, 2:3]), m, c(0, m[nrow(m), 2:3]))
     dimnames(m) <- c(NULL, NULL)
     colnames(m) <- c("recall", "precision", "threshold")

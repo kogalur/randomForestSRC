@@ -24,7 +24,11 @@
     where the outcomes are unspecified or if distinction between
     outcomes and predictors is unnecessary. Ignored for missForest.}
 
-  \item{data}{A data frame containing variables to be imputed.}
+  \item{data}{Data to be imputed. Matrices, tibbles, and
+    \code{data.table} objects are converted to a plain data frame.
+    Column names must be unique and nonempty, each column must be a
+    vector, and numeric values must be finite or missing. Bare vectors
+    and nested matrix or list columns are not supported.}
 
   \item{ntree}{Number of trees grown for each imputation.}
 
@@ -48,9 +52,12 @@
     response variables. \code{mf.q = 1} corresponds to standard
     missForest.}
 
-  \item{max.iter}{Maximum number of iterations for multivariate missForest.}
+  \item{max.iter}{Maximum number of iterations for multivariate
+    missForest. Must be a positive integer.}
 
-  \item{eps}{Convergence threshold for multivariate missForest (change in imputed values).}
+  \item{eps}{Minimum decrease in the between-pass change statistic
+    required to continue missForest iterations. Must be finite and
+    nonnegative.}
 
   \item{ytry}{Number of variables used as pseudo-responses in
     unsupervised forests. See Details.}
@@ -69,18 +76,20 @@
     missing cells. This can improve self-consistency across variables at
     the cost of extra computation.}
 
-  \item{restore.integer}{If \code{TRUE}, variables that were integer
-    supported in the original data are restored to the integer grid after
-    imputation. This includes columns stored as R integers and numeric
-    columns whose observed finite training values are all integer-valued.
-    Numeric columns remain numeric; returned values are rounded
-    to integer support. Columns stored as R integers are returned as
-    integer vectors. Set to \code{FALSE} to retain the raw numeric forest
-    predictions.}
+  \item{restore.integer}{If \code{TRUE}, generated values in variables
+    that were integer supported in the original data are rounded to the
+    integer grid. This includes columns stored as R integers and numeric
+    columns whose observed finite values are all integer-valued. Only
+    originally missing cells are rounded; observed numeric values are
+    preserved. Numeric columns retain numeric storage. Columns stored as
+    R integers are returned as integer vectors only when every nonmissing
+    completed value is exactly integral and within R's integer range;
+    otherwise numeric storage is retained. Set to \code{FALSE} to retain
+    unrounded generated numeric values.}
 
   \item{...}{Additional arguments passed to or from methods.
     Recognized advanced options include \code{full.sweep.options} (a
-    \code{list}) controlling the final sweep hyperparameters:
+    named \code{list}) controlling the final sweep hyperparameters:
     \code{ntree} (default \code{500}), \code{nodesize} (default
     \code{NULL}), \code{nsplit} (default \code{10}); and the standard
     \code{rfsrc} controls \code{mtry}, \code{splitrule}, \code{bootstrap},
@@ -90,8 +99,10 @@
 \details{
   \enumerate{
 
-  \item Before imputation, observations and variables with all values
-  missing are removed.
+  \item For a table containing both observed and missing values,
+  observations and variables with all values missing are removed before
+  imputation. A complete table or a table whose entries are all missing
+  is returned without imputation after container normalization.
 
   \item A forest is grown and used solely for imputation. No ensemble
   statistics (e.g., error rates) are computed. Use this function when
@@ -109,11 +120,17 @@
   splitting. Each round imputes a disjoint set of variables, and the
   full cycle is repeated until convergence, controlled by
   \code{max.iter} and \code{eps}. Setting \code{mf.q = 1} reverts to
-  standard missForest. This method is typically the most accurate, but
-  also the most computationally intensive.
+  response-wise missForest when \code{always.use = NULL}. A
+  non-\code{NULL} \code{always.use}, including an empty or entirely
+  unmatched vector, selects the multivariate branch. The
+  change statistic averages factor disagreement and scaled numeric
+  changes over originally missing entries. Iteration stops when this
+  statistic no longer decreases by at least \code{eps}, or when
+  \code{max.iter} is reached. The last completed pass is retained.
 
-  \item If no formula is provided, unsupervised splitting is used. The
-  default \code{ytry} is \code{sqrt(p)}, where \code{p} is the number of
+  \item If no formula is provided and \code{mf.q} is omitted,
+  unsupervised splitting is used. The default \code{ytry} is
+  \code{sqrt(p)}, where \code{p} is the number of retained
   variables. For each of \code{mtry} candidate variables, a random
   subset of \code{ytry} variables is selected as pseudo-responses. A
   multivariate composite splitting rule is applied, and the split is
@@ -123,8 +140,10 @@
   \item If no missing values remain after preprocessing, the function
   returns the processed data without further action.
 
-  \item All standard \code{rfsrc} options apply; see examples below for
-  illustration.
+  \item Additional forest controls forwarded through \code{...}
+  are \code{mtry}, \code{splitrule}, \code{bootstrap},
+  \code{sampsize}, and \code{samptype}. The optional final sweep
+  has its own \code{full.sweep.options} list.
 
   \item \emph{Optional final sweep}: if \code{full.sweep = TRUE}, a
   post-imputation sweep is performed for every variable with original
@@ -136,7 +155,9 @@
   \code{...}. This applies to both standard and missForest modes.
 
   \item If \code{restore.integer = TRUE}, integer support is detected
-  from the original retained data before imputation begins. Restoration
+  from the original retained data before imputation begins. Numeric
+  values are compared with the nearest integer using an absolute
+  floating-point tolerance that does not increase with their magnitude. Restoration
   is applied after the missForest rough-fix initialization, before and
   after the optional final sweep, and once more before returning the
   completed data. The missForest iterative updates themselves are not

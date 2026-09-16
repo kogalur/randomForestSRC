@@ -16,9 +16,9 @@ sidClustering.rfsrc <- function(data,
   ## preliminary processing
   ##
   ##------------------------------------------------------------------
-  ## make sure we have a data frame
-  if (!is.data.frame(data)) {
-    data <- data.frame(data)
+  ## make sure we have a plain data frame
+  if (!identical(class(data), "data.frame")) {
+    data <- as.data.frame(data, optional = TRUE)
   }
   ## decide which method to use
   method <- match.arg(method, c("sid",

@@ -4,10 +4,16 @@
 \alias{get.brier.survival}
 \alias{get.auct.survival}
 \alias{plotBrierAUC}
+\alias{get.cindex}
 \title{Survival Prediction Performance and Diagnostic Plots}
 \description{
   Plot survival estimates and calculate inverse-probability-of-censoring
   weighted Brier scores and cumulative/dynamic time-dependent AUC.
+  \code{plotBrierAUC} also compares the forest Brier curve with a
+  predictor-free Kaplan--Meier reference estimated from the training data.
+  \code{get.cindex} calculates concordance-based prediction error
+  from observed outcomes and risk predictions for right-censored
+  survival or competing risks.
 }
 \usage{
 \method{plot.survival}{rfsrc}(x, show.plots = TRUE, subset,
@@ -24,7 +30,10 @@ get.auct.survival(o, subset = NULL,
 plotBrierAUC(x, subset = NULL,
   cens.model = c("km", "rfsrc"), papply = lapply,
   times = NULL, conf.int = TRUE,
-  plots = c("brier", "auct"), show.plots = TRUE, ...)
+  plots = c("brier", "auct"), show.plots = TRUE,
+  brier.null = TRUE, ...)
+
+get.cindex(time, censoring, predicted, weight, fast, do.trace = FALSE)
 }
 \arguments{
   \item{x, o}{An object of class \code{(rfsrc, grow)} or
@@ -76,10 +85,40 @@ plotBrierAUC(x, subset = NULL,
   \item{plots}{One or both of \code{"brier"} and \code{"auct"}.
     \code{"auc"} is also accepted as an alias for \code{"auct"}.}
 
+  \item{brier.null}{For \code{plotBrierAUC}, calculate and display the
+    Brier score of a predictor-free Kaplan--Meier survival estimate from
+    the full grow data? The default is \code{TRUE}. The reference is also
+    returned when \code{show.plots=FALSE}. This argument has no effect
+    when only AUC is requested.}
+
   \item{...}{Further graphical arguments. For \code{plotBrierAUC},
-    \code{col}, \code{lwd}, \code{lty}, and \code{type} control
-    the estimated curve; \code{band.col} and \code{band.border} control
-    the confidence band.}
+    \code{xlim}, \code{ylim}, titles, and axis options apply to each
+    requested panel. The arguments \code{col}, \code{lwd}, \code{lty},
+    and \code{type} control the forest curve; \code{band.col} and
+    \code{band.border} control its confidence band. Use \code{null.col},
+    \code{null.lwd}, and \code{null.lty} to style the Brier reference
+    (defaults: black, width 2, dashed). Use \code{legend.pos} to position
+    its Forest/Null legend (default \code{"topright"}), or
+    \code{legend.pos=FALSE} to omit the legend.}
+  \item{time}{For \code{get.cindex}, the observed follow-up times,
+    aligned with \code{censoring} and the prediction rows.}
+  \item{censoring}{For \code{get.cindex}, numeric status codes: zero
+    for censoring and one for an event in right-censored survival.
+    For competing risks, use event codes \code{1}, \ldots, \code{J}.}
+  \item{predicted}{For \code{get.cindex}, risk predictions, with larger
+    values representing higher risk. For right-censored survival, a
+    vector or one-column matrix or data frame. For competing risks,
+    a matrix or data frame with column \code{j} corresponding to event
+    code \code{j}, or a list of event-specific prediction vectors.
+    The first \code{J} columns or list entries are used.}
+  \item{weight}{Optional numeric vector of precomputed concordance
+    weights, one per observation. Omit it for the unweighted calculation.
+    The helper does not estimate censoring weights from the supplied
+    outcomes.}
+  \item{fast}{Optional native concordance-algorithm selector. Normally
+    leave it unspecified so that the native library chooses the
+    implementation. It is not used by the weighted competing-risk branch.}
+  \item{do.trace}{For \code{get.cindex}, enable native diagnostic output?}
 }
 \details{
   \code{plot.survival} produces the following plots, going from top to
@@ -166,13 +205,74 @@ plotBrierAUC(x, subset = NULL,
   leaves no positive IPCW weight in its stratum.
 
   \code{plotBrierAUC} is a base-R plotting helper. It calls a shared
-  numerical engine so that Brier score and AUC use the same fitted
-  censoring model, then adds the requested pointwise confidence bands.
+  numerical engine so that Brier score, its null reference, and AUC use
+  the same censoring model, then adds the requested pointwise confidence
+  bands for the forest curves. The AUC panel retains its horizontal
+  reference at 0.5.
+
+  \subsection{Null reference for the Brier score}{
+    With \code{brier.null=TRUE}, the Brier panel includes a dashed
+    predictor-free reference and a Forest/Null legend. Its survival
+    prediction is the same for every evaluated subject:
+    \deqn{
+      \widehat S_0(t) =
+      \prod_{u \le t}\left\{1-\frac{d_{\mathrm{grow}}(u)}
+                                      {Y_{\mathrm{grow}}(u)}\right\},
+    }
+    where \eqn{d_{\mathrm{grow}}(u)} and
+    \eqn{Y_{\mathrm{grow}}(u)} are the event count and risk-set size
+    at grow-data event time \eqn{u}. All finite grow outcomes are used,
+    including their frequencies at tied times. Events are processed
+    before censorings at a tied time. This is the event-survival
+    estimate; \code{cens.model} separately controls the censoring
+    distribution used for scoring.
+
+    The null Brier curve is obtained by replacing \eqn{\widehat S_i(t)}
+    with \eqn{\widehat S_0(t)} in the IPCW loss above. It uses the same
+    horizons, evaluation subset, censoring weights, and finite forest-loss
+    contributions as the forest curve. Censored observations at or before
+    a horizon retain their zero contribution in both averages. A reference
+    horizon is \code{NA} if the forest horizon is unsupported or a required
+    null loss is nonfinite. Confidence bands are drawn only for the forest.
+
+    For test evaluation, the reference is estimated from the saved grow
+    outcomes, not from the test outcomes. Changing \code{subset} changes
+    the cases being scored, not the grow-data reference. For training
+    evaluation, the reference uses the full training sample and is an
+    in-sample benchmark, even when the forest predictions are OOB.
+    The last Kaplan--Meier estimate is carried forward after its last
+    observed time, subject to the existing censoring-support checks.
+
+    A forest curve below the null curve has lower estimated prediction
+    error than this predictor-free reference at that horizon. The two
+    curves are compared directly on the Brier scale; the score is not
+    rescaled and no comparison test is added.
+  }
 
   Only right-censored survival families are supported. Competing-risk
   analyses should use \command{plot.competing.risk}.
 
 
+  \subsection{Concordance error}{
+    \code{get.cindex} accepts aligned outcome and risk-prediction values
+    directly. Supply \code{predicted.oob} for OOB evaluation or
+    \code{predicted} with the corresponding outcomes for new-data
+    evaluation. It uses the supplied values without fitting a forest or
+    selecting an OOB component automatically.
+
+    A status code greater than one selects the competing-risk branch.
+    For that branch, \code{J} is the largest usable status code and
+    prediction columns are indexed by event code, not matched by their
+    names. Without weights, the calculation for event \code{j} uses
+    observations censored or experiencing event \code{j}; observations
+    with other events are excluded. With weights, it uses the native
+    event-specific weighted concordance calculation instead.
+
+    Missing times, statuses, predictions, and supplied weights are
+    excluded from the applicable calculation. The helper returns the
+    native concordance error; it is distinct from the time-specific
+    cumulative/dynamic AUC returned by \code{get.auct.survival}.
+  }
 }
 \value{
   \code{get.brier.survival} returns a list containing
@@ -192,12 +292,29 @@ plotBrierAUC(x, subset = NULL,
   confidence intervals are requested.
 
   \code{plotBrierAUC} invisibly returns a list containing the requested
-  Brier and/or AUC result objects.
+  Brier and/or AUC result objects. When Brier is requested with
+  \code{brier.null=TRUE}, the Brier result also contains a \code{null}
+  list with \code{brier.score} (columns \code{time} and
+  \code{brier.score}), integrated scores \code{crps} and
+  \code{crps.std}, and the number of evaluated contributions
+  \code{n.eval}. It also contains the common null \code{survival}
+  vector on the scoring grid, \code{n.train} (finite grow outcomes),
+  \code{method="kaplan-meier"}, and \code{source="grow"}.
+  No subject-by-time null loss matrix or null confidence band is returned.
+  The integrated null scores use the same trapezoidal rule and
+  standardization as the forest scores. Direct numerical-helper calls
+  retain their existing return structure.
 
   With evaluation outcomes, \code{plot.survival} invisibly returns the
   mortality-stratified and overall Brier and cumulative integrated Brier
   curves. Without evaluation outcomes, it invisibly returns the predicted
   survival curves and their ensemble mean.
+
+  \code{get.cindex} returns a numeric concordance-error value for
+  right-censored survival, or a numeric vector in event-code order
+  \code{1}, \ldots, \code{J} for competing risks. In the unweighted
+  competing-risk calculation an event with fewer than two usable
+  observations returns \code{NA}.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -244,15 +361,21 @@ plot.survival(rfsrc(Surv(time, status) ~ ., veteran),
 data(pbc, package = "randomForestSRC")
 pbc.obj <- rfsrc(Surv(days, status) ~ ., pbc)
 
+## ------------------------------------------------------------
+## Concordance error from the stored OOB risk predictions
+## ------------------------------------------------------------
+print(get.cindex(pbc.obj$yvar[, 1], pbc.obj$yvar[, 2],
+                 pbc.obj$predicted.oob))
+
 ## standard survival diagnostics
 plot.survival(pbc.obj)
 plot.survival(pbc.obj, subset = c(3, 10), collapse = TRUE)
 
 ## Brier and AUCT helpers with pointwise intervals
 brier.obj <- get.brier.survival(pbc.obj, conf.int = TRUE)
-head(brier.obj$brier.score)
+print(head(brier.obj$brier.score))
 auct.obj <- get.auct.survival(pbc.obj, conf.int = TRUE)
-head(auct.obj$auct.score)
+print(head(auct.obj$auct.score))
 
 ## compare two grow-data censoring models
 brier.km <- get.brier.survival(pbc.obj, cens.model = "km")
@@ -266,10 +389,34 @@ legend("bottomright",
        legend = c("cens.model = km", "cens.model = rfsrc"),
        col = c(2, 4), lty = 1)
 
-## Brier and AUCT curves with confidence bands
-plotBrierAUC(pbc.obj)
+## Brier and AUCT curves; Brier includes the grow-data KM null reference
+perf <- plotBrierAUC(pbc.obj)
+print(head(data.frame(
+  time = perf$brier$time,
+  forest = perf$brier$brier.score$brier.score,
+  null = perf$brier$null$brier.score$brier.score
+)))
 plotBrierAUC(pbc.obj, plots = "auct", conf.int = 0.90)
-plotBrierAUC(pbc.obj, plots = "brier", conf.int = 0.90)
+plotBrierAUC(pbc.obj, plots = "brier", conf.int = 0.90,
+             ylim = c(0, .4), null.lty = 3, legend.pos = "topleft")
+
+## Omit the Brier reference, retaining the forest curve and its band
+plotBrierAUC(pbc.obj, plots = "brier", brier.null = FALSE)
+
+## Independent test evaluation: the null still uses training outcomes
+set.seed(19)
+pbc.complete <- na.omit(pbc)
+trn <- sample(seq_len(nrow(pbc.complete)),
+              size = floor(0.7 * nrow(pbc.complete)))
+grow <- rfsrc(Surv(days, status) ~ ., pbc.complete[trn, ], ntree = 100)
+test <- predict(grow, newdata = pbc.complete[-trn, ])
+test.perf <- plotBrierAUC(test, plots = "brier")
+print(c(forest = test.perf$brier$crps.std,
+        null = test.perf$brier$null$crps.std))
+
+## Obtain both curves without opening a graphics device
+perf <- plotBrierAUC(test, plots = "brier", show.plots = FALSE)
+print(head(perf$brier$null$brier.score))
 
 
 

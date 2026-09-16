@@ -39,7 +39,7 @@
   
   \item{na.action}{Action to take when missing values are present. Options are \code{"na.omit"} (default), \code{"na.random"} for fast random imputation, or \code{"na.impute"} to use the imputation method in \code{rfsrc}.}
   
-  \item{outcome}{Specifies whether predicted values should be based on the outcomes from the training data (\code{"train"}, default) or test data. Ignored if \code{newdata} is missing or if test outcomes are unavailable.}
+  \item{outcome}{Specifies whether predicted values should be based on the outcomes from the training data (\code{"train"}, default) or test data. Ignored if \code{newdata} is missing. The \code{"test"} setting requires test outcomes.}
   
   \item{perf.type}{Optional metric for prediction, VIMP, and error. Currently used for classification and multivariate classification. Choices: \code{"misclass"} (default), \code{"brier"}, and \code{"gmean"}.}
   
@@ -54,13 +54,16 @@
     same as for \code{proximity}. Hybrid mode uses the same rectangular
     test-by-training layout.}
   
-  \item{forest.wt}{Whether to compute the forest weight matrix. Options are the same as for \code{proximity}.}
+  \item{forest.wt}{Whether to compute the forest weight matrix. Options are \code{FALSE} (default), \code{TRUE}, \code{"inbag"}, \code{"oob"}, or \code{"all"}.}
   
   \item{ptn.count}{If nonzero, each tree is pruned to have this many terminal nodes. Only the terminal node membership is returned; no prediction is made. Default is \code{ptn.count = 0}.}
   
-  \item{var.used}{If \code{TRUE}, records how many times each variable was used for splitting.}
+  \item{var.used}{Record how many times each variable was used for splitting. Options are \code{FALSE} (default), \code{"all.trees"}, or \code{"by.tree"}.}
   
-  \item{split.depth}{If \code{TRUE}, returns minimal depth of each variable per case.}
+  \item{split.depth}{Currently disabled in this prediction interface and
+    internally set to \code{FALSE}. To obtain split depths for the
+    training data, request \code{split.depth = "all.trees"} or
+    \code{split.depth = "by.tree"} in \code{\link{rfsrc}}.}
   
   \item{case.depth}{If \code{TRUE}, returns a matrix of the depth at which each case first splits in each tree.}
   
@@ -92,13 +95,21 @@ data. Hybrid mode should not be combined with \code{marginal.xvar}.
 If \code{outcome = "test"}, predictions are computed using y-outcomes from the test data (which must include outcome values). Terminal node statistics are recalculated using these outcomes, while the tree topology remains fixed from training. Error rates and VIMP are then computed by bootstrapping the test set and applying out-of-bagging to maintain unbiased estimates.
 
 Set \code{csv = TRUE} to return case-specific VIMP, and \code{cse = TRUE} to return case-specific error rates. These apply to all families except survival. Both options can also be used at training time.
+Use \code{\link{get.mv.csvimp}} and \code{\link{get.mv.cserror}}
+to extract these stored values; see
+Extracting Multivariate Values (\code{\link{multivariate.values}}).
+
+For prediction from a quantile forest, use \code{\link{quantreg.rfsrc}}
+with \code{object} and \code{newdata}. Its helpers include
+\code{\link{get.quantile}} for quantile extraction and
+\code{\link{get.pinball.error}} for mean pinball losses.
 }
 
 \value{
 An object of class \code{(rfsrc, predict)}, which is a list with the following components:
 
 \describe{
-  \item{call}{The original grow call to \code{rfsrc}.}
+  \item{call}{The prediction call.}
   \item{family}{The family used in the analysis.}
   \item{n}{Sample size of the test data (after handling missing values).}
   \item{ntree}{Number of trees in the trained forest.}
@@ -120,8 +131,9 @@ An object of class \code{(rfsrc, predict)}, which is a list with the following c
   \item{var.used}{Number of times each variable was used in splitting.}
   \item{imputed.indv}{Indices of test observations with missing values.}
   \item{imputed.data}{Imputed version of the test data. Columns are ordered with responses first, followed by predictors.}
-  \item{split.depth}{Matrix or array recording minimal depth of each variable for each case, optionally by tree.}
-  \item{err.rate}{Cumulative out-of-bag (OOB) error rate, if y-outcomes are present.}
+  \item{split.depth}{\code{NULL}; split-depth calculations are currently
+    disabled in this prediction interface.}
+  \item{err.rate}{Prediction error, if y-outcomes are present. For ordinary prediction with \code{newdata}, this is test error; restoring the training data uses OOB error.}
   \item{importance}{Variable importance (VIMP) for the test data. May be \code{NULL}.}
   \item{predicted}{Predicted values for the test data.}
   \item{predicted.oob}{OOB predicted values. May be \code{NULL} depending on context.}
@@ -131,10 +143,10 @@ An object of class \code{(rfsrc, predict)}, which is a list with the following c
   \item{class}{(Classification only) Predicted class labels.}
   \item{class.oob}{(Classification only) OOB predicted class labels.}
 
-  \item{regrOutput}{(Multivariate only) List of performance measures for multivariate regression outcomes.}
-  \item{clasOutput}{(Multivariate only) List of performance measures for multivariate categorical outcomes.}
+  \item{regrOutput}{(Multivariate only) Response-named list of predictions and performance measures for continuous outcomes.}
+  \item{classOutput}{(Multivariate only) Response-named list of predictions and performance measures for categorical outcomes.}
 
-  \item{chf}{(Survival or competing risks) Cumulative hazard function (CHF).}
+  \item{chf}{(Survival or competing risks) Cumulative hazard function (CHF); cause-specific CHF for competing risks.}
   \item{chf.oob}{(Survival or competing risks) OOB CHF. May be \code{NULL}.}
   \item{survival}{(Survival only) Survival function estimates.}
   \item{survival.oob}{(Survival only) OOB survival function. May be \code{NULL}.}
@@ -143,8 +155,6 @@ An object of class \code{(rfsrc, predict)}, which is a list with the following c
 
   \item{cif}{(Competing risks only) Cumulative incidence function (CIF) for each event type.}
   \item{cif.oob}{(Competing risks only) OOB CIF. May be \code{NULL}.}
-  \item{chf}{(Competing risks only) Cause-specific cumulative hazard function (CSCHF).}
-  \item{chf.oob}{(Competing risks only) OOB CSCHF. May be \code{NULL}.}
 }
 }
 
@@ -153,7 +163,15 @@ An object of class \code{(rfsrc, predict)}, which is a list with the following c
 
 The dimensions and contents of returned objects depend on the forest family and whether y-outcomes are available in the test data. In particular, performance-related components (e.g., error rate, VIMP) will be \code{NULL} if y-outcomes are missing.
 
-For multivariate families, predicted values, VIMP, error rates, and performance metrics are stored in the lists \code{regrOutput} and \code{clasOutput}. These can be accessed using the helper functions \code{\link{get.mv.predicted}}, \code{\link{get.mv.vimp}}, and \code{\link{get.mv.error}}.
+For multivariate families, predicted values, VIMP, error rates, and performance metrics are stored in the lists \code{regrOutput} and \code{classOutput}. These can be accessed using the helper functions \code{\link{get.mv.predicted}}, \code{\link{get.mv.vimp}}, and \code{\link{get.mv.error}}.
+See Extracting Multivariate Values (\code{\link{multivariate.values}}) for OOB
+selection, standardization, block errors, and return formats.
+
+Additional classification scores are documented under
+Classification Performance Metrics (\code{\link{classification.performance}});
+\code{\link{get.imbalanced.performance}} provides binary-class summaries
+with selectable thresholds. For right-censored survival diagnostics,
+see \code{\link{plotBrierAUC}}.
 
 }
 
@@ -172,14 +190,23 @@ For multivariate families, predicted values, VIMP, error rates, and performance 
   \emph{Rnews}, 7(2):25-31.
 }	
 \seealso{
-  \command{\link{holdout.vimp.rfsrc}},
-  \command{\link{plot.competing.risk.rfsrc}},
-  \command{\link{plot.rfsrc}},
-  \command{\link{plot.survival.rfsrc}},
-  \command{\link{plot.variable.rfsrc}},
-  \command{\link{rfsrc}},
-  \command{\link{rfsrc.fast}},
-  \command{\link{vimp.rfsrc}}
+  Classification Performance Metrics (\code{\link{classification.performance}}),
+  Extracting Multivariate Values (\code{\link{multivariate.values}}),
+  Fast Saving and Loading Objects (\code{\link{fast.saveload}}),
+  \code{\link{holdout.vimp}},
+  \code{\link{imbalanced.rfsrc}},
+  \code{\link{impute.learn.rfsrc}},
+  \code{\link{plot.competing.risk.rfsrc}},
+  \code{\link{plot.rfsrc}},
+  \code{\link{plot.quantreg.rfsrc}},
+  \code{\link{plot.survival.rfsrc}},
+  \code{\link{plotBrierAUC}},
+  \code{\link{plot.variable.rfsrc}},
+  \code{\link{print.rfsrc}},
+  \code{\link{quantreg.rfsrc}},
+  \code{\link{rfsrc}},
+  \code{\link{rfsrc.fast}},
+  \code{\link{vimp.rfsrc}}
 }
 \examples{
 \donttest{

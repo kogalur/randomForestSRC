@@ -713,6 +713,16 @@ global.prob.assign <- function(prob, prob.epsilon, gk.quantile, quantile.regr, s
   prob.bs.default <- .9
   ## is quantile.regr in effect or is a quantile regression splitting rule in place?
   if (quantile.regr  || grepl("quantile.regr", splitrule) || gk.quantile) {
+    ## Resolve the probability order before deriving a GK tolerance. Keep
+    ## duplicate levels, matching the existing returned-column contract.
+    if (!is.null(prob)) {
+      if (!is.numeric(prob) || !is.null(dim(prob)) || !length(prob) ||
+          any(!is.finite(prob))) {
+        stop("parameter 'prob' must be a nonempty finite numeric vector")
+      }
+      prob <- sort(prob[prob > 0 & prob < 1])
+      if (!length(prob)) stop("parameter 'prob' is not between (0,1)")
+    }
     ## is gk requested?
     if (gk.quantile) {
       ## gk quantile requires prob and prob.epsilon
@@ -728,7 +738,13 @@ global.prob.assign <- function(prob, prob.epsilon, gk.quantile, quantile.regr, s
       }
       ## if prob.epsilon missing, set to default value
       else if (!is.null(prob) && is.null(prob.epsilon)) {
-        prob.epsilon <- mean(diff(sort(prob)), na.rm = TRUE) * .99
+        spacing <- diff(prob)
+        prob.epsilon <- if (length(spacing) && any(spacing > 0)) {
+          mean(spacing) * .99
+        } else {
+          ## A singleton (or repeated single level) has no positive spacing.
+          prob.epsilon.default
+        }
       }
       ## neither are missing
       else {
@@ -742,6 +758,11 @@ global.prob.assign <- function(prob, prob.epsilon, gk.quantile, quantile.regr, s
       if (is.null(prob)) {
         prob <-  prob.default
       }
+    }
+    if (gk.quantile &&
+        (!is.numeric(prob.epsilon) || length(prob.epsilon) != 1L ||
+         !is.finite(prob.epsilon) || prob.epsilon <= 0 || prob.epsilon >= 1)) {
+      stop("parameter 'prob.epsilon' must be a finite number in (0,1)")
     }
     ## make sure prob values are coherent
     if (sum(prob > 0 & prob < 1) == 0) {

@@ -15,7 +15,7 @@ importFrom("stats", "as.dist", "as.formula", "cutree", "dlnorm", "formula",
            "quantile", "qnorm", "runif", "sd", "supsmu", "var", "wilcox.test", "rnorm",
            "lm", "coef", "binom.test", "rmultinom", "setNames")
 importFrom("utils", "installed.packages", "txtProgressBar", "setTxtProgressBar",
-           "write.table", "tail", "object.size", "combn", "flush.console")
+           "write.table", "tail", "object.size", "combn", "flush.console", "head")
 importFrom("grDevices", "gray")
 
 export(extract.bootsample,
@@ -40,6 +40,7 @@ export(extract.bootsample,
        get.mv.predicted,
        get.mv.vimp,
        get.partial.plot.data,
+       get.pinball.error,
        get.pr.auc,
        get.pr.curve,
        get.quantile,
@@ -111,8 +112,6 @@ export(fast.save)
 export(fast.load)
 export(fast.save.list)
 export(fast.load.list)
-export(lsos)
-
 
 
 S3method(max, subtree)

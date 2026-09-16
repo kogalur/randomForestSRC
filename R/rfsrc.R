@@ -71,6 +71,10 @@ rfsrc <- function(formula, data, ntree = 500,
   if (split.depth == "FALSE") split.depth <- FALSE
   ## data cannot be missing
   if (missing(data)) stop("data is missing")
+  ## make sure we have a plain data frame
+  if (!identical(class(data), "data.frame")) {
+    data <- as.data.frame(data, optional = TRUE)
+  }
   ## conduct preliminary formula validation
   if (missing(formula) | (!missing(formula) && is.null(formula))) {
     if (is.null(ytry)) {
@@ -785,7 +789,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        terminal.quants = terminal.quants,
                        importance = importance.value,
                        vimp.threshold = vimp.threshold,
-                       version = "3.7.0")
+                       version = "3.8.0")
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -817,7 +821,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        samptype = samptype,
                        samp = samp,
                        case.wt = case.wt,
-                       version = "3.7.0",
+                       version = "3.8.0",
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,
@@ -936,7 +940,7 @@ rfsrc <- function(formula, data, ntree = 500,
     split.depth.out <-  NULL
   }
   empr.risk <- NULL
-  oob.empr.risk <- NULL
+  empr.risk.oob <- NULL
   if (!is.null(holdout.specs)) {
     holdout.blk <- nativeOutput$holdoutBlk
     nativeOutput$holdoutBlk <- NULL
@@ -984,7 +988,7 @@ rfsrc <- function(formula, data, ntree = 500,
     block.size = block.size,
     holdout.blk = holdout.blk,
     empr.risk = empr.risk,
-    oob.empr.risk = oob.empr.risk,
+    empr.risk.oob = empr.risk.oob,
     ctime.internal = nativeOutput$cTimeInternal,
     ctime.external = ctime.external.stop - ctime.external.start
   )
@@ -1004,7 +1008,7 @@ rfsrc <- function(formula, data, ntree = 500,
   remove(split.depth.out)
   remove(holdout.array)
   remove(empr.risk)
-  remove(oob.empr.risk)
+  remove(empr.risk.oob)
   ## save the outputs
   survOutput <- NULL
   classOutput <- NULL

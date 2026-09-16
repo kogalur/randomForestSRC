@@ -2,6 +2,9 @@
 get.auc.workhorse <- function(roc.data) {
   x <- roc.data[, 1][roc.data[, 2] == 1]
   y <- roc.data[, 1][roc.data[, 2] == 0]
+  ## The rank statistic and denominator must use the same available scores.
+  x <- x[is.finite(x)]
+  y <- y[is.finite(y)]
   if (length(x) > 1 & length(y) > 1) {
     AUC  <- tryCatch({wilcox.test(x, y, exact=F)$stat/(length(x)*length(y))}, error=function(ex){NA})
   }
@@ -21,10 +24,11 @@ get.auc <- function(y, prob) {
     y.uniq <- sort(unique(y))
   }
   nclass <- length(y.uniq)
+  if (nclass < 2L) return(NA_real_)
   AUC <- NULL
   for (i in 1:(nclass - 1)) {
     for (j in (i + 1):nclass) {
-      pt.ij <- (y == y.uniq[i] | y == y.uniq[j])
+      pt.ij <- !is.na(y) & (y == y.uniq[i] | y == y.uniq[j])
       if (sum(pt.ij) > 1) {
         y.ij <- y[pt.ij]
         pij <- prob[pt.ij, j]
@@ -35,7 +39,7 @@ get.auc <- function(y, prob) {
       }
     } 
   }
-  if (is.null(AUC)) {
+  if (is.null(AUC) || all(is.na(AUC))) {
     NA
   }
   else {
@@ -84,7 +88,8 @@ get.brier.error <- function(y, prob, normalized = TRUE, vector = FALSE) {
   }
   ## return the summary value 
   if (!vector) {
-    sum(bs * norm.const, na.rm = TRUE)
+    ## No available classwise loss is an unavailable score, not a zero loss.
+    if (all(is.na(bs))) NA_real_ else sum(bs * norm.const, na.rm = TRUE)
   }
   ## return the vector of brier values
   else {

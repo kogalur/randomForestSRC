@@ -823,6 +823,93 @@ set.nodesize <- function(n, p, nodesize = NULL) {
        crps.std = crps.std,
        n.eval = n.eval)
 }
+## predictor-free Kaplan-Meier survival estimated from the full grow outcomes
+##
+## This is the event-survival distribution, not the censoring distribution.
+## At a tied event/censoring time, all subjects still contribute to the event
+## risk set. Censoring removes them only after the event-survival update.
+.surv.null.km <- function(time, status, times) {
+  ok <- is.finite(time) & is.finite(status)
+  time <- as.numeric(time[ok])
+  status <- as.numeric(status[ok])
+  n <- length(time)
+  if (n == 0L) {
+    stop("no non-missing grow outcomes are available for the null Brier reference.")
+  }
+  ## Group exact ties once; counts and risk sets retain repeated observations.
+  ord <- order(time)
+  time <- time[ord]
+  status <- status[ord]
+  run <- rle(time)
+  first <- c(1L, utils::head(cumsum(run$lengths), -1L) + 1L)
+  n.risk <- n - first + 1L
+  n.event <- tabulate(match(time[status != 0], run$values),
+                      nbins = length(run$values))
+  surv <- cumprod(1 - n.event / n.risk)
+  ## Right-continuous evaluation, with survival one before the first time
+  ## and the final estimate carried forward after the last observed time.
+  idx <- findInterval(times, run$values)
+  list(time = times,
+       survival = c(1, surv)[1L + idx],
+       n.train = n)
+}
+## score the grow-data null predictor on the forest's evaluation contributions
+##
+## The forest loss matrix supplies the eligibility mask, including missing
+## outcomes/predictions and unsupported censoring horizons. Early-censored
+## observations retain their zero contribution and remain in the denominator.
+## The same censoring estimates are reused; no second censoring fit is grown.
+.surv.brier.null <- function(dat, censoring, brier) {
+  null <- .surv.null.km(dat$grow.yvar[, 1L], dat$grow.yvar[, 2L],
+                        dat$time)
+  time <- as.numeric(dat$eval.yvar[, 1L])
+  status <- as.numeric(dat$eval.yvar[, 2L])
+  point <- rep(NA_real_, length(dat$time))
+  n.eval <- integer(length(dat$time))
+  for (j in seq_along(dat$time)) {
+    use <- which(is.finite(brier$brier.matx[, j]))
+    if (length(use) == 0L) next
+    tt <- dat$time[j]
+    s0 <- null$survival[j]
+    case <- time[use] <= tt & status[use] != 0
+    control <- time[use] > tt
+    loss <- numeric(length(use))
+    if (any(case)) {
+      loss[case] <- s0^2 / censoring$G.minus[use[case]]
+    }
+    if (any(control)) {
+      g <- if (is.matrix(censoring$G.time)) {
+        censoring$G.time[use[control], j]
+      }
+      else {
+        censoring$G.time[j]
+      }
+      loss[control] <- (1 - s0)^2 / g
+    }
+    ## An unrepresentable null loss invalidates this reference horizon;
+    ## do not silently drop a case and change the comparison denominator.
+    if (all(is.finite(loss))) {
+      point[j] <- mean(loss)
+      n.eval[j] <- length(use)
+    }
+  }
+  crps <- trapz(dat$time, point)
+  time.max <- max(dat$time, na.rm = TRUE)
+  crps.std <- if (is.finite(time.max) && time.max > 0) {
+    crps / time.max
+  }
+  else {
+    NA_real_
+  }
+  list(brier.score = data.frame(time = dat$time, brier.score = point),
+       crps = crps,
+       crps.std = crps.std,
+       n.eval = n.eval,
+       survival = null$survival,
+       n.train = null$n.train,
+       method = "kaplan-meier",
+       source = "grow")
+}
 ## weighted case/control placements for cumulative/dynamic AUC
 .surv.auct.placements <- function(case.risk, control.risk,
                                    case.weight, control.weight) {
@@ -1041,7 +1128,8 @@ set.nodesize <- function(n, p, nodesize = NULL) {
                                       times = NULL,
                                       conf.int = FALSE,
                                       keep.matrix = TRUE,
-                                      metrics = c("brier", "auct")) {
+                                      metrics = c("brier", "auct"),
+                                      brier.null = FALSE) {
   cens.model <- match.arg(cens.model)
   metrics <- unique(match.arg(metrics, c("brier", "auct"),
                               several.ok = TRUE))
@@ -1051,6 +1139,10 @@ set.nodesize <- function(n, p, nodesize = NULL) {
   if (length(keep.matrix) != 1L || is.na(keep.matrix) ||
       !is.logical(keep.matrix)) {
     stop("'keep.matrix' must be TRUE or FALSE.")
+  }
+  if (length(brier.null) != 1L || is.na(brier.null) ||
+      !is.logical(brier.null)) {
+    stop("'brier.null' must be TRUE or FALSE.")
   }
   conf.level <- .surv.conf.level(conf.int)
   dat <- .get.survival.performance.data(o, subset = subset, times = times)
@@ -1087,7 +1179,16 @@ set.nodesize <- function(n, p, nodesize = NULL) {
                  conf.level = conf.level)
   out <- list()
   if ("brier" %in% metrics) {
-    brier <- .surv.brier(dat, censoring, conf.level, papply, keep.matrix)
+    ## Retain losses only long enough to align the optional null reference.
+    ## Existing helper calls do not request the null and keep their output.
+    brier <- .surv.brier(dat, censoring, conf.level, papply,
+                         keep.matrix = keep.matrix || brier.null)
+    if (brier.null) {
+      brier$null <- .surv.brier.null(dat, censoring, brier)
+    }
+    if (!keep.matrix) {
+      brier["brier.matx"] <- list(NULL)
+    }
     out$brier <- c(brier, common)
   }
   if ("auct" %in% metrics) {

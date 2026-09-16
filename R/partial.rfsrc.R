@@ -12,6 +12,10 @@ partial.rfsrc <- function(
   do.trace = FALSE,
   ...)
 {
+  ## Compute training-row predictions for each primary predictor value.
+  ## The native output retains individual rows; averaging belongs to the
+  ## extraction helper below. Additional predictors are fixed, not expanded
+  ## into a Cartesian grid. No new forest is grown.
   ## hidden options
   user.option <- list(...)
   ## Object consistency
@@ -26,7 +30,7 @@ partial.rfsrc <- function(
   }
   ## anonymous not allowed
   if (inherits(object, "anonymous")) {
-    stop("this function does work with anonymous forests")
+    stop("this function does not work with anonymous forests")
   }
   ## jitt=FALSE if not specified
   jitt <- is.hidden.jitt(user.option, "none", "na.omit", FALSE, partial = TRUE)
@@ -43,6 +47,9 @@ partial.rfsrc <- function(
     ## object is already a forest.
   }
   ## convert oob to ensemble
+  if (!is.logical(oob) || length(oob) != 1L || is.na(oob)) {
+    stop("'oob' must be TRUE or FALSE")
+  }
   if (oob) {
     ensemble <- "oob"
   }
@@ -55,27 +62,42 @@ partial.rfsrc <- function(
   ## pull the x-variable and y-outcome names from the grow object
   xvar.names <- object$xvar.names
   yvar.names <- object$yvar.names
-  ## verify the x-var
-  if (length(which(xvar.names == partial.xvar)) != 1) {
-    stop("x-variable specified incorrectly:  ", partial.xvar)
+  ## Validate predictor identities and grids before requesting native work.
+  if (!is.character(partial.xvar) || length(partial.xvar) != 1L ||
+      is.na(partial.xvar) || !(partial.xvar %in% xvar.names)) {
+    stop("'partial.xvar' must name one predictor in the forest")
   }
-  ## uniquify the x-var
+  .partial.check.values(partial.values, partial.xvar, object)
   partial.values <- sort(unique(partial.values))
-  ## verify the x-var2
-  if (!is.null(partial.xvar2)) {   
-      if (length(partial.xvar2) != length(partial.values2)) {
-          stop("second order x-variable and value vectors not of same length:  ", length(partial.xvar2), "vs", length(partial.values2))
-      }
-      for (i in 1:length(partial.xvar2)) {
-          if (length(which(xvar.names == partial.xvar2[i])) != 1) {
-              stop("second order x-variable element", i, "specified incorrectly:  ", partial.xvar2[i])
-          }
-      }
+  if (length(partial.xvar2) || length(partial.values2)) {
+    if (!is.character(partial.xvar2) || anyNA(partial.xvar2) ||
+        anyDuplicated(partial.xvar2) ||
+        any(!(partial.xvar2 %in% xvar.names)) ||
+        partial.xvar %in% partial.xvar2 ||
+        length(partial.xvar2) != length(partial.values2)) {
+      stop("secondary predictors must be distinct forest predictors, different ",
+           "from 'partial.xvar', with one value for each predictor")
+    }
+    for (i in seq_along(partial.xvar2)) {
+      .partial.check.values(partial.values2[i], partial.xvar2[i], object)
+    }
   }
-  ## Caution:  There are no checks on partial.type.  Note that "rel.freq" and "mort"
-  ## are equivalent from a native code perspective.
+  if (family %in% c("surv", "surv-CR")) {
+    allowed <- if (family == "surv") c("mort", "rel.freq", "surv", "chf") else
+      c("years.lost", "cif", "chf")
+    if (!is.character(partial.type) || length(partial.type) != 1L ||
+        is.na(partial.type)) {
+      stop("specify one 'partial.type': ", paste(allowed, collapse = ", "))
+    }
+    partial.type <- match.arg(partial.type, allowed)
+  }
+  else if (grepl("surv", family)) {
+    stop("this survival family is not supported by partial()")
+  }
   ## Determine the immutable yvar factor map
   yfactor <- object$yvar.factor
+  ## Partial prediction requests every response. A response selected by
+  ## get.partial.plot.data() is selected after these arrays are returned.
   ## multivariate family details
   ##m.target.idx <- get.outcome.target(family, yvar.names, NULL)
   m.target.idx <- 1:length(yvar.names)
@@ -88,6 +110,12 @@ partial.rfsrc <- function(
   ## Get event information for survival families.
   event.info <- object$event.info
   event.type  <- event.info$event.type
+  ## Scalar mortality/years-lost summaries do not select an evaluation time.
+  partial.time.idx <- NULL
+  if (family %in% c("surv", "surv-CR") &&
+      partial.type %in% c("surv", "cif", "chf")) {
+    partial.time.idx <- .partial.time.index(partial.time, event.info$time.interest)
+  }
   ## CR.bits assignment.
   cr.bits <- get.cr.bits(family)
   ## Determine the immutable xvar factor map.
@@ -275,17 +303,9 @@ partial.rfsrc <- function(
   rfsrcOutput <- list(call = match.call(),
                       family = family,
                       partial.time = partial.time)
-  ## Subset the user time vector from the grow time interest vector.
-  if (grepl("surv", family)) {
-      ## Get the indices of the closest points of the grow time interest vector.
-      ## Exact:
-      ## partial.time.idx <- match(partial.time, event.info$time.interest)
-      ## Closest:
-      partial.time.idx <- sapply(partial.time, function(x) {max(which(event.info$time.interest <= x))})
-      if (sum(is.na(partial.time.idx)) > 0) {
-          stop("partial.time must be a subset of the time interest vector contained in the model")
-      }
-  }
+  ## Time-dependent arrays arrive on the full stored time grid. The
+  ## following R-side selection uses the last grid point <= each request;
+  ## it does not select the nearest point in absolute distance.
   if (family == "surv") {
     if ((partial.type == "rel.freq") || (partial.type == "mort")) {
       mort.names <- list(NULL, NULL)
@@ -513,142 +533,109 @@ partial <- partial.rfsrc
 ##
 ##################################################################
 get.partial.plot.data <- function(o, target, m.target = NULL, granule = FALSE) {
-  ##--------------------------------------------------------------
-  ##
-  ## coherency checks
-  ##
-  ##--------------------------------------------------------------
-  if (sum(inherits(o, c("rfsrc", "partial"), TRUE) == c(1, 2)) != 2) {
-    stop("this function only works for objects of class `(rfsrc, partial)'")
+  if (!inherits(o, "rfsrc") || !inherits(o, "partial")) {
+    stop("this function only works for objects of class '(rfsrc, partial)'")
   }
-  ##--------------------------------------------------------------
-  ##
-  ## extract the partial data, family specific
-  ##
-  ##--------------------------------------------------------------
-  family <- class(o)[3]
-  yvar.names <- o$yvar.names
-  x <-  o$partial.values
-  ## multivariate families
-  if (family == "regr+" | family == "class+" | family == "mix+") {
-    ## determine the y-outcome to be used
-    if (missing(m.target)) {
-      m.target <- yvar.names[1]
+  if (!is.logical(granule) || length(granule) != 1L || is.na(granule)) {
+    stop("'granule' must be TRUE or FALSE")
+  }
+  family <- o$family
+  if (is.null(family)) family <- class(o)[3L]
+  x <- o$partial.values
+  k <- length(x)
+  if (!k) stop("the partial object has no predictor grid")
+  target.arg <- if (missing(target)) NULL else target
+  ## Work with observation-by-grid matrices after selecting other axes.
+  if (family %in% c("regr", "class", "regr+", "class+", "mix+")) {
+    response <- .partial.response(o, m.target)
+    pdta <- response$values
+    n <- dim(pdta)[1L]
+    if (response$classification) {
+      labels <- dimnames(pdta)[[2L]][-1L]
+      j <- .plot.variable.target(target.arg, labels)
+      pdta <- .partial.matrix(pdta[, 1L + j, , drop = FALSE], n, k)
     }
     else {
-      m.target <- match.arg(m.target, yvar.names)
-    }      
-    ## pull the data
-    pdta  <- unlist(list(o$classOutput, o$regrOutput), recursive = FALSE)[[m.target]]
-    ## convert to either regression or classification
-    ## classification
-    if (length(dim(pdta)) > 2) {
-      ## identify target class level
-      if (missing(target)) {
-        target <- 1
+      pdta <- .partial.matrix(pdta, n, k)
+    }
+    yhat <- partialhat(pdta, x, granule)
+  }
+  else if (family %in% c("surv", "surv-CR")) {
+    pdta <- o$survOutput
+    if (is.null(pdta) || is.null(dim(pdta))) stop("partial survival predictions are unavailable")
+    n <- dim(pdta)[1L]
+    if (family == "surv") {
+      if (length(dim(pdta)) == 2L) {
+        yhat <- partialhat(.partial.matrix(pdta, n, k), x, granule)
       }
       else {
-        target <- match(match.arg(target, yvar.names), yvar.names)
+        yhat <- do.call(cbind, lapply(seq_len(dim(pdta)[2L]), function(tt) {
+          partialhat(.partial.matrix(pdta[, tt, , drop = FALSE], n, k), x, granule)
+        }))
       }
-      pdta <- pdta[, 1 + target, ]
-      pdta[is.infinite(pdta)] <- NA
-      yhat <- partialhat(pdta, x, granule)
-    }
-    ## regression
-    else {
-      pdta[is.infinite(pdta)] <- NA
-      yhat <- partialhat(pdta, x, granule)
-    }
-  }
-  ## regression
-  else if (family == "regr") {
-    pdta <- o$regrOutput[[1]]
-    pdta[is.infinite(pdta)] <- NA
-    yhat <- partialhat(pdta, x, granule)    
-  }
-  ## classification
-  else if (family == "class") {
-    pdta <- o$classOutput[[1]]
-    yvar.names <- colnames(pdta[,,1])[-1]
-    if (missing(target)) {
-      target <- 1
     }
     else {
-      target <- match(match.arg(target, yvar.names), yvar.names)
-    }
-    pdta <- pdta[, 1 + target, ]
-    pdta[is.infinite(pdta)] <- NA
-    yhat <- partialhat(pdta, x, granule)    
-  }
-  ## survival
-  else if (family == "surv") {
-    pdta <- o$survOutput
-    pdta[is.infinite(pdta)] <- NA
-    ## surv, chf
-    if (length(dim(pdta)) > 2) {
-      yhat <- do.call(cbind, lapply(1:dim(pdta)[2], function(k) {
-        partialhat(pdta[, k, ], x, granule)
-      }))
-    }
-    ## mortality
-    else {
-      yhat <- partialhat(pdta, x, granule)
-    }
-  }
-  ## competing risk
-  else if (family == "surv-CR") {
-    pdta <- o$survOutput
-    pdta[is.infinite(pdta)] <- NA
-    ## identify target cause specific event
-    if (missing(target)) {
-        target <- 1
+      ## Public extraction selects an event code; plot.variable uses positions.
+      events <- o$event.info$event.type
+      if (is.null(target.arg)) {
+        j <- 1L
       }
       else {
-        target <- match(target, o$event.info$event.type)
+        if (length(target.arg) != 1L || is.na(target.arg)) stop("'target' must select one event code")
+        j <- match(target.arg, events)
+        if (is.na(j)) stop("'target' is not an event code in the forest")
       }
-    ## cif, chf
-    if (length(dim(pdta)) > 3) {
-      yhat <- do.call(cbind, lapply(1:dim(pdta)[2], function(k) {
-        partialhat(pdta[, k, target, ], x, granule)
-      }))
+      if (length(dim(pdta)) == 3L) {
+        yhat <- partialhat(.partial.matrix(pdta[, j, , drop = FALSE], n, k), x, granule)
+      }
+      else {
+        yhat <- do.call(cbind, lapply(seq_len(dim(pdta)[2L]), function(tt) {
+          partialhat(.partial.matrix(pdta[, tt, j, , drop = FALSE], n, k), x, granule)
+        }))
+      }
     }
-    ## years-lost
-    else {
-      yhat <- partialhat(pdta[, target, ], x, granule)
-    }
   }
-  else {
-    stop("family specified is not supported")
-  }
-  ##--------------------------------------------------------------
-  ##
-  ## return the goodies
-  ##
-  ##--------------------------------------------------------------
-  if (granule) {
-    x.unq <- sort(unique(x))
-    n <- dim(pdta)[1]
-    n.x <- length(x.unq)
-    list(x = rep(x.unq, rep(n, n.x)), yhat = yhat, partial.time = o$partial.time)
-  }
-  else {
-    list(x = x, yhat = yhat, partial.time = o$partial.time)
-  }
+  else stop("family specified is not supported")
+  list(x = if (granule) rep(x, each = n) else x,
+       yhat = yhat, partial.time = o$partial.time)
 }
-##################################################################
-##
-##
-## utility functions
-##
-##
-##################################################################
+## Average finite partial predictions, or keep the unscaled row-level values.
 partialhat <- function(pdta, x, granule = FALSE) {
-  if (granule) {
-    c(pdta)
+  if (is.null(dim(pdta))) {
+    if (!length(x) || length(pdta) %% length(x) != 0L) {
+      stop("partial predictions do not align with the predictor grid")
+    }
+    pdta <- matrix(pdta, ncol = length(x))
   }
-  else {
-    colMeans(pdta, na.rm = TRUE)
+  pdta[!is.finite(pdta)] <- NA_real_
+  if (granule) return(as.vector(pdta))
+  out <- colMeans(pdta, na.rm = TRUE)
+  out[!is.finite(out)] <- NA_real_
+  out
+}
+## Original factor labels define the codes accepted by the saved forest.
+.partial.factor.levels <- function(object, name) {
+  fm <- object$xvar.factor
+  j <- match(name, fm$factor)
+  if (!is.na(j)) return(fm$levels[[j]])
+  j <- match(name, fm$order)
+  if (!is.na(j)) return(fm$order.levels[[j]])
+  if (!is.null(object$xvar)) {
+    xx <- if (is.matrix(object$xvar)) object$xvar[, name] else object$xvar[[name]]
+    return(levels(xx))
   }
+  NULL
+}
+.partial.check.values <- function(values, name, object) {
+  if (!is.numeric(values) || !is.null(dim(values)) || !length(values) ||
+      any(!is.finite(values))) {
+    stop("partial values for '", name, "' must be a nonempty finite numeric vector")
+  }
+  labels <- .partial.factor.levels(object, name)
+  if (length(labels) && any(values != floor(values) | values < 1L | values > length(labels))) {
+    stop("partial values for factor '", name, "' must use the original training codes 1 to ", length(labels))
+  }
+  invisible(NULL)
 }
 get.partial.bits <- function (partial.length) {
   ## Convert partial option into native code parameter.

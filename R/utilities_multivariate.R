@@ -240,14 +240,17 @@ get.mv.error <- function(obj, standardize = FALSE, pretty = TRUE, block = FALSE)
     }
     er
   })
-  ## if the first entry is NULL make the entire list NULL
-  if (is.null(err[[1]])) {
+  ## A missing error for one response must not discard other responses.
+  ## Preserve NULL slots in list output; return NULL only when none exist.
+  if (!length(err) || all(vapply(err, is.null, logical(1)))) {
     err <- NULL
-  }  
+  }
   ## return as a vector for convenient interpretation?
   ## vector reduces information for classification to "all"
   if (!is.null(err)) {
     if (pretty) {
+      ## Keep response names aligned when an error component is unavailable.
+      err <- lapply(err, function(er) if (is.null(er)) NA_real_ else er)
       err <- unlist(err)
       names(err) <- nms
     }

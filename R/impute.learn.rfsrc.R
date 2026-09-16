@@ -1,3 +1,13 @@
+## Predictive imputation: public training, persistence, prediction and OOD methods.
+##
+## Training first completes the retained raw table, then fits one forest per
+## target using only rows where that target was originally observed. Optional
+## supervised predictions augment the predictor side of these target forests.
+##
+## The manifest records the raw schema, original missingness summaries, target
+## order, predictor maps and learner locations. Prediction reuses the saved
+## forests; it does not train forests on newdata. Detailed preparation and
+## numerical helpers are in utilities_impute_learn.R.
 impute.learn.rfsrc <- function(formula, data,
                                ntree = 100, nodesize = 1, nsplit = 10,
                                nimpute = 2, fast = FALSE, blocks,
@@ -19,6 +29,11 @@ impute.learn.rfsrc <- function(formula, data,
                                save.on.fit = !is.null(out.dir),
                                save.ood = TRUE,
                                weight = NULL) {
+  ##------------------------------------------------------------------
+  ## Resolve formula roles and the target-selection default
+  ##------------------------------------------------------------------
+  ## formula controls initial imputation only. supervised.formula instead
+  ## defines the raw predictor block and the optional auxiliary forest.
   target.mode.missing <- missing(target.mode)
   supervised.enabled <- !missing(supervised.formula) && !is.null(supervised.formula)
   formula.supplied <- !missing(formula)
@@ -33,6 +48,9 @@ impute.learn.rfsrc <- function(formula, data,
   }
   target.mode <- match.arg(target.mode)
   persist.on.fit <- !is.null(out.dir) && isTRUE(save.on.fit)
+  ##------------------------------------------------------------------
+  ## Require at least one destination for the trained forests
+  ##------------------------------------------------------------------
   if (isTRUE(save.on.fit) && is.null(out.dir)) {
     stop("'save.on.fit = TRUE' requires 'out.dir' to be supplied.",
          call. = FALSE)
@@ -45,21 +63,32 @@ impute.learn.rfsrc <- function(formula, data,
   if (persist.on.fit) {
     .check.fst()
   }
-  ## make sure data is a data frame
-  if (missing(data)) {
-    stop("'data' is missing.", call. = FALSE)
-  }
-  if (is.character(data) && length(data) == 1L && is.null(dim(data))) {
-    stop("'data' must be a data frame-like object, not a character string. ",
-         "Did you mean data = ", data, " rather than data = \"", data, "\"?",
+  ## Validate shared controls before complete-data or no-target shortcuts.
+  if (missing(data)) stop("'data' is missing.", call. = FALSE)
+  data <- .impute.data.frame(data)
+  .impute.scalar(max.iter, "max.iter", lower = 1, whole = TRUE,
+                 upper = .Machine$integer.max)
+  .impute.scalar(eps, "eps", lower = 0)
+  if (!is.null(ytry)) .impute.scalar(ytry, "ytry", lower = 1, whole = TRUE,
+                                    upper = .Machine$integer.max)
+  if (!is.null(always.use) && (!is.character(always.use) || anyNA(always.use))) {
+    stop("'always.use' must be NULL or a character vector of variable names.",
          call. = FALSE)
   }
-  if (is.atomic(data) && is.null(dim(data)) && !is.list(data)) {
-    stop("'data' must be a data frame, matrix, or other tabular object. ",
-         "A bare vector is not allowed.",
-         call. = FALSE)
+  .impute.forest.options(list(ntree = ntree, nodesize = nodesize,
+                              nsplit = nsplit, nimpute = nimpute))
+  if (!missing(mf.q)) .impute.scalar(mf.q, "mf.q", lower = 0, open.lower = TRUE)
+  if (!missing(blocks)) .impute.scalar(blocks, "blocks", lower = 1, whole = TRUE,
+                                      upper = .Machine$integer.max)
+  for (nm in c("fast", "anonymous", "wipe", "keep.models", "keep.ximp",
+               "save.on.fit", "save.ood", "verbose")) {
+    .impute.flag(get(nm), nm)
   }
-  data <- as.data.frame(data, stringsAsFactors = FALSE)
+  .impute.path.part(learner.root, "learner.root", nested = TRUE)
+  .impute.path.part(learner.prefix, "learner.prefix")
+  if (persist.on.fit) out.dir <- .impute.save.destination(out.dir)
+  ## Normalize raw columns separately from supervised responses. Response
+  ## columns are retained for the auxiliary forest, not as imputation targets.
   if (isTRUE(supervised.enabled)) {
     supervised.spec <- .parse.supervised.spec(supervised.formula, data)
     train.input <- .normalize.training.data(supervised.spec$x.data)
@@ -72,6 +101,11 @@ impute.learn.rfsrc <- function(formula, data,
     response.data <- NULL
     supervised.args <- list()
   }
+  ##------------------------------------------------------------------
+  ## Retain usable rows/columns and record the original schema
+  ##------------------------------------------------------------------
+  ## Keep this missingness mask unchanged. Later completed values must not
+  ## turn originally missing target responses into training observations.
   dropped <- .drop.all.na.train(train.input)
   train.data <- dropped$data
   if (nrow(train.data) == 0L || ncol(train.data) == 0L) {
@@ -89,6 +123,9 @@ impute.learn.rfsrc <- function(formula, data,
   has.missing <- any(which.na)
   schema <- .build.schema(train.data)
   fs <- .parse.full.sweep.options(full.sweep.options)
+  ##------------------------------------------------------------------
+  ## Stage 1: complete the raw training table
+  ##------------------------------------------------------------------
   if (!has.missing) {
     if (identical(target.mode, "missing.only")) {
       stop("Training data have no missing values after preprocessing. ",
@@ -105,6 +142,8 @@ impute.learn.rfsrc <- function(formula, data,
   else {
     .msg("Starting training-time imputation...", verbose = verbose)
     fit.start <- proc.time()[[3]]
+    ## A separate learner bank is fitted below, so disable impute()'s own
+    ## optional final sweep. Missing arguments are forwarded only if supplied.
     impute.args <- c(
       list(
         data = train.data,
@@ -128,13 +167,13 @@ impute.learn.rfsrc <- function(formula, data,
     if (!missing(blocks)) impute.args$blocks <- blocks
     mf.q.missing <- missing(mf.q)
     if (!mf.q.missing) impute.args$mf.q <- mf.q
-    train.imputation <- if (mf.q.missing) {
-      "selected by impute.rfsrc defaults"
-    } else if (length(mf.q) == 1L && !is.na(mf.q) && identical(as.integer(mf.q), 1L)) {
-      "missForest"
-    } else {
-      "multivariate missForest"
-    }
+    ## Derive the label from the same exact mf.q/always.use rule as impute().
+    method <- .impute.method.spec(
+      mf.q = if (mf.q.missing) NULL else mf.q,
+      always.use = always.use,
+      variable.names = names(train.data)
+    )
+    train.imputation <- method$name
     ximp <- tryCatch(
       do.call(impute.rfsrc, impute.args),
       error = function(e) e
@@ -148,16 +187,29 @@ impute.learn.rfsrc <- function(formula, data,
          " seconds.", verbose = verbose)
     ximp <- as.data.frame(ximp, stringsAsFactors = FALSE)
   }
+  ximp <- .impute.data.frame(ximp, "completed training data")
+  if (nrow(ximp) != nrow(train.data) || !setequal(names(ximp), names(train.data))) {
+    stop("Training-time imputation changed the retained table dimensions or columns.",
+         call. = FALSE)
+  }
+  ximp <- ximp[, names(train.data), drop = FALSE]
   if (anyNA(ximp)) {
     stop("Training-time imputation did not return a fully completed raw predictor table.",
          call. = FALSE)
   }
+  ## Deployment starts use means/modes from the completed training table.
+  ## Numeric scales from this same table standardize prediction-pass changes.
   init <- .compute.init(ximp, schema)
   scale <- .compute.scale(ximp, schema)
   engine <- if (isTRUE(anonymous)) rfsrc.anonymous else rfsrc
   supervised.model <- NULL
   supervised.info <- list(enabled = FALSE)
   augmented.ximp <- ximp
+  ##------------------------------------------------------------------
+  ## Optional supervised forest and training auxiliary predictors
+  ##------------------------------------------------------------------
+  ## Fit after raw imputation, using only retained rows with complete response
+  ## information. The forest always uses rfsrc(), even for an anonymous bank.
   if (isTRUE(supervised.enabled)) {
     response.rows <- .supervised.usable.rows(response.data)
     if (length(response.rows) != nrow(train.data)) {
@@ -189,6 +241,7 @@ impute.learn.rfsrc <- function(formula, data,
     if (length(supervised.args) > 0L) {
       supervised.fit.args[names(supervised.args)] <- supervised.args
     }
+    .impute.forest.options(supervised.fit.args)
     .msg("Fitting supervised forest...", verbose = verbose)
     supervised.fit <- tryCatch(
       do.call(rfsrc, supervised.fit.args),
@@ -203,6 +256,8 @@ impute.learn.rfsrc <- function(formula, data,
       stop("The supervised forest returned predictor names that do not match the retained training predictors.",
            call. = FALSE)
     }
+    ## Start with supervised OOB predictions on the rows used to grow the
+    ## auxiliary forest, preserving their positions in the retained raw table.
     aux.used <- .align.supervised.aux(
       .supervised.materialize.aux(
         supervised.fit,
@@ -224,6 +279,8 @@ impute.learn.rfsrc <- function(formula, data,
     )
     names(aux.train) <- names(aux.used)
     aux.train[response.rows, ] <- aux.used
+    ## Response-incomplete rows were excluded from the supervised fit. They
+    ## receive ordinary predictions from that forest using their completed X.
     response.omit <- which(!response.rows)
     if (length(response.omit) > 0L) {
       aux.omit.newdata <- .conform.x.to.forest(
@@ -256,6 +313,9 @@ impute.learn.rfsrc <- function(formula, data,
       }
       aux.train[response.omit, ] <- aux.omit
     }
+    ## Rows with nonfinite auxiliary entries receive ordinary predictions.
+    ## This fallback can use in-sample predictions for supervised grow rows;
+    ## therefore the resulting auxiliary block is not uniformly OOB.
     aux.invalid <- if (ncol(aux.train) > 0L) {
       rowSums(!is.finite(as.matrix(aux.train))) > 0L
     } else {
@@ -290,6 +350,8 @@ impute.learn.rfsrc <- function(formula, data,
            paste(intersect(names(aux.train), names(train.data)), collapse = ", "),
            call. = FALSE)
     }
+    ## Store numeric initialization values for deployment-time auxiliary
+    ## failures, then fill any remaining nonfinite auxiliary entries.
     aux.schema <- .build.schema(aux.train)
     aux.init <- .compute.init(aux.train, aux.schema)
     aux.scale <- .compute.scale(aux.train, aux.schema)
@@ -320,6 +382,11 @@ impute.learn.rfsrc <- function(formula, data,
       model.name = .make.learner.name(0L, "supervised", prefix = learner.prefix)
     )
   }
+  ##------------------------------------------------------------------
+  ## Stage 2: choose target forests and their predictor sets
+  ##------------------------------------------------------------------
+  ## deployment.xvars restricts raw predictors. Auxiliary columns, when
+  ## present, are appended to every target's predictor set.
   targets <- .resolve.targets(which.na, target.mode = target.mode)
   predictor.map.raw <- .resolve.predictor.map(targets, names(train.data), deployment.xvars)
   predictor.map <- if (isTRUE(supervised.info$enabled)) {
@@ -332,12 +399,19 @@ impute.learn.rfsrc <- function(formula, data,
     stop("Some targets have no available predictors after applying deployment restrictions: ",
          paste(bad.targets, collapse = ", "), call. = FALSE)
   }
+  ## Use increasing training missingness as the prediction-time update order.
+  ## All bank forests below use the same completed table; fitting a forest
+  ## does not itself update ximp or the predictors of later bank forests.
   miss.frac <- colMeans(which.na)
   sweep.order <- targets[order(miss.frac[targets], decreasing = FALSE)]
+  ##------------------------------------------------------------------
+  ## Prepare output storage and per-target bookkeeping
+  ##------------------------------------------------------------------
+  transaction <- NULL
   if (persist.on.fit) {
-    if (isTRUE(wipe)) .safe.unlink.dir(out.dir)
-    .safe.dir.create(out.dir)
-    .safe.dir.create(file.path(out.dir, learner.root))
+    transaction <- .impute.begin.save(out.dir, wipe = wipe)
+    on.exit(try(.safe.unlink.dir(transaction$stage), silent = TRUE), add = TRUE)
+    .safe.dir.create(file.path(transaction$stage, learner.root))
   }
   models <- setNames(vector("list", length(targets)), targets)
   learners <- setNames(vector("list", length(targets)), targets)
@@ -353,12 +427,16 @@ impute.learn.rfsrc <- function(formula, data,
     invisible(NULL)
   }
   if (isTRUE(supervised.info$enabled) && isTRUE(persist.on.fit)) {
-    learner.path <- file.path(out.dir, learner.root, supervised.info$model.name)
+    learner.path <- file.path(transaction$stage, learner.root, supervised.info$model.name)
     .msg("Saving supervised forest to ", learner.path, verbose = verbose)
-    fast.save(supervised.model, learner.path, testing = FALSE)
+    .impute.write.model(supervised.model, supervised.info$model.name,
+                         file.path(transaction$stage, learner.root), "supervised forest")
   }
   .msg("Training final-sweep learner bank...", verbose = verbose)
   sweep.start <- proc.time()[[3]]
+  ##------------------------------------------------------------------
+  ## Grow and optionally persist each target forest
+  ##------------------------------------------------------------------
   for (i in seq_along(sweep.order)) {
     yname <- sweep.order[[i]]
     trn <- which(!which.na[, yname])
@@ -374,7 +452,9 @@ impute.learn.rfsrc <- function(formula, data,
       n.missing.train = length(tst),
       status = "pending",
       error = NULL,
-      family = NA_character_
+      family = NA_character_,
+      n.oob.finite = if (isTRUE(save.ood)) 0L else NA_integer_,
+      n.oob.nonfinite = if (isTRUE(save.ood)) length(trn) else NA_integer_
     )
     .msg("  [", i, "/", length(sweep.order), "] target = `", yname,
          "`  predictors = ", length(xvars), "  observed rows = ", length(trn),
@@ -384,6 +464,8 @@ impute.learn.rfsrc <- function(formula, data,
       record.ood.issue(yname, "No observed training rows were available for OOD reference.")
       next
     }
+    ## Restrict responses to originally observed rows. Use a collision-safe
+    ## temporary response name so a raw predictor name cannot mask the target.
     yy <- ximp[trn, yname]
     xtrain <- augmented.ximp[trn, xvars, drop = FALSE]
     response.name <- .make.response.name(names(xtrain))
@@ -392,7 +474,7 @@ impute.learn.rfsrc <- function(formula, data,
     fit.df <- fit.df[, c(response.name, xvars), drop = FALSE]
     fit.args <- c(
       list(
-        formula = stats::as.formula(paste0("`", response.name, "` ~ .")),
+        formula = .impute.formula(response.name),
         data = fit.df,
         ntree = fs$ntree,
         nodesize = fs$nodesize,
@@ -406,6 +488,13 @@ impute.learn.rfsrc <- function(formula, data,
       do.call(engine, fit.args),
       error = function(e) e
     )
+    ## Keep per-target failures in the manifest while allowing the remaining
+    ## bank fits to proceed. The returned object can therefore be a partial bank.
+    if (!inherits(grow, "error") &&
+        (is.null(.resolve.predict.forest(grow)) ||
+         !(grow$family %||% "") %in% c("regr", "class"))) {
+      grow <- simpleError("The fit did not return a usable target forest.")
+    }
     if (inherits(grow, "error")) {
       learners[[yname]]$status <- "error"
       learners[[yname]]$error <- conditionMessage(grow)
@@ -416,6 +505,9 @@ impute.learn.rfsrc <- function(formula, data,
     }
     learners[[yname]]$status <- "ok"
     learners[[yname]]$family <- grow$family
+    ## Final-learner OOB predictions provide the target reference. Embed the
+    ## discrepancies into retained-row order, leaving originally missing
+    ## target responses unscored. Earlier imputation is not re-run OOB.
     if (isTRUE(save.ood)) {
       pred.oob <- list(
         predicted = grow$predicted.oob,
@@ -436,24 +528,46 @@ impute.learn.rfsrc <- function(formula, data,
         tmp <- rep(NA_real_, nrow(train.data))
         tmp[trn] <- as.numeric(delta.oob)
         ood.delta[[yname]] <- tmp
+        learners[[yname]]$n.oob.finite <- sum(is.finite(delta.oob))
+        learners[[yname]]$n.oob.nonfinite <- sum(!is.finite(delta.oob))
       }
     }
     if (isTRUE(keep.models)) {
       models[[yname]] <- grow
     }
     if (persist.on.fit) {
-      learner.path <- file.path(out.dir, learner.root, learner.name)
+      learner.path <- file.path(transaction$stage, learner.root, learner.name)
       .msg("      saving learner to ", learner.path, verbose = verbose)
-      fast.save(grow, learner.path, testing = FALSE)
+      .impute.write.model(grow, learner.name,
+                           file.path(transaction$stage, learner.root),
+                           paste0("learner for `", yname, "`"))
     }
     if (!isTRUE(keep.models)) {
       rm(grow)
       gc()
     }
   }
+  successful <- vapply(learners, function(x) identical(x$status, "ok"), logical(1))
+  failed.targets <- names(learners)[!successful]
+  if (!any(successful)) {
+    stop("No target learners were trained successfully. Failed targets: ",
+         paste(failed.targets, collapse = ", "), call. = FALSE)
+  }
+  if (length(failed.targets)) {
+    warning(length(failed.targets), " of ", length(targets),
+            " target learners were unavailable: ", paste(failed.targets, collapse = ", "),
+            ". Their missing values retain initialization fills; see manifest$learners.",
+            call. = FALSE)
+  }
   sweep.seconds <- proc.time()[[3]] - sweep.start
   .msg("Final-sweep learner bank finished in ", format(sweep.seconds, digits = 4),
        " seconds.", verbose = verbose)
+  ##------------------------------------------------------------------
+  ## Build target references and the saved row-reference ingredients
+  ##------------------------------------------------------------------
+  ## Save aligned row-by-target training scores, not just a single row score.
+  ## OOD calls can then rebuild the row reference for other target subsets,
+  ## weights and aggregation rules without growing new forests.
   ood <- NULL
   if (isTRUE(save.ood)) {
     target.reference <- list()
@@ -522,6 +636,9 @@ impute.learn.rfsrc <- function(formula, data,
       issues = ood.issues
     )
   }
+  ##------------------------------------------------------------------
+  ## Assemble the deployment specification and return object
+  ##------------------------------------------------------------------
   manifest <- list(
     spec.version = 2L,
     created.at = format(Sys.time(), tz = "UTC", usetz = TRUE),
@@ -577,56 +694,47 @@ impute.learn.rfsrc <- function(formula, data,
   )
   class(object) <- c("impute.learn.rfsrc", "impute.learn")
   if (persist.on.fit) {
-    saveRDS(manifest, file.path(out.dir, "manifest.rds"))
+    .impute.commit.save(transaction, manifest)
     .msg("Wrote manifest: ", file.path(out.dir, "manifest.rds"), verbose = verbose)
   }
   object
 }
 impute.learn <- impute.learn.rfsrc
+##------------------------------------------------------------------
+## Save a bank from memory or from an attached on-disk source
+##------------------------------------------------------------------
+## This method may reload lazy learners before writing them. The source and
+## destination paths therefore both matter when deciding whether to wipe.
 save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE) {
   if (!inherits(object, "impute.learn.rfsrc")) {
     stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
   }
   .check.fst()
+  .impute.flag(verbose, "verbose")
   object$manifest <- .normalize.impute.learn.manifest(object$manifest)
+  .impute.check.layout(object$manifest)
   learner.root <- object$manifest$learner.root %||% "learners"
-  source.path <- if (is.null(object$path)) NULL else normalizePath(object$path, mustWork = FALSE)
-  dest.path <- normalizePath(path, mustWork = FALSE)
-  if (!is.null(source.path) && identical(source.path, dest.path) && isTRUE(wipe)) {
-    .msg("Save path matches the existing imputer path; leaving directory in place.",
-         verbose = verbose)
-    wipe <- FALSE
-  }
-  if (isTRUE(wipe)) .safe.unlink.dir(path)
-  .safe.dir.create(path)
-  .safe.dir.create(file.path(path, learner.root))
-  saveRDS(object$manifest, file.path(path, "manifest.rds"))
-  .msg("Saved manifest to ", file.path(path, "manifest.rds"), verbose = verbose)
+  source.path <- if (is.null(object$path)) NULL else .impute.canonical.path(object$path)
+  transaction <- .impute.begin.save(path, wipe = wipe, source.path = source.path,
+                                    targets = object$manifest$targets)
+  on.exit(try(.safe.unlink.dir(transaction$stage), silent = TRUE), add = TRUE)
+  dest.root <- file.path(transaction$stage, learner.root)
+  .safe.dir.create(dest.root)
   source.root <- if (is.null(source.path)) NULL else file.path(source.path, learner.root)
   if (.is.supervised.manifest(object$manifest)) {
-    sup.mdl <- object$supervised.model
-    if (is.null(sup.mdl)) {
+    mdl <- object$supervised.model
+    if (is.null(mdl)) {
       if (is.null(source.root)) {
-        stop("The supervised forest is not available in memory and no saved ",
-             "imputer path is attached to 'object'.",
+        stop("The supervised forest is unavailable in memory and has no saved source.",
              call. = FALSE)
       }
-      .msg("Loading supervised forest from attached path before saving.",
-           verbose = verbose)
-      sup.mdl <- .fast.load.named(
-        object$manifest$supervised$model.name,
-        source.root,
-        label = "supervised forest",
-        strict = TRUE
-      )
+      mdl <- .fast.load.named(object$manifest$supervised$model.name, source.root,
+                              label = "supervised forest", strict = TRUE)
     }
-    learner.path <- file.path(path, learner.root, object$manifest$supervised$model.name)
-    .msg("Saving supervised forest to ", learner.path, verbose = verbose)
-    fast.save(sup.mdl, learner.path, testing = FALSE)
-    if (is.null(object$supervised.model)) {
-      rm(sup.mdl)
-      gc()
-    }
+    .msg("Saving supervised forest...", verbose = verbose)
+    .impute.write.model(mdl, object$manifest$supervised$model.name, dest.root,
+                         "supervised forest")
+    rm(mdl)
   }
   for (target in object$manifest$targets) {
     info <- object$manifest$learners[[target]]
@@ -634,32 +742,41 @@ save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE) {
     mdl <- object$models[[target]]
     if (is.null(mdl)) {
       if (is.null(source.root)) {
-        stop("Learner for `", target, "` is not available in memory and no saved ",
-             "learner path is attached to 'object'.",
+        stop("Learner for `", target, "` is unavailable in memory and has no saved source.",
              call. = FALSE)
       }
-      .msg("Loading learner for `", target, "` from attached path before saving.",
-           verbose = verbose)
       mdl <- .fast.load.learner(target, info, source.root, strict = TRUE)
     }
-    learner.path <- file.path(path, learner.root, info$learner.name)
-    .msg("Saving learner for `", target, "` to ", learner.path, verbose = verbose)
-    fast.save(mdl, learner.path, testing = FALSE)
-    if (is.null(object$models[[target]])) {
-      rm(mdl)
-      gc()
-    }
+    .msg("Saving learner for `", target, "`...", verbose = verbose)
+    .impute.write.model(mdl, info$learner.name, dest.root, paste0("learner for `", target, "`"))
+    rm(mdl)
+    if (is.null(object$models[[target]])) gc()
   }
-  invisible(load.impute.learn.rfsrc(path, lazy = TRUE, verbose = FALSE))
+  .impute.commit.save(transaction, object$manifest)
+  .msg("Saved imputer to ", transaction$path, verbose = verbose)
+  invisible(load.impute.learn.rfsrc(transaction$path, lazy = TRUE, verbose = FALSE))
 }
 save.impute.learn <- save.impute.learn.rfsrc
+##------------------------------------------------------------------
+## Load a manifest and optionally materialize its learner bank
+##------------------------------------------------------------------
+## Selecting targets here narrows the available update bank. Raw schema columns
+## are retained because they may still be predictors of the selected learners.
 load.impute.learn.rfsrc <- function(path, targets = NULL, lazy = TRUE, verbose = TRUE) {
+  .impute.flag(lazy, "lazy")
+  .impute.flag(verbose, "verbose")
+  if (!is.null(targets) && (!is.character(targets) || anyNA(targets))) {
+    stop("'targets' must be NULL or a character vector without missing names.",
+         call. = FALSE)
+  }
+  path <- .impute.canonical.path(path)
   .check.fst()
   manifest.path <- file.path(path, "manifest.rds")
   if (!file.exists(manifest.path)) {
     stop("Manifest not found: ", manifest.path, call. = FALSE)
   }
   manifest <- .normalize.impute.learn.manifest(readRDS(manifest.path))
+  .impute.check.layout(manifest)
   all.targets <- manifest$targets
   if (!is.null(targets)) {
     bad.targets <- setdiff(targets, all.targets)
@@ -712,6 +829,11 @@ load.impute.learn.rfsrc <- function(path, targets = NULL, lazy = TRUE, verbose =
   object
 }
 load.impute.learn <- load.impute.learn.rfsrc
+##------------------------------------------------------------------
+## Return the prepared raw table with prediction diagnostics
+##------------------------------------------------------------------
+## The shared preparation helper performs harmonization, initialization and
+## ordered saved-forest updates; supervised auxiliary columns remain internal.
 predict.impute.learn.rfsrc <- function(object, newdata,
                                        max.predict.iter = 3L,
                                        eps = 1e-3,
@@ -720,6 +842,9 @@ predict.impute.learn.rfsrc <- function(object, newdata,
                                        cache.learners = c("session", "none", "all"),
                                        verbose = TRUE,
                                        ...) {
+  if (!inherits(object, "impute.learn.rfsrc")) {
+    stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
+  }
   cache.learners <- match.arg(cache.learners)
   object$manifest <- .normalize.impute.learn.manifest(object$manifest)
   prep <- .prepare.impute.learn.newdata(
@@ -736,6 +861,12 @@ predict.impute.learn.rfsrc <- function(object, newdata,
   prep$data
 }
 predict.impute.learn <- predict.impute.learn.rfsrc
+##------------------------------------------------------------------
+## Score observed deployment targets against their OOB references
+##------------------------------------------------------------------
+## Predictor completion and target scoring are separate operations. Missing
+## target values may be filled on the predictor side, but they are not treated
+## as observed targets when reconstruction discrepancies are calculated.
 impute.ood.rfsrc <- function(object, newdata,
                              targets = NULL,
                              max.predict.iter = 3L,
@@ -755,6 +886,12 @@ impute.ood.rfsrc <- function(object, newdata,
   cache.learners <- match.arg(cache.learners)
   if (!inherits(object, "impute.learn.rfsrc")) {
     stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
+  }
+  .impute.flag(return.details, "return.details")
+  .impute.flag(return.reconstruction, "return.reconstruction")
+  if (!is.null(targets) && (!is.character(targets) || anyNA(targets))) {
+    stop("'targets' must be NULL or a character vector without missing names.",
+         call. = FALSE)
   }
   object$manifest <- .normalize.impute.learn.manifest(object$manifest)
   ood.ref <- object$manifest$ood
@@ -777,6 +914,9 @@ impute.ood.rfsrc <- function(object, newdata,
   if (length(score.targets) == 0L) {
     stop("No valid targets requested for OOD scoring.", call. = FALSE)
   }
+  ## Complete all targets available in the bank before selecting the targets
+  ## to score. A scored target can depend on another, unscored imputed column.
+  aggregate.spec <- .canonicalize.ood.aggregate(aggregate, aggregate.args)
   prep <- .prepare.impute.learn.newdata(
     object = object,
     newdata = newdata,
@@ -798,7 +938,6 @@ impute.ood.rfsrc <- function(object, newdata,
     stop("No requested targets have a saved OOD reference.", call. = FALSE)
   }
   weight <- .resolve.ood.weight(use.targets, weight, default = ood.ref$weight)
-  aggregate.spec <- .canonicalize.ood.aggregate(aggregate, aggregate.args)
   completed.data <- prep$working.data
   n <- nrow(completed.data)
   target.delta <- matrix(NA_real_, nrow = n, ncol = length(use.targets),
@@ -831,10 +970,11 @@ impute.ood.rfsrc <- function(object, newdata,
     invisible(NULL)
   }
   disk.load.targets <- prep$info$disk.load.targets %||% character(0)
+  n.disk.loads <- prep$info$n.disk.loads %||% 0L
   unseen.mask <- prep$harmonized$unseen.mask
   unseen.rows <- prep$harmonized$unseen.rows
   .msg("Scoring OOD targets...", verbose = verbose)
-  for (target in use.targets) {
+  for (target in if (n > 0L) use.targets else character(0)) {
     info <- object$manifest$learners[[target]]
     if (!identical(info$status, "ok")) {
       msg <- paste0("No trained learner is available (status = ",
@@ -846,41 +986,68 @@ impute.ood.rfsrc <- function(object, newdata,
     mdl <- mdl.info$model
     if (isTRUE(mdl.info$loaded.from.disk)) {
       disk.load.targets <- c(disk.load.targets, target)
+      n.disk.loads <- n.disk.loads + 1L
     }
     if (is.null(mdl)) {
       record.issue(target, mdl.info$error %||% "learner could not be loaded")
       next
     }
-    xvars <- object$manifest$predictor.map[[target]]
-    pred.df <- completed.data[, xvars, drop = FALSE]
-    pred.df <- .conform.x.to.forest(pred.df, mdl)
-    pred <- tryCatch(
-      predict(mdl, pred.df),
-      error = function(e) e
-    )
-    if (inherits(pred, "error")) {
-      record.issue(target, paste0("Prediction failed: ", conditionMessage(pred)))
+    result <- tryCatch({
+      xvars <- object$manifest$predictor.map[[target]]
+      pred.df <- completed.data[, xvars, drop = FALSE]
+      pred.df <- .conform.x.to.forest(pred.df, mdl)
+      pred <- predict(mdl, pred.df)
+      observed <- prep$harmonized$data[[target]]
+      delta <- .compute.ood.delta(observed, pred, object$manifest$schema[[target]])
+      if (!is.numeric(delta) || !is.null(dim(delta)) || length(delta) != n) {
+        stop("OOD discrepancy must have one value per deployment row.", call. = FALSE)
+      }
+      reconstructed <- NULL
+      invalid <- 0L
+      reconstruction.issue <- NULL
+      if (isTRUE(return.reconstruction)) {
+        ## Optional reconstruction output must not change an otherwise valid
+        ## probability-based OOD score when class labels are unavailable.
+        checked <- tryCatch({
+          values <- .extract.prediction(pred, info$family, object$manifest$schema[[target]])
+          .validate.target.values(values, n, object$manifest$schema[[target]])
+        }, error = function(e) e)
+        if (inherits(checked, "error")) {
+          reconstruction.issue <- conditionMessage(checked)
+        } else {
+          reconstructed <- checked$values
+          reconstructed[!checked$valid] <- NA
+          invalid <- sum(!checked$valid)
+        }
+      }
+      list(delta = delta, reconstructed = reconstructed, invalid = invalid,
+           reconstruction.issue = reconstruction.issue,
+           unavailable = sum(!is.na(observed) & is.na(delta)))
+    }, error = function(e) e)
+    if (inherits(result, "error")) {
+      record.issue(target, paste0("Prediction/scoring failed: ", conditionMessage(result)))
       if (identical(prep$cache.learners, "none") && is.null(object$models[[target]])) {
         rm(mdl)
         gc()
       }
       next
     }
+    if (result$unavailable > 0L) {
+      record.issue(target, paste0(result$unavailable,
+        " observed target value(s) had no valid reconstruction discrepancy."))
+    }
     if (isTRUE(return.reconstruction)) {
-      reconstructed <- .extract.prediction(
-        pred,
-        info$family,
-        object$manifest$schema[[target]]
-      )
-      if (!is.null(reconstructed) && length(reconstructed) == n) {
-        target.reconstruction[[target]] <- reconstructed
-      } else {
-        record.issue(target, "Failed to extract target reconstruction from prediction object.")
+      if (!is.null(result$reconstructed)) {
+        target.reconstruction[[target]] <- result$reconstructed
+      }
+      if (!is.null(result$reconstruction.issue)) {
+        record.issue(target, paste0("Reconstruction unavailable: ", result$reconstruction.issue))
+      }
+      if (result$invalid > 0L) {
+        record.issue(target, paste0(result$invalid, " reconstruction(s) were unavailable."))
       }
     }
-    observed <- prep$harmonized$data[[target]]
-    delta <- .compute.ood.delta(observed, pred,
-                                object$manifest$schema[[target]])
+    delta <- result$delta
     target.unseen <- if (target %in% names(unseen.mask)) {
       unseen.mask[[target]]
     } else {
@@ -900,19 +1067,25 @@ impute.ood.rfsrc <- function(object, newdata,
       gc()
     }
   }
+  ##------------------------------------------------------------------
+  ## Aggregate scoreable targets and calibrate the row score
+  ##------------------------------------------------------------------
   score <- .aggregate.ood.row(
     target.score[, use.targets, drop = FALSE],
     weight = weight,
     aggregate = aggregate.spec$name,
     aggregate.args = aggregate.spec$args
   )
-  weight.mask <- matrix(rep(weight > 0, each = n), nrow = n)
+  weight.mask <- matrix(rep(weight > 0, each = n), nrow = n, ncol = length(weight))
   targets.used <- rowSums(is.finite(target.score[, use.targets, drop = FALSE]) & weight.mask)
   score.percentile <- rep(NA_real_, n)
   row.reference.used <- FALSE
   row.reference.mode <- NULL
   row.reference.reason <- NULL
   row.reference.n.train <- 0L
+  ## Recompute the reference with the active subset, weights and aggregate.
+  ## This does not additionally condition on each deployment row's own pattern
+  ## of observed targets.
   rebuilt.row.reference <- .rebuild.ood.row.reference(
     train.target.score = ood.ref$train.target.score,
     targets = use.targets,
@@ -977,6 +1150,8 @@ impute.ood.rfsrc <- function(object, newdata,
       }
     }
   }
+  ## Schema novelty is a row-wide override. It applies even when the unseen
+  ## factor belongs to an unscored or zero-weight raw column.
   if (length(unseen.rows) > 0L && any(unseen.rows)) {
     score[unseen.rows] <- .max.ood.aggregate.value(
       aggregate = aggregate.spec$name,
@@ -996,10 +1171,18 @@ impute.ood.rfsrc <- function(object, newdata,
     for (target in use.targets) {
       reconstructed.data[[target]] <- target.reconstruction[[target]]
     }
+    ## Reconstructions replace whole scored-target columns and are all generated.
+    ## Unscored columns retain the harmonized observations, including fractions.
+    reconstructed.generated <- matrix(
+      FALSE, nrow = n, ncol = ncol(reconstructed.data),
+      dimnames = list(NULL, names(reconstructed.data))
+    )
+    reconstructed.generated[, use.targets] <- TRUE
     reconstructed.data <- .restore.schema(
       reconstructed.data,
       object$manifest$schema,
-      restore.integer = TRUE
+      restore.integer = TRUE,
+      generated = reconstructed.generated
     )
   }
   out <- list(
@@ -1020,6 +1203,7 @@ impute.ood.rfsrc <- function(object, newdata,
       weight = weight,
       aggregate = aggregate.spec$name,
       aggregate.args = aggregate.spec$args,
+      conversion.issues = prep$info$conversion.issues,
       added.columns = prep$info$added.columns,
       dropped.extra.columns = prep$info$dropped.extra.columns,
       dropped.response.columns = prep$info$dropped.response.columns,
@@ -1027,7 +1211,7 @@ impute.ood.rfsrc <- function(object, newdata,
       unseen.rows = unseen.rows,
       maxed.rows = unseen.rows,
       cache.learners = prep$cache.learners,
-      n.disk.loads = length(unique(disk.load.targets)),
+      n.disk.loads = n.disk.loads,
       disk.load.targets = unique(disk.load.targets),
       row.reference.used = row.reference.used,
       row.reference.mode = row.reference.mode,
@@ -1044,6 +1228,9 @@ impute.ood.rfsrc <- function(object, newdata,
   out
 }
 impute.ood <- impute.ood.rfsrc
+##------------------------------------------------------------------
+## Print a compact manifest summary without loading model files
+##------------------------------------------------------------------
 print.impute.learn.rfsrc <- function(x, ...) {
   x$manifest <- .normalize.impute.learn.manifest(x$manifest)
   cat("Predictive imputer (randomForestSRC)\n")
@@ -1051,6 +1238,10 @@ print.impute.learn.rfsrc <- function(x, ...) {
   cat("  training rows: ", x$manifest$n.train, "\n", sep = "")
   cat("  training cols: ", x$manifest$p.train, "\n", sep = "")
   cat("  targets:       ", length(x$manifest$targets), "\n", sep = "")
+  successful <- vapply(x$manifest$learners[x$manifest$targets],
+                       function(info) identical(info$status, "ok"), logical(1))
+  cat("  learners ok:   ", sum(successful), "\n", sep = "")
+  cat("  unavailable:   ", sum(!successful), "\n", sep = "")
   cat("  ood targets:   ", length(x$manifest$ood$targets %||% character(0)), "\n", sep = "")
   cat("  supervised:    ", if (.is.supervised.manifest(x$manifest)) "yes" else "no", "\n", sep = "")
   if (.is.supervised.manifest(x$manifest)) {

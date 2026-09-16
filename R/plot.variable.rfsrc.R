@@ -1,3 +1,151 @@
+## ------------------------------------------------------------------
+## Plotting helpers. Argument overrides are merged once by name; the
+## fitted values and native prediction settings are never replaced by ... .
+## ------------------------------------------------------------------
+.plot.variable.merge <- function(defaults, overrides) {
+  if (length(overrides)) {
+    nm <- names(overrides)
+    if (is.null(nm) || anyNA(nm) || any(!nzchar(nm))) {
+      stop("graphical arguments in '...' must be named")
+    }
+    for (i in seq_along(overrides)) defaults[nm[i]] <- overrides[i]
+  }
+  defaults
+}
+.plot.variable.flag <- function(value, name) {
+  if (!is.logical(value) || length(value) != 1L || is.na(value)) {
+    stop("'", name, "' must be TRUE or FALSE")
+  }
+  value
+}
+.plot.variable.count <- function(value, name) {
+  if (!is.numeric(value) || length(value) != 1L || !is.finite(value)) {
+    stop("'", name, "' must be a finite number")
+  }
+  max(1, round(value))
+}
+## One summary definition for numeric partial predictions in every family.
+## The sample variance and its divisor use exactly the same finite rows.
+.plot.variable.summary <- function(pred) {
+  if (is.null(dim(pred))) stop("partial predictions must be an observation-by-grid matrix")
+  pred[!is.finite(pred)] <- NA_real_
+  n.used <- colSums(!is.na(pred))
+  center <- colMeans(pred, na.rm = TRUE)
+  center[n.used == 0L] <- NA_real_
+  spread <- vapply(seq_len(ncol(pred)), function(j) {
+    if (n.used[j] > 1L) sd(pred[, j], na.rm = TRUE) else NA_real_
+  }, numeric(1L))
+  se <- spread / sqrt(n.used)
+  se[n.used < 2L] <- NA_real_
+  list(mean = center, sd = spread, se = se, n.used = n.used, pred = pred)
+}
+.plot.variable.range <- function(x, fraction = .005) {
+  x <- x[is.finite(x)]
+  if (!length(x)) return(c(0, 1))
+  z <- range(x)
+  pad <- fraction * diff(z)
+  if (!is.finite(pad) || pad == 0) pad <- fraction * max(1, abs(z))
+  z + c(-pad, pad)
+}
+## Keep box-specific settings off ordinary plot()/points()/lines() calls.
+.plot.variable.box.names <- function() {
+  c("notch", "outline", "boxfill", "boxcol", "boxlty", "boxlwd",
+    "whiskcol", "whisklty", "whisklwd", "staplecol", "staplelty", "staplelwd",
+    "medcol", "medlty", "medlwd", "medpch", "medcex", "medbg", "outcol", "outpch",
+    "outcex", "outbg", "outlty", "outlwd", "boxwex", "staplewex", "outwex",
+    "notch.frac", "varwidth", "width", "border", "horizontal", "at", "show.names", "names", "range")
+}
+.plot.variable.panel <- function(x, y, dots, xlab, ylab) {
+  args <- .plot.variable.merge(list(x = x, y = y, type = "n", xlab = xlab, ylab = ylab),
+                               dots[setdiff(names(dots), .plot.variable.box.names())])
+  ## Scaffolding is separate from the styled fitted curve and observations.
+  args$x <- x
+  args$y <- y
+  args$type <- "n"
+  if (!any(is.finite(x)) && is.null(args$xlim)) args$xlim <- c(0, 1)
+  if (!any(is.finite(y)) && is.null(args$ylim)) args$ylim <- c(0, 1)
+  do.call("plot", args)
+}
+## Smooth only finite contiguous pieces, keeping unavailable grid points as gaps.
+.plot.variable.line <- function(x, y, smooth, args = list()) {
+  good <- is.finite(x) & is.finite(y)
+  runs <- rle(good)
+  finish <- cumsum(runs$lengths)
+  start <- finish - runs$lengths + 1L
+  for (j in which(runs$values)) {
+    idx <- seq.int(start[j], finish[j])
+    if (length(idx) < 2L) next
+    xy <- if (smooth && length(unique(x[idx])) > 1L) lowess(x[idx], y[idx]) else
+      list(x = x[idx], y = y[idx])
+    do.call("lines", .plot.variable.merge(xy, args))
+  }
+  invisible(NULL)
+}
+.plot.variable.boxes <- function(groups, labels, dots, xlab, ylab, partial = FALSE) {
+  groups <- lapply(groups, function(z) z[is.finite(z)])
+  names(groups) <- labels
+  if (!any(lengths(groups))) {
+    .plot.variable.panel(seq_along(groups), rep(NA_real_, length(groups)), dots, xlab, ylab)
+    text(mean(par("usr")[1:2]), mean(par("usr")[3:4]), "No finite predictions")
+    return(invisible(NULL))
+  }
+  box.range <- if (is.null(dots$range)) 1.5 else dots$range
+  bp <- boxplot(groups, plot = FALSE, range = box.range)
+  labels <- if (is.null(dots$names)) labels else dots$names
+  if (length(labels) != length(groups)) stop("'names' must have one label per displayed group")
+  bp$names <- as.character(labels)
+  horizontal <- if (is.null(dots$horizontal)) FALSE else .plot.variable.flag(dots$horizontal, "horizontal")
+  axes <- if (is.null(dots$axes)) TRUE else .plot.variable.flag(dots$axes, "axes")
+  show.names <- if (is.null(dots$show.names)) TRUE else .plot.variable.flag(dots$show.names, "show.names")
+  xaxt <- if (is.null(dots$xaxt)) par("xaxt") else dots$xaxt
+  yaxt <- if (is.null(dots$yaxt)) par("yaxt") else dots$yaxt
+  defaults <- list(z = bp, outline = FALSE, notch = TRUE, boxfill = "bisque",
+                   horizontal = horizontal,
+                   xlab = if (horizontal) ylab else xlab,
+                   ylab = if (horizontal) xlab else ylab)
+  if (partial) {
+    limits <- bp$stats
+    if (isTRUE(dots$outline)) limits <- c(limits, bp$out)
+    if (is.null(dots$notch) || isTRUE(dots$notch)) limits <- c(limits, bp$conf)
+    defaults[[if (horizontal) "xlim" else "ylim"]] <- .plot.variable.range(limits)
+  }
+  args <- .plot.variable.merge(defaults, dots[setdiff(names(dots), c("type", "range", "names"))])
+  args$z <- bp
+  args$axes <- FALSE
+  args$show.names <- FALSE
+  if (is.null(args$frame.plot)) args$frame.plot <- axes
+  if (is.null(args$at)) args$at <- seq_along(labels)
+  if (!is.numeric(args$at) || length(args$at) != length(labels) || any(!is.finite(args$at))) {
+    stop("'at' must give one finite position per displayed group")
+  }
+  ## bxp reverses its limit arguments for horizontal boxes. Keep public
+  ## xlim and ylim attached to the displayed horizontal and vertical axes.
+  if (horizontal) {
+    for (pair in list(c("xlim", "ylim"), c("xaxs", "yaxs"))) {
+      first <- args[[pair[1L]]]
+      second <- args[[pair[2L]]]
+      args[[pair[1L]]] <- second
+      args[[pair[2L]]] <- first
+    }
+  }
+  do.call("bxp", args)
+  axis.names <- c("las", "cex.axis", "col.axis", "font.axis", "line", "lwd",
+                  "lwd.ticks", "col.ticks", "hadj", "padj", "gap.axis", "mgp",
+                  "tck", "tcl", "xpd", "fg")
+  axis.args <- dots[intersect(names(dots), axis.names)]
+  value.side <- if (horizontal) 1L else 2L
+  label.side <- if (horizontal) 2L else 1L
+  if (axes && !identical(if (horizontal) xaxt else yaxt, "n")) {
+    do.call("axis", .plot.variable.merge(list(side = value.side), axis.args))
+  }
+  if (axes && show.names && !identical(if (horizontal) yaxt else xaxt, "n")) {
+    idx <- unique(round(pretty(seq_along(labels), min(30L, length(labels)))))
+    idx <- idx[idx >= 1L & idx <= length(labels)]
+    do.call("axis", .plot.variable.merge(list(side = label.side, at = args$at[idx],
+                        labels = labels[idx], tick = TRUE), axis.args))
+  }
+  invisible(bp)
+}
 plot.variable.rfsrc <- function(
   x,
   xvar.names,
@@ -19,465 +167,301 @@ plot.variable.rfsrc <- function(
   ...)
 {
   ## --------------------------------------------------------------
-  ##   
-  ##   coherence checks
-  ##
+  ## Object and display controls. Cached plots need no saved forest.
   ## --------------------------------------------------------------
-  ## is this a synthetic forest?
-  if (sum(inherits(x, c("rfsrc", "synthetic"), TRUE) == c(1, 2)) == 2) {
-    x <- x$rfSyn
-  }
-  ## check that object is interpretable
-  ## first rename x to object to avoid confusion with x matrix
+  if (inherits(x, "rfsrc") && inherits(x, "synthetic")) x <- x$rfSyn
   object <- x
-  remove(x)
-  if (sum(inherits(object, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2 &
-      sum(inherits(object, c("rfsrc", "plot.variable"), TRUE) == c(1,2)) != 2) {
-    stop("this function only works for objects of class `(rfsrc, grow)', '(rfsrc, synthetic)' or '(rfsrc, plot.variable)'")
+  if (!inherits(object, "rfsrc") ||
+      !(inherits(object, "grow") || inherits(object, "plot.variable"))) {
+    stop("this function requires an rfsrc grow, synthetic, or plot.variable object")
   }
-  if (object$family == "unsupv") {
-    stop("this function does not apply to unsupervised forests")
+  cached <- inherits(object, "plot.variable")
+  if (identical(object$family, "unsupv")) stop("this function does not apply to unsupervised forests")
+  if (inherits(object, "anonymous")) stop("this function does not work with anonymous forests")
+  partial <- .plot.variable.flag(partial, "partial")
+  oob <- .plot.variable.flag(oob, "oob")
+  show.plots <- .plot.variable.flag(show.plots, "show.plots")
+  sorted <- .plot.variable.flag(sorted, "sorted")
+  smooth.lines <- .plot.variable.flag(smooth.lines, "smooth.lines")
+  plots.per.page <- .plot.variable.count(plots.per.page, "plots.per.page")
+  granule <- .plot.variable.count(granule, "granule")
+  npts <- .plot.variable.count(npts, "npts")
+  if (!missing(nvar)) nvar <- .plot.variable.count(nvar, "nvar")
+  if (partial && !cached && (is.null(object$forest) || !isTRUE(object$forest$forest))) {
+    stop("forest is empty: re-run rfsrc (grow call) with forest=TRUE")
   }
-  if (inherits(object, "anonymous")) {
-      stop("this function does work with anonymous forests")
-  }    
-  ## terminate if a partial plot is requested but no forest is found
-  if (partial && (is.null(object$forest) || !object$forest$forest)) {
-    stop("forest is empty:  re-run rfsrc (grow call) with forest=TRUE")
+  dots <- .plot.variable.merge(list(), list(...))
+  if (!is.null(dots$pars)) {
+    if (!is.list(dots$pars)) stop("'pars' must be a named list of graphical arguments")
+    pars <- dots$pars
+    dots$pars <- NULL
+    dots <- .plot.variable.merge(pars, dots)
   }
+  if (any(c("x", "y", "z") %in% names(dots))) stop("plotting arguments must not replace stored plot data")
   ## --------------------------------------------------------------
-  ##   
-  ##   preliminary processing
-  ##
+  ## New calculation: retain the training row, factor, and event maps.
   ## --------------------------------------------------------------
-  ## if missing data was imputed then overlay the missing data for x
-  ## bug reported by John Ehrlinger
-  xvar <- object$xvar
-  if (!is.null(object$imputed.indv)) {
-    xvar[object$imputed.indv, ] <- object$imputed.data[, object$xvar.names]
-  }
-  n <- nrow(xvar)
-  ## obtain hidden options - set matched options to NULL
-  dots <- list(...)
-  plot.names <- names(formals(plot.default))
-  bxp.names <- unique(c(names(formals(bxp)),
-                 "xaxt", "yaxt", "las", "cex.axis", 
-                 "col.axis", "main", "cex.main",
-                 "col.main", "sub", "cex.sub", "col.sub", 
-                 "xlab", "ylab", "cex.lab", "col.lab", "boxfill","varwidth"))
-  axis.names <- unique(c(names(formals(axis)), "las", "cex.axis"))
-  ## by default xlab and ylab are extracted from the data
-  ## over-ridden only by hidden options
-  xlab.flag <- ylab.flag <- TRUE
-  if (!is.null(dots$xlab)) {
-    xlab.flag <- FALSE
-  }
-  if (!is.null(dots$ylab)) {
-    ylab.flag <- FALSE
-  }
-  ## default notch, boxfill
-  if (is.null(dots$notch)) {
-    dots$notch <- TRUE
-  }
-  if (is.null(dots$boxfill)) {
-    dots$boxfill <- "bisque"
-  }
-  ## --------------------------------------------------------------------------------------------
-  ## do the following if the class is NOT "plot.variable" 
-  ## (i.e. the object has not already been processed by the wraper)
-  if (!inherits(object, "plot.variable")) {
-    ## process the subsetted index 
-    ## assumes the entire data set is to be used if not specified
-    if (missing(subset)) {
-      subset <- 1:n
+  if (!cached) {
+    xvar <- object$xvar
+    if (is.null(xvar) || is.null(dim(xvar))) stop("stored training predictors are unavailable")
+    if (!identical(class(xvar), "data.frame")) xvar <- as.data.frame(xvar, optional = TRUE)
+    if (!is.null(object$imputed.indv)) {
+      xvar[object$imputed.indv, ] <- object$imputed.data[, object$xvar.names, drop = FALSE]
     }
-      else {
-        ## convert the user specified subset into a usable form
-        if (is.logical(subset)) subset <- which(subset)
-        subset <- unique(subset[subset >= 1 & subset <= n])
-        if (length(subset) == 0) {
-          stop("'subset' not set properly")
-        }
-      }
-    ## subset the x-data
-    xvar <- xvar[subset,, drop = FALSE]
+    n.full <- nrow(xvar)
+    subset <- .plot.variable.subset(if (missing(subset)) NULL else subset, n.full)
+    xvar <- xvar[subset, , drop = FALSE]
     n <- nrow(xvar)
-    ## process the object depending on the underlying family
     family <- object$family
-    ## Ensure the coherency of multivariate target.
     m.target <- get.univariate.target(object, m.target)
-    ## Survival and competing risk families.
-    if (grepl("surv", family)) {
-      ##extract event information
+    target.arg <- if (missing(target)) NULL else target
+    event.info <- NULL
+    VIMP <- NULL
+    if (family %in% c("surv", "surv-CR")) {
       event.info <- get.event.info(object, subset)
-      cens <- event.info$cens
-      event.type <- event.info$event.type
-      ## assign time if missing
-      if (missing(time)) {
-        time <- median(event.info$time.interest, na.rm = TRUE)
+      ## The full forest map controls positions, even if a subset omits an event.
+      full.events <- object$forest$event.info$event.type
+      if (is.null(full.events)) full.events <- get.event.info(object)$event.type
+      event.info$event.type <- full.events
+      allowed <- if (family == "surv") c("mort", "rel.freq", "surv", "chf") else
+        c("years.lost", "cif", "chf")
+      if (missing(surv.type)) surv.type <- allowed[1L]
+      if (length(surv.type) != 1L || is.na(surv.type)) stop("'surv.type' must select one survival summary")
+      pred.type <- match.arg(surv.type, allowed)
+      if (pred.type %in% c("surv", "cif", "chf")) {
+        if (missing(time)) time <- median(event.info$time.interest, na.rm = TRUE)
+        .partial.time.index(time, event.info$time.interest, "time", single = TRUE)
       }
-      ## Check for single time point.
-      if (length(time) > 1) {
-        stop("time must be a single value:  ", time)
-      }
-      ## CR analysis.
+      else time <- NULL
       if (family == "surv-CR") {
-        if (missing(target)) {
-          target <- 1
-        }
-          else {
-            if (target < 1 || target > max(event.type, na.rm = TRUE)) {
-              stop("'target' is specified incorrectly")
-            }
-          }
-        VIMP <- object$importance[, target]
-        ## set the surv.type
-        surv.type <- setdiff(surv.type, c("mort", "rel.freq", "surv"))[1]
-        pred.type <- match.arg(surv.type, c("years.lost", "cif", "chf"))
+        if (!is.null(target.arg) && !is.numeric(target.arg)) stop("competing-risk 'target' must be an event index")
+        target <- .plot.variable.target(target.arg, seq_along(full.events))
+        event.label <- full.events[target]
+        if (!is.null(object$importance)) VIMP <- object$importance[, target]
         ylabel <- switch(pred.type,
-                         "years.lost" = paste("Years lost for event ", target),
-                         "cif"        = paste("CIF for event ", target, " (time=", time, ")", sep = ""),
-                         "chf"        = paste("CHF for event ", target, " (time=", time, ")", sep = ""))
+          "years.lost" = paste("Years lost for event", event.label),
+          "cif" = paste0("CIF for event ", event.label, " (time=", time, ")"),
+          "chf" = paste0("CHF for event ", event.label, " (time=", time, ")"))
       }
-      ## Right-censoring analysis.
-        else {
-          target <- 1
-          VIMP <- object$importance
-          ## set the surv.type
-          surv.type <- setdiff(surv.type, c("years.lost", "cif", "chf"))[1]
-          pred.type <- match.arg(surv.type, c("rel.freq", "mort", "chf", "surv"))
-          ylabel <- switch(pred.type,
-                           "rel.freq"   = "standardized mortality",
-                           "mort"       = "mortality",
-                           "chf"        = paste("CHF (time=", time, ")", sep = ""),
-                           "surv"       = paste("predicted survival (time=", time, ")", sep = ""))
-        }
-    }
-    ## Univariate and multivariate families.
       else {
-        ## assign a null time value
-        event.info <- time <- NULL
-        ## Factor outcome
-        if(is.factor(coerce.multivariate(object, m.target)$yvar)) {
-          object.yvar.levels <- levels(coerce.multivariate(object, m.target)$yvar)
-          pred.type <- match.arg(class.type, c("prob", "bayes"))
-          if (missing(target)) {
-            target <- object.yvar.levels[1]
-          }
-          if (is.character(target)) {
-            target <- match(match.arg(target, object.yvar.levels), object.yvar.levels)
-          }
-            else {
-              if ((target > length(object.yvar.levels)) | (target < 1)) {
-                stop("target is specified incorrectly:", target)
-              }
-            }
-          if (pred.type == "prob") {
-            VIMP <- coerce.multivariate(object, m.target)$importance[, 1 + target]
-            ylabel <- paste("probability", object.yvar.levels[target])
-            remove(object.yvar.levels)
-          }
-            else {
-              VIMP <- coerce.multivariate(object, m.target)$importance[, 1]
-              ylabel <- paste("bayes")
-              remove(object.yvar.levels)
-            }
-        }
-        ## Regression outcome.
-          else {
-            pred.type <- "y"
-            target <- NULL
-            VIMP <- coerce.multivariate(object, m.target)$importance
-            ylabel <- expression(hat(y))
-          }
+        target <- 1L
+        VIMP <- object$importance
+        ylabel <- switch(pred.type, "rel.freq" = "standardized mortality",
+          "mort" = "mortality", "chf" = paste0("CHF (time=", time, ")"),
+          "surv" = paste0("predicted survival (time=", time, ")"))
       }
-    ## extract x-var names to be plotted
-    ## should x-var be sorted by importance?
-    if (missing(xvar.names)) {
-      xvar.names <- object$xvar.names
     }
-      else {
-        xvar.names <- intersect(xvar.names, object$xvar.names)
-        if (length(xvar.names) ==  0){
-          stop("none of the x-variable supplied match available ones:\n", object$xvar.names)
-        }
-      }
-    if (sorted & !is.null(VIMP)) {
-      xvar.names <- xvar.names[rev(order(VIMP[xvar.names]))]
-    }
-    if (!missing(nvar)) {
-      nvar <- max(round(nvar), 1)
-      xvar.names <- xvar.names[1:min(length(xvar.names), nvar)]
-    }
-    nvar <- length(xvar.names)
-    ## Marginal plot setup
-    if (!partial) {
-      yhat <- extract.pred(predict(object, m.target = m.target),
-                           pred.type,
-                           subset,
-                           time,
-                           m.target,
-                           target,
-                           oob = oob)
-    }
-    ## Partial plot setup
     else {
-      if (npts < 1) npts <- 1 else npts <- round(npts)
-      ## Loop over all x-variables.
-      prtl <- lapply(1:nvar, function(k) {
-        ## We now allow subsetting of the x-values in the partial mode call.
-        ## x <- na.omit(object$xvar[, object$xvar.names == xvar.names[k]])
-        ## Bug reported by Amol Pande 16/11/2017
-        x <- na.omit(xvar[, object$xvar.names == xvar.names[k]])
-        if (is.factor(x)) x <- factor(x, exclude = NULL)          
-        n.x <- length(unique(x))
-        if (!is.factor(x) & n.x > npts) {
-          x.uniq <- sort(unique(x))[unique(as.integer(seq(1, n.x, length = min(npts, n.x))))]
+      if (grepl("surv", family)) stop("this survival family is not supported by variable plotting")
+      time <- NULL
+      univariate <- coerce.multivariate(object, m.target)
+      if (is.factor(univariate$yvar)) {
+        levels.y <- levels(univariate$yvar)
+        pred.type <- match.arg(class.type, c("prob", "bayes"))
+        target <- .plot.variable.target(target.arg, levels.y)
+        if (pred.type == "prob") {
+          if (!is.null(univariate$importance)) VIMP <- univariate$importance[, 1L + target]
+          ylabel <- paste("probability", levels.y[target])
         }
         else {
-          if (is.factor(x)) {
-            x.uniq <- 1:length(unique(x))##partial.rfsrc requires factors as integers
-          }
-          else {
-            x.uniq <- sort(unique(x))
-          }
+          if (!is.null(univariate$importance)) VIMP <- univariate$importance[, 1L]
+          ylabel <- "bayes class code"
         }
-        n.x <- length(x.uniq)
-        yhat <- yhat.se <- NULL
-        factor.x <- is.factor(x) | (n.x <= granule)
-        pred.temp <- extract.partial.pred(partial.rfsrc(object$forest,
-                                                        m.target = m.target,
-                                                        partial.type = pred.type,
-                                                        partial.xvar = xvar.names[k],
-                                                        partial.values = x.uniq,
-                                                        partial.time = time,
-                                                        oob = oob),
-                                          pred.type,
-                                          subset,##we now allow subsetting
-                                          m.target,
-                                          target)
-        ## Results in the mean along an x-value over n.
-        if (!is.null(dim(pred.temp))) {
-          mean.temp <- colMeans(pred.temp, na.rm = TRUE)
+      }
+      else {
+        pred.type <- "y"
+        target <- NULL
+        VIMP <- univariate$importance
+        ylabel <- expression(hat(y))
+      }
+    }
+    ## Keep finite importance values ahead of unavailable ones.
+    if (missing(xvar.names)) xvar.names <- object$xvar.names else
+      xvar.names <- intersect(xvar.names, object$xvar.names)
+    if (!length(xvar.names)) stop("none of the supplied predictors match available variables")
+    if (sorted && !is.null(VIMP)) {
+      score <- VIMP[xvar.names]
+      score[!is.finite(score)] <- NA_real_
+      xvar.names <- xvar.names[order(score, decreasing = TRUE, na.last = TRUE)]
+    }
+    if (!missing(nvar)) xvar.names <- head(xvar.names, nvar)
+    nvar <- length(xvar.names)
+    plots.per.page <- min(plots.per.page, nvar)
+    ## Ordinary prediction dispatch is retained; extraction selects stored data.
+    if (!partial) {
+      yhat <- extract.pred(predict(object, m.target = m.target), pred.type,
+                            subset, time, m.target, target, oob = oob)
+    }
+    else {
+      prtl <- lapply(xvar.names, function(name) {
+        xx <- xvar[[name]]
+        factor.x <- is.factor(xx)
+        if (factor.x) {
+          labels <- .partial.factor.levels(object$forest, name)
+          if (!length(labels)) labels <- levels(xx)
+          codes <- which(labels %in% as.character(xx[!is.na(xx)]))
+          grid <- as.numeric(codes)
+          display <- factor(labels[codes], levels = labels[codes], ordered = is.ordered(xx))
+          xx <- xx[!is.na(xx)]
         }
         else {
-          mean.temp <- mean(pred.temp, na.rm = TRUE)
+          xx <- xx[is.finite(xx)]
+          grid <- sort(unique(xx))
+          if (length(grid) > npts) {
+            grid <- grid[unique(as.integer(seq(1, length(grid), length.out = npts)))]
+          }
+          display <- grid
         }
-        if (!factor.x) {
-          yhat <- mean.temp
-          if (coerce.multivariate(object, m.target)$family == "class") {
-            yhat.se <- mean.temp * (1 - mean.temp) / sqrt(n)
-          }
-          else {
-            sd.temp <- apply(pred.temp, 2, sd, na.rm = TRUE)
-            yhat.se <- sd.temp / sqrt(n)                
-          }
+        if (!length(grid)) stop("predictor '", name, "' has no available values in the plotting subset")
+        n.x <- length(grid)
+        discrete <- factor.x || n.x <= granule
+        raw <- extract.partial.pred(partial.rfsrc(object$forest,
+                     m.target = m.target, partial.type = pred.type,
+                     partial.xvar = name, partial.values = grid,
+                     partial.time = time, oob = oob),
+                   pred.type, subset, m.target, target)
+        summary <- .plot.variable.summary(raw)
+        if (discrete) {
+          ## Retain the boxplot convention on the same SE scale as curves.
+          divisor <- sqrt(summary$n.used)
+          divisor[divisor == 0] <- NA_real_
+          adjusted <- sweep(sweep(summary$pred, 2L, summary$mean, "-"), 2L, divisor, "/")
+          adjusted <- sweep(adjusted, 2L, summary$mean, "+")
+          yhat <- as.vector(adjusted)
         }
-        else {
-          if (!is.null(dim(pred.temp))) {
-            pred.temp <- t(apply(pred.temp, 1, function(yhat) {
-              se <- (yhat - mean.temp) / sqrt(n)
-              mean.temp + sign(se) * abs(se)
-            }))
-          }
-          else {
-            pred.temp <- mean.temp + (pred.temp - mean.temp) / sqrt(n)
-          }
-          yhat <- c(yhat, pred.temp)
-          x.uniq <- sort(unique(x))##map factor back to original labels
-        }
-        list(xvar.names = xvar.names[k], yhat = yhat, yhat.se = yhat.se, n.x = n.x, x.uniq = x.uniq, x = x)
+        else yhat <- summary$mean
+        list(xvar.names = name, yhat = yhat, yhat.se = summary$se,
+             yhat.mean = summary$mean, yhat.sd = summary$sd, n.used = summary$n.used,
+             n.x = n.x, x.uniq = display, partial.values = grid, x = xx,
+             factor.x = discrete)
       })
       names(prtl) <- xvar.names
     }
-    plots.per.page <- max(round(min(plots.per.page,nvar)), 1)
-    granule <- max(round(granule), 1)
-    ## save the plot.variable object
-    plot.variable.obj <- list(family = family,
-                              partial = partial,
-                              event.info = event.info,
-                              target = target,
-                              ylabel = ylabel,
-                              n = n,
-                              xvar.names = xvar.names,
-                              nvar = nvar, 
-                              plots.per.page = plots.per.page,
-                              granule = granule,
-                              smooth.lines = smooth.lines)
+    plot.variable.obj <- list(family = family, partial = partial, event.info = event.info,
+                 target = target, ylabel = ylabel, n = n, xvar.names = xvar.names,
+                 nvar = nvar, plots.per.page = plots.per.page, granule = granule,
+                 smooth.lines = smooth.lines)
     if (partial) {
       plot.variable.obj$pData <- prtl
-      #06/15/24: provide this object for convenience of custom user plots
       plot.variable.obj$plotthis <- lapply(prtl, function(pp) {
-        if (length(pp$x.uniq) == length(pp$yhat)) {
-          data.frame(x=pp$x.uniq, yhat=pp$yhat)
-        }
-        else {
-          data.frame(x=rep(pp$x.uniq, rep(n, pp$n.x)), yhat=pp$yhat)
-        }
+        data.frame(x = if (pp$factor.x) rep(pp$x.uniq, each = n) else pp$x.uniq,
+                   yhat = pp$yhat)
+      })
+      plot.variable.obj$partial.summary <- lapply(prtl, function(pp) {
+        data.frame(x = pp$x.uniq, mean = pp$yhat.mean, sd = pp$yhat.sd,
+                   se = pp$yhat.se, n.used = pp$n.used)
       })
     }
     else {
       plot.variable.obj$yhat <- yhat
       plot.variable.obj$xvar <- xvar
     }
-    ## assign the class
     class(plot.variable.obj) <- c("rfsrc", "plot.variable", family)
   }
-  ## --------------------------------------------------------------------------------------------
-  ## do the following if the class IS "plot.variable" 
   else {
+    ## Replay uses the saved numerical values and layout settings.
     plot.variable.obj <- object
-    remove(object)
-    family <- plot.variable.obj$family
-    partial <- plot.variable.obj$partial
-    event.info <- plot.variable.obj$event.info
-    target <- plot.variable.obj$target
-    ylabel <- plot.variable.obj$ylabel
-    n <- plot.variable.obj$n
-    if (missing(xvar.names)) {
-      xvar.names <- plot.variable.obj$xvar.names
-    }
-    else {
-      xvar.names <- intersect(xvar.names, plot.variable.obj$xvar.names)
-    }
+    family <- object$family
+    partial <- object$partial
+    event.info <- object$event.info
+    target <- object$target
+    ylabel <- object$ylabel
+    n <- object$n
+    if (missing(xvar.names)) xvar.names <- object$xvar.names else
+      xvar.names <- intersect(xvar.names, object$xvar.names)
+    if (!length(xvar.names)) stop("none of the supplied predictors match the saved plotting object")
     nvar <- length(xvar.names)
-    plots.per.page <- min(plot.variable.obj$plots.per.page, nvar)
-    granule <- plot.variable.obj$granule
-    smooth.lines <- plot.variable.obj$smooth.lines
-    if (partial) {
-      prtl <- plot.variable.obj$pData[xvar.names]
-    }
-    else {
-      yhat <- plot.variable.obj$yhat
-      xvar <- plot.variable.obj$xvar[, xvar.names, drop = FALSE]
-    }
-    if (!is.null(event.info)){
-      cens <- event.info$cens
-      event.type <- event.info$event.type
+    plots.per.page <- min(.plot.variable.count(object$plots.per.page, "plots.per.page"), nvar)
+    granule <- object$granule
+    smooth.lines <- object$smooth.lines
+    if (partial) prtl <- object$pData[xvar.names] else {
+      yhat <- object$yhat
+      xvar <- object$xvar[, xvar.names, drop = FALSE]
     }
   }
-  ## save par settings
+  ## --------------------------------------------------------------
+  ## Rendering only. Restore device settings even when a panel errors.
+  ## --------------------------------------------------------------
   if (show.plots) {
     old.par <- par(no.readonly = TRUE)
-  }
-  ## --------------------------------------------------------------------------------
-  ##
-  ## marginal plots
-  ##
-  ## --------------------------------------------------------------------------------
-  if (!partial && show.plots) {
-    ## graphical set up
+    on.exit(par(old.par), add = TRUE)
     par(mfrow = c(min(plots.per.page, ceiling(nvar / plots.per.page)), plots.per.page))
-    if (n > 500) cex.pt <- 0.5 else cex.pt <- 0.75
-    ## loop over variables
-    for (k in 1:nvar) {
-      ##x-stuff
-      x <- xvar[, which(colnames(xvar) == xvar.names[k])]
-      x.uniq <- unique(x)
-      n.x <- length(x.uniq)
-      ## hidden options
-      if (xlab.flag) {
-        dots$xlab <- xvar.names[k]
-      }
-      if (ylab.flag) {
-        dots$ylab <- ylabel
-      }
-      ## x-continuous-plot
-      if (!is.factor(x) & n.x > granule) {
-        do.call("plot", c(list(x = x, y = yhat, type = "n"), dots[names(dots) %in% plot.names]))
-        if (grepl("surv", family)) {
-          points(x[cens == target], yhat[cens == target], pch = 16, col = 4, cex = cex.pt)
-          points(x[cens == 0], yhat[cens == 0], pch = 16, cex = cex.pt)
-        }
-        lines(lowess(x[!is.na(x)], yhat[!is.na(x)]), col = 2, lwd=3)
-      }
-      ## x-factor-plots
-      else {
-        if (is.factor(x)) x <- factor(x, exclude = NULL)
-        bp <- boxplot(yhat ~ x, na.action = "na.omit", names = rep("", n.x), plot = FALSE)
-        do.call("bxp", c(list(z = bp, outline = FALSE, xaxt = "n"), dots[names(dots) %in% bxp.names]))
-        at.pretty <- unique(round(pretty(1:n.x, min(30, n.x))))
-        at.pretty <- at.pretty[at.pretty >= 1 & at.pretty <= n.x]
-        do.call("axis", c(list(side = 1, at = at.pretty,
-             labels = format(sort(x.uniq)[at.pretty], trim = TRUE, digits = 4),
-             tick = TRUE), dots[names(dots) %in% axis.names]))
-        }
-    }
-  }
-  ## --------------------------------------------------------------------------------
-  ##
-  ## partial plots
-  ##
-  ## --------------------------------------------------------------------------------
-  if (partial && show.plots) {
-    ## graphical setup
-    plots.per.page <- max(round(min(plots.per.page,nvar)), 1)
-    granule <- max(round(granule),1)
-    par(mfrow = c(min(plots.per.page, ceiling(nvar/plots.per.page)), plots.per.page))
-    ## loop over variables
-    for (k in 1:nvar) {
-      ## x-stuff
-      x <- prtl[[k]]$x
-      if (is.factor(x)) x <- factor(x, exclude = NULL)          
-      x.uniq <- prtl[[k]]$x.uniq
-      n.x <- prtl[[k]]$n.x
-      if (n.x > 25) cex.pt <- 0.5 else cex.pt <- 0.75
-      ## y-stuff
-      yhat <- prtl[[k]]$yhat
-      yhat.se <- prtl[[k]]$yhat.se
-      factor.x <- !(!is.factor(x) & (n.x > granule))
-      ## hidden options
-      if (xlab.flag) {
-        dots$xlab <- prtl[[k]]$xvar.names
-      }
-      if (ylab.flag) {
-        dots$ylab <- ylabel
-      }
-      ## x-continuous-plot
-      if (!factor.x) {
-        do.call("plot", c(list(x = c(min(x), x.uniq, max(x), x.uniq, x.uniq),
-                               y = c(NA, yhat, NA, yhat + 2 * yhat.se, yhat - 2 * yhat.se),
-                               type = "n"), dots[names(dots) %in% plot.names]))
-        points(x.uniq, yhat, pch = 16, cex = cex.pt, col = 2)
-        if (any(yhat.se > 0)) {
-            if (smooth.lines && !any(is.na(yhat.se))) {
-                lines(lowess(x.uniq, yhat + 2 * yhat.se), lty = 3, col = 2)
-                lines(lowess(x.uniq, yhat - 2 * yhat.se), lty = 3, col = 2)
+    if (!partial) {
+      yplot <- if (is.factor(yhat)) as.numeric(yhat) else yhat
+      for (name in xvar.names) {
+        xx <- xvar[[name]]
+        xlabel <- name
+        yl <- ylabel
+        distinct <- unique(xx[!is.na(xx)])
+        if (!is.factor(xx) && length(distinct) > granule) {
+          .plot.variable.panel(xx, yplot, dots, xlabel, yl)
+          point.args <- .plot.variable.merge(list(pch = 16, cex = if (n > 500) .5 else .75),
+                             dots[intersect(names(dots), c("pch", "col", "cex", "bg"))])
+          if (grepl("surv", family)) {
+            status <- event.info$cens
+            event <- if (family == "surv-CR") event.info$event.type[target] else NULL
+            use.event <- is.finite(status) & (if (is.null(event)) status != 0 else status == event)
+            for (pt in list(which(use.event), which(is.finite(status) & status == 0))) {
+              if (!length(pt)) next
+              style <- point.args
+              if (is.null(dots$col)) style$col <- if (all(status[pt] == 0)) 1 else 4
+              do.call("points", .plot.variable.merge(list(x = xx[pt], y = yplot[pt]), style))
             }
-            else {
-                lines(x.uniq, yhat + 2 * yhat.se, lty = 3, col = 2)
-                lines(x.uniq, yhat - 2 * yhat.se, lty = 3, col = 2)
-            }
-        }
-        if (smooth.lines) {
-          lines(lowess(x.uniq, yhat), lty = 2, lwd=2)
-        }
-          else {
-            lines(x.uniq, yhat, lty = 2, lwd=2)
           }
-        rug(x, ticksize=0.03)
-      }
-      ## x-factor-plots
+          ok <- is.finite(xx) & is.finite(yplot)
+          args <- .plot.variable.merge(list(col = 2, lwd = 3, type = "l"),
+                     dots[intersect(names(dots), c("col", "lty", "lwd", "type", "pch", "cex", "bg"))])
+          if (sum(ok) > 1L && length(unique(xx[ok])) > 1L) {
+            do.call("lines", .plot.variable.merge(lowess(xx[ok], yplot[ok]), args))
+          }
+          else if (any(ok)) do.call("points", .plot.variable.merge(list(x = xx[ok], y = yplot[ok]), point.args))
+        }
         else {
-          y.se <- 0.005
-          bp <- boxplot(yhat ~ rep(x.uniq, rep(n, n.x)), names = rep("", n.x), plot = FALSE)
-          do.call("bxp", c(list(z = bp, outline = FALSE, range = 2,
-                                ylim = c(min(bp$stats[1,], na.rm = TRUE) * ( 1 - y.se ),
-                                         max(bp$stats[5,], na.rm = TRUE) * ( 1 + y.se )),
-                                xaxt = "n"), dots[names(dots) %in% bxp.names]))
-          at.pretty <- unique(round(pretty(1:n.x, min(30,n.x))))
-          at.pretty <- at.pretty[at.pretty >= 1 & at.pretty <= n.x]
-          do.call("axis", c(list(side = 1, at = at.pretty,
-             labels = format(sort(x.uniq)[at.pretty], trim = TRUE, digits = 4),
-             tick = TRUE), dots[names(dots) %in% axis.names]))
+          labels <- if (is.factor(xx)) levels(xx)[levels(xx) %in% as.character(distinct)] else sort(distinct)
+          groups <- lapply(labels, function(label) yplot[which(xx == label)])
+          .plot.variable.boxes(groups, format(labels, trim = TRUE, digits = 4), dots, xlabel, yl)
+        }
+      }
+    }
+    else {
+      for (pp in prtl) {
+        discrete <- if (!is.null(pp$factor.x)) pp$factor.x else is.factor(pp$x) || pp$n.x <= granule
+        xlabel <- pp$xvar.names
+        yl <- ylabel
+        if (discrete) {
+          values <- matrix(pp$yhat, nrow = n, ncol = pp$n.x)
+          groups <- lapply(seq_len(pp$n.x), function(j) values[, j])
+          .plot.variable.boxes(groups, format(pp$x.uniq, trim = TRUE, digits = 4), dots, xlabel, yl, partial = TRUE)
+        }
+        else {
+          grid <- pp$x.uniq
+          center <- pp$yhat
+          se <- pp$yhat.se
+          upper <- center + 2 * se
+          lower <- center - 2 * se
+          xx <- c(min(pp$x), grid, max(pp$x), grid, grid)
+          yy <- c(NA_real_, center, NA_real_, upper, lower)
+          .plot.variable.panel(xx, yy, dots, xlabel, yl)
+          p.args <- .plot.variable.merge(list(pch = 16, cex = if (pp$n.x > 25) .5 else .75, col = 2),
+                       dots[intersect(names(dots), c("pch", "cex", "col", "bg"))])
+          style <- if (is.null(dots$type)) "b" else dots$type
+          if (style %in% c("p", "b", "o")) do.call("points", .plot.variable.merge(list(x = grid, y = center), p.args))
+          if (any(is.finite(se) & se > 0)) {
+            band.args <- .plot.variable.merge(list(lty = 3, col = 2),
+                           dots[intersect(names(dots), c("col", "lwd"))])
+            .plot.variable.line(grid, upper, smooth.lines, band.args)
+            .plot.variable.line(grid, lower, smooth.lines, band.args)
+          }
+          if (!(style %in% c("p", "n"))) {
+            line.args <- .plot.variable.merge(list(lty = 2, lwd = 2, type = if (style == "b") "l" else style),
+                          dots[intersect(names(dots), c("col", "lty", "lwd"))])
+            .plot.variable.line(grid, center, smooth.lines, line.args)
+          }
+          rug(pp$x[is.finite(pp$x)], ticksize = .03)
+        }
       }
     }
   }
-  ## Restore par settings
-  if (show.plots) {
-    par(old.par)
-  }
-  ## Return the plot.variable object for reuse
   invisible(plot.variable.obj)
 }
 plot.variable <- plot.variable.rfsrc

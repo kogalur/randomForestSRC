@@ -152,7 +152,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("3.7.0", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("3.8.0", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
@@ -211,6 +211,10 @@ generic.predict.rfsrc <-
   prob.assign <- global.prob.assign(if (is.null(prob)) object$prob else prob,
                                     if (is.null(prob.epsilon)) object$prob.epsilon else prob.epsilon,
                                     gk.quantile, object$quantile.regr, splitrule, object$n)
+  ## The native request and later quantile-array parsing must use the
+  ## same resolved probabilities, including inherited/default values.
+  prob <- prob.assign$prob
+  prob.epsilon <- prob.assign$prob.epsilon
   ## Determine the immutable yvar factor map which is needed for
   ## classification sexp dimensioning.  But, first convert object$yvar
   ## to a data frame which is required for factor processing
@@ -280,6 +284,10 @@ generic.predict.rfsrc <-
   ##
   ##--------------------------------------------------------
   if (!restore.mode) {
+    ## Normalize data-frame subclasses before base extraction semantics are used.
+    if (!identical(class(newdata), "data.frame")) {
+      newdata <- as.data.frame(newdata, optional = TRUE)
+    }
     ## Filter the test data based on the formula
     newdata <- newdata[, is.element(names(newdata), c(yvar.names, xvar.names)), drop = FALSE]
     ## impute.mean for anonymous forests

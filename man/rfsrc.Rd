@@ -30,7 +30,7 @@ Ishwaran, 2017).
   
   \item For survival and competing risk analysis, concordance-based
   performance is now computed using Uno inverse-probability-of-censoring
-  weighting (Uno et al. 2001). This affects all survival performance
+  weighting (Uno et al. 2011). This affects all survival performance
   values derived from the concordance index, including out-of-bag and
   test error rates and variable importance (VIMP). To revert to
   unweighted Harrell concordance, set \code{use.uno = FALSE} when
@@ -125,7 +125,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
 
   \item{sampsize}{Bootstrap sample size (used when \code{bootstrap="by.root"}). Defaults: 0.632 x n for \code{swor}; n for \code{swr}. Can also be numeric.}
 
-  \item{na.action}{Missing data handling. \code{"na.omit"} (default) removes rows with any \code{NA}; \code{"na.impute"} performs fast internal imputation. See also \code{impute}.}
+  \item{na.action}{Missing data handling. \code{"na.omit"} (default) removes rows with any \code{NA}; \code{"na.impute"} performs fast internal imputation. See also \code{\link{impute.rfsrc}}.}
 
   \item{nimpute}{Number of iterations for internal imputation. If >1, OOB error rates may be optimistic.}
 
@@ -139,7 +139,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
 
   \item{distance}{Compute pairwise distances between cases? Similar options as \code{proximity}. See Details.}
 
-  \item{forest.wt}{Return forest weight matrix? Same options as \code{proximity}. Default is \code{TRUE} (inbag).}
+  \item{forest.wt}{Return forest weight matrix? Same options as \code{proximity}. Default is \code{FALSE}.}
 
   \item{xvar.wt}{Optional weights on x-variables for sampling at splits. Does not need to sum to 1. Defaults to uniform.}
 
@@ -201,7 +201,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
     \item \strong{Regression}
     \enumerate{
       \item \code{"mse"} (default): weighted mean squared error (Breiman et al., 1984).
-      \item \code{"quantile.regr"}: quantile regression via check-loss; see \code{quantreg.rfsrc}.
+      \item \code{"quantile.regr"}: quantile regression via check-loss; see \code{\link{quantreg.rfsrc}} for quantile estimation methods and extraction helpers.
       \item \code{"la.quantile.regr"}: local adaptive quantile regression.
     }
 
@@ -232,7 +232,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
     }
 
     \item \strong{Unsupervised}
-    Splitting uses pseudo-outcomes and the composite rule. See \code{sidClustering} for advanced unsupervised analysis.
+    Splitting uses pseudo-outcomes and the composite rule. See \code{\link{sidClustering}} for advanced unsupervised analysis.
 
     \item \strong{Custom splitting}
     Custom rules can be defined using \code{splitCustom.c}. Up to 16 rules per family are allowed. Use \code{"custom"}, \code{"custom1"}, etc. Compilation required.
@@ -258,11 +258,19 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
   Error is computed using OOB data:
   \itemize{
     \item Regression: mean squared error.
-    \item Classification: misclassification rate, Brier score, AUC.
-    \item Survival: C-error = 1 - Harrell's concordance index.
+    \item Classification: misclassification rate, Brier score, or G-mean-based error, as selected by \code{perf.type}.
+    \item Survival: C-error = 1 - concordance, using Uno weighting when \code{use.uno = TRUE} and unweighted Harrell concordance otherwise.
   }
 
   If \code{bootstrap = "none"}, OOB error is unavailable. Use \code{predict.rfsrc} for cross-validation error instead.
+
+  See Classification Performance Metrics (\code{\link{classification.performance}})
+  for additional classification scores and
+  \code{\link{get.imbalanced.performance}} for binary-class performance
+  summaries and threshold choices. For right-censored survival,
+  \code{\link{plotBrierAUC}} displays Brier and AUC curves, including a
+  Kaplan--Meier reference for Brier score; \code{\link{get.cindex}}
+  calculates concordance-based error.
 
   \item \emph{Variable Importance (VIMP)}
 
@@ -273,7 +281,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
     \item \code{"anti"} (default): anti-split assignment.
   }
 
-  The \code{block.size} option controls granularity. For confidence intervals, see \code{subsampling}. Also see \code{holdout.vimp} for a more conservative variant.
+  The \code{block.size} option controls granularity. For confidence intervals and the \code{\link{extract.subsample}} and \code{\link{extract.bootsample}} helpers, see \code{\link{subsample.rfsrc}}; use \code{\link{plot.subsample.rfsrc}} to display the results. Also see \code{\link{holdout.vimp}} for a more conservative variant.
 
   \item \emph{Multivariate Forests}
 
@@ -282,7 +290,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
   or
   \preformatted{rfsrc(cbind(y1, ..., yd) ~ ., data)}
 
-  Use \code{get.mv.formula}, \code{get.mv.predicted}, \code{get.mv.error} for multivariate extraction.
+  Use \code{\link{get.mv.formula}} to construct a multivariate formula.
+  For \code{\link{get.mv.predicted}}, \code{\link{get.mv.error}}, \code{\link{get.mv.vimp}},
+  block errors, and case-specific extraction helpers, see
+  Extracting Multivariate Values (\code{\link{multivariate.values}}).
 
   \item \emph{Unsupervised Forests}
 
@@ -304,6 +315,9 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
   \item \emph{Missing data imputation}
 
   Use \code{na.action = "na.impute"}. Iteration with \code{nimpute > 1} replaces missing values using OOB predictions. Observations or variables with all missing values are removed.
+  See \code{\link{impute.rfsrc}} for standalone imputation and
+  \code{\link{impute.learn.rfsrc}} for learning an imputer to apply to
+  new data.
 
   \item \emph{Allowable data types and factors}
 
@@ -336,8 +350,8 @@ An object of class \code{(rfsrc, grow)} with the following components:
   \item{proximity}{Proximity matrix indicating how often case pairs fall in the same terminal node.}
   \item{forest}{Forest object, returned if \code{forest=TRUE}. Required for prediction and most wrappers.}
   \item{forest.wt}{Forest weight matrix.}
-  \item{membership}{Terminal node membership matrix (rows: trees; columns: cases).}
-  \item{inbag}{Inbag count matrix (rows: trees; columns: cases).}
+  \item{membership}{Terminal node membership matrix (rows: cases; columns: trees).}
+  \item{inbag}{Inbag count matrix (rows: cases; columns: trees).}
   \item{var.used}{Number of times each variable is used to split a node.}
   \item{imputed.indv}{Indices of individuals with missing values.}
   \item{imputed.data}{Imputed dataset with responses followed by predictors.}
@@ -351,8 +365,8 @@ An object of class \code{(rfsrc, grow)} with the following components:
   \item{class}{(Classification) In-bag predicted class labels.}
   \item{class.oob}{(Classification) OOB predicted class labels.}
 
-  \item{regrOutput}{(Multivariate) List of performance results for continuous outcomes.}
-  \item{clasOutput}{(Multivariate) List of performance results for categorical outcomes.}
+  \item{regrOutput}{(Multivariate) Response-named list of predictions and performance results for continuous outcomes.}
+  \item{classOutput}{(Multivariate) Response-named list of predictions and performance results for categorical outcomes.}
 
   \item{survival}{(Survival) In-bag survival functions.}
   \item{survival.oob}{(Survival) OOB survival functions.}
@@ -378,7 +392,7 @@ Values returned by the forest depend on the family:
   
   \item \strong{Competing risks}: \code{predicted} contains expected life years lost by cause (Ishwaran et al., 2013). Also returned are three-dimensional arrays for CIF and CSCHF indexed by case, time, and event type.
   
-  \item \strong{Multivariate}: Predictions, VIMP, and error rates are returned in \code{regrOutput} and \code{clasOutput}. Use \code{get.mv.predicted}, \code{get.mv.vimp}, and \code{get.mv.error} to extract results.
+  \item \strong{Multivariate}: Predictions, VIMP, and error rates are returned in \code{regrOutput} and \code{classOutput}. Use \code{\link{get.mv.predicted}}, \code{\link{get.mv.vimp}}, and \code{\link{get.mv.error}} to extract results. Their OOB selection, standardization, and return formats are described in Extracting Multivariate Values (\code{\link{multivariate.values}}).
 }
 }
 
@@ -502,38 +516,46 @@ Values returned by the forest depend on the family:
 }
 \seealso{
 
-  \command{\link{get.tree.rfsrc}},
+  Classification Performance Metrics (\code{\link{classification.performance}}),
+  Extracting Multivariate Values (\code{\link{multivariate.values}}),
+  Fast Saving and Loading Objects (\code{\link{fast.saveload}}),
 
-  \command{\link{holdout.vimp.rfsrc}},
+  \code{\link{get.tree.rfsrc}},
 
-  \command{\link{imbalanced.rfsrc}},
-  \command{\link{impute.rfsrc}},
+  \code{\link{holdout.vimp}},
 
-  \command{\link{max.subtree.rfsrc}},
+  \code{\link{imbalanced.rfsrc}},
+  \code{\link{impute.rfsrc}},
+  \code{\link{impute.learn.rfsrc}},
 
-  \command{\link{partial.rfsrc}},
-  \command{\link{plot.competing.risk.rfsrc}},
-  \command{\link{plot.rfsrc}},
-  \command{\link{plot.survival.rfsrc}},
-  \command{\link{plot.variable.rfsrc}},
-  \command{\link{predict.rfsrc}},
-  \command{\link{print.rfsrc}},
+  \code{\link{max.subtree.rfsrc}},
 
-  \command{\link{quantreg.rfsrc}},
+  \code{\link{partial.rfsrc}},
+  \code{\link{plot.competing.risk.rfsrc}},
+  \code{\link{plot.rfsrc}},
+  \code{\link{plot.quantreg.rfsrc}},
+  \code{\link{plot.subsample.rfsrc}},
+  \code{\link{plot.survival.rfsrc}},
+  \code{\link{plotBrierAUC}},
+  \code{\link{plot.variable.rfsrc}},
+  \code{\link{predict.rfsrc}},
+  \code{\link{print.rfsrc}},
 
-  \command{\link{rfsrc}},
-  \command{\link{rfsrc.anonymous}},
-  \command{\link{rfsrc.cart}},
-  \command{\link{rfsrc.fast}},
+  \code{\link{quantreg.rfsrc}},
+
+  \code{\link{rfsrc}},
+  \code{\link{rfsrc.anonymous}},
+  \code{\link{rfsrc.cart}},
+  \code{\link{rfsrc.fast}},
 
   
-  \command{\link{sidClustering.rfsrc}},
+  \code{\link{sidClustering.rfsrc}},
 
-  \command{\link{subsample.rfsrc}},
+  \code{\link{subsample.rfsrc}},
   
-  \command{\link{tune.rfsrc}},
+  \code{\link{tune.rfsrc}},
 
-  \command{\link{vimp.rfsrc}}
+  \code{\link{vimp.rfsrc}}
 }
 \examples{
 \donttest{

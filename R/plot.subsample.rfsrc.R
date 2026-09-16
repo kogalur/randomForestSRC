@@ -4,6 +4,16 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
                           sorted = TRUE, show.plots = TRUE,
                           ...)
 {
+  ## Validate selectors before extracting or drawing stored intervals.
+  .subsample.check.flag(standardize, "standardize")
+  .subsample.check.flag(normal, "normal")
+  .subsample.check.flag(jknife, "jknife")
+  .subsample.check.flag(sorted, "sorted")
+  .subsample.check.flag(show.plots, "show.plots")
+  if (!is.numeric(pmax) || length(pmax) != 1L || is.na(pmax) ||
+      pmax < 1 || (is.finite(pmax) && pmax != floor(pmax))) {
+    stop("'pmax' must be a positive integer or Inf.", call. = FALSE)
+  }
   ##--------------------------------------------------------------
   ##
   ## was subsampling or double-bootstrap used?
@@ -49,29 +59,26 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   if (x$performance.only) {
     xlab <- "generalization error"
   }
-  ## extract vimp and vimp column names - depends on family and univariate/multivariate
-  ## special mod needed for generalization error
-  if (is.null(m.target)) {  
+  ## The selected statistic column supplies both values and its label,
+  ## including error-only classification and competing-risk displays.
+  if (is.null(m.target)) {
     vmp <- x$vmp[[1]]
-    if (!x$performance.only) {
-      vmp.col.names <- colnames(x$vmp[[1]])
-    }
-    else {
-      vmp.col.names <- names(x$vmp)
-    }
   }
   else {
     vmp <- x$vmp[[m.target]]
-    if (!x$performance.only) {
-      vmp.col.names <- colnames(x$vmp[[m.target]])
-    }
-    else {
-      vmp.col.names <- m.target
-    }
+  }
+  if (is.null(vmp) || NROW(vmp) == 0L || NCOL(vmp) == 0L) {
+    stop("No reference statistics are available for the selected outcome.",
+         call. = FALSE)
+  }
+  vmp <- as.matrix(vmp)
+  vmp.col.names <- colnames(vmp)
+  if (is.null(vmp.col.names) && ncol(vmp) == 1L) {
+    vmp.col.names <- if (is.null(m.target)) names(x$vmp)[1L] else m.target
   }
   if (fmly == "regr" || fmly == "surv") {
     target <- 0
-    vmp <- c(vmp)
+    vmp <- c(vmp[, 1L])
     xlab <- paste(xlab, " (", vmp.col.names, ")", sep = "")
   }
   else if (fmly == "class") {
@@ -84,7 +91,8 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
         target <- match(match.arg(target, yvar.levels), yvar.levels)
       }
       else {
-        if (target < 0 || target > length(yvar.levels)) {
+        if (!is.numeric(target) || length(target) != 1L || !is.finite(target) ||
+            target != floor(target) || target < 0 || target > length(yvar.levels)) {
           stop("'target' is specified incorrectly")
         }
       }
@@ -98,21 +106,14 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
     }
     else {
       n.event <- length(get.event.info(x$rf)$event.type)
-      if (target < 1 || target > n.event) {
+      if (!is.numeric(target) || length(target) != 1L || !is.finite(target) ||
+          target != floor(target) || target < 1 || target > n.event) {
         stop("'target' is specified incorrectly")
       }
       target <- target - 1
     }
     vmp <- c(vmp[, 1 + target])
     xlab <- paste(xlab, " (", vmp.col.names[1 + target], ")", sep = "")
-  }
-  ##--------------------------------------------------------------
-  ##
-  ## over-ride x label if the user has supplied their own
-  ##
-  ##--------------------------------------------------------------
-  if (!is.null(list(...)$xlab)) {
-    xlab <- list(...)$xlab
   }
   ##--------------------------------------------------------------
   ##
@@ -127,7 +128,7 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   else {
     oo <- extract.bootsample(x, alpha = alpha, target = target, m.target = m.target,
                              standardize = standardize, raw = TRUE)
-    boxplot.dta <- oo[[1]]
+    boxplot.dta <- oo$ci
   }
   if (normal) {
     if (subsample && jknife) {
@@ -187,61 +188,118 @@ plot.subsample.rfsrc <- function(x, alpha = .01, xvar.names,
   col.pt[is.na(col.pt)] <- FALSE
   colr <- c("blue", "red")[1 + col.pt]
   ##--------------------------------------------------------------
-  ##
-  ## finesse ... unnamed options to be passed to bxp and axis
-  ##
+  ## Resolve graphical settings once, then reuse them for both drawing
+  ## passes. User arguments override defaults instead of being duplicated.
   ##--------------------------------------------------------------
-  ## pull the unnamed options
+  merge.args <- function(defaults, overrides) {
+    if (length(overrides)) {
+      nms <- names(overrides)
+      if (is.null(nms) || anyNA(nms) || any(!nzchar(nms))) {
+        stop("Graphical arguments must be named.", call. = FALSE)
+      }
+      overrides <- overrides[!duplicated(nms, fromLast = TRUE)]
+      defaults[names(overrides)] <- overrides
+    }
+    defaults
+  }
   dots <- list(...)
-  bxp.names <- c(names(formals(bxp)),
-                 "xaxt", "yaxt", "las", "cex.axis", 
-                 "col.axis", "cex.main",
-                 "col.main", "sub", "cex.sub", "col.sub", 
-                 "ylab", "cex.lab", "col.lab")
-  axis.names <- formals(axis)
-  axis.names$tick <- axis.names$las <- axis.names$labels <- NULL
-  axis.names <- c(names(axis.names), "cex.axis") 
-  ## override xlab
-  if (!is.null(dots$xlab)) {
-    xlab <- dots$xlab
+  pars <- dots$pars
+  dots$pars <- NULL
+  if (!is.null(pars) && !is.list(pars)) {
+    stop("'pars' must be a named list of graphical arguments.", call. = FALSE)
   }
-  ## overlay ylab when user mistakenly uses it  
-  if (!is.null(dots$ylab) && length(dots$ylab) == p) {
+  dots <- merge.args(merge.args(list(), pars), dots)
+  if ("z" %in% names(dots)) {
+    stop("The interval summaries supplied to bxp cannot be replaced by 'z'.",
+         call. = FALSE)
+  }
+  ## Custom row names follow the selected pre-sort rows, as in the original
+  ## interface. A scalar ylab is an axis title, not a one-row label override.
+  if (!is.null(dots$ylab) && length(dots$ylab) > 1L && length(dots$ylab) == p) {
     bp$names <- dots$ylab[o.pt]
-    bxp.names <- bxp.names[bxp.names != "ylab"]
+    dots$ylab <- NULL
   }
-  ## overlay names
   if (!is.null(dots$names)) {
+    if (length(dots$names) != p) {
+      stop("'names' must have one label per selected row before sorting and trimming.",
+           call. = FALSE)
+    }
     bp$names <- dots$names[o.pt]
+    dots$names <- NULL
   }
-  ## special mod needed for generalization error
-  if (x$performance.only) {
-    bp$names <- ""
+  if (x$performance.only) bp$names <- rep("", length(bp$names))
+  horizontal <- if (is.null(dots$horizontal)) TRUE else dots$horizontal
+  .subsample.check.flag(horizontal, "horizontal")
+  axes <- if (is.null(dots$axes)) TRUE else dots$axes
+  .subsample.check.flag(axes, "axes")
+  show.names <- if (is.null(dots$show.names)) TRUE else dots$show.names
+  .subsample.check.flag(show.names, "show.names")
+  fill <- if (is.null(dots$col)) colr else dots$col
+  defaults <- list(z = bp, main = main,
+                   boxfill = fill, whisklty = 1, whisklwd = 2,
+                   outline = FALSE, horizontal = horizontal,
+                   frame.plot = axes)
+  defaults[[if (horizontal) "xlab" else "ylab"]] <- xlab
+  args <- merge.args(defaults, dots)
+  ## Public xlim/ylim refer to the axes as displayed. bxp internally reverses
+  ## the limit arguments for horizontal boxes, so translate them here.
+  if (horizontal) {
+    xy <- args[c("xlim", "ylim")]
+    args[c("xlim", "ylim")] <- NULL
+    if (!is.null(xy$ylim)) args$xlim <- xy$ylim
+    if (!is.null(xy$xlim)) args$ylim <- xy$xlim
   }
-  ##--------------------------------------------------------------
-  ##
-  ## draw the core bxp plot
-  ##
-  ##--------------------------------------------------------------
+  ## Manual axes allow separate suppression and the original row-label
+  ## orientation. Both bxp passes have axes disabled to avoid drawing twice.
+  xaxt <- if (is.null(dots$xaxt)) "s" else dots$xaxt
+  yaxt <- if (is.null(dots$yaxt)) "s" else dots$yaxt
+  args$axes <- FALSE
+  args$show.names <- FALSE
+  if (is.null(args$at)) args$at <- seq_along(bp$names)
+  if (!is.numeric(args$at) || length(args$at) != length(bp$names) ||
+      any(!is.finite(args$at))) {
+    stop("'at' must give one finite position per displayed interval.", call. = FALSE)
+  }
+  ## Common axis styling is forwarded without replacing the tick positions
+  ## or statistic labels. bxp-specific controls remain with bxp.
+  axis.names <- c("las", "cex.axis", "col.axis", "font.axis", "line",
+                  "lwd", "lwd.ticks", "col", "col.ticks", "hadj", "padj",
+                  "gap.axis", "mgp", "tck", "tcl", "xpd", "fg")
+  axis.args <- dots[intersect(names(dots), axis.names)]
   if (show.plots) {
-    do.call("bxp", c(list(z = bp, main = main, xlab = xlab, 
-                          boxfill = colr, xaxt = "n", yaxt = "n",
-                          outline = FALSE, horizontal = TRUE),
-                     dots[names(dots) %in% bxp.names]))
-    do.call("axis", c(list(side = 1, at = pretty(c(bp$stats)), tick = .02), dots[names(dots) %in% axis.names]))
-    do.call("axis", c(list(side = 2, at = 1:length(bp$names), labels = bp$names,
-                           las = 2, tick = FALSE), dots[names(dots) %in% axis.names]))
-    abline(h = 1:length(bp$names), col = gray(.9), lty = 1)
-    abline(v = 0, lty = 1, lwd = 1.5, col = gray(.8))
-    bxp(bp, boxfill=colr,xaxt="n",yaxt="n",
-        outline=FALSE,horizontal=TRUE,add=TRUE,
-        whisklty=1,whisklwd=2)
+    if (is.null(dots$xaxt)) xaxt <- par("xaxt")
+    if (is.null(dots$yaxt)) yaxt <- par("yaxt")
+    do.call("bxp", args)
+    value.side <- if (horizontal) 1L else 2L
+    row.side <- if (horizontal) 2L else 1L
+    draw.value <- axes && !identical(if (horizontal) xaxt else yaxt, "n")
+    draw.rows <- axes && show.names &&
+      !identical(if (horizontal) yaxt else xaxt, "n")
+    if (draw.value) {
+      value.axis <- merge.args(list(side = value.side), axis.args)
+      do.call("axis", value.axis)
+    }
+    if (draw.rows) {
+      row.axis <- merge.args(list(side = row.side, at = args$at,
+                                  labels = bp$names, las = 2, tick = FALSE),
+                             axis.args)
+      do.call("axis", row.axis)
+    }
+    if (horizontal) {
+      abline(h = args$at, col = gray(.9), lty = 1)
+      if (!par("xlog")) abline(v = 0, lty = 1, lwd = 1.5, col = gray(.8))
+    }
+    else {
+      abline(v = args$at, col = gray(.9), lty = 1)
+      if (!par("ylog")) abline(h = 0, lty = 1, lwd = 1.5, col = gray(.8))
+    }
+    ## Redraw the intervals above the guides with exactly the resolved styles.
+    ## Do not repeat titles or frames on the overlay.
+    args$add <- TRUE
+    args$ann <- FALSE
+    args$frame.plot <- FALSE
+    do.call("bxp", args)
   }
-  ##--------------------------------------------------------------
-  ##
-  ## return the invisible boxplot data
-  ##
-  ##--------------------------------------------------------------
   invisible(bp)
 }
 plot.subsample <- plot.subsample.rfsrc

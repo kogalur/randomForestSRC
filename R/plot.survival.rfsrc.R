@@ -272,11 +272,14 @@ plot.survival <- plot.survival.rfsrc
 ## draw one Brier or AUCT performance curve using base R graphics
 .surv.plot.performance.curve <- function(score, estimate,
                                          ylab, main, reference = NULL,
-                                         dots = list()) {
+                                         dots = list(), null.score = NULL) {
   time <- score$time
   value <- score[[estimate]]
   has.band <- all(c("lower", "upper") %in% names(score))
   yy <- value
+  if (!is.null(null.score)) {
+    yy <- c(yy, null.score$brier.score)
+  }
   if (has.band) {
     yy <- c(yy, score$lower, score$upper)
   }
@@ -293,6 +296,16 @@ plot.survival <- plot.survival.rfsrc
     line.args[[nm]] <- dots[[nm]]
     dots[[nm]] <- NULL
   }
+  ## Null-reference styling is separate from the forest curve. Consume these
+  ## arguments before forwarding ordinary graphical options to plot().
+  null.args <- list(col = 1, lwd = 2, lty = 2)
+  for (nm in names(null.args)) {
+    key <- paste0("null.", nm)
+    if (!is.null(dots[[key]])) null.args[[nm]] <- dots[[key]]
+    dots[[key]] <- NULL
+  }
+  legend.pos <- if (is.null(dots$legend.pos)) "topleft" else dots$legend.pos
+  dots$legend.pos <- NULL
   band.col <- if (!is.null(dots$band.col)) {
     dots$band.col
   }
@@ -323,7 +336,17 @@ plot.survival <- plot.survival.rfsrc
   if (!is.null(reference)) {
     abline(h = reference, lty = 3, col = gray(.5))
   }
+  if (!is.null(null.score)) {
+    do.call(lines, c(list(x = null.score$time,
+                         y = null.score$brier.score), null.args))
+  }
   do.call(lines, c(list(x = time, y = value), line.args))
+  if (!is.null(null.score) && !identical(legend.pos, FALSE)) {
+    legend(legend.pos, legend = c("Forest", "Null (KM)"),
+           col = c(line.args$col[1L], null.args$col[1L]),
+           lty = c(line.args$lty[1L], null.args$lty[1L]),
+           lwd = c(line.args$lwd[1L], null.args$lwd[1L]), bty = "n")
+  }
   rug(time, ticksize = -0.025)
 }
 ## base-R plot helper for Brier score and time-dependent AUC
@@ -335,6 +358,7 @@ plotBrierAUC <- function(x,
                            conf.int = TRUE,
                            plots = c("brier", "auct"),
                            show.plots = TRUE,
+                           brier.null = TRUE,
                            ...) {
   plots <- as.character(plots)
   if (length(plots) == 0L) {
@@ -349,7 +373,8 @@ plotBrierAUC <- function(x,
                                    times = times,
                                    conf.int = conf.int,
                                    keep.matrix = FALSE,
-                                   metrics = plots)
+                                   metrics = plots,
+                                   brier.null = brier.null)
   if (is.null(ans)) {
     return(invisible(NULL))
   }
@@ -365,7 +390,9 @@ plotBrierAUC <- function(x,
           estimate = "brier.score",
           ylab = "Brier Score",
           main = "Brier Score Over Time",
-          dots = dots
+          dots = dots,
+          null.score = if (is.null(ans$brier[["null"]])) NULL else
+            ans$brier[["null"]]$brier.score
         )
       }
       else {

@@ -1,335 +1,204 @@
 quantreg.rfsrc <- function(formula, data, object, newdata,
-                           method = "local", splitrule = NULL,
+                           method = "exchangeable", splitrule = NULL,
                            prob = NULL, prob.epsilon = NULL,
                            oob = TRUE, fast = FALSE, maxn = 1e3, ...)
 {
-  ## we intialize the grow primary operation as false
-  grow <- FALSE
-  ## which method will be used?
-  method <- match.arg(method, c("forest", "local", "gk", "GK", "G-K", "g-k"))
-  ## we now allow other regression splitting rules to be used 
-  ## splitrule <- "quantile.regr"
-  ## --------------------------------------------------------------------------------
-  ##
-  ## grow mode
-  ##
-  ## if no object is present, then the user is requesting a quantile regression forest
-  ##
-  ## --------------------------------------------------------------------------------
-  if (missing(object)) {
-    ## the primary operation is grow 
-    grow <- TRUE
-    ## list of forest parameters
-    rfnames <- get.rfnames(hidden = TRUE)
-    ## restrict to allowed values
-    rfnames <- rfnames[rfnames != "formula"            &
-                       rfnames != "data"               &
-                       rfnames != "splitrule"          ]
-    ## get the permissible hidden options
-    dots <- list(...)
-    dots <- dots[names(dots) %in% rfnames]
-    ## manually set key hidden options 
+  ## ------------------------------------------------------------------
+  ## Resolve the current operation and options before calling the forest.
+  ## NULL newdata has the same meaning as an omitted prediction dataset.
+  ## ------------------------------------------------------------------
+  grow <- missing(object)
+  test <- !missing(newdata) && !is.null(newdata)
+  ## Use the descriptive method name in all newly returned components.
+  ## Keep the former name as an alias for existing user calls.
+  method <- match.arg(method, c("exchangeable", "forest", "local",
+                                "gk", "GK", "G-K", "g-k"))
+  if (method == "local") method <- "exchangeable"
+  if (!(method %in% c("exchangeable", "forest"))) method <- "gk"
+  .quantreg.check.flag(oob, "oob")
+  .quantreg.check.flag(fast, "fast")
+  if (!is.numeric(maxn) || length(maxn) != 1L || is.na(maxn) ||
+      maxn < 1 || (is.finite(maxn) && maxn != floor(maxn))) {
+    stop("'maxn' must be a positive integer or Inf.", call. = FALSE)
+  }
+  if (!is.null(prob)) {
+    .quantreg.check.prob(prob)
+    prob <- sort(prob)
+  }
+  if (!is.null(prob.epsilon) &&
+      (!is.numeric(prob.epsilon) || length(prob.epsilon) != 1L ||
+       !is.finite(prob.epsilon) || prob.epsilon <= 0 || prob.epsilon >= 1)) {
+    stop("'prob.epsilon' must be a finite number in (0, 1).", call. = FALSE)
+  }
+  dots.all <- list(...)
+  if (!is.null(dots.all[["outcome"]])) {
+    outcome <- match.arg(dots.all[["outcome"]], c("train", "test"))
+    if (outcome != "train") {
+      stop("'outcome = \"test\"' is not supported by quantreg(); ",
+           "supply newdata for ordinary prediction.", call. = FALSE)
+    }
+  }
+  dots.all$outcome <- NULL
+  if (test && !identical(class(newdata), "data.frame")) {
+    newdata <- as.data.frame(newdata, optional = TRUE)
+  }
+  ## ------------------------------------------------------------------
+  ## Grow the forest, retain full-ensemble and OOB training residuals,
+  ## and select the residual bank once. With oob = TRUE the selected bank
+  ## uses OOB mean predictions when that output component is available.
+  ## The exchangeable method pools its finite residuals with equal weights.
+  ## Later restore/newdata calls preserve this original bank selection.
+  ## ------------------------------------------------------------------
+  if (grow) {
+    if (missing(formula)) stop("'formula' is missing.", call. = FALSE)
+    if (missing(data)) stop("'data' is missing.", call. = FALSE)
+    if (!identical(class(data), "data.frame")) {
+      data <- as.data.frame(data, optional = TRUE)
+    }
+    fmly <- parseFormula(formula, data)$family
+    if (!(fmly %in% c("regr", "regr+", "mix+"))) {
+      stop("This function requires at least one continuous outcome.", call. = FALSE)
+    }
+    if (is.null(splitrule)) splitrule <- "la.quantile.regr"
+    if (fmly %in% c("regr+", "mix+") &&
+        splitrule %in% c("la.quantile.regr", "quantile.regr")) {
+      splitrule <- NULL
+    }
+    rfnames <- setdiff(get.rfnames(hidden = TRUE), c("formula", "data", "splitrule"))
+    dots <- dots.all[names(dots.all) %in% rfnames]
     dots$prob <- prob
     dots$prob.epsilon <- prob.epsilon
-    ## set the default split rule
-    if (is.null(splitrule)) {
-      splitrule <- "la.quantile.regr"
-    }
-    ## quantile splitrule cannot be used for multivariate regression
-    fmly <- parseFormula(formula, data)$family
-    if (fmly == "regr+" || fmly == "class+" || fmly == "mix+") {
-      if (splitrule == "la.quantile.regr" || splitrule == "la.quantile.regr") {
-        splitrule <- NULL
-      }
-    }
-    ## determine the grow interface - rfsrc or rfsrc.fast?
-    if (!fast) {
-      rfsrc.grow <- "rfsrc"
-    }
-    else {
-      rfsrc.grow <- "rfsrc.fast"
-    }
-    ## if the user wants method=forest, set GK to false and request forest weights
-    if (method == "forest") {
-      dots$gk.quantile <- FALSE
-      dots$forest.wt <- if (oob) "oob" else TRUE
-    }
-    ## if user wants local method, set GK to false
-    else if (method == "local") {
-      dots$gk.quantile <- FALSE
-    }
-    ## user is requesting GK method
-    else {
-      dots$gk.quantile <- TRUE
-    }
-    ## set the hidden quantile.regr flag as TRUE
+    dots$gk.quantile <- method == "gk"
     dots$quantile.regr <- TRUE
-    ## grow a quantile regression forest
-    object <- do.call(rfsrc.grow, c(list(formula = formula, data = data, splitrule = splitrule), dots))
-    ## save the grow yvar - this will be crucial downstream for prediction
-    object$yvar.grow <- object$yvar
-    ## ----------------------------------------------------------------------
-    ##
-    ## save the grow residual - this will be crucial downstream for prediction
-    ##
-    ## ----------------------------------------------------------------------
-    ## pull the target outcome names
-    if (object$family == "regr") {
-      ynames <- object$yvar.names
+    if (method == "forest") dots$forest.wt <- if (oob) "oob" else TRUE
+    engine <- if (fast) "rfsrc.fast" else "rfsrc"
+    object <- do.call(engine, c(list(formula = formula, data = data,
+                                    splitrule = splitrule), dots))
+    if (!is.list(object) || is.null(object$yvar) || is.null(object$n)) {
+      stop("The grow interface did not retain the responses and predictions ",
+           "required by quantreg().", call. = FALSE)
     }
-    else {
-      ynames <- names(object$regrOutput)
-    }
-    ## cycle over ynames, extract residual
-    if (ncol(cbind(object$yvar.grow)) > 1) {
-      object$res.grow <- do.call(cbind, lapply(ynames, function(yn) {
-        if (oob && !is.null(object$regrOutput[[yn]]$predicted.oob)) {
-          object$yvar[, yn] - object$regrOutput[[yn]]$predicted.oob
-        }
-        else {
-          object$yvar[, yn] - object$regrOutput[[yn]]$predicted
-        }
-      }))
-      colnames(object$res.grow) <- ynames
-    }
-    else {##only one yvar - vectorize it
-      if (oob && !is.null(object$predicted.oob)) {
-        object$res.grow <- object$yvar - object$predicted.oob
-      }
-        else {
-        object$res.grow <- object$yvar - object$predicted
-      }
+  } else {
+    if (!inherits(object, "quantreg") || !inherits(object, "rfsrc") ||
+        !inherits(object, "grow")) {
+      stop("'object' must be the original quantreg grow object.", call. = FALSE)
     }
   }
-  ## user has passed in an object - is it a quantile object?
-  else {
-    if (sum(grepl("quantreg", class(object))) == 0) { 
-      stop("object must be a quantreg object")
-    }
+  if (!(object$family %in% c("regr", "regr+", "mix+"))) {
+    stop("This function requires at least one continuous outcome.", call. = FALSE)
   }
-  ## -----------------------------------------------------------------------
-  ##
-  ## forest object must contain regression outcomes
-  ## this includes multivariate regression and mixed multivariate regression
-  ##
-  ## -----------------------------------------------------------------------
-  if (!(object$family == "regr" | !is.null(object$regrOutput))) {
-    stop("this function requires at least one outcome that is continuous\n")
+  ## The grow object exposes actual residual/residual.oob values. The saved
+  ## forest retains both banks and the original source selection for reuse.
+  object <- .quantreg.save.residuals(object, oob, initialize = grow)
+  if (is.null(object$forest$prob)) {
+    stop("The forest did not retain its quantile probability settings.", call. = FALSE)
   }
-  ## ---------------------------------------
-  ##
-  ##  save grow prob for later calculations
-  ##  can be over-written in predict mode
-  ##
-  ## -----------------------------------------
   prob.grow <- object$forest$prob
-  ## ---------------------------------------
-  ##
-  ##  prediction mode
-  ##
-  ## -----------------------------------------
-  if (!grow || !missing(newdata)) {
-    ## the user can over-ride grow options in predict mode
-    ## if prob and prob.epsilon are non-NULL, over-ride grow values
-    ## make sure to overwrite prob.grow 
-    dots <- list(...)
-    if (!is.null(prob)) {
-      prob.grow <- dots$prob <- prob
+  .quantreg.check.prob(prob.grow)
+  ## ------------------------------------------------------------------
+  ## Restore the training rows or predict new rows using the saved trees.
+  ## Resolve probabilities before dispatch so native columns and labels agree.
+  ## ------------------------------------------------------------------
+  if (!grow || test) {
+    if (!isTRUE(object$forest$forest)) {
+      stop("Forest information is missing; grow with forest = TRUE.", call. = FALSE)
     }
-    else {
-      dots$prob <- prob.grow
-    }
-    dots$prob.epsilon <- prob.epsilon
-    ## grow mode is in effect, but new data is present --> oob cannot be TRUE
-    if (!missing(newdata)) {
-      oob <- FALSE
-    }
-    ## forest method -> set GK to false and request forest weights
-    if (method == "forest") {
-      dots$gk.quantile <- FALSE
-      dots$forest.wt <- TRUE
-      if (missing(newdata) && oob) {
-        dots$forest.wt <- "oob"
+    ## New rows use ordinary mean predictions (or native GK quantiles).
+    ## This does not change the residuals already saved during growth.
+    if (test) oob <- FALSE
+    dots <- dots.all
+    dots$outcome <- "train"
+    dots$gk.quantile <- method == "gk"
+    settings <- global.prob.assign(
+      if (is.null(prob)) prob.grow else prob,
+      if (is.null(prob.epsilon)) object$forest$prob.epsilon else prob.epsilon,
+      method == "gk", TRUE, object$forest$splitrule, object$forest$n
+    )
+    prob.grow <- dots$prob <- settings$prob
+    dots$prob.epsilon <- settings$prob.epsilon
+    if (method == "forest") dots$forest.wt <- if (oob) "oob" else TRUE
+    ## The general predictor allows classification-only target requests; the
+    ## quantile interface requires at least one requested continuous response.
+    if (!is.null(dots$m.target)) {
+      continuous <- if (object$family == "regr") object$yvar.names else names(object$regrOutput)
+      if (!length(intersect(dots$m.target, continuous))) {
+        stop("'m.target' must select at least one continuous outcome.", call. = FALSE)
       }
     }
-    ## local method -> set GK to false and request forest weights
-    else if (method == "local") {
-      dots$gk.quantile <- FALSE
-    }
-    ## user is requesting GK method
-    else {
-      dots$gk.quantile <- TRUE
-    }
-    ## save grow information before restore/predict over-writes it
-    yvar.grow <- object$yvar.grow
-    res.grow <- object$res.grow
-    ## restore call on grow data 
-    if (missing(newdata)) {
-      object <- do.call(predict, c(list(object = object), dots))
-    }
-    ## predict call with new data
-    else {
-      object <- do.call(predict, c(list(object = object, newdata = newdata), dots))
-    }
-    ## restore grow information
-    object$yvar.grow <- yvar.grow
-    object$res.grow <- res.grow
+    ## The predictor carries the saved forest, including training data,
+    ## residual banks and their source settings, into the result.
+    args <- c(list(object = object), dots)
+    if (test) args$newdata <- newdata
+    object <- do.call(predict, args)
   }
-  ## -----------------------------------
-  ##
-  ## grow/test done: final value of prob
-  ##
-  ## -----------------------------------
   prob <- prob.grow
-  ## -----------------------------------
-  ##
-  ## pull the target outcome names
-  ##
-  ## -----------------------------------
+  ## The prediction workhorse leaves NULL slots for unrequested multivariate
+  ## outcomes. Process only the continuous output components actually returned.
   if (object$family == "regr") {
     ynames <- object$yvar.names
+  } else {
+    ynames <- names(object$regrOutput)[!vapply(object$regrOutput, is.null, logical(1))]
   }
-  else {
-    ynames <- names(object$regrOutput)
+  if (!length(ynames)) {
+    stop("No continuous-outcome predictions were returned.", call. = FALSE)
   }
-  ## -----------------------------------
-  ##
-  ## finally - extract quantile information
-  ##
-  ## -----------------------------------
-  rO <- lapply(ynames, function(yn) {
-    ## ------------------------------------
-    ##
-    ## GK method - also clean up the object   
-    ##
-    ## ------------------------------------
-    if (!(method == "forest" || method == "local")) {
-      if (ncol(cbind(object$yvar.grow)) > 1) {
-        y <- object$yvar.grow[, yn]
-        if (oob && !is.null(object$regrOutput[[yn]]$quantile.oob)) {
-        quant <- object$regrOutput[[yn]]$quantile.oob
-        }
-        else {
-          quant <- object$regrOutput[[yn]]$quantile
-        }
-        object$regrOutput[[yn]]$quantile.oob <<- object$regrOutput[[yn]]$quantile <<- NULL
+  ## ------------------------------------------------------------------
+  ## Summarize each response distribution. Quantiles and residual moments
+  ## use the full residual bank; yunq is only a CDF/reporting grid.
+  ## ------------------------------------------------------------------
+  rO <- setNames(vector("list", length(ynames)), ynames)
+  for (yn in ynames) {
+    component <- if (object$family == "regr") object else object$regrOutput[[yn]]
+    y <- .quantreg.response(.quantreg.training.yvar(object), yn)
+    grid <- .quantreg.grid(y, maxn)
+    selected <- .quantreg.prediction(component, oob, quantile = method == "gk")
+    n <- object$n
+    mean <- std <- prediction <- residual.source <- NULL
+    if (method == "gk") {
+      quant <- selected$value
+      if (!is.numeric(quant) || length(quant) != n * length(prob) ||
+          (!is.null(dim(quant)) &&
+           !identical(as.integer(dim(quant)), c(as.integer(n), length(prob))))) {
+        stop("Native quantile dimensions do not match the evaluated rows and probabilities.",
+             call. = FALSE)
       }
-      else {
-        y <- object$yvar.grow
-        if (oob && !is.null(object$quantile.oob)) {
-          quant <- object$quantile.oob
-        }
-        else {
-          quant <- object$quantile
-        }
-        object$quantile.oob <<- object$quantile <<- NULL
-      }
-      ## append a minimum and maximum y value corresponding to prob = 0, 1
-      quant.temp <- cbind(min(y, na.rm = TRUE) - 1, quant, max(y, na.rm = TRUE))
-      prob.temp <- c(0, prob, 1)
-      ## unique y values
-      yunq <- sort(unique(y))
-      ## cdf calculation
-      ## trim atoms: useful for big data otherwise O(n^2)
-      if (length(yunq) > maxn) {
-        yunq <- yunq[unique(round(seq(1, length(yunq), length.out = maxn)))]
-      }
-      cdf <- t(apply(quant.temp, 1, function(q) {prob.temp[sIndex(q, yunq)]}))
-      ## density
-      density <- t(apply(cbind(0, cdf), 1, diff))
-    }
-    ## ------------------------------------
-    ##
-    ## forest weight or local method
-    ##
-    ## ------------------------------------
-    else {
-      ## pull grow y, grow residual, and yhat (either grow/predicted)
-      if (ncol(cbind(object$yvar.grow)) > 1) {
-        y <- object$yvar.grow[, yn]
-        res <- object$res.grow[, yn]
-        if (oob && !is.null(object$regrOutput[[yn]]$predicted.oob)) {
-          yhat <- object$regrOutput[[yn]]$predicted.oob
-        }
-        else {
-          yhat <- object$regrOutput[[yn]]$predicted
-        }
-      }
-      else {
-        y <- object$yvar.grow
-        res <- object$res.grow
-         if (oob && !is.null(object$predicted.oob)) {
-          yhat <- object$predicted.oob
-        }
-        else {
-          yhat <- object$predicted
-        }
-      }
-      ## extract unique y values
-      yunq <- sort(unique(y))
-      ## trim atoms for density/cdf (useful for big data otherwise O(n^2) memory)
-      if (length(yunq) > maxn) {
-        yunq <- yunq[unique(round(seq(1, length(yunq), length.out = maxn)))]
-      }
-      ## fast CDF construction
-      ## ------------------------------------------------------------
-      if (method == "forest") {
-        ord <- order(res)
-        res_sorted <- res[ord]
-        n_res <- length(res_sorted)
-        n_pred <- length(yhat)
-        K <- length(yunq)
-        cdf <- matrix(0, nrow = n_pred, ncol = K)
-        cw0 <- numeric(n_res + 1L)
-        for (i in seq_len(n_pred)) {
-          cw0[-1L] <- cumsum(object$forest.wt[i, ord])
-          pos <- findInterval(yunq - yhat[i], res_sorted)
-          cdf[i, ] <- cw0[pos + 1L]
-        }
+      quant <- matrix(quant, nrow = n, ncol = length(prob))
+      cdf <- .quantreg.gk.cdf(quant, prob, grid, max(y[is.finite(y)]))
+      ## Keep the public quantile matrix in one location, as before.
+      if (object$family == "regr") {
+        object$quantile <- object$quantile.oob <- NULL
       } else {
-        ## locally adjusted cdf 
-        res_sorted <- sort(res)
-        n_res <- length(res_sorted)
-        n_pred <- length(yhat)
-        K <- length(yunq)
-        cdf <- matrix(0, nrow = n_pred, ncol = K)
-        for (i in seq_len(n_pred)) {
-          pos <- findInterval(yunq - yhat[i], res_sorted)
-          cdf[i, ] <- pos / n_res
-        }
+        object$regrOutput[[yn]]$quantile <- NULL
+        object$regrOutput[[yn]]$quantile.oob <- NULL
       }
-      ## quantiles
-      quant <- t(apply(cdf, 1, function(pr) {
-        c(min(yunq, na.rm = TRUE), yunq)[1 + sIndex(pr, prob)]
-      }))
-      ## density
-      density <- t(apply(cbind(0, cdf), 1, diff))
+    } else {
+      residual.source <- object$forest[["quantreg"]][["residual.source"]][[yn]]
+      residual <- .quantreg.training.residual(object, yn, residual.source)
+      if (length(residual) != length(y)) {
+        stop("Saved responses and residuals are not aligned.", call. = FALSE)
+      }
+      prediction <- .quantreg.vector(selected$value, n, "Current predictions")
+      weight <- if (method == "forest") object$forest.wt else NULL
+      if (method == "forest" && is.null(weight)) {
+        stop("The forest method requires the requested forest-weight matrix.", call. = FALSE)
+      }
+      summary <- .quantreg.residual(residual, prediction, prob, grid, weight)
+      quant <- summary$quantiles
+      cdf <- summary$cdf
+      mean <- summary$mean
+      std <- summary$std
     }
-    ## ------------------------------------
-    ##
-    ## ends loop for specific yvar
-    ## return various quantities as list
-    ##
-    ## ------------------------------------
-    list(quantiles = quant,
-         prob = prob,
-         cdf = cdf,
-         density = density,
-         yunq = yunq)
-  })
-  ## ------------------------------------
-  ##
-  ## finished -- return final goodies
-  ##
-  ## ------------------------------------
-  if (object$family == "regr") {
-    rO <- rO[[1]]
+    ## Keep source metadata separate from the numerical OOB residuals.
+    ## oob describes the current prediction; residual.source identifies the
+    ## selected training bank. GK uses no residual bank for its quantiles.
+    rO[[yn]] <- list(quantiles = quant, prob = prob, cdf = cdf,
+                     density = .quantreg.increments(cdf), yunq = grid,
+                     mean = mean, std = std, method = method,
+                     oob = selected$oob, prediction = prediction,
+                     residual.source = residual.source)
   }
-  else {
-    names(rO) <- ynames
-  }
-  object$quantreg <- rO
-  class(object)[4] <- "quantreg"
+  object$quantreg <- if (object$family == "regr") rO[[1L]] else rO
+  if (!inherits(object, "quantreg")) class(object) <- c(class(object), "quantreg")
   object
 }
 quantreg <- quantreg.rfsrc

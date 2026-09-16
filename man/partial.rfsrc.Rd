@@ -2,104 +2,179 @@
 \alias{partial.rfsrc}
 \alias{partial}
 \alias{get.partial.plot.data}
-\title{Acquire Partial Effect of a Variable}
+\title{Compute Partial Dependence Values}
 \description{
-  Direct, fast inferface for partial effect of a variable.  Works for all families.
+  Compute observation-level predictions after setting a predictor to specified
+  values. The saved forest is reused. Results can be averaged for partial
+  dependence curves or retained for custom plots. Regression, classification,
+  multivariate and mixed outcomes, right-censored survival, and competing
+  risks have family-specific outputs.
 }
 \usage{
-partial.rfsrc(object, oob = TRUE, 
+partial.rfsrc(object, oob = TRUE,
   partial.type = NULL, partial.xvar = NULL, partial.values = NULL,
   partial.xvar2 = NULL, partial.values2 = NULL,
   partial.time = NULL, get.tree = NULL, seed = NULL, do.trace = FALSE, ...)
+
+get.partial.plot.data(o, target, m.target = NULL, granule = FALSE)
 }
 \arguments{
-  \item{object}{An object of class \code{(rfsrc, grow)}.}
-  \item{oob}{By default out-of-bag values are returned, but inbag
-    values can be requested by setting this option to \code{FALSE}.}
-  \item{partial.type}{Character vector specifying type of predicted
-    value requested.  See details below.}
-  \item{partial.xvar}{Character value specifying the single primary
-    partial x-variable to be used.}
-  \item{partial.values}{Vector of values that the primary partialy
-    x-variable will assume.}
-  \item{partial.xvar2}{Vector of character values specifying the second order x-variables to be
-    used.}
-  \item{partial.values2}{Vector of values that the second order
-    x-variables will assume.  Each second order x-variable can only
-    assume a single value.  This the length of \code{partial.xvar2} and
-    \code{partial.values2} will be the same.  In addition, the user must
-    do the appropriate conversion for factors, and represent a value as
-    a numeric element.}
-  \item{partial.time}{For survival families, the time at which the predicted
-    survival value is evaluated at (depends on \code{partial.type}).}
-  \item{get.tree}{Vector of integer(s) identifying trees over which the
-    partial values are calculated over.  By default, uses all trees in the
-    forest.}
-  \item{seed}{Negative integer specifying seed for the random number
-    generator.}
-  \item{do.trace}{Number of seconds between updates to the user on
-    approximate time to completion.}
-  \item{...}{Further arguments passed to or from other methods.}
+  \item{object}{An object of class \code{(rfsrc, grow)} with a saved forest,
+    or an object of class \code{(rfsrc, forest)} retaining its training data.
+    Anonymous forests are not supported.}
+  \item{oob}{Logical. Request out-of-bag (OOB) partial predictions by default.
+    Each observation is predicted using trees for which it was OOB in the
+    original training sample. Set to \code{FALSE} to request the non-OOB
+    ensemble. This selects predictions within the saved forest; it does not
+    refit the forest or select a different set of observations for averaging.}
+  \item{partial.type}{For right-censored survival, one of \code{"mort"},
+    \code{"rel.freq"}, \code{"surv"}, or \code{"chf"}. For competing risks,
+    one of \code{"years.lost"}, \code{"cif"}, or \code{"chf"}. Specify a
+    single type for these families. For regression and classification this
+    argument is not used and may be \code{NULL}.}
+  \item{partial.xvar}{Name of the single predictor to vary.}
+  \item{partial.values}{Nonempty numeric vector of values for
+    \code{partial.xvar}. Values are sorted and duplicates removed before
+    calculation. For a factor, supply its integer codes in the original
+    training level order, not its labels.}
+  \item{partial.xvar2}{Optional character vector of additional predictors
+    to fix while varying \code{partial.xvar}.}
+  \item{partial.values2}{One numeric value for each predictor in
+    \code{partial.xvar2}, in the same order. Factors require their original
+    training integer codes. These are fixed values, not additional grids.}
+  \item{partial.time}{Numeric vector of evaluation times for \code{"surv"},
+    \code{"cif"}, or \code{"chf"}. Supply at least one time; using points
+    from the forest's \code{time.interest} gives exact grid matches.
+    Between grid points, the last stored time not exceeding the requested
+    time is used. Times must be finite and must not precede the first
+    stored time. A request beyond the last stored time uses that last time.
+    Missing, empty, or invalid requests are rejected before native prediction.
+    Mortality and years-lost outputs have no requested-time dimension and
+    ignore this argument.}
+  \item{get.tree}{Optional vector of tree indices. By default all trees
+    are considered, with OOB eligibility applied when \code{oob = TRUE}.}
+  \item{seed}{Negative integer specifying the random-number seed.}
+  \item{do.trace}{Number of seconds between progress updates; \code{FALSE}
+    suppresses updates.}
+  \item{...}{Additional internal prediction options. Plotting arguments
+    belong in the subsequent plotting call, not in \code{partial()}.}
+  \item{o}{An object returned by \code{partial()}.}
+  \item{target}{For classification extraction, a class label or its position
+    within the selected response's levels; the first class is used when
+    omitted. This applies to univariate, multivariate, and mixed fits. For competing risks, an event
+    code from \code{o$event.info$event.type}; omission selects the first
+    event. Ignored for regression.}
+  \item{m.target}{For multivariate or mixed \code{partial} objects, the
+    response name to extract. The default is the first response in
+    \code{o$yvar.names}. All response arrays are already in \code{o}.}
+  \item{granule}{Logical used by \code{get.partial.plot.data()}. The default
+    \code{FALSE} averages the observation-level partial predictions at each
+    grid value. With \code{TRUE}, retain them all and repeat each grid value
+    once per observation. This is different from the numeric \code{granule}
+    argument of \code{plot.variable()}.}
 }
 \details{
+  \subsection{Partial predictions and averaging}{
+    For a primary predictor \eqn{X_j}, the calculation replaces its value by
+    \eqn{z} for every training observation while leaving the other predictor
+    values at that observation's values. Write the resulting prediction as
+    \eqn{P_i(z) = \widehat f(z, X_{i,-j})}. The default summary returned by
+    \code{get.partial.plot.data()} is the average of the available
+    \eqn{P_i(z)} values. With OOB prediction, the prediction function for
+    row \eqn{i} uses that row's OOB trees.
 
-  Used for direct, efficient call to obtain partial plot effects.
-  This function is intended primarily for experts. 
-  
-  Out-of-bag (OOB) values are returned by default.
-
-  For factors, the partial value should be encoded as a positive integer
-  reflecting the level number of the factor.  The actual label of the
-  factor should not be used.
-
-  The utility function \code{get.partial.plot.data} is supplied for
-  processing returned raw partial effects in a format more convenient
-  for plotting.  Options are specified as in \code{plot.variable}.  See
-  examples for illustration.
-  
-  Raw partial plot effects data is returned either as an array or a list
-  of length equal to the number of outcomes (length is one for
-  univariate families) with entries depending on the underlying family:
-  
-  \enumerate{
-    \item For regression, partial plot data is returned as a list
-    in \code{regrOutput} with dim \code{[n] x  [length(partial.values)]}.
-    
-    \item For classification, partial plot data is returned as a list
-    in \code{classOutput} of dim \code{[n] x [1 + yvar.nlevels[.]] x
-      [length(partial.values)]}.
-    
-    \item For mixed multivariate regression, values are returned in 
-    list format both in \code{regrOutput} and \code{classOutput}
-    
-    \item For survival, values are returned as either a matrix or array
-    in \code{survOutput}. Depending on partial type specified this can be:
-    \itemize{
-      \item For partial type \code{surv} returns the survival function
-         of dim \code{[n] x [length(partial.time)] x [length(partial.values)]}.
-      \item For partial type \code{mort} returns mortality
-        of dim \code{[n] x [length(partial.values)]}.
-      \item For partial type \code{chf} returns the cumulative hazard function
-        of dim \code{[n] x [length(partial.time)] x [length(partial.values)]}.
-    }
-    
-    \item For competing risks, values are returned as either a matrix or
-    array in \code{survOutput}.  Depending on the options specified this
-    can be:
-    \itemize{
-      \item For partial type \code{years.lost} returns the expected number of life years lost 
-      of dim \code{[n] x [length(event.info$event.type)] x
-        [length(partial.values)]}.
-      \item For partial type \code{cif} returns the cumulative incidence function of dim
-	    \code{[n] x [length(partial.time)] x
-	      [length(event.info$event.type)] x
-	      [length(partial.values)]}.
-      \item For partial type \code{chf} returns the cumulative hazard function of dim
-            \code{[n] x [length(partial.time)] x [length(event.info$event.type)]
-            x [length(partial.values)]}.
-    }
-
+    \code{partial()} returns the observation-level arrays and does not
+    average them. The extraction helper replaces infinite values by
+    \code{NA} and omits missing values when averaging. A grid value with
+    no available predictions has an unavailable mean.
   }
+  \subsection{Predictor grids and factors}{
+    The returned \code{partial.values} gives the actual sorted, unique
+    grid. The input order and duplicated values are not retained.
+    Reducing the grid reduces the number of partial predictions and the
+    size of the result.
+
+    Factor codes refer to the level order saved during training. For
+    example, if the original levels are \code{c("low", "middle", "high")},
+    the code for \code{"high"} is 3 even when a plotting subset contains
+    only \code{"middle"} and \code{"high"}. Use
+    \code{match(labels, levels(training.factor))} to obtain these codes.
+    The extraction helper returns numeric grid values, so factor labels
+    can be added in the custom plotting call.
+  }
+  \subsection{Fixing additional predictors}{
+    \code{partial.xvar2} and \code{partial.values2} fix one or more
+    additional coordinates for every observation. For example, vary wind
+    over a grid while holding temperature at a specified value. To make a
+    two-dimensional display, repeat the call at several fixed temperature
+    values. A single call does not expand \code{partial.values2} into a
+    Cartesian product of grids.
+  }
+  \subsection{Responses and survival summaries}{
+    Regression outputs contain predicted responses. Classification outputs
+    contain an \code{"all"} column followed by columns named for the class
+    levels. Multivariate and mixed fits return named response components;
+    \code{m.target} in the extraction helper selects among these components.
+    The class selector \code{target} is then resolved using that response's
+    class labels, not response names. A single observation or grid point
+    retains its observation-by-grid meaning during extraction.
+
+    For right-censored survival, \code{"mort"} returns mortality,
+    \code{"surv"} returns survival probabilities, and \code{"chf"} returns
+    cumulative hazards. At this low-level interface, \code{"rel.freq"}
+    requests the same raw output as \code{"mort"}; neither \code{partial()}
+    nor \code{get.partial.plot.data()} normalizes this output.
+
+    Competing-risk outputs are expected years lost, cumulative incidence,
+    or cause-specific cumulative hazard, selected by \code{partial.type}.
+    The time-dependent outputs are calculated on the forest's stored time
+    grid and then selected in R for \code{partial.time}. The returned
+    \code{partial.time} retains the requested times.
+  }
+  \subsection{Custom plots}{
+    With \code{granule = FALSE}, the extraction helper returns one mean
+    for each primary grid value. Time-dependent survival summaries have
+    one column per requested time. With \code{granule = TRUE}, values are
+    ordered by primary grid value and then observation; the result contains
+    raw predictions, without the display shrinkage used for boxplots by
+    \code{plot.variable(partial = TRUE)}.
+
+    The automatic plotting wrapper also returns \code{partial.summary},
+    containing the partial mean, empirical row-averaging standard error,
+    and available row count for each grid value. See
+    \code{\link{plot.variable.rfsrc}} for that scale's interpretation.
+
+    Use \code{plot.variable()} for an automatically selected predictor
+    grid and built-in displays. Use \code{partial()} when explicit grids,
+    several evaluation times, additional fixed predictors, or raw
+    observation-level results are needed.
+  }
+}
+\value{
+  \code{partial()} returns an object of class \code{(rfsrc, partial, family)}.
+  It contains \code{call}, \code{family}, \code{partial.values},
+  \code{partial.time}, \code{yvar.names}, and \code{event.info}, together with
+  the applicable prediction components below. Let \eqn{n} be the number of
+  training rows, \eqn{K} the number of sorted unique primary values,
+  \eqn{T} the number of requested times, and \eqn{J} the number of events.
+  \item{regrOutput}{Named list of regression-response matrices, each
+    \eqn{n \times K}.}
+  \item{classOutput}{Named list of classification-response arrays, each
+    \eqn{n \times (1 + C) \times K}, where \eqn{C} is that response's number
+    of classes. The second dimension is named \code{all} followed by the
+    class labels.}
+  \item{survOutput}{For right-censored mortality, an \eqn{n \times K}
+    matrix. For survival or cumulative hazard, an \eqn{n \times T \times K}
+    array. For competing-risk years lost, an \eqn{n \times J \times K}
+    array. For competing-risk cumulative incidence or cumulative hazard,
+    an \eqn{n \times T \times J \times K} array.}
+
+  \code{get.partial.plot.data()} returns a list with \code{x}, \code{yhat},
+  and \code{partial.time}. Normally \code{x} is the primary grid and
+  \code{yhat} is a vector of means or a grid-by-time matrix. With
+  \code{granule = TRUE}, \code{x} is repeated across observations and
+  \code{yhat} contains the corresponding raw values, with one column per
+  time for time-dependent summaries.
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur
@@ -117,56 +192,37 @@ partial.rfsrc(object, oob = TRUE,
 }
 \examples{
 \donttest{
+## ------------------------------------------------------------
+##
+## Regression: explicit grid and raw observation-level output.
+##
+## ------------------------------------------------------------
+set.seed(19)
+dta <- na.omit(airquality)
+fit <- rfsrc(Ozone ~ ., data = dta, ntree = 100)
+wind <- unique(as.numeric(quantile(fit$xvar$Wind, seq(0, 1, length.out = 11))))
+p <- partial(fit, partial.xvar = "Wind", partial.values = wind)
+pd <- get.partial.plot.data(p)
+print(head(data.frame(Wind = pd$x, partial = pd$yhat)))
+plot(pd$x, pd$yhat, type = "b", xlab = "Wind", ylab = "Partial prediction")
+raw <- get.partial.plot.data(p, granule = TRUE)
+boxplot(raw$yhat ~ raw$x, xlab = "Wind", ylab = "Individual partial predictions")
 
 ## ------------------------------------------------------------
 ##
-## regression
+## Vary wind while fixing temperature at three values.
 ##
 ## ------------------------------------------------------------
-
-airq.obj <- rfsrc(Ozone ~ ., data = airquality)
-
-## partial effect for wind
-partial.obj <- partial(airq.obj,
-                  partial.xvar = "Wind",
-                  partial.values = airq.obj$xvar$Wind)
-pdta <- get.partial.plot.data(partial.obj)
-
-## plot partial values
-plot(pdta$x, pdta$yhat, type = "b", pch = 16,
-      xlab = "wind", ylab = "partial effect of wind")
-
-
-## example where we display all the partial effects
-## instead of averaging - use the granule=TRUE option
-pdta <- get.partial.plot.data(partial.obj, granule = TRUE)
-boxplot(pdta$yhat ~ pdta$x, xlab = "Wind", ylab = "partial effect")
-
-## ------------------------------------------------------------
-##
-## regression: partial effects for two variables simultaneously
-##
-## ------------------------------------------------------------
-
-airq.obj <- rfsrc(Ozone ~ ., data = airquality)
-
-## specify wind and temperature values of interest
-wind <- sort(unique(airq.obj$xvar$Wind))
-temp <- sort(unique(airq.obj$xvar$Temp))
-
-## partial effect for wind, for a given temp
-pdta <- do.call(rbind, lapply(temp, function(x2) {
-  o <- partial(airq.obj,
-         partial.xvar = "Wind", partial.xvar2 = "Temp",
-         partial.values = wind, partial.values2 = x2)
-  cbind(wind, x2, get.partial.plot.data(o)$yhat)
-}))
-pdta <- data.frame(pdta)
-colnames(pdta) <- c("wind", "temp", "effectSize")
-
-## coplot of partial effect of wind and temp 
-coplot(effectSize ~ wind|temp, pdta, pch = 16, overlap = 0)
-
+temperature <- as.numeric(quantile(fit$xvar$Temp, c(.25, .5, .75)))
+slices <- lapply(temperature, function(tt) {
+  pp <- partial(fit, partial.xvar = "Wind", partial.values = wind,
+                partial.xvar2 = "Temp", partial.values2 = tt)
+  get.partial.plot.data(pp)$yhat
+})
+matplot(wind, do.call(cbind, slices), type = "l", lty = 1,
+        xlab = "Wind", ylab = "Partial prediction")
+legend("topright", legend = paste("Temp =", temperature),
+       col = seq_along(temperature), lty = 1)
 
 ## ------------------------------------------------------------
 ##
@@ -175,7 +231,7 @@ coplot(effectSize ~ wind|temp, pdta, pch = 16, overlap = 0)
 ##
 ## ------------------------------------------------------------
 
-n <- 1000
+n <- 200
 x <- matrix(rnorm(n * 3), ncol = 3)
 y <- x[, 1] + x[, 1] * x[, 2] + x[, 1] * x[, 2] * x[, 3]
 o <- rfsrc(y ~ ., data = data.frame(y = y, x))
@@ -206,140 +262,122 @@ coplot(effectSize ~ x1|x2*x3, pdta, pch = 16, overlap = 0)
 
 ## ------------------------------------------------------------
 ##
-## classification
+## Classification: extract a named class from a univariate response.
 ##
 ## ------------------------------------------------------------
-
-iris.obj <- rfsrc(Species ~., data = iris)
-
-## partial effect for sepal length
-partial.obj <- partial(iris.obj,
-                  partial.xvar = "Sepal.Length",
-                  partial.values = iris.obj$xvar$Sepal.Length)
-
-## extract partial effects for each species outcome
-pdta1 <- get.partial.plot.data(partial.obj, target = "setosa")
-pdta2 <- get.partial.plot.data(partial.obj, target = "versicolor")
-pdta3 <- get.partial.plot.data(partial.obj, target = "virginica")
-
-## plot the results
-par(mfrow=c(1,1))
-plot(pdta1$x, pdta1$yhat, type="b", pch = 16,
-     xlab = "sepal length", ylab = "adjusted probability", 
-     ylim = range(pdta1$yhat,pdta2$yhat,pdta3$yhat))
-points(pdta2$x, pdta2$yhat, col = 2, type = "b", pch = 16)
-points(pdta3$x, pdta3$yhat, col = 4, type = "b", pch = 16)
-legend("topleft", legend=levels(iris.obj$yvar), fill = c(1, 2, 4))
+iris.fit <- rfsrc(Species ~ ., data = iris, ntree = 100)
+sp <- partial(iris.fit, partial.xvar = "Sepal.Length",
+              partial.values = seq(4.5, 7.5, length.out = 11))
+sp.data <- get.partial.plot.data(sp, target = "versicolor")
+plot(sp.data$x, sp.data$yhat, type = "b", ylim = c(0, 1),
+     xlab = "Sepal length", ylab = "Partial probability of versicolor")
 
 ## ------------------------------------------------------------
 ##
-## survival
+## Multivariate regression: one partial call, two extracted responses.
 ##
 ## ------------------------------------------------------------
+mv <- rfsrc(cbind(Ozone, Temp) ~ ., data = dta, ntree = 100)
+mp <- partial(mv, partial.xvar = "Wind", partial.values = wind)
+print(names(mp$regrOutput))
+mp.ozone <- get.partial.plot.data(mp, m.target = "Ozone")
+mp.temp <- get.partial.plot.data(mp, m.target = "Temp")
+print(head(data.frame(Wind = mp.temp$x, Temp = mp.temp$yhat)))
 
+## ------------------------------------------------------------
+##
+## Mixed outcomes: extract a named class from the selected response.
+##
+## ------------------------------------------------------------
+car.mix <- mtcars
+car.mix$am <- factor(car.mix$am)
+mix <- rfsrc(Multivar(mpg, am) ~ ., data = car.mix, ntree = 100)
+mix.p <- partial(mix, partial.xvar = "wt", partial.values = c(2, 3, 4))
+mix.am <- get.partial.plot.data(mix.p, m.target = "am", target = "1")
+print(data.frame(wt = mix.am$x, probability = mix.am$yhat))
+
+## ------------------------------------------------------------
+##
+## Factors: keep the training level codes when choosing labels.
+##
+## ------------------------------------------------------------
+car.data <- mtcars
+car.data$cyl <- factor(car.data$cyl)
+car.fit <- rfsrc(mpg ~ ., data = car.data, ntree = 100)
+lev <- levels(car.fit$xvar$cyl)
+code <- match(lev, levels(car.fit$xvar$cyl))
+cp <- partial(car.fit, partial.xvar = "cyl", partial.values = code)
+cd <- get.partial.plot.data(cp, granule = TRUE)
+boxplot(cd$yhat ~ factor(cd$x, levels = code, labels = lev),
+        xlab = "Cylinders", ylab = "Individual partial predictions")
+
+## ------------------------------------------------------------
+##
+## Right-censored survival: several stored evaluation times.
+##
+## ------------------------------------------------------------
 data(veteran, package = "randomForestSRC")
-v.obj <- rfsrc(Surv(time,status)~., veteran, nsplit = 10, ntree = 100)
-
-## partial effect of age on mortality
-partial.obj <- partial(v.obj,
-  partial.type = "mort",
-  partial.xvar = "age",
-  partial.values = v.obj$xvar$age,
-  partial.time = v.obj$time.interest)
-pdta <- get.partial.plot.data(partial.obj)
-
-plot(lowess(pdta$x, pdta$yhat, f = 1/3),
-   type = "l", xlab = "age", ylab = "adjusted mortality")
-
-## example where x is discrete - partial effect of age on mortality
-## we use the granule=TRUE option
-partial.obj <- partial(v.obj,
-       partial.type = "mort",
-       partial.xvar = "trt",
-       partial.values = v.obj$xvar$trt,
-       partial.time = v.obj$time.interest)
-pdta <- get.partial.plot.data(partial.obj, granule = TRUE)
-boxplot(pdta$yhat ~ pdta$x, xlab = "treatment", ylab = "partial effect")
-
-
-## partial effects of karnofsky score on survival
-karno <- quantile(v.obj$xvar$karno)
-partial.obj <- partial(v.obj,
-  partial.type = "surv",
-  partial.xvar = "karno",
-  partial.values = karno,
-  partial.time = v.obj$time.interest)
-pdta <- get.partial.plot.data(partial.obj)
-
-matplot(pdta$partial.time, t(pdta$yhat), type = "l", lty = 1,
-     xlab = "time", ylab = "karnofsky adjusted survival")
-legend("topright", legend = paste0("karnofsky = ", karno), fill = 1:5)
-
+vfit <- rfsrc(Surv(time, status) ~ ., data = veteran, ntree = 100)
+grid <- vfit$time.interest
+when <- grid[unique(round(seq(1, length(grid), length.out = 3)))]
+karno <- unique(as.numeric(quantile(vfit$xvar$karno)))
+vp <- partial(vfit, partial.type = "surv", partial.xvar = "karno",
+              partial.values = karno, partial.time = when)
+vd <- get.partial.plot.data(vp)
+print(vd$partial.time)
+matplot(vd$x, vd$yhat, type = "l", lty = 1,
+        xlab = "Karnofsky score", ylab = "Partial survival probability")
+legend("bottomright", legend = paste("Time =", vd$partial.time),
+       col = seq_along(vd$partial.time), lty = 1)
 
 ## ------------------------------------------------------------
 ##
-## competing risk
+## Survival curves at selected quantiles of Karnofsky score.
+## Reuse vfit from the preceding right-censored survival example.
 ##
 ## ------------------------------------------------------------
+karno.probs <- c(.10, .50, .90)
+karno.values <- quantile(vfit$xvar$karno, probs = karno.probs,
+                         na.rm = TRUE)
+print(karno.values)
 
+## Set Karnofsky score to each requested value for every reference row.
+## Keep the other predictors at their observed values and use OOB trees.
+surv.partial <- partial(vfit,
+                         oob = TRUE,
+                         partial.type = "surv",
+                         partial.xvar = "karno",
+                         partial.values = as.numeric(karno.values),
+                         partial.time = vfit$time.interest)
+surv.data <- get.partial.plot.data(surv.partial)
+
+## yhat has one row per distinct Karnofsky value and one column per time.
+## Transpose it so that each plotted column is a survival curve over time.
+## Each curve averages over the same reference rows.
+curve.id <- seq_along(surv.data$x)
+matplot(surv.data$partial.time, t(surv.data$yhat),
+        type = "s", col = curve.id, lty = curve.id, lwd = 2,
+        ylim = c(0, 1), xlab = "Time", ylab = "Survival probability",
+        main = "Partial survival curves by Karnofsky score")
+
+## Use the returned grid for labels: partial() removes tied quantile values.
+legend("topright",
+       legend = paste("Karnofsky =", format(surv.data$x, trim = TRUE)),
+       col = curve.id, lty = curve.id, lwd = 2, bty = "n")
+
+## ------------------------------------------------------------
+##
+## Competing risks: select an event code from the saved event map.
+##
+## ------------------------------------------------------------
 data(follic, package = "randomForestSRC")
-follic.obj <- rfsrc(Surv(time, status) ~ ., follic, nsplit = 3, ntree = 100)
-
-## partial effect of age on years lost
-partial.obj <- partial(follic.obj,
-  partial.type = "years.lost",
-  partial.xvar = "age",
-  partial.values = follic.obj$xvar$age,
-  partial.time = follic.obj$time.interest)
-pdta1 <- get.partial.plot.data(partial.obj, target = 1)
-pdta2 <- get.partial.plot.data(partial.obj, target = 2)
-
-par(mfrow=c(2,2))
-plot(lowess(pdta1$x, pdta1$yhat),
-   type = "l", xlab = "age", ylab = "adjusted years lost relapse")
-plot(lowess(pdta2$x, pdta2$yhat),
-   type = "l", xlab = "age", ylab = "adjusted years lost death")
-
-## partial effect of age on cif
-partial.obj <- partial(follic.obj,
-  partial.type = "cif",
-  partial.xvar = "age",
-  partial.values = quantile(follic.obj$xvar$age),
-  partial.time = follic.obj$time.interest)
-pdta1 <- get.partial.plot.data(partial.obj, target = 1)
-pdta2 <- get.partial.plot.data(partial.obj, target = 2)
-
-matplot(pdta1$partial.time, t(pdta1$yhat), type = "l", lty = 1,
-     xlab = "time", ylab = "age adjusted cif for relapse")
-matplot(pdta2$partial.time, t(pdta2$yhat), type = "l", lty = 1,
-     xlab = "time", ylab = "age adjusted cif for death")
-
-
-## ------------------------------------------------------------
-##
-## multivariate mixed outcomes
-##
-## ------------------------------------------------------------
-
-mtcars2 <- mtcars
-mtcars2$carb <- factor(mtcars2$carb)
-mtcars2$cyl <- factor(mtcars2$cyl)
-mtcars.mix <- rfsrc(Multivar(carb, mpg, cyl) ~ ., data = mtcars2)
-
-## partial effect of displacement for each the three-outcomes
-partial.obj <- partial(mtcars.mix,
-                  partial.xvar = "disp",
-                  partial.values = mtcars.mix$xvar$disp)
-pdta1 <- get.partial.plot.data(partial.obj, m.target = "carb")
-pdta2 <- get.partial.plot.data(partial.obj, m.target = "mpg")
-pdta3 <- get.partial.plot.data(partial.obj, m.target = "cyl")
-
-par(mfrow=c(2,2))
-plot(lowess(pdta1$x, pdta1$yhat), type = "l", xlab="displacement", ylab="carb")
-plot(lowess(pdta2$x, pdta2$yhat), type = "l", xlab="displacement", ylab="mpg")
-plot(lowess(pdta3$x, pdta3$yhat), type = "l", xlab="displacement", ylab="cyl")
-
-
+crfit <- rfsrc(Surv(time, status) ~ ., data = follic, ntree = 100, nsplit = 3)
+age <- unique(as.numeric(quantile(crfit$xvar$age)))
+crp <- partial(crfit, partial.type = "years.lost",
+               partial.xvar = "age", partial.values = age)
+event <- crp$event.info$event.type[1]
+crd <- get.partial.plot.data(crp, target = event)
+plot(crd$x, crd$yhat, type = "b", xlab = "Age", ylab = "Partial years lost")
 }
 }
 \keyword{partial}

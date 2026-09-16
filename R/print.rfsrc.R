@@ -1,4 +1,5 @@
-print.rfsrc <- function(x, outcome.target = NULL, ...) {
+print.rfsrc <- function(x, outcome.target = NULL, ...,
+                         quantreg.tau = NULL) {
   has.all.classes <- function(obj, cls) all(cls %in% class(obj))
   ## simple pass-throughs for certain composite objects
   if (has.all.classes(x, c("rfsrc","forest")) ||
@@ -7,28 +8,6 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       has.all.classes(x, c("rfsrc","sidClustering"))) {
     print.default(x)
     return()
-  }
-  ## mean pinball losses from a quantreg object
-  .get.pinball.losses <- function(qobj, taus = c(0.1, 0.5, 0.9), subset = NULL) {
-    qL <- extract.quantile(qobj)
-    j <- 1L
-    q <- qL[[j]]
-    y <- if (is.vector(qobj$yvar)) c(qobj$yvar) else qobj$yvar[, names(qL)[j]]
-    if (is.null(subset)) subset <- seq_along(y)
-    y    <- y[subset]
-    cdf  <- q$cdf[subset, , drop = FALSE]
-    yunq <- q$yunq
-    pinball <- function(y, q, tau) (tau - (y < q)) * (y - q)
-    out <- sapply(taus, function(tt) {
-      ## invert CDF to get q_tau by monotone interpolation
-      qhat <- vapply(seq_len(nrow(cdf)), function(i) {
-        suppressWarnings(stats::approx(x = cdf[i, ], y = yunq, xout = tt,
-                                ties = "ordered", rule = 2)$y)
-      }, numeric(1))
-      mean(pinball(y, qhat, tt), na.rm = TRUE)
-    })
-    names(out) <- paste0("tau=", taus)
-    out
   }
   ## subsample/bootsample
   if (has.all.classes(x, c("rfsrc","subsample"))) {
@@ -54,16 +33,47 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
   family.pretty <- family.pretty(x)
   family.org <- x$family
   yvar.dim <- if (!is.null(x$yvar)) ncol(as.data.frame(x$yvar)) else NA_integer_
-  ## coerce multivariate -> univariate if requested/needed
-  ## save standardized mv error rates if available
-  x$univariate <- coerce.multivariate(x, 1)$univariate
+  ## Keep the original quantile components before general multivariate coercion.
+  quantreg.source <- if (inherits(x, "quantreg")) x else NULL
+  ## Determine the output family without coercing an arbitrary response.
+  x$univariate <- !(x$family %in% c("regr+", "class+", "mix+"))
   if (is.null(outcome.target) && !x$univariate) {
+    ## Retain the existing mean-then-response summary.  Missing errors do
+    ## not become an empty-vector mean or an apparent numerical result.
     mv.err.rate <- as.numeric(get.mv.error(x, FALSE))
-    mv.err.rate <- c(mean(mv.err.rate, na.rm=TRUE), mv.err.rate)
+    if (length(mv.err.rate)) {
+      mv.mean <- if (all(is.na(mv.err.rate))) NA_real_ else {
+        mean(mv.err.rate, na.rm = TRUE)
+      }
+      mv.err.rate <- c(mv.mean, mv.err.rate)
+    }
   }
   if (!is.null(outcome.target) && !x$univariate) {
     outcome.target <- get.univariate.target(x, outcome.target)
     x <- coerce.multivariate(x, outcome.target)
+  }
+  ## Build a univariate scoring view for the selected continuous response.
+  ## This prevents a coerced multivariate print from scoring the first outcome
+  ## accidentally, or losing the residual bank needed for pinball evaluation.
+  quantile.input <- NULL
+  if (!is.null(quantreg.source) && identical(x$family, "regr")) {
+    q.list <- extract.quantile(quantreg.source)
+    q.target <- if (identical(quantreg.source$family, "regr")) {
+      quantreg.source$yvar.names
+    } else if (length(outcome.target) == 1L) {
+      if (is.numeric(outcome.target)) quantreg.source$yvar.names[outcome.target] else outcome.target
+    } else {
+      character(0)
+    }
+    if (length(q.target) == 1L && q.target %in% names(q.list)) {
+      quantile.input <- quantreg.source
+      quantile.input$quantreg <- q.list[[q.target]]
+      quantile.input$family <- "regr"
+      quantile.input$yvar.names <- q.target
+      if (!is.null(quantreg.source$yvar)) {
+        quantile.input$yvar <- .quantreg.response(quantreg.source$yvar, q.target)
+      }
+    }
   }
   ## ---- Metrics containers
   conf.mat <- miss.err <- iratio <- brier.err <- brier.norm.err <- auc.err <- pr.auc.err <- gmean.err <- NULL
@@ -86,12 +96,15 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     class.pred <- if (!is.null(x$class.oob) && !all(is.na(x$class.oob))) x$class.oob else x$class
     if (!is.null(x$err.rate) && !is.null(x$yvar) && !is.null(prob.mat)) {
       conf.mat <- get.confusion(x$yvar, class.pred)
-      names(dimnames(conf.mat)) <- c("  observed", "predicted")
       ## robust misclassification: use first K columns
       if (!is.null(k.class) && k.class >= 2) {
         core <- conf.mat[, seq_len(min(k.class, ncol(conf.mat))), drop = FALSE]
         miss.err <- 1 - sum(diag(core)) / sum(core)
       }
+      ## append row sample sizes, excluding the existing class.error column
+      class.freq <- rowSums(conf.mat[, -ncol(conf.mat), drop = FALSE])
+      conf.mat <- cbind(conf.mat, class.freq = class.freq)
+      names(dimnames(conf.mat)) <- c("  observed", "predicted")
       if (k.class > 2) {
         brier.err <- get.brier.error(x$yvar, prob.mat, normalized = FALSE)
         brier.norm.err <- get.brier.error(x$yvar, prob.mat, normalized = TRUE)
@@ -136,22 +149,44 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     }
   }
   ## ---- Quantile regression (pinball/CRPS) block
-  quantile.flag <- has.all.classes(x, c("rfsrc","quantreg")) && identical(x$family, "regr")
+  quantile.flag <- !is.null(quantile.input)
   if (quantile.flag) {
-    if (!is.null(x$yvar)) {
+    if (!is.null(quantile.input$yvar)) {
       ## CRPS (standardized and raw) from existing internal helper
-      qcrps.std.df <- tryCatch(get.quantile.crps(x, pretty = TRUE, standardize = TRUE),
+      qcrps.std.df <- tryCatch(get.quantile.crps(quantile.input, pretty = TRUE, standardize = TRUE),
                                error = function(e) NULL)
-      qcrps.raw.df <- tryCatch(get.quantile.crps(x, pretty = TRUE, standardize = FALSE),
+      qcrps.raw.df <- tryCatch(get.quantile.crps(quantile.input, pretty = TRUE, standardize = FALSE),
                                error = function(e) NULL)
       if (is.data.frame(qcrps.std.df) && nrow(qcrps.std.df))
         q.crps.std <- tail(qcrps.std.df$crps, 1L)
       if (is.data.frame(qcrps.raw.df) && nrow(qcrps.raw.df))
         q.crps      <- tail(qcrps.raw.df$crps, 1L)
-      ## Pinball loss at user-selectable taus (defaults 0.1, 0.5, 0.9)
-      taus <- getOption("rfsrc.pinball.taus", c(0.1, 0.5, 0.9))
-      q.pinball <- tryCatch(.get.pinball.losses(x, taus = taus), error = function(e) NULL)
+      ## Resolve per-call levels before the scoring handler so invalid input
+      ## is reported directly rather than silently hiding the pinball line.
+      taus <- .quantreg.resolve.tau(quantreg.tau)
+      q.pinball <- tryCatch(
+        get.pinball.error(quantile.input, tau = taus),
+        error = function(e) {
+          warning("Pinball losses are unavailable: ", conditionMessage(e),
+                  call. = FALSE)
+          NULL
+        })
     }
+  }
+  ## Quantile-score provenance follows the selected component, independently
+  ## of whether this object is printed through the grow or prediction branch.
+  print.quantile.metrics <- function() {
+    if (!quantile.flag) return(invisible(NULL))
+    prefix <- if (isTRUE(quantile.input$quantreg[["oob"]])) "(OOB) " else ""
+    label <- function(text) sprintf("%36s: ", paste0(prefix, text))
+    if (!is.null(q.crps))
+      cat(label("Quantile-CRPS"), digits.pretty(q.crps, 8), "\n", sep = "")
+    if (!is.null(q.crps.std))
+      cat(label("Quantile-CRPS (std)"), digits.pretty(q.crps.std, 8), "\n", sep = "")
+    if (length(q.pinball))
+      cat(label("Pinball loss by tau"), digits.pretty(q.pinball, 8),
+          " (tau = ", digits.pretty(taus), ")\n", sep = "")
+    invisible(NULL)
   }
   ## ---- Requested performance error (last row)
   err.rate <- NULL
@@ -173,9 +208,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
       err.rate <- digits.pretty(er[nrow(er), , drop = TRUE], 8)
     }
   }
-  ## adjustment for multivariate families - swap the standardized mv terror
+  ## Report the multivariate summary only when error components exist.
   if (is.null(outcome.target) && !x$univariate) {
-    err.rate <- digits.pretty(mv.err.rate, 3)
+    err.rate <- if (length(mv.err.rate)) digits.pretty(mv.err.rate, 3) else NULL
   }
   ## ensure nsplit exists
   if (is.null(x$nsplit)) x$nsplit <- 0
@@ -240,13 +275,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         cat("                          (OOB) CRPS: ", digits.pretty(crps.err, 8), "\n", sep = "")
       if (x$family == "surv" && !is.null(crps.std.err))
         cat("             (OOB) standardized CRPS: ", digits.pretty(crps.std.err, 8), "\n", sep = "")
-      if (quantile.flag && !is.null(q.crps))
-        cat("                 (OOB) Quantile-CRPS: ", digits.pretty(q.crps, 8), "\n", sep = "")
-      if (quantile.flag && !is.null(q.crps.std))
-        cat("           (OOB) Quantile-CRPS (std): ", digits.pretty(q.crps.std, 8), "\n", sep = "")
-      if (quantile.flag && length(q.pinball))
-        cat("           (OOB) Pinball loss by tau: ", digits.pretty(q.pinball, 8),
-            " (tau = ", digits.pretty(taus), ")", "\n", sep = "")
+      print.quantile.metrics()
       cat("   (OOB) Requested performance error: ", err.rate, "\n\n", sep = "")
     }
     if (x$family == "class" && !is.null(conf.mat)) {
@@ -283,7 +312,8 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
     cat("         Total no. of grow variables: ", length(x$xvar.names), "\n", sep = "")
     if (!x$univariate) {
       cat("         Total no. of grow responses: ", yvar.dim, "\n", sep = "")
-      cat("         User has requested response: ", outcome.target, "\n", sep = "")
+      if (!is.null(outcome.target))
+        cat("         User has requested response: ", outcome.target, "\n", sep = "")
     }
     cat("       Resampling used to grow trees: ", samp.used, "\n", sep = "")
     if (!is.null(outcome.target) && !is.null(x$forest$n))
@@ -311,13 +341,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...) {
         cat("                                CRPS: ", digits.pretty(crps.err, 8), "\n", sep = "")
       if (x$family == "surv" && !is.null(crps.std.err))
         cat("                     standardized CRPS: ", digits.pretty(crps.std.err, 8), "\n", sep = "")
-      if (quantile.flag && !is.null(q.crps))
-        cat("                       Quantile-CRPS: ", digits.pretty(q.crps, 8), "\n", sep = "")
-      if (quantile.flag && !is.null(q.crps.std))
-        cat("                 Quantile-CRPS (std): ", digits.pretty(q.crps.std, 8), "\n", sep = "")
-            if (quantile.flag && length(q.pinball))
-        cat("                 Pinball loss by tau: ", digits.pretty(q.pinball, 8),
-            " (tau = ", digits.pretty(taus), ")", "\n", sep = "")
+      print.quantile.metrics()
       cat("         Requested performance error: ", err.rate, "\n\n", sep = "")
     }
     if (x$family == "class" && !is.null(conf.mat)) {

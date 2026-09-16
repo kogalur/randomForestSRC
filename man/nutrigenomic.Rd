@@ -5,14 +5,28 @@
 \description{
   Investigates the effects of five dietary treatments on 21 liver lipids
   and 120 hepatic gene expressions in wild-type and PPAR-alpha deficient
-  mice. A multivariate mixed random forest analysis is performed by
-  regressing gene expression, diet, and genotype (x-variables) on lipid
-  expression profiles (multivariate y-responses).
+  mice. The examples fit a multivariate regression forest with lipid
+  expression profiles as the responses and gene expression, diet, and
+  genotype as predictors.
+}
+\details{
+  The examples use \code{\link{get.mv.formula}} to construct the response
+  formula, and \code{\link{get.mv.error}} and \code{\link{get.mv.vimp}}
+  to extract response-specific performance errors and variable importance
+  (VIMP). For these regression responses, \code{standardize = TRUE}
+  divides each error or importance value by the variance of the
+  corresponding response. See
+  Extracting Multivariate Values (\code{\link{multivariate.values}})
+  for the helper interfaces and returned formats.
 }
 \references{
   Martin P.G. et al. (2007). Novel aspects of PPAR-alpha-mediated
   regulation of lipid and xenobiotic metabolism revealed through a
   nutrigenomic study. \emph{Hepatology}, 45(3), 767--777.
+}
+\seealso{
+  \code{\link{rfsrc}}, \code{\link{predict.rfsrc}},
+  Extracting Multivariate Values (\code{\link{multivariate.values}})
 }
 \examples{
 \donttest{

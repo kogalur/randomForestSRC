@@ -1,6 +1,7 @@
 \name{sidClustering.rfsrc}
 \alias{sidClustering.rfsrc}
 \alias{sidClustering}
+\alias{sid.perf.metric}
 \title{sidClustering using SID (Staggered Interaction Data) for Unsupervised Clustering}
 
 \description{
@@ -20,6 +21,8 @@
   use.sid.for.x = TRUE,
   x.only = NULL, y.only = NULL,
   dist.sharpen = TRUE, ...)
+
+sid.perf.metric(truth, cluster, mode = c("entropy", "gini"))
 }
 
 \arguments{
@@ -47,6 +50,18 @@
   \item{y.only}{Character vector specifying which variables to use as multivariate responses. Applies only when \code{method = "unsupv"}.}
 
   \item{dist.sharpen}{Logical. If \code{TRUE} (default), applies Euclidean distance to the forest distance matrix to improve clustering ("distance sharpening"). The resulting distance matrix will not be bounded between 0 and 1. Turning this off speeds up computation but may reduce clustering quality. Applies only when \code{method = "sid"} or \code{"unsupv"}.}
+
+  \item{truth}{Known class labels used to evaluate a clustering. Supply a
+    complete vector with unused factor levels removed.}
+
+  \item{cluster}{Cluster labels for the same observations, in the same
+    order as \code{truth}. Supply one complete vector of the same length,
+    with unused factor levels removed. If several clustering solutions
+    were requested, select one column of \code{clustering}.}
+
+  \item{mode}{Measure used by \code{sid.perf.metric}: cluster-size-weighted
+    entropy (the default) or Gini impurity. Smaller values indicate purer
+    clusters.}
 
   \item{...}{Additional arguments passed to \code{\link{rfsrc}} to control forest construction.}
 
@@ -86,12 +101,100 @@ This method is invoked by setting \code{method = "sh"}, \code{"sh1"}, or \code{"
 
 The third method, \code{method = "unsupv"}, trains a multivariate forest using the data both as predictors and as responses. The multivariate splitting rule is applied at each node. This method is fast and simple but may be less accurate compared to SID clustering.
 
-The package includes a helper function \code{sid.perf.metric} for evaluating clustering performance using a normalized score; smaller values indicate better performance. See Mantero and Ishwaran (2021) for theoretical background and empirical benchmarking.
+\subsection{Evaluating a clustering}{
+  \code{sid.perf.metric} measures how well a clustering separates known
+  classes. It evaluates the mixture of true classes within each cluster:
+  a cluster containing only one true class has zero impurity, while a
+  cluster containing several classes has positive impurity. The true
+  labels are supplied for evaluation after clustering. The helper can
+  evaluate SID or any other clustering method.
+
+  Supply \code{truth} and \code{cluster} for the same observations in the
+  same order. Cluster labels are arbitrary identifiers; they need not
+  match the names or numerical values in \code{truth}. The number of
+  clusters may differ from the number of true classes. For a matrix of
+  clustering solutions, evaluate one column at a time. Use complete
+  label vectors with unused factor levels removed.
+
+  Let \eqn{K} be the number of observed true classes and \eqn{J} the
+  number of nonempty clusters. In the cross-tabulation
+  \code{table(truth, cluster)}, let \eqn{n_{kj}} count observations from
+  true class \eqn{k} assigned to cluster \eqn{j}. Write
+  \eqn{n_j=\sum_{k=1}^{K}n_{kj}} for the size of cluster \eqn{j},
+  \eqn{n=\sum_{j=1}^{J}n_j} for the total sample size, and
+  \eqn{p_{kj}=n_{kj}/n_j} for the within-cluster class proportions.
+
+  For \code{mode = "entropy"} (the default), the impurity of cluster
+  \eqn{j} is
+  \deqn{H_j=-\sum_{k=1}^{K}p_{kj}\log_2(p_{kj}),}{
+    H_j = -sum_k p_kj * log2(p_kj),}
+  with zero-probability terms contributing zero. Entropy measures the
+  remaining uncertainty about the true class within that cluster, in
+  bits. For \code{mode = "gini"}, the impurity is
+  \deqn{G_j=1-\sum_{k=1}^{K}p_{kj}^{2}.}{
+    G_j = 1 - sum_k p_kj^2.}
+  This is the probability that two independent draws from the cluster's
+  empirical class distribution have different labels.
+
+  The returned \code{result} is the cluster-size-weighted average,
+  \deqn{H=\sum_{j=1}^{J}\frac{n_j}{n}H_j
+    \quad\mbox{or}\quad
+    G=\sum_{j=1}^{J}\frac{n_j}{n}G_j.}{
+    H = sum_j (n_j/n) * H_j, or G = sum_j (n_j/n) * G_j.}
+  Weighting by \eqn{n_j/n} makes a cluster's contribution proportional
+  to the number of observations it represents, rather than giving a
+  small cluster the same weight as a large one. The weighted entropy
+  is the empirical conditional entropy of the true class given cluster
+  membership. Smaller values indicate purer clusters in either mode.
+}
+
+\subsection{Normalizing and interpreting the clustering score}{
+  The maximum impurity of a cluster with \eqn{K} possible true classes
+  occurs when those classes are equally represented. The maxima are
+  \eqn{\log_2(K)} for entropy and \eqn{1-1/K} for Gini. Accordingly,
+  \code{normalized_measure} is
+  \deqn{H_{\mathrm{norm}}=\frac{H}{\log_2(K)}
+    \quad\mbox{or}\quad
+    G_{\mathrm{norm}}=\frac{G}{1-1/K}.}{
+    H_norm = H / log2(K), or G_norm = G / (1 - 1/K).}
+  For \eqn{K>1}, the normalized score lies between zero and one. Zero
+  means every cluster contains only one true class; one means every
+  cluster contains the same proportion \eqn{1/K} of each true class.
+  The score is a fraction of the uniform-class maximum impurity, rather
+  than a misclassification rate. With only one true class, the raw
+  score is zero and the normalized score is undefined.
+
+  For example, suppose there are ten observations from two true classes,
+  A and B. One cluster contains four A observations and is pure; a second
+  contains three A and three B observations and is evenly mixed. Their
+  weights are \eqn{0.4} and \eqn{0.6}. The entropy impurities are zero
+  and one, giving \code{result = 0.6} and
+  \code{normalized_measure = 0.6}. The Gini impurities are zero and
+  \eqn{0.5}, giving \code{result = 0.3} and
+  \code{normalized_measure = 0.6} after division by \eqn{0.5}.
+
+  The normalization uses the uniform-class maximum, not the impurity of
+  the observed marginal class proportions or an expected score under
+  random clustering. Consequently, when the true classes are imbalanced,
+  a clustering that reproduces the overall class proportions in every
+  cluster can provide no class separation and still have a normalized
+  score below one.
+
+  These measures assess within-cluster purity. Dividing one true class
+  into several pure clusters still gives zero impurity, and assigning
+  each observation to its own cluster also gives zero. Thus a low score
+  does not by itself select an appropriate number of clusters or require
+  a one-to-one correspondence with the true classes. For method
+  comparisons, use the same observations and true labels, and compare
+  solutions with the same number of clusters when isolating differences
+  in class separation. See Mantero and Ishwaran (2021) for theoretical
+  background and empirical benchmarking.
+}
 }
 
 \value{
 
-A list with the following components:
+\code{sidClustering} returns a list with the following components:
 
 \item{clustering}{A vector or matrix assigning each observation to a cluster. If multiple values of \code{k} were specified, this is a matrix with one column per clustering solution.}
 
@@ -100,6 +203,16 @@ A list with the following components:
 \item{dist}{The distance matrix computed from the forest. Used for clustering. For \code{method = "sid"}, this is based on the forest dissimilarity; for Breiman/SH methods, this is one minus the proximity matrix.}
 
 \item{sid}{The SID-transformed data used in the clustering (applies only to \code{method = "sid"}). Provided as a list with separate components for the staggered features and their interactions, corresponding to outcomes and predictors in the multivariate forest.}
+
+\subsection{Clustering performance}{
+  \code{sid.perf.metric} returns a list with three components:
+  \describe{
+    \item{result}{The cluster-size-weighted entropy or Gini impurity.}
+    \item{measure}{The selected mode, \code{"entropy"} or \code{"gini"}.}
+    \item{normalized_measure}{The weighted impurity divided by its maximum
+      for equally represented true classes, as described in Details.}
+  }
+}
 }
 
   
@@ -155,6 +268,7 @@ if (library("mlbench", logical.return = TRUE)) {
   o2 <- sidClustering(glass, k = 6)
   print(table(y, o2$cl))
   print(sid.perf.metric(y, o2$cl))
+  print(sid.perf.metric(y, o2$clustering, mode = "gini"))
 
   ## compare with Shi-Horvath mode 1 
   o2.sh <- sidClustering(glass, method = "sh1", k = 6)
