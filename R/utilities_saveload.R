@@ -1,12 +1,70 @@
+## Check compact-save eligibility before any destination is removed.
+## The normal serializer and both loaders keep their existing format.
+.fast.save.check <- function(o, compact) {
+  if (!is.logical(compact) || length(compact) != 1L || is.na(compact)) {
+    stop("'compact' must be TRUE or FALSE.", call. = FALSE)
+  }
+  ## Retain the existing grow-object interface.
+  if (sum(inherits(o, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2) {
+    stop("this function only works for objects of class `(rfsrc, grow)'")
+  }
+  if (!compact) return(invisible(NULL))
+  f <- o[["forest"]]
+  if (!is.list(f) || is.null(f[["nativeArray"]])) {
+    stop("Compact saving requires a retained forest. Refit with forest = TRUE.",
+         call. = FALSE)
+  }
+  if (inherits(o, "anonymous") || inherits(f, "anonymous") ||
+      is.null(f[["xvar"]]) || is.null(f[["yvar"]])) {
+    stop("Compact saving requires a non-anonymous forest with retained training ",
+         "predictors and responses. Save anonymous forests with compact = FALSE.",
+         call. = FALSE)
+  }
+  ## fast.load() reconstructs sampsize(n) as n * sampsize(1).  On-the-fly
+  ## restoration must retain the realized training sample size. Do not
+  ## silently change this existing format for a custom sampling function.
+  n <- f[["n"]]
+  sf <- f[["sampsize"]]
+  if (!is.numeric(n) || length(n) != 1L || !is.finite(n) || n < 1 ||
+      !is.function(sf)) {
+    stop("Compact saving requires valid training sample-size information.",
+         call. = FALSE)
+  }
+  same.size <- tryCatch({
+    size <- sf(n)
+    fraction <- sf(1)
+    is.numeric(size) && length(size) == 1L && is.finite(size) &&
+      is.numeric(fraction) && length(fraction) == 1L &&
+      is.finite(fraction) && is.finite(n * fraction) &&
+      round(size) >= 1 && round(size) == round(n * fraction)
+  }, error = function(e) FALSE)
+  if (!isTRUE(same.size)) {
+    stop("Compact saving cannot preserve the training sample size using ",
+         "sampsize(1). Use saveRDS() to retain this sampling specification.",
+         call. = FALSE)
+  }
+  invisible(NULL)
+}
 ## o must be a list of forests!
-fast.save.list <- function(o, path=NULL, testing=FALSE, units="Mb") {
+fast.save.list <- function(o, path=NULL, testing=FALSE, units="Mb", compact=FALSE) {
+  if (!is.logical(compact) || length(compact) != 1L || is.na(compact)) {
+    stop("'compact' must be TRUE or FALSE.", call. = FALSE)
+  }
+  if (compact) {
+    if (!is.list(o) || length(o) == 0L) {
+      stop("'o' must be a nonempty list of grow objects.", call. = FALSE)
+    }
+    ## Check every element before replacing the list's destination.
+    invisible(lapply(o, .fast.save.check, compact = TRUE))
+  }
   if (is.null(path)) {
     path <- paste0(getwd(), "/forest")
   }
   unlink(path, recursive=TRUE)
   dir.create(path, showWarnings=FALSE, recursive=TRUE)
   lapply(1:length(o), function(j) {
-    fast.save(o[[j]], paste0(path, "/forest", j), testing=testing, units=units)
+    fast.save(o[[j]], paste0(path, "/forest", j), testing=testing, units=units,
+              compact=compact)
   })
 }
 ## o must be a list of forests!
@@ -22,17 +80,22 @@ fast.load.list <- function(directory, path = NULL, testing = FALSE, units="Mb") 
     fast.load(files[j], path, testing=testing, units=units)
   })
 }
-fast.save <- function(o, path=NULL, testing=TRUE, units="Mb") {
+fast.save <- function(o, path=NULL, testing=TRUE, units="Mb", compact=FALSE) {
+  .fast.save.check(o, compact)
   if (is.null(path)) {
     path <- paste0(getwd(), "/forest")
   }
   unlink(path, recursive=TRUE)
   dir.create(path, showWarnings=FALSE, recursive=TRUE)
-  ## coherence check
-  if (sum(inherits(o, c("rfsrc", "grow"), TRUE) == c(1, 2)) != 2)
-    stop("this function only works for objects of class `(rfsrc, grow)'")
   ## extract the forest - hereafter this is what we work with
   o <- o$forest
+  ## Save an on-the-fly representation of the same fitted forest.
+  ## Only this local copy is changed; keep all reconstruction metadata.
+  if (compact) {
+    o[["terminal.qualts"]] <- FALSE
+    o[["terminal.quants"]] <- FALSE
+    o[["nativeArrayTNDS"]] <- NULL
+  }
   ## nativeArrayTNDS
   check <- !sapply(o$nativeArrayTNDS, is.null)
   if (sum(check) > 0) {

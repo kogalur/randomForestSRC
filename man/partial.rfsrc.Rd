@@ -4,11 +4,19 @@
 \alias{get.partial.plot.data}
 \title{Compute Partial Dependence Values}
 \description{
-  Compute observation-level predictions after setting a predictor to specified
-  values. The saved forest is reused. Results can be averaged for partial
-  dependence curves or retained for custom plots. Regression, classification,
+  Compute predictions for partial dependence analysis using a fitted forest.
+  This advanced interface is the workhorse called by
+  \code{plot.variable(..., partial = TRUE)}, which provides automatic grid
+  selection and plotting. Use \code{partial()} directly for custom predictor
+  grids, additional fixed predictors, several survival evaluation times,
+  or observation-level predictions.
+
+  \code{partial()} returns predictions for each training observation.
+  \code{get.partial.plot.data()} extracts their means or individual values
+  for custom plots. Supported outcomes include regression, classification,
   multivariate and mixed outcomes, right-censored survival, and competing
-  risks have family-specific outputs.
+  risks. See \code{\link{plot.variable.rfsrc}} for the simpler plotting
+  interface.
 }
 \usage{
 partial.rfsrc(object, oob = TRUE,
@@ -20,161 +28,195 @@ get.partial.plot.data(o, target, m.target = NULL, granule = FALSE)
 }
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)} with a saved forest,
-    or an object of class \code{(rfsrc, forest)} retaining its training data.
-    Anonymous forests are not supported.}
-  \item{oob}{Logical. Request out-of-bag (OOB) partial predictions by default.
-    Each observation is predicted using trees for which it was OOB in the
-    original training sample. Set to \code{FALSE} to request the non-OOB
-    ensemble. This selects predictions within the saved forest; it does not
-    refit the forest or select a different set of observations for averaging.}
-  \item{partial.type}{For right-censored survival, one of \code{"mort"},
-    \code{"rel.freq"}, \code{"surv"}, or \code{"chf"}. For competing risks,
-    one of \code{"years.lost"}, \code{"cif"}, or \code{"chf"}. Specify a
-    single type for these families. For regression and classification this
-    argument is not used and may be \code{NULL}.}
-  \item{partial.xvar}{Name of the single predictor to vary.}
-  \item{partial.values}{Nonempty numeric vector of values for
+    or an object of class \code{(rfsrc, forest)}. The forest must contain
+    its training data. Anonymous forests are not supported.}
+  \item{oob}{Logical. If \code{TRUE} (default), predict each observation
+    using trees that excluded it during training. If \code{FALSE}, use
+    the non-OOB ensemble.}
+  \item{partial.type}{Prediction summary for survival outcomes. For
+    right-censored survival, choose \code{"mort"}, \code{"rel.freq"},
+    \code{"surv"}, or \code{"chf"}. For competing risks, choose
+    \code{"years.lost"}, \code{"cif"}, or \code{"chf"}. Specify one type
+    for these families; see Details for their meanings. Ignored for
+    regression and classification.}
+  \item{partial.xvar}{Name of the predictor to vary.}
+  \item{partial.values}{Nonempty vector of finite numeric values for
     \code{partial.xvar}. Values are sorted and duplicates removed before
-    calculation. For a factor, supply its integer codes in the original
-    training level order, not its labels.}
-  \item{partial.xvar2}{Optional character vector of additional predictors
-    to fix while varying \code{partial.xvar}.}
-  \item{partial.values2}{One numeric value for each predictor in
-    \code{partial.xvar2}, in the same order. Factors require their original
-    training integer codes. These are fixed values, not additional grids.}
-  \item{partial.time}{Numeric vector of evaluation times for \code{"surv"},
-    \code{"cif"}, or \code{"chf"}. Supply at least one time; using points
-    from the forest's \code{time.interest} gives exact grid matches.
-    Between grid points, the last stored time not exceeding the requested
-    time is used. Times must be finite and must not precede the first
-    stored time. A request beyond the last stored time uses that last time.
-    Missing, empty, or invalid requests are rejected before native prediction.
-    Mortality and years-lost outputs have no requested-time dimension and
-    ignore this argument.}
+    calculation. For a factor, supply integer codes from its training
+    level order; see Details.}
+  \item{partial.xvar2}{Optional character vector naming additional
+    predictors to hold fixed. Names must be distinct and different from
+    \code{partial.xvar}.}
+  \item{partial.values2}{Numeric vector giving one finite fixed value per
+    predictor in \code{partial.xvar2}, in the same order. Factors use
+    their training level codes. Each value applies to all observations
+    throughout the primary predictor grid.}
+  \item{partial.time}{Nonempty vector of finite evaluation times for
+    \code{"surv"}, \code{"cif"}, or \code{"chf"}. Times must be at least
+    the first value in the forest's \code{time.interest}. See Details for
+    matching requests to the time grid. Ignored for \code{"mort"},
+    \code{"rel.freq"}, and \code{"years.lost"}.}
   \item{get.tree}{Optional vector of tree indices. By default all trees
     are considered, with OOB eligibility applied when \code{oob = TRUE}.}
   \item{seed}{Negative integer specifying the random-number seed.}
   \item{do.trace}{Number of seconds between progress updates; \code{FALSE}
     suppresses updates.}
-  \item{...}{Additional internal prediction options. Plotting arguments
-    belong in the subsequent plotting call, not in \code{partial()}.}
+  \item{...}{Additional internal prediction options. Supply graphical
+    arguments to the subsequent plotting call.}
   \item{o}{An object returned by \code{partial()}.}
-  \item{target}{For classification extraction, a class label or its position
-    within the selected response's levels; the first class is used when
-    omitted. This applies to univariate, multivariate, and mixed fits. For competing risks, an event
-    code from \code{o$event.info$event.type}; omission selects the first
-    event. Ignored for regression.}
-  \item{m.target}{For multivariate or mixed \code{partial} objects, the
-    response name to extract. The default is the first response in
-    \code{o$yvar.names}. All response arrays are already in \code{o}.}
-  \item{granule}{Logical used by \code{get.partial.plot.data()}. The default
-    \code{FALSE} averages the observation-level partial predictions at each
-    grid value. With \code{TRUE}, retain them all and repeat each grid value
-    once per observation. This is different from the numeric \code{granule}
+  \item{target}{For classification, a class label or its numeric position
+    in the selected response's levels. For competing risks, an event code
+    from \code{o$event.info$event.type}. The first class or event is used
+    when omitted. Ignored for regression and right-censored survival.}
+  \item{m.target}{Response name to extract from a multivariate or mixed
+    \code{partial} object. The default is the first response in
+    \code{o$yvar.names}.}
+  \item{granule}{Logical used by \code{get.partial.plot.data()}. If
+    \code{FALSE} (default), return the mean prediction at each grid value.
+    If \code{TRUE}, return individual predictions with a grid value for
+    each observation. This differs from the numeric \code{granule}
     argument of \code{plot.variable()}.}
 }
 \details{
   \subsection{Partial predictions and averaging}{
-    For a primary predictor \eqn{X_j}, the calculation replaces its value by
-    \eqn{z} for every training observation while leaving the other predictor
-    values at that observation's values. Write the resulting prediction as
-    \eqn{P_i(z) = \widehat f(z, X_{i,-j})}. The default summary returned by
-    \code{get.partial.plot.data()} is the average of the available
-    \eqn{P_i(z)} values. With OOB prediction, the prediction function for
-    row \eqn{i} uses that row's OOB trees.
+    At each value in \code{partial.values}, \code{partial()} sets
+    \code{partial.xvar} to that value for every training observation and
+    predicts with the fitted forest. The other predictors stay at each
+    observation's training values, except for any additional predictors
+    fixed by \code{partial.xvar2}. No trees are refitted.
 
-    \code{partial()} returns the observation-level arrays and does not
-    average them. The extraction helper replaces infinite values by
-    \code{NA} and omits missing values when averaging. A grid value with
-    no available predictions has an unavailable mean.
+    For a predictor \eqn{X_j}, with no additional predictors fixed, write
+    the prediction for observation \eqn{i} at value \eqn{z} as
+    \eqn{P_i(z) = \widehat f(z, X_{i,-j})}.
+    Averaging these predictions gives the partial dependence at \eqn{z}:
+    the model's mean prediction when \eqn{X_j} is set to \eqn{z}, averaged
+    over the training values of the other predictors.
+
+    \code{partial()} returns the individual \eqn{P_i(z)} values;
+    \code{get.partial.plot.data()} computes their means. With
+    \code{oob = TRUE}, each \eqn{P_i(z)} uses the trees for which
+    observation \eqn{i} was OOB. This changes the contributing trees,
+    while the training observations still provide the values over which
+    the mean is calculated.
   }
-  \subsection{Predictor grids and factors}{
-    The returned \code{partial.values} gives the actual sorted, unique
-    grid. The input order and duplicated values are not retained.
-    Reducing the grid reduces the number of partial predictions and the
-    size of the result.
+  \subsection{Choosing predictor values}{
+    Choose a grid for the range of interest, such as equally spaced
+    values or selected training quantiles. Each grid point requires a
+    prediction for every observation, so fewer points reduce computation
+    and output size.
 
-    Factor codes refer to the level order saved during training. For
-    example, if the original levels are \code{c("low", "middle", "high")},
-    the code for \code{"high"} is 3 even when a plotting subset contains
-    only \code{"middle"} and \code{"high"}. Use
-    \code{match(labels, levels(training.factor))} to obtain these codes.
-    The extraction helper returns numeric grid values, so factor labels
-    can be added in the custom plotting call.
+    For factors, use the integer codes corresponding to the training
+    levels. For example, levels \code{c("low", "middle", "high")} have
+    codes 1, 2, and 3. Use \code{match(labels, levels(training.factor))}
+    to obtain codes for selected labels. The extraction helper returns
+    numeric codes, which can be labeled in the plotting call.
   }
   \subsection{Fixing additional predictors}{
-    \code{partial.xvar2} and \code{partial.values2} fix one or more
-    additional coordinates for every observation. For example, vary wind
-    over a grid while holding temperature at a specified value. To make a
-    two-dimensional display, repeat the call at several fixed temperature
-    values. A single call does not expand \code{partial.values2} into a
-    Cartesian product of grids.
-  }
-  \subsection{Responses and survival summaries}{
-    Regression outputs contain predicted responses. Classification outputs
-    contain an \code{"all"} column followed by columns named for the class
-    levels. Multivariate and mixed fits return named response components;
-    \code{m.target} in the extraction helper selects among these components.
-    The class selector \code{target} is then resolved using that response's
-    class labels, not response names. A single observation or grid point
-    retains its observation-by-grid meaning during extraction.
+    Use \code{partial.xvar2} and \code{partial.values2} to hold additional
+    predictors at specified values for every observation. For example,
+    vary wind over a grid while fixing temperature at one value. The
+    resulting curve averages predictions over the remaining predictors.
 
+    To compare curves at several temperatures, repeat the call with a
+    different fixed temperature each time. This also provides the values
+    for a two-dimensional display: one predictor varies along the grid,
+    and the other changes between calls.
+  }
+  \subsection{Selecting a response}{
+    \code{get.partial.plot.data()} extracts predicted responses for
+    regression and the selected class probability for classification.
+    For multivariate and mixed outcomes, \code{partial()} computes all
+    responses in one call. Use \code{m.target} in the extraction helper
+    to choose a response, and \code{target} to choose a class when that
+    response is a factor. Several responses or classes can be extracted
+    from the same partial object without recalculating predictions.
+
+    For competing risks, \code{target} selects an event code from
+    \code{o$event.info$event.type}. This differs from \code{plot.variable()},
+    where \code{target} selects the event's position in that vector.
+  }
+  \subsection{Survival summaries and evaluation times}{
     For right-censored survival, \code{"mort"} returns mortality,
     \code{"surv"} returns survival probabilities, and \code{"chf"} returns
-    cumulative hazards. At this low-level interface, \code{"rel.freq"}
-    requests the same raw output as \code{"mort"}; neither \code{partial()}
-    nor \code{get.partial.plot.data()} normalizes this output.
+    cumulative hazards. In \code{partial()} and its extraction helper,
+    \code{"rel.freq"} returns the same unnormalized mortality as
+    \code{"mort"}.
 
-    Competing-risk outputs are expected years lost, cumulative incidence,
-    or cause-specific cumulative hazard, selected by \code{partial.type}.
-    The time-dependent outputs are calculated on the forest's stored time
-    grid and then selected in R for \code{partial.time}. The returned
-    \code{partial.time} retains the requested times.
+    For competing risks, \code{"years.lost"} returns expected years lost,
+    \code{"cif"} returns cumulative incidence, and \code{"chf"} returns
+    cause-specific cumulative hazard. The extraction helper selects the
+    event of interest.
+
+    Supply \code{partial.time} for \code{"surv"}, \code{"cif"}, or
+    \code{"chf"}. Predictions use the forest's \code{time.interest} grid.
+    Each request uses the last grid time less than or equal to it;
+    a request after the final grid time uses that final time. Using
+    values from \code{time.interest} gives exact matches. The returned
+    \code{partial.time} contains the requested times, which can differ
+    from the grid times used for prediction.
+
+    Mortality and years lost are scalar summaries and do not use
+    \code{partial.time}.
   }
-  \subsection{Custom plots}{
-    With \code{granule = FALSE}, the extraction helper returns one mean
-    for each primary grid value. Time-dependent survival summaries have
-    one column per requested time. With \code{granule = TRUE}, values are
-    ordered by primary grid value and then observation; the result contains
-    raw predictions, without the display shrinkage used for boxplots by
-    \code{plot.variable(partial = TRUE)}.
+  \subsection{Extracting results for custom plots}{
+    Pass the partial object to \code{get.partial.plot.data()} to obtain
+    predictor values \code{x} and corresponding predictions \code{yhat}.
+    The \code{granule} argument controls the summary:
+    \describe{
+      \item{\code{granule = FALSE}}{Return the mean at each grid value.
+        Only finite predictions contribute to the mean; if none are
+        finite, the mean is \code{NA}.}
+      \item{\code{granule = TRUE}}{Return the individual predictions,
+        grouped by grid value and then in training-observation order.
+        Each grid value is repeated once per observation. Nonfinite
+        predictions become \code{NA}.}
+    }
+    For time-dependent survival summaries, \code{yhat} has one column
+    per requested time. The individual values are on the original
+    prediction scale. Unlike the boxplot values from
+    \code{plot.variable(..., partial = TRUE)}, they are not shrunk toward
+    their mean.
 
-    The automatic plotting wrapper also returns \code{partial.summary},
-    containing the partial mean, empirical row-averaging standard error,
-    and available row count for each grid value. See
-    \code{\link{plot.variable.rfsrc}} for that scale's interpretation.
-
-    Use \code{plot.variable()} for an automatically selected predictor
-    grid and built-in displays. Use \code{partial()} when explicit grids,
-    several evaluation times, additional fixed predictors, or raw
-    observation-level results are needed.
+    For automatic plots and numerical summaries, use
+    \code{plot.variable(..., partial = TRUE)}. Its \code{partial.summary}
+    component contains means, standard deviations, row-averaging standard
+    errors, and finite prediction counts. See
+    \code{\link{plot.variable.rfsrc}} for the interpretation of its
+    standard errors and display bands.
   }
 }
 \value{
   \code{partial()} returns an object of class \code{(rfsrc, partial, family)}.
-  It contains \code{call}, \code{family}, \code{partial.values},
-  \code{partial.time}, \code{yvar.names}, and \code{event.info}, together with
-  the applicable prediction components below. Let \eqn{n} be the number of
-  training rows, \eqn{K} the number of sorted unique primary values,
-  \eqn{T} the number of requested times, and \eqn{J} the number of events.
-  \item{regrOutput}{Named list of regression-response matrices, each
-    \eqn{n \times K}.}
-  \item{classOutput}{Named list of classification-response arrays, each
-    \eqn{n \times (1 + C) \times K}, where \eqn{C} is that response's number
-    of classes. The second dimension is named \code{all} followed by the
-    class labels.}
-  \item{survOutput}{For right-censored mortality, an \eqn{n \times K}
-    matrix. For survival or cumulative hazard, an \eqn{n \times T \times K}
-    array. For competing-risk years lost, an \eqn{n \times J \times K}
-    array. For competing-risk cumulative incidence or cumulative hazard,
-    an \eqn{n \times T \times J \times K} array.}
+  It includes \code{call}, \code{family}, \code{partial.values} (the grid
+  used), \code{partial.time} (the requested times), \code{yvar.names}, and
+  \code{event.info}, together with the prediction components below.
+  Let \eqn{n} be the number of training observations, \eqn{K} the number
+  of predictor grid values, \eqn{T} the number of requested times, and
+  \eqn{J} the number of events.
+  \item{regrOutput}{Named list with one \eqn{n \times K} matrix per
+    regression response. Rows correspond to observations and columns
+    to predictor grid values.}
+  \item{classOutput}{Named list with one
+    \eqn{n \times (1 + C) \times K} array per classification response,
+    where \eqn{C} is its number of classes. The second dimension is named
+    \code{"all"} followed by the class labels; the class-labeled columns
+    contain class probabilities.}
+  \item{survOutput}{For right-censored mortality (\code{"mort"} or
+    \code{"rel.freq"}), an \eqn{n \times K} matrix. For survival or
+    cumulative hazard, an \eqn{n \times T \times K} array. For
+    competing-risk years lost, an \eqn{n \times J \times K} array.
+    For competing-risk cumulative incidence or cumulative hazard, an
+    \eqn{n \times T \times J \times K} array.}
 
-  \code{get.partial.plot.data()} returns a list with \code{x}, \code{yhat},
-  and \code{partial.time}. Normally \code{x} is the primary grid and
-  \code{yhat} is a vector of means or a grid-by-time matrix. With
-  \code{granule = TRUE}, \code{x} is repeated across observations and
-  \code{yhat} contains the corresponding raw values, with one column per
-  time for time-dependent summaries.
+  \code{get.partial.plot.data()} returns a list with:
+  \item{x}{Predictor grid values. With \code{granule = TRUE}, each value
+    is repeated \eqn{n} times to match the individual predictions.}
+  \item{yhat}{Mean predictions when \code{granule = FALSE}, or individual
+    predictions when \code{granule = TRUE}. Scalar summaries give a
+    vector of length \eqn{K} or \eqn{nK}, respectively. Time-dependent
+    summaries give a matrix with \eqn{K} or \eqn{nK} rows and \eqn{T}
+    columns.}
+  \item{partial.time}{The evaluation times supplied to \code{partial()}.}
 }
 \author{
   Hemant Ishwaran and Udaya B. Kogalur

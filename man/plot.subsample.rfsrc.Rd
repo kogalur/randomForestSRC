@@ -3,129 +3,153 @@
 \alias{plot.subsample}
 \title{Plot Subsampling Confidence Intervals for Variable Importance}
 \description{
-  Display confidence intervals for variable importance (VIMP) from a
-  \code{subsample} object. Select predictors, an outcome, and an
-  interval method using the saved replicate estimates. Prediction-error
-  and joint-VIMP rows can also be displayed when requested during
-  subsampling.
+  Plot confidence intervals for variable importance (VIMP) from a
+  \code{subsample} analysis. Compare predictors and assess whether their
+  importance is positive under the chosen interval method. Joint VIMP
+  and prediction error can also be displayed when included in the
+  resampling analysis.
 }
 \usage{\method{plot.subsample}{rfsrc}(x, alpha = .01, xvar.names,
  standardize = TRUE, normal = TRUE, jknife = FALSE, target, m.target = NULL,
  pmax = 75, main = "", sorted = TRUE, show.plots = TRUE, ...)}
 \arguments{
-  \item{x}{An object returned by \code{\link{subsample.rfsrc}}.}
-  \item{alpha}{Significance level for the displayed intervals, whose
-    nominal confidence level is \eqn{1-\alpha}. The plotting default
+  \item{x}{An object returned by \code{\link{subsample.rfsrc}}, including
+    double-bootstrap output.}
+  \item{alpha}{Significance level, strictly between zero and one.
+    Intervals have nominal confidence level \eqn{1-\alpha}. The default
     \code{.01} gives 99 percent intervals. Use \code{alpha = .05} to
-    match the default of \code{extract.subsample} and the print method.}
-  \item{xvar.names}{Names of predictor rows to display. If omitted,
-    all available rows are considered, subject to \code{pmax}.
-    This selects stored results and does not regrow the forest.}
-  \item{standardize}{For regression outcomes, divide VIMP by the
-    variance of the selected response in the full training data.
-    The same variance is used for all replicate estimates and any
-    error row. Other families are unchanged. Set \code{FALSE} to
-    display the original error scale.}
+    match the default for extraction and printing.}
+  \item{xvar.names}{Names of rows to display: predictor names, or
+    \code{"joint"} and \code{"err"} when those statistics were requested.
+    If omitted, all rows are considered, subject to \code{pmax}.}
+  \item{standardize}{For regression, divide estimates by the selected
+    response's variance in the full training data. The same divisor
+    applies to all replicates, VIMP, and prediction error. Other
+    families are unchanged. Set \code{FALSE} for the original scale.}
   \item{normal}{Use normal-approximation intervals when \code{TRUE}
     and nonparametric intervals when \code{FALSE}. For double-bootstrap
     objects, these are bootstrap normal and percentile intervals.}
-  \item{jknife}{Select the delete-\eqn{d} jackknife standard error for
-    normal intervals. Use \code{normal = TRUE, jknife = TRUE} for this
-    display. The default normal display uses the subsampling standard
-    error. Ignored when \code{normal = FALSE} and for double-bootstrap
-    objects.}
-  \item{target}{For classification, an integer or class label selecting
-    class-specific VIMP; the default is overall VIMP. For competing
-    risks, an integer from 1 to \code{J} selecting an event type;
-    the default is the first event. This selects a statistic within
-    the outcome identified by \code{m.target}.}
+  \item{jknife}{Use the delete-\eqn{d} jackknife standard error for
+    normal intervals. The default uses the subsampling standard error.
+    Ignored when \code{normal = FALSE} or for double-bootstrap objects.}
+  \item{target}{For classification, use \code{0} (the default) for the
+    overall statistic, or a class label or position \code{1}, \code{2},
+    and so on for a class-specific statistic. For competing risks, use
+    an event position from \code{1} to \code{J}, where \code{J} is the
+    number of event types; the first event is the default. Ignored for
+    regression and right-censored survival.}
   \item{m.target}{Name of one response in a multivariate or mixed-outcome
-    forest. If omitted, a default response is selected. This selects
-    an outcome in the saved results; it is separate from choosing
-    a class or event with \code{target}.}
-  \item{pmax}{Maximum number of rows retained for display, selected
-    by VIMP.}
+    forest. The default selects the first regression response with
+    results, or the first classification response with results if none
+    is available for regression. Use \code{target} to select a class
+    or event within that response.}
+  \item{pmax}{Maximum number of rows to display. Supply a positive
+    integer or \code{Inf} for all rows. When this limit is exceeded,
+    the rows with the largest reference estimates are displayed in
+    decreasing order, even if \code{sorted = FALSE}.}
   \item{main}{Main plot title.}
-  \item{sorted}{Order the displayed rows by importance.}
-  \item{show.plots}{Draw the plot. Set \code{FALSE} to obtain its
-    plot-data return value without opening or updating a plot.}
-  \item{...}{Graphical arguments for the interval display, including
-    \code{xlim}, \code{ylim}, \code{xlab}, \code{ylab}, \code{boxfill},
-    \code{border}, \code{whisklty}, \code{whisklwd}, and axis controls.
-    A named \code{pars} list is also accepted; direct arguments take
-    precedence. See Details.}
+  \item{sorted}{Order rows by decreasing reference estimate. For VIMP,
+    this places the most important predictors first. See \code{pmax}.}
+  \item{show.plots}{Draw the plot. Set \code{FALSE} to return its
+    numerical summaries without drawing.}
+  \item{...}{Named graphical arguments, such as \code{xlim},
+    \code{ylim}, \code{xlab}, \code{ylab}, \code{boxfill},
+    \code{border}, \code{whisklty}, and \code{whisklwd}. A named
+    \code{pars} list is also accepted; direct arguments take precedence.
+    See Details.}
 }
 \details{
-  \subsection{Choosing an interval display}{
-    The default uses normal intervals and the subsampling standard
-    error. Use \code{normal = TRUE, jknife = TRUE} for normal intervals
-    with the jackknife standard error, or \code{normal = FALSE} for
-    nonparametric intervals. All use the estimates already stored
-    in \code{x}; changing \code{alpha} or the display method does not
-    perform another round of subsampling.
+  After fitting \code{smp <- subsample(obj)}, use
+  \code{plot.subsample(smp)} to compare VIMP estimates and their
+  uncertainty. Each row represents a predictor or a requested joint-VIMP
+  or prediction-error statistic. Changing the confidence level, interval
+  method, or selected results uses the saved replicates without fitting
+  more forests.
 
-    The subsampling standard error measures replicate dispersion
-    around the replicate mean. The jackknife calculation measures
-    dispersion around the full-data estimate, incorporating the
-    displacement between those two centers. The jackknife standard
-    error is not necessarily larger for a finite replicate set.
-    The nonparametric interval reverses empirical quantiles of the
-    centered subsampling roots. See \code{\link{subsample.rfsrc}}
-    for the calculations.
+  \subsection{Interpreting the display}{
+    The default plot is horizontal, with VIMP or prediction error on
+    the horizontal axis. Whiskers mark the confidence limits; the box
+    spans the lower and upper quartiles of the interval summary.
+    For subsampling, the center line marks the full-data estimate for
+    normal intervals and the interval median for nonparametric
+    intervals. For double-bootstrap output, it marks the bootstrap mean.
 
-    The display summarizes uncertainty in VIMP, not the distribution
-    of the observed predictor values. Its intervals are calculated
-    separately for each displayed statistic. A positive lower VIMP
-    endpoint identifies a positive-importance result under that
-    interval procedure; the display does not apply a multiple-testing
-    correction. Prediction-error rows summarize the error itself.
+    Boxes are red when the lower confidence limit exceeds zero and
+    blue otherwise. For VIMP, red identifies positive importance under
+    the chosen interval method. An \code{err} row summarizes prediction
+    error, so its color is not a variable-selection result. Intervals
+    are calculated separately, without a multiple-testing adjustment.
+    These boxes describe uncertainty in the estimates, not variation
+    in the observed predictor values.
+  }
+  \subsection{Choosing the interval method}{
+    Subsampling provides three displays:
+    \describe{
+      \item{Normal subsampling (default).}{Use
+        \code{normal = TRUE, jknife = FALSE}. The standard error measures
+        variation about the subsample mean.}
+      \item{Normal jackknife.}{Use \code{normal = TRUE, jknife = TRUE}.
+        The standard error uses deviations from the full-data estimate,
+        including its difference from the subsample mean.}
+      \item{Nonparametric subsampling.}{Use \code{normal = FALSE}.
+        Limits use empirical quantiles of centered and scaled
+        subsample estimates.}
+    }
+    The jackknife standard error need not be larger than the subsampling
+    standard error. See \code{\link{subsample.rfsrc}} for the formulas
+    and finite-replicate scaling.
+
+    For double-bootstrap objects, \code{normal = TRUE} uses normal
+    intervals centered at the bootstrap mean; \code{normal = FALSE}
+    uses percentile intervals. \code{jknife} has no effect.
+
+    Use the same \code{alpha} when comparing plots with printed or
+    extracted results. Plotting defaults to \code{.01}; printing and
+    extraction default to \code{.05}.
   }
   \subsection{Selecting predictors and outcomes}{
-    \code{xvar.names} selects rows and \code{m.target} selects a response.
-    For a classification response or competing-risk outcome,
-    \code{target} additionally selects its class-specific or
-    event-specific statistic. These selections are made after
-    resampling, so one saved object can be used for several displays.
+    Use \code{xvar.names} to choose rows, \code{m.target} to choose a
+    response, and \code{target} to choose its class or event statistic.
+    For example, \code{m.target = "Ozone"} selects results for the
+    response named \code{Ozone}, not a predictor to display.
 
-    Set \code{alpha} explicitly when comparing results with
-    \code{print} or \code{extract.subsample}; their default is .05,
-    whereas the plotting default is .01.
+    Competing-risk indexing differs from extraction: the first event
+    uses \code{target = 1} here but \code{target = 0} in
+    \code{extract.subsample()}.
   }
-  \subsection{Graphical customization}{
-    The default display is horizontal. \code{xlim} controls its
-    horizontal VIMP/error axis and \code{ylim} controls its vertical
-    row positions. These arguments always refer to the displayed axes;
-    the wrapper handles the internal limit reversal used by \code{bxp}
-    for horizontal boxes. \code{horizontal = FALSE} gives a vertical
-    display, with VIMP/error on the vertical axis.
+  \subsection{Customizing the plot}{
+    \code{xlim} and \code{ylim} control the horizontal and vertical
+    axes as displayed. Use \code{horizontal = FALSE} to place VIMP or
+    prediction error on the vertical axis.
 
-    Use \code{boxfill} (or \code{col}) for the box fill,
-    \code{border} for its border, and \code{whisklty} and
-    \code{whisklwd} for interval whiskers. By default, boxes are red
-    when their lower endpoint is positive and blue otherwise. User
-    styles are retained when the intervals are redrawn above the guides.
-    \code{outline = FALSE} remains the default. The whiskers are
-    confidence limits and the boxes show the inner interval summaries,
-    rather than quartiles of the observed predictor values.
+    Set \code{boxfill} (or \code{col}) for box colors, \code{border}
+    for borders, and \code{whisklty} and \code{whisklwd} for the
+    confidence-limit lines. Outliers are hidden by default
+    (\code{outline = FALSE}).
 
     \code{cex.axis}, \code{col.axis}, and \code{las} control axis
-    labels. Set \code{xaxt = "n"} or \code{yaxt = "n"} to suppress
-    one axis, or \code{axes = FALSE} to suppress both. A scalar
-    \code{ylab} is a vertical-axis title. \code{names} supplies one
-    row label per selected statistic before sorting and trimming; labels
-    follow the same ordering as the statistics. \code{at} supplies
-    positions for the final displayed intervals.
-
-    \code{show.plots = FALSE} returns the plot data invisibly without
-    opening a graphics device. \code{extract.subsample(x, raw = TRUE)}
-    returns the interval matrices and replicate estimates directly.
+    labels. Use \code{xaxt = "n"} or \code{yaxt = "n"} to suppress one
+    axis, or \code{axes = FALSE} for both. A single \code{ylab} string
+    sets the vertical-axis title. For custom row labels, supply
+    \code{names} with one label per selected row before sorting and
+    limiting the display to \code{pmax} rows. \code{at} sets positions
+    for the final displayed intervals.
+  }
+  \subsection{Obtaining numerical results}{
+    \code{plot.subsample(smp, show.plots = FALSE)} returns the selected
+    interval matrix and labels without drawing.
+    \code{extract.subsample(smp, raw = TRUE)} returns all interval
+    methods and the replicate estimates. Both use the requested
+    \code{standardize} setting.
   }
 }
 \value{
-  Invisibly returns a boxplot-summary list. Its \code{stats} component
-  is the selected five-row confidence-interval matrix, in displayed
-  order, and \code{names} contains the row labels. The remaining
-  components are the boxplot scaffold, not additional subsampling
+  Invisibly returns a list with the following plotting components:
+  \item{stats}{Five-row interval matrix, with one column per displayed
+    statistic. Rows contain the lower confidence limit, lower quartile,
+    center, upper quartile, and upper confidence limit.}
+  \item{names}{Labels corresponding to the columns of \code{stats}.}
+  Other components support the boxplot drawing and are not additional
   confidence intervals. The same list is returned with
   \code{show.plots = FALSE}.
 }

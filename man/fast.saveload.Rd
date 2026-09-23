@@ -4,112 +4,131 @@
 \alias{fast.load}
 \alias{fast.save.list}
 \alias{fast.load.list}
-\title{Fast Saving and Loading Objects}
+\title{Fast Saving and Loading of Random Forests}
 \description{
-  Save and load the forest component of a fitted random forest using a
-  directory of files.  The loaded forest can be passed to
-  \code{predict()}.  Corresponding helpers save and load lists of forests.
+  Save and load a minimal forest object for prediction.  These functions
+  are designed to use substantially less disk space and load large forests
+  faster than saving the full fitted object with \code{\link[base]{saveRDS}}
+  and loading it with \code{\link[base]{readRDS}}.  Functions are available
+  for a single forest or a list of forests.
 }
 \usage{
-fast.save(o, path = NULL, testing = TRUE, units = "Mb")
+fast.save(o, path = NULL, testing = TRUE, units = "Mb", compact = FALSE)
 
 fast.load(directory, path = NULL, testing = FALSE, units = "Mb")
 
-fast.save.list(o, path = NULL, testing = FALSE, units = "Mb")
+fast.save.list(o, path = NULL, testing = FALSE, units = "Mb", compact = FALSE)
 
 fast.load.list(directory, path = NULL, testing = FALSE, units = "Mb")
 }
 \arguments{
-  \item{o}{For \code{fast.save()}, a grow object with class beginning
-    \code{c("rfsrc", "grow")} and a retained \code{forest} component.
-    Supply the grow object, not \code{o$forest}.  For
-    \code{fast.save.list()}, a nonempty list of such grow objects.}
+  \item{o}{For \code{fast.save()}, a fitted object with class beginning
+    \code{c("rfsrc", "grow")} and a \code{forest} component.
+    Supply the fitted object, not \code{o$forest}.  For
+    \code{fast.save.list()}, a nonempty list of these objects.}
   \item{path}{For saving, the destination directory, including its name.
-    The default is \code{file.path(getwd(), "forest")}.  An existing
-    destination and all its contents are removed before saving.
+    The default is \code{file.path(getwd(), "forest")}.
+    An existing destination and all its contents are deleted.
     For loading, the parent directory containing \code{directory};
-    \code{NULL} uses the current working directory.  See Details for
-    matching save and load paths.}
-  \item{directory}{For loading, the name of the saved forest directory
-    relative to \code{path}, or to the current working directory when
-    \code{path = NULL}.  For \code{fast.load.list()}, the name of the
-    directory containing the saved forest subdirectories.}
-  \item{testing}{Print component-size diagnostics using \code{lsos()}.
+    \code{NULL} uses the current working directory.}
+  \item{directory}{Name of the saved directory relative to \code{path}.
+    For \code{fast.load.list()}, this directory contains the individual
+    forest subdirectories.}
+  \item{testing}{Print component memory sizes using \code{lsos()}.
     Defaults to \code{TRUE} for \code{fast.save()} and \code{FALSE}
-    for the other helpers.  This is a size display, not a save/load
-    comparison or a timing benchmark.}
-  \item{units}{Character string specifying the units for the diagnostic
-    size display, passed to \code{format(object.size(...), units = units)}.
-    The default is \code{"Mb"}.  This does not affect the saved format.}
+    for the other functions.}
+  \item{units}{Units for the memory-size display, passed to
+    \code{format(object.size(...), units = units)}.
+    The default is \code{"Mb"}.}
+  \item{compact}{If \code{TRUE}, omit terminal-node information from the
+    saved forest and recompute it during prediction.  Requires a
+    non-anonymous forest containing the training predictors and responses.
+    If \code{FALSE} (default), save the forest with its available
+    terminal-node information.  See \emph{Compact saving} below.}
 }
 \details{
   \subsection{Saving and loading a forest}{
-    \code{fast.save()} saves \code{o$forest}, including its retained
-    training data and tree information.  \code{fast.load()} returns the
-    reconstructed forest object, which can be used directly with
+    \code{fast.save()} addresses the large files and slow loading that
+    can result from saving a full fitted forest with \code{saveRDS()}.
+    It saves only \code{o$forest}, the minimal object used for prediction,
+    including its tree information and any training data it contains.
+    Predictions and performance summaries outside this component are
+    excluded.  \code{fast.load()} returns the forest for use with
     \code{\link{predict.rfsrc}}.
 
-    Components outside \code{o$forest}, such as the grow object's
-    prediction and performance summaries, are not saved.  To preserve
-    the complete R object instead, use \code{\link[base]{saveRDS}} and
-    \code{\link[base]{readRDS}}.
+    Large tabular components are saved efficiently with
+    \code{fst::write_fst()}, and the remaining forest information with
+    \code{saveRDS(..., compress = FALSE)}.  Saving requires the \pkg{fst}
+    and \pkg{data.table} packages; loading requires \pkg{fst}.
+    All files have a \file{.rda} extension despite the different formats.
+    Keep the directory's files together and load the forest with
+    \code{fast.load()}.
+  }
+  \subsection{Compact saving}{
+    With \code{compact = TRUE}, the saved forest includes the tree
+    structure, factor-split information, training data, seeds, and other
+    forest information, but omits stored terminal-node information.
+    Prediction recomputes this information from the saved forest and
+    training data without growing new trees.  The fitted object in memory
+    is unchanged.
 
-    Saving requires the \pkg{fst} and \pkg{data.table} packages;
-    loading requires \pkg{fst}.  Large tabular components are written
-    with \code{fst::write_fst()}, and the remaining forest metadata are
-    stored with \code{saveRDS(..., compress = FALSE)}.  The files use a
-    \file{.rda} suffix despite these different formats.  Keep the entire
-    directory together and read it using \code{fast.load()}.
+    The saved copy has \code{terminal.qualts = FALSE} and
+    \code{terminal.quants = FALSE}, with \code{nativeArrayTNDS} removed.
+    Use the same \code{fast.load()} or \code{fast.load.list()} call
+    for either saving mode.  Compact saving can further reduce disk space,
+    but prediction may take longer and peak memory use may not decrease.
+
+    Use \code{compact = FALSE} for anonymous forests.  Compact saving
+    includes the training data.  Eligibility checks run before the
+    destination is deleted; for lists, every forest is checked first.
   }
   \subsection{Directories}{
-    \strong{Both save helpers remove the destination directory and all
-    its contents before writing.}  Use a dedicated directory for the
-    forest or forest list, rather than a directory containing other work.
-    The destination is then created, including parent directories as
-    needed.
+    \strong{Both save functions delete an existing destination directory
+    and all its contents.}  Use a dedicated directory for each forest or
+    list.  The destination and any missing parent directories are then
+    created.
 
-    Saving takes the full destination in \code{path}.  Loading takes
-    its name in \code{directory} and its parent in \code{path}.  For a
-    destination stored in \code{save.path}, the matching load call is
+    When saving, \code{path} is the complete destination.  When loading,
+    \code{directory} is its name and \code{path} is its parent.  For a
+    destination \code{save.path}, use
     \code{fast.load(basename(save.path), path = dirname(save.path))}.
-    With the default save destination, use \code{fast.load("forest")}.
+    For the default destination, use \code{fast.load("forest")}.
   }
   \subsection{Lists of forests}{
-    \code{fast.save.list()} saves the elements in subdirectories
+    \code{fast.save.list()} saves forests in subdirectories
     \file{forest1}, \file{forest2}, and so on, inside \code{path}.
-    Original list names are not stored.
+    List names are not saved.  \code{fast.load.list()} loads every entry
+    listed by \code{list.files()} in that directory, so it should contain
+    only saved forest subdirectories.
 
-    \code{fast.load.list()} loads every entry returned by
-    \code{list.files()} in the list directory and returns an unnamed
-    list in that order.  Keep only saved forest subdirectories there.
-    Directory-name ordering can differ from the original numeric index
-    order: for example, \file{forest10} can precede \file{forest2}.
-    Use \code{fast.load()} on a named subdirectory when selecting a
-    particular saved element.
-  }
-  \subsection{Sampling-size function}{
-    The saved sampling-size information is
-    \code{sampfrac = o$forest$sampsize(1)}.  Loading reconstructs the
-    function as \code{function(x) x * sampfrac}.  This preserves a
-    proportional sampling-size rule; it does not preserve an arbitrary
-    nonlinear custom function.  Use \code{saveRDS()} when that original
-    function must be retained.
+    The loaded list is unnamed and follows directory-listing order,
+    which can differ from the original order: \file{forest10} can precede
+    \file{forest2}.  To load one forest, call \code{fast.load()} with its
+    subdirectory name.
   }
 }
 \value{
   \describe{
-    \item{\code{fast.save}}{Used for its file-writing side effect.
-      Its return value is the memory-usage matrix from the final
-      \code{gc(FALSE)} call, not the saved forest.}
-    \item{\code{fast.load}}{The reconstructed forest component, retaining
-      its saved class, ordinarily \code{c("rfsrc", "forest", family)}.
-      It is a forest object rather than the original grow object.}
-    \item{\code{fast.save.list}}{An unnamed list of the return values
-      from the individual \code{fast.save()} calls.  The forests are
-      saved in the destination subdirectories.}
-    \item{\code{fast.load.list}}{An unnamed list of reconstructed forest
-      objects in the directory-listing order described above.}
+    \item{\code{fast.save}}{Saves the forest to disk and returns the
+      memory-usage matrix produced by \code{gc(FALSE)}.}
+    \item{\code{fast.load}}{The saved forest component with its original
+      class, usually \code{c("rfsrc", "forest", family)}.}
+    \item{\code{fast.save.list}}{An unnamed list of the memory-usage
+      matrices returned by the individual \code{fast.save()} calls.}
+    \item{\code{fast.load.list}}{An unnamed list of forest objects in
+      directory-listing order.}
   }
+}
+\note{
+  The sampling-size function is saved as
+  \code{sampfrac = o$forest$sampsize(1)} and loaded as
+  \code{function(x) x * sampfrac}.  Use \code{saveRDS()} to save a custom
+  function that is not proportional to sample size.
+
+  Compact saving checks that \code{round(sampsize(n))} equals
+  \code{round(n * sampsize(1))} at the training sample size \code{n}.
+  A mismatch stops saving before the destination is deleted.
+  This check applies only at the training sample size.
 }
 \seealso{
   \code{\link{rfsrc}}, \code{\link{predict.rfsrc}},
@@ -134,6 +153,26 @@ if (requireNamespace("fst", quietly = TRUE) &&
 }
 
 \donttest{
+## ------------------------------------------------------------
+## Compact saving: the same forest, fewer saved components
+## ------------------------------------------------------------
+if (requireNamespace("fst", quietly = TRUE) &&
+    requireNamespace("data.table", quietly = TRUE)) {
+  o <- rfsrc(mpg ~ ., data = mtcars, ntree = 100)
+  set.seed(19)
+  reference <- predict(o, seed = -19)
+  save.path <- tempfile("rfsrc-compact-")
+  fast.save(o, path = save.path, compact = TRUE, testing = FALSE)
+  oo <- fast.load(basename(save.path), path = dirname(save.path))
+  print(oo[c("terminal.qualts", "terminal.quants")])
+  print(list.files(save.path, pattern = "^nativeArrayTDNS_"))
+  set.seed(19)
+  restored <- predict(oo, seed = -19)
+  print(all.equal(reference$predicted, restored$predicted))
+  print(all.equal(reference$predicted.oob, restored$predicted.oob))
+  unlink(save.path, recursive = TRUE)
+}
+
 ## ------------------------------------------------------------
 ## Regression: a list of forests with different node sizes
 ## ------------------------------------------------------------
@@ -309,7 +348,7 @@ if (requireNamespace("fst", quietly = TRUE) &&
                 get.mv.predicted(pp, oob = FALSE)))
   print(summary(get.mv.predicted(p) - get.mv.predicted(pp)))
   for (yn in names(p$classOutput)) {
-    cat("check coherence for outcome:", yn, "\n")
+    print(yn)
     print(all.equal(as.character(p$classOutput[[yn]]$class),
                     as.character(pp$classOutput[[yn]]$class)))
     print(all.equal(as.character(p$classOutput[[yn]]$class.oob),

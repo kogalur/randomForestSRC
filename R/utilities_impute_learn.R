@@ -994,7 +994,8 @@
   .impute.forest.options(fs)
   allowed <- c(
     "mtry", "splitrule", "bootstrap", "sampsize", "samptype",
-    "perf.type", "rfq", "save.memory", "importance", "proximity"
+    "perf.type", "rfq", "save.memory", "importance", "proximity",
+    "terminal.qualts", "terminal.quants"
   )
   structural <- c("ntree", "nodesize", "nsplit")
   unknown <- setdiff(names(fs), c(structural, allowed))

@@ -1,3 +1,35 @@
+# randomForestSRC 3.9.0
+
+## Forest storage and imputation
+
+* Added optional `compact = TRUE` saving to `fast.save()` and
+  `fast.save.list()`. Compact saves omit terminal-node information and
+  reconstruct it during prediction without growing new trees. This can
+  reduce disk use at the cost of additional prediction time. The fitted
+  object is unchanged, and both saving modes use the existing loaders.
+  The default remains `compact = FALSE`.
+
+* Added compact-save eligibility checks before removing an existing
+  destination, including checks of every forest when saving a list.
+  Compact saving requires a non-anonymous forest with retained training
+  predictors and responses, and a sampling-size specification that
+  preserves the training sample size after loading. `fast.save()` also
+  checks the grow-object class before removing its destination.
+
+* `impute.learn()` now accepts `terminal.qualts` and `terminal.quants`
+  in `full.sweep.options`, allowing terminal-node storage controls to
+  reach the saved target learners. These settings are independent of
+  initial-imputation and supervised auxiliary-forest options.
+
+## Documentation and build
+
+* Reorganized and clarified help for forest saving and loading,
+  imputation and OOD scoring, quantile regression, survival and
+  classification performance, multivariate extraction, partial dependence,
+  subsampling, tuning, and associated plots. Expanded explanations of
+  prediction selection, score and interval interpretation, returned
+  values, graphical controls, and examples.
+
 # randomForestSRC 3.8.0
 
 ## Quantile regression

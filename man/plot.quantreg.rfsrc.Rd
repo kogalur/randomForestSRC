@@ -3,9 +3,11 @@
 \alias{plot.quantreg}
 \title{Plot Conditional Quantiles and CRPS Diagnostics}
 \description{
-  Plots observed responses against their conditional quantiles. An optional
-  inset compares the forest's continuous ranked probability score (CRPS)
-  curve with a predictor-free reference based on the training responses.
+  Plots observed responses against their predicted conditional quantiles.
+  An optional inset compares the forest's continuous ranked probability
+  score (CRPS) with a reference that uses the training-response
+  distribution without predictors. Numerical pinball losses can also
+  be displayed for selected quantile levels.
 }
 \usage{
 \method{plot.quantreg}{rfsrc}(x, prbL = .25, prbU = .75,
@@ -14,121 +16,152 @@
   inset.args = list(), crps.null = TRUE, quantreg.tau = NULL)
 }
 \arguments{
-  \item{x}{A quantile regression object returned by \code{\link{quantreg}}.
-    Observed responses must be retained in the object. Predictions made
-    without response values cannot be displayed by this diagnostic.}
-  \item{prbL, prbU}{Single probabilities in \eqn{(0,1)} specifying the lower
-    and upper conditional quantiles. Require \code{prbL < prbU}. The middle
-    probability is \code{0.5} when it lies strictly between these bounds;
-    otherwise it is their midpoint. Each requested probability is matched
-    to the nearest stored probability by \code{get.quantile()}. Include
-    the desired probabilities in the original \code{quantreg()} call for
-    exact matching.}
+  \item{x}{A training or prediction object returned by
+    \code{\link{quantreg}}, containing observed responses for the
+    observations to be plotted. For new-data diagnostics, include
+    response columns in the \code{quantreg()} prediction call.}
+  \item{prbL, prbU}{Lower and upper quantile levels, each a single
+    probability in \eqn{(0,1)}, with \code{prbL < prbU}. The middle
+    level is 0.5 when it lies strictly between them; otherwise it is
+    their midpoint. Each level is matched to the nearest stored
+    probability by \code{get.quantile()}. Include the desired levels
+    in \code{prob} when calling \code{quantreg()} for exact matching.}
   \item{m.target}{Name of one continuous response to display. The default
-    is the first response with stored quantiles. For multivariate or mixed
-    outcomes, this selects existing results for plotting and does not
-    request new predictions.}
-  \item{crps}{Logical. If \code{TRUE}, add the standardized, finite-grid
-    CRPS curve returned by \code{get.quantile.crps()}.}
-  \item{subset}{Positive integer row indices, or a logical vector with one
-    nonmissing entry per row of the quantile output. The default uses all
-    rows. Repeated integer indices repeat those observations in the plot
-    and score calculation. Row indices refer to the stored results, after
-    any preprocessing performed during training or prediction.}
-  \item{xlab, ylab}{Axis labels for the main quantile panel. Defaults are
-    the selected response name and \code{"Target Quantiles"}.}
-  \item{...}{Named graphical arguments for the main quantile panel, passed
-    to \code{\link[graphics]{plot.default}}. In particular, \code{xlim}
-    and \code{ylim} set its axis limits; \code{main}, \code{cex.axis},
-    \code{las}, and related options customize its title and axes. Entries
-    \code{pch}, \code{col}, and \code{cex} customize the middle quantile
-    points. The plotted coordinates and initial empty-panel \code{type}
-    are controlled internally. These arguments apply whether or not the
-    CRPS inset is displayed.}
-  \item{inset.args}{Named list of graphical arguments for the CRPS inset,
-    passed to \code{\link[graphics]{plot.default}}. Entries \code{xlim}
-    and \code{ylim} set the inset limits; \code{col}, \code{lty}, and
-    \code{lwd} control the forest curve. Axis options such as
-    \code{cex.axis}, \code{las}, and \code{tck} also apply to the inset.
-    Use \code{axes = FALSE} to suppress both inset axes, or
-    \code{yaxt = "n"} to suppress its right-hand axis. The default
-    \code{list()} uses the inset's own settings, independently of
-    \code{...}. Ignored when \code{crps = FALSE}. Must be supplied by its
-    full argument name.}
-  \item{quantreg.tau}{Optional numeric vector of levels strictly between
-    zero and one.  Adds a lower-right annotation of mean pinball losses
-    at these levels for the selected response and subset, using
-    \code{get.pinball.error()}.  The default \code{NULL} adds no pinball
-    annotation, even when a session reporting option is set.  It does
-    not change \code{prbL}, \code{prbU}, or the CRPS inset.  Must be
-    supplied by its full argument name.}
-  \item{crps.null}{Logical. If \code{TRUE}, add the null reference when
-    \code{crps = TRUE}. The reference is drawn as a dashed black curve,
-    with a legend identifying \code{Forest} and \code{Null}. Set to
-    \code{FALSE} to display only the forest curve. Must be supplied by its
-    full argument name.}
+    is the first response with quantile results. For multivariate or
+    mixed outcomes, this selects results from \code{x} without
+    calculating new predictions.}
+  \item{crps}{If \code{TRUE}, display the standardized, finite-grid CRPS
+    curve from \code{get.quantile.crps()} in an inset.}
+  \item{subset}{Observations to plot and score. Supply positive integer
+    row indices or a logical vector with one nonmissing entry per row
+    of the quantile output. \code{NULL} uses all rows. Indices refer to
+    the returned results after training or prediction preprocessing;
+    repeated indices include an observation more than once.}
+  \item{xlab, ylab}{Main-panel axis labels. Defaults are the selected
+    response name and \code{"Target Quantiles"}.}
+  \item{...}{Named graphical arguments for the main panel, passed to
+    \code{\link[graphics]{plot.default}}. Use \code{xlim} and
+    \code{ylim} for axis limits, \code{main} for the title, and
+    \code{cex.axis}, \code{las}, and related options for the axes.
+    The arguments \code{pch}, \code{col}, and \code{cex} style the
+    middle-quantile points. The function sets the plotted coordinates
+    and initial panel \code{type}. These settings do not style the
+    CRPS inset.}
+  \item{inset.args}{Named list of graphical arguments for the CRPS
+    inset, passed to \code{\link[graphics]{plot.default}}. Use
+    \code{xlim} and \code{ylim} for inset limits, and \code{col},
+    \code{lty}, and \code{lwd} for the forest curve. Axis options such
+    as \code{cex.axis}, \code{las}, and \code{tck} also apply.
+    \code{axes = FALSE} hides both inset axes; \code{yaxt = "n"}
+    hides its right-hand axis. The default \code{list()} uses the
+    inset's own settings. Ignored when \code{crps = FALSE}. Supply
+    the full argument name.}
+  \item{quantreg.tau}{Quantile levels for numerical pinball-loss labels,
+    as a vector of finite probabilities strictly between zero and one.
+    For each level, the plot displays the mean loss for the selected
+    response and subset in the lower-right corner of the main panel.
+    The default \code{NULL} omits these labels, even when the session
+    option \code{quantreg.tau} is set. The plotted quantiles and CRPS
+    inset are unchanged. Supply the full argument name.}
+  \item{crps.null}{If \code{TRUE}, include the null reference in the
+    CRPS inset as a dashed black curve, with a legend identifying
+    \code{Forest} and \code{Null}. Set to \code{FALSE} for the forest
+    curve alone. Ignored when \code{crps = FALSE}. Supply the full
+    argument name.}
 }
 \details{
-  The main panel places observed response values on the horizontal axis
-  and the requested conditional quantiles on the vertical axis. A point
-  marks the middle quantile, and a vertical segment with endpoint marks
-  spans the lower and upper quantiles. The dashed diagonal is the identity
-  line. Horizontal jitter reduces overplotting; it does not change the
-  response values used for CRPS. Rows with unavailable responses or
-  requested quantiles are omitted from the main panel with a warning.
+  The plot compares observed responses with the predicted response
+  distributions. The main panel shows selected quantiles for individual
+  observations; the CRPS inset summarizes distributional prediction
+  error across observations. Both displays use the response selected
+  by \code{m.target} and the observations selected by \code{subset}.
 
-  An explicit \code{quantreg.tau} adds pinball losses to the main panel.
-  Each loss is averaged over the requested \code{subset}, excluding
-  unavailable responses and quantiles separately at that level.  It
-  uses the original response values, not their jittered display
-  positions.  These are the same values returned by
-  \code{get.pinball.error(x, tau = quantreg.tau, subset = subset,
-  m.target = m.target)} for the selected response.  The reporting levels
-  are independent of the lower and upper quantiles shown in the plot.
-  The session option \code{quantreg.tau} sets defaults for printing and
-  loss extraction; plotting keeps this annotation off unless levels
-  are supplied explicitly.
+  \subsection{Quantile panel}{
+    Each observation is placed at its observed response on the
+    horizontal axis. A point marks its predicted middle quantile, and a
+    vertical segment with endpoint marks spans its lower and upper
+    quantiles. The dashed diagonal marks equality between observed and
+    predicted values. The default levels request the median and an
+    interval from the 25th to the 75th percentile.
 
-  The inset shows the average squared CDF error, integrated by the
-  trapezoidal rule from the first response-grid value to each successive
-  grid value and divided by the width of that interval. Its horizontal
-  axis is the response threshold and its right-hand vertical axis is
-  standardized CRPS. Lower values indicate less error over the
-  corresponding integration interval. This is the finite-grid curve
-  computed by \code{get.quantile.crps()}, with the same dependence on the
-  reporting grid. The first value is unavailable because its integration
-  interval has zero width. An entirely unavailable curve is omitted with
-  a warning.
+    Horizontal jitter separates overlapping observations. All scores
+    use the original response values, not these display positions.
+    Observations with an unavailable response or requested quantile
+    are omitted from the main panel with a warning.
+  }
 
-  The null reference uses the empirical CDF of all finite training
-  responses for the selected outcome,
-  \deqn{F_0(t) = \frac{1}{n_0}\sum_{j=1}^{n_0} I(Y_j^{\mathrm{train}}\leq t),}
-  where \eqn{n_0} is the number of finite training responses. Repeated
-  response values retain their frequencies. This same predictor-free CDF
-  is used for every evaluated observation. Training responses are read
-  from \code{x$forest$yvar}, or from \code{x$yvar} for a grow object
-  without saved training responses in its forest. Test responses are
-  used only for evaluation, not to construct the reference. Distinct
-  reporting-grid values are not a replacement for the training sample.
+  \subsection{Pinball-loss labels}{
+    Supply \code{quantreg.tau = c(.1, .5, .9)} to display mean pinball
+    losses for the 10th, 50th, and 90th percentile predictions as text
+    in the lower-right corner of the main panel. Smaller losses
+    indicate better quantile predictions. These levels can differ from
+    the quantiles drawn in the panel.
 
-  Both curves use the same response grid, subset, integration rule, and
-  standardization. At each threshold, both scores exclude the same rows
-  with an unavailable observed response or forest CDF prediction. The
-  reference distribution itself is not restricted by \code{subset}.
-  In training plots, the full-training empirical reference includes the
-  evaluated training response; it is an in-sample benchmark, not an OOB
-  or leave-one-out null estimate. If training responses are unavailable,
-  the null curve is omitted with a warning.
+    The values are calculated by
+    \code{get.pinball.error(x, tau = quantreg.tau, subset = subset,
+    m.target = m.target)} for the selected response. Each loss averages
+    over the selected observations with finite responses and quantile
+    predictions at that level. Plotting omits these labels unless
+    levels are supplied in the call; the session reporting option
+    alone does not add them.
+  }
 
-  Graphical arguments in \code{...} control the main panel. Customize
-  the inset separately with \code{inset.args}, for example,
-  \code{inset.args = list(ylim = c(0, 0.3), lwd = 1.5)}. Default inset
-  limits cover both curves. Limits supplied inside \code{inset.args}
-  change the displayed inset window only; they do not recompute or
-  truncate either score integral. Main-panel limits also leave both score
-  calculations unchanged. Inset graphics settings are restored before
-  returning so additional drawing refers to the main panel, and successive
-  calls can be used in a multi-panel layout.
+  \subsection{CRPS inset}{
+    The inset evaluates the predicted CDF across response thresholds.
+    At each threshold, it averages the squared difference between the
+    predicted CDF and the indicator that the observed response is at
+    or below that threshold. It integrates these errors by the
+    trapezoidal rule from the first reporting-grid value to each
+    successive value, then divides by the integration width.
+
+    The horizontal axis is the response threshold; the right-hand
+    vertical axis is standardized CRPS. Lower values indicate less
+    error over the corresponding integration interval. This is the
+    finite-grid curve returned by \code{get.quantile.crps()}, so the
+    grid's range and resolution affect the scores. The first value is
+    unavailable because its integration width is zero. An entirely
+    unavailable curve is omitted with a warning.
+  }
+
+  \subsection{Null reference}{
+    The null curve provides a comparison with predictions based on the
+    training-response distribution alone. It uses the same empirical
+    CDF for every evaluated observation:
+    \deqn{F_0(t)=\frac{1}{n_0}\sum_{j=1}^{n_0}
+      I(Y_j^{\mathrm{train}}\leq t),}
+    where \eqn{n_0} is the number of finite training responses for the
+    selected outcome. Every training observation contributes, so
+    repeated response values contribute according to their frequencies.
+    Test responses are used only to evaluate the reference, not to
+    construct it.
+
+    Forest and null curves use the same response grid, subset,
+    integration rule, and standardization. At each threshold, both
+    exclude observations with an unavailable response or forest CDF
+    prediction. The null distribution itself always uses all finite
+    training responses, regardless of \code{subset}. For training
+    plots, it includes the evaluated responses and is an in-sample
+    benchmark rather than an OOB or leave-one-out estimate.
+
+    Training responses come from \code{x$forest$yvar}, or
+    \code{x$yvar} for a training object without responses saved in its
+    forest. If they are unavailable, the null curve is omitted with
+    a warning.
+  }
+
+  \subsection{Customizing the display}{
+    Use \code{...} for the main panel and \code{inset.args} for the
+    inset. For example,
+    \code{inset.args = list(ylim = c(0, 0.3), lwd = 1.5)} changes the
+    inset's vertical limits and forest-curve line width. Default inset
+    limits cover both curves.
+
+    Axis limits change only the displayed region; they do not change
+    the observations scored or the CRPS integration limits. After the
+    inset is drawn, graphics settings return to the main panel so that
+    further drawing applies there. Successive calls can be used in a
+    multi-panel layout.
+  }
 }
 \value{
   Used for its graphical side effect. Invisibly returns \code{NULL}.
@@ -137,8 +170,9 @@
   Hemant Ishwaran and Udaya B. Kogalur
 }
 \seealso{
-  \code{\link{quantreg}}, \code{get.quantile()},
-  \code{get.quantile.crps()}, \code{\link[graphics]{plot.default}}
+  \code{\link{quantreg}}, \code{\link{get.quantile}},
+  \code{\link{get.quantile.crps}}, \code{\link{get.pinball.error}},
+  \code{\link[graphics]{plot.default}}
 }
 \examples{
 \donttest{

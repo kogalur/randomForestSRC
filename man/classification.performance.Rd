@@ -10,11 +10,10 @@
 \alias{get.bayes.rule}
 \title{Classification Performance Metrics}
 \description{
-  Evaluate classification predictions using confusion matrices,
+  Evaluate predicted classes and probabilities using confusion matrices,
   class-specific misclassification rates, ROC area under the curve (AUC),
-  Brier score, log loss, and binary precision-recall summaries.  The
-  helpers take observed responses and predicted classes or probabilities
-  directly.  A class-assignment helper is also provided.
+  Brier score, log loss, and binary precision-recall summaries.
+  \code{get.bayes.rule()} assigns classes from predicted probabilities.
 }
 \usage{
 get.confusion(y, class.or.prob)
@@ -34,152 +33,134 @@ get.pr.curve(truth, yhat)
 get.bayes.rule(prob, class.relfrq = NULL)
 }
 \arguments{
-  \item{y}{Observed class labels, normally a factor.  Keep the same
-    factor levels and ordering as the probability columns.  For
-    \code{get.auc()}, a nonfactor response is also accepted, with
-    probability columns in the order of \code{sort(unique(y))}.
+  \item{y}{Observed class labels, usually a factor with levels in
+    probability-column order.  \code{get.auc()} also accepts nonfactor
+    labels, with columns in \code{sort(unique(y))} order.
     \code{get.misclass.error()} also accepts vectors of class labels.}
   \item{prob}{Numeric matrix with one row per observation and one column
-    per class.  Arrange columns in response-level order and name them
-    with the corresponding class labels.  \code{get.auc()} uses column
-    positions even when names are present.  \code{get.logloss()} and
-    \code{get.bayes.rule()} require class column names;
-    \code{get.brier.error()} can supply missing names from
-    \code{levels(y)}.}
-  \item{class.or.prob}{For \code{get.confusion()}, either a factor of
-    predicted labels with the same levels as \code{y}, or a matrix of
-    class probabilities as described for \code{prob}.  Missing matrix
-    column names are supplied from \code{levels(y)}.}
+    per class, in response-level order.  Name columns with the class
+    labels.  \code{get.auc()} uses column positions;
+    \code{get.logloss()} and \code{get.bayes.rule()} require column names.
+    \code{get.confusion()} and \code{get.brier.error()} supply missing
+    names from \code{levels(y)}.}
+  \item{class.or.prob}{A factor of predicted labels with the same levels
+    as \code{y}, or a probability matrix as described for \code{prob}.}
   \item{yhat}{For \code{get.misclass.error()}, predicted class labels
-    aligned with \code{y}.  For the precision-recall helpers, a numeric
-    score vector, a one-column matrix or data frame, or a two-column
-    matrix or data frame.  A vector or single column contains scores for
-    the positive class; larger scores favor that class.  Scores need not
-    lie in \eqn{[0,1]}.  See Details for the class and column conventions.}
-  \item{truth}{Binary observed responses for precision-recall summaries:
-    a vector coded \code{0}/\code{1}, or a factor with two levels.
-    Code \code{1} is positive.  For factors with labels other than
-    \code{0} and \code{1}, the less frequent class is positive.}
-  \item{normalized}{If \code{TRUE}, use the normalized Brier scale
-    described below, on which equal probabilities for all classes give
-    score one.  If \code{FALSE}, average the squared probability errors
-    over classes.}
-  \item{vector}{If \code{TRUE}, return the scaled Brier contribution
-    for each class, rather than their sum.  These are class-level
-    contributions, not observation-level losses.}
-  \item{robust}{For \code{get.logloss()}, remove infinite log losses
-    before averaging.  The default is \code{TRUE}.  This does not clip
-    probabilities or modify confusion counts.}
-  \item{class.relfrq}{Optional vector of class relative frequencies in
-    probability-column order, for a two-class problem.  With \code{NULL},
-    \code{get.bayes.rule()} selects the largest class probability.
-    Otherwise it applies the minority-prevalence cutoff described below.}
+    aligned with \code{y}.  For precision-recall summaries, a numeric
+    score vector or a matrix or data frame with one or two columns.
+    A vector or single column gives positive-class scores; larger values
+    favor that class.  Scores need not lie in \eqn{[0,1]}.
+    See Details for two-column inputs.}
+  \item{truth}{Binary responses coded \code{0}/\code{1}, or a two-level
+    factor.  For \code{0}/\code{1} labels, \code{1} is positive.
+    For other factors, the less frequent class is positive, with ties
+    resolved by the first factor level.  The positive class is selected
+    before excluding missing scores.}
+  \item{normalized}{If \code{TRUE}, scale the Brier score so that equal
+    class probabilities give score one.  If \code{FALSE}, average the
+    squared probability errors over classes.  See Details.}
+  \item{vector}{If \code{TRUE}, return scaled Brier contributions for
+    each class instead of their sum.}
+  \item{robust}{For \code{get.logloss()}, exclude infinite losses before
+    averaging.  Probabilities are unchanged.}
+  \item{class.relfrq}{Optional two-class relative frequencies, in
+    probability-column order.  \code{NULL} selects the largest-probability
+    rule; supplying frequencies selects the minority-prevalence rule
+    described below.}
 }
 \details{
   \subsection{Supplying predictions}{
-    These helpers score the predictions supplied to them; they do not fit
-    a forest or automatically choose OOB predictions.  For a grow object,
-    use \code{o$yvar} with \code{o$predicted.oob} for OOB probability
-    scores, or \code{o$class.oob} for its stored class assignments.  For
-    new-data evaluation, use the prediction object's responses and
-    \code{predicted} or \code{class} components.
+    Supply responses and predictions in matching row order.  For OOB
+    evaluation of a grow object \code{o}, use \code{o$yvar} with
+    \code{o$predicted.oob} for probabilities or \code{o$class.oob} for
+    predicted classes.  For new data, use the prediction object's
+    \code{yvar} with \code{predicted} or \code{class}.
 
-    Keep responses and predictions aligned by row.  For a common scoring
-    sample, restrict to observed responses and finite probabilities before
-    calling the helpers.  In particular, \code{get.logloss()} and
+    To compare metrics on the same observations, retain observed labels
+    and finite probabilities.  \code{get.logloss()} and
     \code{get.misclass.error()} require nonmissing observed labels.
-    The examples illustrate this preparation for OOB predictions.
 
     For a combined binary summary with sensitivity, specificity, F1,
     G-mean, and random-reference comparisons, use
     \code{\link{get.imbalanced.performance}}.
   }
   \subsection{Class assignments and misclassification}{
-    With \code{class.relfrq = NULL}, \code{get.bayes.rule()} assigns each
-    row to a class with the largest probability, sampling among tied
-    maximizers.  A row whose probabilities are all missing receives
-    \code{NA}.  With two class relative frequencies supplied, it assigns
-    the minority class when that class's probability is at least its
-    supplied relative frequency.  Otherwise it assigns the majority
-    class.  If the frequencies tie, the first probability column is
-    treated as the minority.  Supply finite probabilities for this
-    frequency-based rule.
+    With \code{class.relfrq = NULL}, \code{get.bayes.rule()} selects the
+    class with the largest probability, breaking ties at random.  Rows
+    with all probabilities missing receive \code{NA}.  With two class
+    frequencies supplied, it assigns the minority class when its
+    probability is at least its relative frequency, and the majority
+    class otherwise.  If frequencies tie, the class in the first
+    probability column is treated as the minority.  Supply finite
+    probabilities for this rule.
 
-    \code{get.confusion()} has observed classes in rows and predicted
-    classes in columns.  Its final \code{class.error} column is one minus
-    the fraction correctly classified within each observed class, rounded
-    to four decimal places.  Missing response/prediction pairs do not
-    enter the counts.  When supplied a probability matrix, it uses the
-    largest-probability rule.  To evaluate RFQ or another thresholded
-    rule, supply that rule's predicted factor instead, for example
-    \code{o$class.oob}.
+    \code{get.confusion()} tabulates observed classes in rows and
+    predicted classes in columns.  The final \code{class.error} column
+    gives each observed class's misclassification rate, rounded to four
+    decimal places.  Missing response/prediction pairs are excluded.
+    Probability matrices use the largest-probability rule.  For RFQ or
+    another thresholded rule, supply the predicted factor instead, such
+    as \code{o$class.oob}.
 
-    \code{get.misclass.error()} returns one misclassification rate per
-    observed class, in \code{sort(unique(y))} order.  It returns
-    class-specific rates rather than an overall error rate.  Missing
-    predicted labels make the corresponding class rate unavailable.
+    \code{get.misclass.error()} returns one error rate per observed
+    class, in \code{sort(unique(y))} order.  A missing predicted label
+    makes the corresponding class rate unavailable.
   }
   \subsection{ROC area under the curve}{
-    \code{get.auc()} uses the pairwise multiclass construction of Hand
-    and Till.  For each pair of classes, it calculates a rank-based AUC
-    using each class's probability column as its score and averages the
-    two directions.  It then averages over available class pairs.
-    For complementary two-class probabilities, the two directions agree.
-    Larger values indicate better discrimination.
+    \code{get.auc()} computes the multiclass AUC of Hand and Till (2001).
+    For each class pair, it averages two rank-based AUCs, one using each
+    class's probability as the score, then averages across available
+    pairs.  For complementary binary probabilities, the two directions
+    agree.  Larger values indicate better discrimination.
 
-    Missing observed labels and nonfinite scores are excluded from the
-    relevant rank calculations.  Each direction requires at least two
-    finite scores in each of the two classes.  Unavailable pairs are
-    omitted; the result is \code{NA} when no pair is available.
+    Missing labels and nonfinite scores are excluded from each rank
+    calculation.  Each direction requires at least two finite scores
+    per class.  Unavailable pairs are omitted; the result is \code{NA}
+    when none remain.
   }
   \subsection{Brier score}{
+    The Brier score measures squared probability error (Brier, 1950).
     For \eqn{J} classes, let
     \deqn{b_j=\mathrm{mean}_i\left[(I(y_i=j)-p_{ij})^2\right].}
-    The scalar returned by \code{get.brier.error()} is
+    \code{get.brier.error()} returns
     \deqn{\frac{J}{J-1}\sum_{j=1}^{J} b_j}
-    with \code{normalized = TRUE}, and
+    for \code{normalized = TRUE}, or
     \deqn{\frac{1}{J}\sum_{j=1}^{J} b_j}
-    with \code{normalized = FALSE}.  Smaller values are better.  Equal
-    probabilities \eqn{p_{ij}=1/J} give normalized score one.  For
-    complementary binary probabilities, the unnormalized score is the
-    usual mean squared error of either class probability, and the
-    normalized score is four times that value.
+    for \code{normalized = FALSE}.  Smaller values are better.
+    Equal probabilities \eqn{p_{ij}=1/J} give normalized score one.
+    For complementary binary probabilities, the unnormalized score is
+    the mean squared error of either class probability; the normalized
+    score is four times that value.
 
-    With \code{vector = TRUE}, each returned element is \eqn{b_j}
-    multiplied by the selected scaling constant.  Missing losses are
-    omitted separately within each class.  The scalar sums available
-    class contributions and is \code{NA} when none are available.
+    With \code{vector = TRUE}, each element is \eqn{b_j} multiplied by
+    the selected scaling constant.  Missing losses are omitted within
+    each class.  The scalar sums available contributions, returning
+    \code{NA} when none remain.
   }
   \subsection{Log loss}{
     With every response level represented, \code{get.logloss()} averages
-    \eqn{-\log(p_{i,y_i})}, using the natural logarithm.  Smaller values
-    are better.  With \code{robust = TRUE}, infinite losses from zero
-    probabilities are excluded, rather than replaced using a probability
-    floor.  Use \code{robust = FALSE} to retain these infinite losses.
-    Missing losses are excluded in either case.  An unused factor level
-    contributes one zero term to the helper's average.
+    the negative log probability of the observed class,
+    \eqn{-\log(p_{i,y_i})}, using the natural logarithm (see Gneiting and
+    Raftery, 2007).  Smaller values are better.  Missing losses are
+    omitted.  With \code{robust = TRUE}, infinite losses from zero
+    probabilities are also omitted; \code{robust = FALSE} retains them.
+    Probabilities are not clipped.  An unused factor level contributes
+    one zero term to the average.
   }
   \subsection{Precision-recall summaries}{
-    These helpers apply to two classes.  For truth coded \code{0}/\code{1},
-    including a factor with those two labels, \code{1} is positive.
-    For other two-level factors, the less frequent observed class is
-    positive; ties select the first factor level.  This choice is made
-    before excluding missing scores.
+    For two-column scores, named columns match the original response
+    levels; unnamed columns follow factor-level order,
+    or \code{0}, \code{1} order for nonfactor responses.  The
+    positive-class column is selected.  Rows with a missing response
+    or nonfinite selected score are excluded; both classes must remain.
 
-    A score vector or single column always refers to the positive class.
-    With two columns, named columns are matched to the original response
-    levels; unnamed columns follow factor-level order, or \code{0},
-    \code{1} order for a nonfactor response.  The positive-class column
-    is then selected.  Rows with a missing response or nonfinite selected
-    score are excluded.
-
-    \code{get.pr.auc()} returns the precision-recall area and a random
-    reference area equal to the positive-class proportion among the
-    scored observations.  The area uses the analytic precision-recall
-    interpolation implemented by the package.  \code{get.pr.curve()}
-    supplies recall, precision, and threshold values for plotting; its
-    rows run from high to low recall.  Both classes must have a usable
-    score.  Larger precision-recall areas are better.
+    \code{get.pr.auc()} returns the precision-recall area, calculated
+    using analytic precision-recall interpolation, and a random reference
+    area equal to the positive-class proportion among scored observations.
+    \code{get.pr.curve()} returns recall, precision, and thresholds in
+    decreasing recall order.  Larger precision-recall areas are better.
+    See Davis and Goadrich (2006) for background on precision-recall
+    curves.
   }
 }
 \value{
@@ -204,6 +185,26 @@ get.bayes.rule(prob, class.relfrq = NULL)
     \item{\code{get.bayes.rule}}{A factor of predicted classes with
       levels given by the probability-column names.}
   }
+}
+\references{
+  Brier, G.W. (1950). Verification of forecasts expressed in terms of
+  probability. \emph{Monthly Weather Review}, 78, 1-3.
+  \doi{10.1175/1520-0493(1950)078<0001:VOFEIT>2.0.CO;2}
+
+  Davis, J. and Goadrich, M. (2006). The relationship between
+  precision-recall and ROC curves. \emph{Proceedings of the 23rd
+  International Conference on Machine Learning}, 233-240.
+  \doi{10.1145/1143844.1143874}
+
+  Gneiting, T. and Raftery, A.E. (2007). Strictly proper scoring rules,
+  prediction, and estimation. \emph{Journal of the American Statistical
+  Association}, 102, 359-378.
+  \doi{10.1198/016214506000001437}
+
+  Hand, D.J. and Till, R.J. (2001). A simple generalisation of the area
+  under the ROC curve for multiple class classification problems.
+  \emph{Machine Learning}, 45, 171-186.
+  \doi{10.1023/A:1010920819831}
 }
 \seealso{
   \code{\link{rfsrc}}, \code{\link{predict.rfsrc}},

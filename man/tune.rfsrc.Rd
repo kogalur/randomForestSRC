@@ -3,14 +3,15 @@
 \alias{tune}
 \alias{tune.nodesize.rfsrc}
 \alias{tune.nodesize}
-\title{Tune Random Forest for optimal \code{mtry} and \code{nodesize}}
+\title{Tune Random Forest Parameters}
 
 \description{
 
-  Finds the optimal \code{mtry} and \code{nodesize} for a random forest
-using out-of-bag (OOB) error.  Two search strategies are supported: a
-grid-based search and a golden-section search with noise control.  Works
-for all response families supported by \code{rfsrc.fast}.
+  Select \code{mtry} and \code{nodesize} for a supervised random forest
+  using holdout or out-of-bag (OOB) prediction error. \code{tune()} searches
+  over both parameters; \code{tune.nodesize()} searches over
+  \code{nodesize} only. Both functions offer grid and golden-section
+  search and fit the tuning forests with \code{\link{rfsrc.fast}}.
 
 }
 
@@ -34,74 +35,157 @@ for all response families supported by \code{rfsrc.fast}.
 }
 
 \arguments{
-  \item{formula}{A model formula.}
-  \item{data}{A data frame with response and predictors.}
-  \item{mtry.start}{Initial \code{mtry} for \code{tune}.}
-  \item{nodesize.try}{Candidate \code{nodesize} values. Only values \eqn{\le} \code{floor(sampsize(n)/2)} are used.}
-  \item{ntree.try}{Number of trees grown at each tuning evaluation.}
-  \item{sampsize}{Function or numeric giving the per-tree subsample size. During tuning a single numeric size \code{ssize} is computed and passed to \code{rfsrc.fast}. If a vector is supplied (e.g., class specific), its total is used for \code{ssize}.}
-  \item{nsplit}{Number of random split points to consider at each node.}
-  \item{step.factor}{Multiplicative step-out factor over \code{mtry} for grid search in \code{tune}.}
-  \item{improve}{Minimum relative improvement required to continue a search step in \code{tune}.}
-  \item{strikeout}{Maximum number of consecutive non-improving steps allowed in \code{tune}.}
-  \item{max.iter}{Maximum number of iterations for the step-out search in \code{tune} or the coordinate loop when \code{method = "golden"}.}
-  \item{method}{Search strategy: \code{"grid"} (default) or \code{"golden"}.}
-  \item{final.window}{For golden search, the terminal bracket width for the one-dimensional line search.}
-  \item{reps.initial}{Replicates averaged at interior evaluations during golden iterations.}
-  \item{reps.final}{Replicates averaged for each candidate during the final local sweep in golden search.}
-  \item{trace}{If \code{TRUE}, prints progress.}
-  \item{do.best}{If \code{TRUE}, \code{tune} fits and returns a forest at the optimal pair.}
-  \item{seed}{Optional integer for reproducible tuning. The holdout split (when used) and all tuning fits become deterministic for a given seed.}
-  \item{...}{Additional arguments passed to \code{\link{rfsrc.fast}}. Arguments that control tuning itself (\code{perf.type}, \code{forest}, \code{save.memory}, \code{ntree}, \code{mtry}, \code{nodesize}, \code{sampsize}, \code{nsplit}) are managed internally.}
+  \item{formula}{A model formula specifying the response and predictors.}
+  \item{data}{A data frame containing the response and predictors.}
+  \item{mtry.start}{Starting value of \code{mtry} for \code{tune()}.}
+  \item{nodesize.try}{Candidate terminal-node sizes for grid search,
+    subject to the limits in \bold{Note}. Not used for golden search.}
+  \item{ntree.try}{Number of trees in each tuning forest, excluding the
+    final forest returned by \code{tune()}.}
+  \item{sampsize}{Per-tree sample size, supplied as a function of the
+    sample size or as a number. For a numeric vector, such as class-specific
+    sizes, the total is used during tuning.}
+  \item{nsplit}{Number of random split points considered at each node.}
+  \item{step.factor}{Factor for increasing or decreasing \code{mtry}
+    during grid search in \code{tune()}. Must be greater than one.}
+  \item{improve}{Relative-error reduction threshold for \code{tune()}.
+    Must be nonnegative; \code{1e-3} corresponds to a 0.1 percent decrease.}
+  \item{strikeout}{Number of additional steps allowed after error
+    increases in grid search, counted across each search direction.
+    For golden search in \code{tune()}, the number of consecutive
+    alternating-search iterations without sufficient improvement before
+    stopping.}
+  \item{max.iter}{Maximum iterations per search direction (grid) or
+    per one-dimensional search (golden). For \code{tune()} with golden
+    search, also limits the number of alternating searches.}
+  \item{method}{Search method: \code{"grid"} (default) or
+    \code{"golden"}. See \bold{Details}.}
+  \item{final.window}{Target interval width for golden search. Also
+    sets the distance searched on either side of the best value from
+    the initial small-value comparisons.}
+  \item{reps.initial}{Number of replicate forests per setting during
+    golden-section search; their errors are averaged.}
+  \item{reps.final}{Number of replicate forests per setting in the final
+    integer comparisons for golden search; their errors are averaged.}
+  \item{trace}{If \code{TRUE}, print tuning progress and errors.}
+  \item{do.best}{If \code{TRUE}, \code{tune()} also fits a forest on all
+    available data using the selected settings.}
+  \item{seed}{Optional integer seed for reproducible tuning, including
+    the holdout sample when used.}
+  \item{...}{Additional options for \code{\link{rfsrc.fast}}, such as
+    \code{splitrule} and \code{perf.type}. In \code{tune()},
+    \code{ntree}, \code{mtry}, \code{nodesize}, \code{forest}, and
+    \code{save.memory} are controlled by the tuner; values supplied
+    here are ignored.}
 }
 
 \details{
 
-\emph{Error estimate.} If \code{2 * ssize < n}, a disjoint holdout of
-size \code{ssize} is used for evaluation; otherwise OOB error is
-used.
+  Tuning compares forest settings to find those with the lowest
+  prediction error. The parameter \code{mtry} controls how many
+  predictors are considered at each split, and \code{nodesize} controls
+  terminal-node size. A forest is grown for each candidate setting and
+  its prediction error is calculated. The selected setting has the
+  smallest error in the returned results table.
 
+  \subsection{Choosing a search method}{
 
-\emph{Subsample used during tuning.} Both functions derive a single
-integer \code{ssize} from \code{sampsize} and pass it to
-\code{\link{rfsrc.fast}} for all tuning fits. This improves stability
-and comparability across candidates. When \code{do.best = TRUE} in
-\code{tune}, the final forest is fit with the user-supplied
-\code{sampsize} exactly as provided.
+    \describe{
+      \item{\code{method = "grid"}:}{
+        For each eligible \code{nodesize.try} value, \code{tune()}
+        starts at \code{mtry.start} and searches toward smaller and
+        larger \code{mtry} values. \code{step.factor} sets the spacing;
+        \code{improve}, \code{strikeout}, and \code{max.iter} control
+        when to stop. The grid specifies \code{nodesize} values, while
+        \code{mtry} values are chosen during the search.
+        \code{tune.nodesize()} evaluates the \code{nodesize.try} grid
+        directly, subject to the sample-size limit in \bold{Note}.
+      }
+      \item{\code{method = "golden"}:}{
+        Comparisons within an interval progressively narrow the search
+        toward values with smaller error. \code{tune()} alternates
+        between searching over \code{nodesize} with \code{mtry} fixed
+        and searching over \code{mtry} with \code{nodesize} fixed.
+        \code{tune.nodesize()} searches over \code{nodesize} only.
 
+        Each one-dimensional search also checks \code{1:9} within its
+        limits. It finishes with individual integer comparisons near
+        the best small value or within the remaining interval. Averaging
+        replicate forests, controlled by \code{reps.initial} and
+        \code{reps.final}, reduces the effect of random variation in
+        forest fits. \code{nodesize.try} and \code{step.factor} are not
+        used.
+      }
+    }
 
-\emph{Grid search.} \code{tune} performs a step-out search over
-\code{mtry} for each \code{nodesize} in \code{nodesize.try}, using
-\code{step.factor}, \code{improve}, \code{strikeout}, and
-\code{max.iter}. \code{tune.nodesize} evaluates the supplied
-\code{nodesize.try} grid directly.
+  }
 
+  \subsection{Comparing prediction errors}{
 
-\emph{Golden search.} Uses a guarded golden-section line search with
-noise control. For each one-dimensional search (over \code{nodesize} or
-\code{mtry}), the routine probes a small left-anchor grid \code{1:9},
-iterates golden shrinkage until the bracket width is at most
-\code{final.window}, then runs a short local sweep with
-\code{reps.final} replicates. In \code{tune} the searches over
-\code{nodesize} and \code{mtry} alternate in a simple coordinate loop,
-with \code{improve} and \code{strikeout} as stopping controls.
+    Both functions use one per-tree sample size, \code{ssize}, throughout
+    tuning. Let \code{n} be the sample size after preprocessing. When
+    \code{2 * ssize < n}, a random holdout of \code{ssize} observations
+    is set aside. Forests are grown on the remaining data, and all
+    candidates are evaluated on this same holdout. Otherwise, forests
+    use all available data and are evaluated by OOB error.
 
+    Supply \code{perf.type} to choose the tuning error measure.
+    \code{tune()} averages the available errors from
+    \code{\link{get.mv.error}} with \code{standardize = TRUE}:
+    regression errors are divided by the response variance, and errors
+    for multivariate responses are averaged.
+
+  }
+
+  \subsection{Fitting the final forest}{
+
+    With \code{do.best = TRUE}, \code{tune()} fits a new forest on all
+    available data, using the selected \code{mtry} and \code{nodesize},
+    the original \code{sampsize} argument, and the specified
+    \code{nsplit}. The forest is returned as \code{rf}.
+
+    This final fit uses the default tree count and performance measure
+    of \code{rfsrc.fast}. To choose these yourself, set
+    \code{do.best = FALSE} and fit a forest separately with the returned
+    \code{optimal} values. \code{tune.nodesize()} returns its selected
+    node size and error table without a final forest fit.
+
+  }
 
 }
 
 \value{
-For \code{tune}:
-\itemize{
-  \item \code{results}: matrix with columns \code{nodesize}, \code{mtry}, \code{err}.
-  \item \code{optimal}: named numeric vector \code{c(nodesize = ..., mtry = ...)}.
-  \item \code{rf}: fitted forest at the optimum if \code{do.best = TRUE}.
+  \code{tune()} returns a list with components:
+  \describe{
+    \item{results}{A numeric matrix with columns \code{nodesize},
+      \code{mtry}, and \code{err} (prediction error). For golden search,
+      this table contains the final integer comparisons; repeated
+      parameter pairs are combined by averaging their errors.}
+    \item{optimal}{A named numeric vector giving the \code{nodesize}
+      and \code{mtry} with the smallest error in \code{results}.}
+    \item{rf}{The final fitted forest when \code{do.best = TRUE};
+      otherwise \code{NULL}.}
+  }
+
+  \code{tune.nodesize()} returns a list with components:
+  \describe{
+    \item{nsize.opt}{The selected \code{nodesize}.}
+    \item{err}{A data frame with columns \code{nodesize} and \code{err},
+      giving the candidate values and their prediction errors.}
+  }
 }
 
-For \code{tune.nodesize}:
-\itemize{
-  \item \code{nsize.opt}: optimal \code{nodesize}.
-  \item \code{err}: data frame with columns \code{nodesize} and \code{err}.
-}
+\note{
+  The tuning sample size \code{ssize} is obtained by evaluating
+  \code{sampsize(n)}, using a numeric scalar directly, or summing a
+  numeric vector. In \code{tune()}, it is rounded and bounded between
+  2 and \code{n}.
+
+  For \code{tune()}, \code{mtry} ranges from 1 to the number of
+  predictors, and the upper \code{nodesize} limit is
+  \code{max(10, floor(ssize / 2))}. Grid values above this limit are
+  excluded. For \code{tune.nodesize()}, the upper grid limit is half
+  the per-tree sample size, rounded down.
 }
 
 \author{
@@ -109,7 +193,9 @@ Hemant Ishwaran and Udaya B. Kogalur
 }
 
 \seealso{
-\code{\link{rfsrc.fast}}
+  \code{\link{rfsrc.fast}},
+  \code{\link{rfsrc}},
+  \code{\link{get.mv.error}}
 }
 
 \examples{
@@ -148,7 +234,7 @@ if (library("interp", logical.return = TRUE)) {
                    color.palette = colorRampPalette(c("yellow", "red")),
                    xlab = "nodesize", ylab = "mtry",
                    main = "error rate for nodesize and mtry",
-                   key.title = title(main = "OOB error", cex.main = 1),
+                   key.title = title(main = "Tuning error", cex.main = 1),
                    plot.axes = {
                      axis(1); axis(2)
                      points(x0, y0, pch = "x", cex = 1, font = 2)

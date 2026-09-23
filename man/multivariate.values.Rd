@@ -10,11 +10,12 @@
 \title{Extracting Multivariate Values}
 \description{
   Extract predictions, performance errors, variable importance (VIMP),
-  and case-specific values from fitted random forests.  The helpers
-  collect response-specific results from multivariate regression,
-  multivariate classification, and mixed-outcome forests.  They also
-  provide a common interface for univariate results.  A helper for
-  constructing a multivariate formula is included.
+  and case-specific errors and VIMP from random forest fits and
+  predictions.  The functions combine response-specific results from
+  multivariate regression, multivariate classification, and mixed-outcome
+  forests.  They also work with univariate forests.
+  \code{get.mv.formula()} constructs a multivariate formula from
+  response names.
 }
 \usage{
 get.mv.predicted(obj, oob = TRUE)
@@ -33,158 +34,161 @@ get.mv.formula(ynames)
 }
 \arguments{
   \item{obj}{An object returned by \code{rfsrc()} or
-    \code{predict.rfsrc()} containing the values to extract.  For
-    multivariate and mixed outcomes, retain the response columns in
-    \code{obj$yvar}, including factor levels: these identify each
-    response's type.  VIMP and case-specific quantities must already be
-    present in the object.  See Details for survival and unavailable
-    components.}
-  \item{oob}{If \code{TRUE}, extract \code{predicted.oob} for each
-    response when that component is present; otherwise use
-    \code{predicted}.  If \code{FALSE}, use \code{predicted}.  Selection
-    is made for the entire response component, not separately for each
-    observation.}
+    \code{predict.rfsrc()}.  For multivariate and mixed-outcome objects,
+    \code{obj$yvar} must contain the response columns with their original
+    types and factor levels.}
+  \item{oob}{If \code{TRUE}, use \code{predicted.oob} for each response,
+    falling back to \code{predicted} when that response's OOB component
+    is \code{NULL}.  If \code{FALSE}, use \code{predicted}.}
   \item{standardize}{If \code{TRUE}, divide regression errors and VIMP
-    by the variance of the corresponding response in \code{obj$yvar},
-    calculated with \code{na.rm = TRUE}.  Classification and survival
-    values are unchanged.  The treatment of a zero or unavailable
-    variance is described under Standardization.}
-  \item{pretty}{If \code{TRUE}, return a compact error vector or VIMP
-    matrix, retaining only the overall \code{all} entry for each
-    classification response.  If \code{FALSE}, return a response-named
-    list and retain the class-specific entries.  Competing-risk
-    event-specific entries are retained in either form.  This argument
-    does not round the values.}
-  \item{block}{If \code{TRUE}, extract the stored sequence of block
-    errors from \code{err.block.rate}, rather than the final entry of
-    \code{err.rate}.  This forces \code{pretty = FALSE}.
-    \code{get.mv.error.block()} is a shorthand for this choice.}
-  \item{ynames}{Character vector of response names for
-    \code{get.mv.formula()}.  These should name columns in the data
-    supplied to the subsequent forest fit.}
+    by the corresponding response variance in \code{obj$yvar}.
+    Classification and survival values are unchanged.  See
+    Standardization for the treatment of zero or missing variances.}
+  \item{pretty}{If \code{TRUE}, return errors as a named vector and
+    VIMP as a matrix, using only the overall \code{all} value for each
+    classification response.  If \code{FALSE}, return a list named by
+    response, including class-specific values.  Competing-risk
+    event-specific values are included in both formats.  Values are
+    not rounded.}
+  \item{block}{If \code{TRUE}, return the block-error sequence from
+    \code{err.block.rate} instead of the final error from
+    \code{err.rate}.  This sets \code{pretty = FALSE}.
+    \code{get.mv.error.block()} is shorthand for this choice.}
+  \item{ynames}{Character vector of response column names for
+    \code{get.mv.formula()}.  These columns must be in the data used
+    to fit the forest.}
 }
 \details{
+  The extraction functions use results already computed during fitting
+  or prediction.  Results are reported separately for each response.
+  Subset the returned vector, matrix, or list to select responses or
+  predictors.
+
   \subsection{Predictions}{
-    \code{get.mv.predicted()} combines the stored predictions into a
-    matrix with observations in rows.  Each regression response supplies
-    one column.  Each classification response supplies one probability
-    column per class, named \code{response.class}.  The responses follow
-    \code{obj$yvar.names}; class columns retain their stored order.
+    \code{get.mv.predicted()} returns a matrix with observations in
+    rows and predictions in columns:
+    \itemize{
+      \item Regression: one column per response.
+      \item Classification: one probability column per class, named
+      \code{response.class}.
+      \item Right-censored survival: the mortality prediction.
+      \item Competing risks: one prediction column per event, named
+      \code{response.event}.
+    }
+    Responses follow \code{obj$yvar.names}; class and event columns
+    follow their order in the object.  Time-indexed survival, cumulative
+    hazard, and cumulative incidence arrays are not included.
 
-    The default uses OOB predictions when available.  An existing OOB
-    component is retained even if some or all of its entries are missing.
-    The fallback to \code{predicted} occurs only when that entire
-    component is \code{NULL}.  Use \code{oob = FALSE} to explicitly
-    select full-ensemble or new-data predictions.
-
-    For right-censored survival, the helper extracts the stored mortality
-    prediction.  For competing risks, it extracts the event-specific
-    \code{predicted} values, with names of the form
-    \code{response.event}.  It does not extract the time-indexed survival,
-    cumulative hazard, or cumulative incidence arrays.
+    By default, OOB predictions are used for each response when its
+    \code{predicted.oob} component is present.  Missing values within
+    that component remain missing, even if every value is missing.
+    The function uses \code{predicted} only when the entire OOB component
+    is \code{NULL}.  Set \code{oob = FALSE} to use full-ensemble or
+    new-data predictions.
   }
   \subsection{Performance errors and variable importance}{
-    \code{get.mv.error()} extracts the final stored performance error
-    for each response.  The error measure is the one used when the object
-    was fitted or predicted; the helper does not recalculate it or change
-    \code{perf.type}.  With \code{pretty = FALSE}, classification output
-    includes \code{all} and the class-specific errors.  Survival output
-    retains its stored error columns, including event-specific columns
-    for competing risks.
+    \code{get.mv.error()} returns the final performance error for each
+    response, using the error measure selected during fitting or
+    prediction.  With \code{pretty = FALSE}, classification results
+    include \code{all} and the class-specific errors.  Survival results
+    include all error columns, including event-specific errors for
+    competing risks.
 
-    \code{get.mv.error.block()} returns the full stored block-error
-    sequence for each response.  It is equivalent to
-    \code{get.mv.error(obj, standardize = standardize, block = TRUE)}.
-    It does not choose a block size or form new blocks.
+    \code{get.mv.error.block()} returns the full block-error sequence
+    computed during fitting or prediction.  It is equivalent to
+    \code{get.mv.error(obj, standardize = standardize, block = TRUE)};
+    the block size is determined when those errors are computed.
 
-    \code{get.mv.vimp()} collects the stored \code{importance}
-    components.  With \code{pretty = TRUE}, predictors index rows and
-    results are combined across responses in columns.  With
-    \code{pretty = FALSE}, each response has its own matrix, preserving
-    classification \code{all} and class-specific columns and
-    competing-risk event columns.  Request importance during fitting
-    or use \code{\link{vimp}} before extracting it.
-
-    To select a response or predictor, subset the returned vector,
-    matrix, or response-named list.  These extraction calls do not fit
-    trees, run prediction, or average errors or VIMP across responses.
+    \code{get.mv.vimp()} extracts variable importance.  Request
+    importance when fitting the forest or use \code{\link{vimp}}
+    before calling this function.  With \code{pretty = TRUE}, the
+    result is a matrix with predictors in rows and response results
+    in columns.  With \code{pretty = FALSE}, each response has its own
+    matrix, including classification \code{all} and class-specific
+    columns and competing-risk event columns.
   }
   \subsection{Case-specific values}{
-    \code{get.mv.cserror()} obtains the case-specific error as
-    \code{cse.num / cse.den} from the stored response component.
-    \code{get.mv.csvimp()} similarly obtains case-specific VIMP as
-    \code{csv.num / csv.den}.  These quantities must have been retained
-    during fitting or prediction; the helpers do not generate them from
-    the ensemble predictions.  In particular, case-specific error is
-    not obtained by applying a loss to \code{predicted.oob} and the
-    observed response.
+    \code{get.mv.cserror()} calculates case-specific error as
+    \code{cse.num / cse.den}; \code{get.mv.csvimp()} calculates
+    case-specific VIMP as \code{csv.num / csv.den}.  These numerator
+    and denominator components must be saved in the fitted or prediction
+    object.  Case-specific error is calculated from these components,
+    not by applying a loss to \code{predicted.oob} and the observed
+    response.
 
-    With one response, the case-specific values are returned directly;
-    with multiple responses, they are returned in a response-named list.
-    Case-specific VIMP has observations in rows and the stored VIMP
-    variables in columns.  Variable names are attached when available
-    from the \code{importance} component.  Both helpers return
-    \code{NULL} for right-censored survival and competing risks.
+    With one response, values are returned directly; with multiple
+    responses, they are returned in a list named by response.
+    Case-specific VIMP has observations in rows and VIMP variables in
+    columns, with variable names taken from \code{importance} when
+    available.  Both functions return \code{NULL} for right-censored
+    survival and competing risks.
   }
   \subsection{Standardization}{
     For a regression response \eqn{Y}, \code{standardize = TRUE}
-    divides each extracted error or importance value by
-    \code{var(Y, na.rm = TRUE)}.  This uses the response values on the
-    supplied object: training responses for a grow result and evaluation
-    responses for a test-prediction result.  It leaves predictions and
-    all classification and survival values unchanged.
+    divides each error or VIMP value by \code{var(Y, na.rm = TRUE)}.
+    The variance uses the response values in \code{obj$yvar}: training
+    responses for a fitted object and evaluation responses for a
+    test-prediction object.  Classification and survival values are
+    unchanged.  Standardization is off by default and does not apply
+    to predictions.
 
-    \code{get.mv.error()} and \code{get.mv.vimp()} divide by this
-    variance directly; a zero or unavailable variance can therefore
-    produce nonfinite values.  The two case-specific helpers instead
-    use divisor one when that variance is zero or \code{NA}.  No
-    standardization is applied by default.
+    \code{get.mv.error()}, \code{get.mv.error.block()}, and
+    \code{get.mv.vimp()} divide by the variance directly, so a zero
+    or missing variance can produce nonfinite values.  The case-specific
+    functions use a divisor of one when the variance is zero or
+    \code{NA}.
   }
-  \subsection{Availability of stored results}{
-    Supply an object containing the requested output for its responses.
-    Missing predictions and numerical \code{NA} values remain as stored.
-    \code{get.mv.error()} returns \code{NULL} when all response errors
-    are absent.  Otherwise its compact output uses \code{NA} for an
-    absent response error, while list output retains a \code{NULL} entry.
-
-    \code{get.mv.vimp()}, \code{get.mv.cserror()}, and
-    \code{get.mv.csvimp()} return \code{NULL} when the first response
-    has no corresponding component, even if a later response has one.
-    When a response-named list is returned, absent later components
-    remain \code{NULL}.
+  \subsection{Missing results}{
+    A \code{NULL} component means that the corresponding result is
+    absent from \code{obj}.  An \code{NA} entry is a missing value
+    within an existing result.
+    \itemize{
+      \item \code{get.mv.error()} returns \code{NULL} when no response
+      has an error result.  Otherwise, a response without an error is
+      represented by \code{NA} in vector output or \code{NULL} in list
+      output.  The same list behavior applies to
+      \code{get.mv.error.block()}.
+      \item \code{get.mv.vimp()}, \code{get.mv.cserror()}, and
+      \code{get.mv.csvimp()} return \code{NULL} if the first response
+      lacks the corresponding result, even when later responses have
+      results.  If the first response has a result, missing later
+      results are \code{NULL} in list output.
+    }
   }
   \subsection{Constructing a multivariate formula}{
-    \code{get.mv.formula(ynames)} returns a formula of the form
-    \code{Multivar(y1, y2, ...) ~ .}.  The named responses may be
-    continuous, factors, or a mixture; the forest fit determines their
-    types from the supplied data.  The dot denotes the remaining data
-    columns.  This helper constructs the formula only.
+    \code{get.mv.formula(ynames)} returns
+    \code{Multivar(y1, y2, ...) ~ .}.  Responses may be continuous,
+    factors, or a mixture; their types are determined from the data
+    when the forest is fitted.  The dot specifies the remaining data
+    columns as predictors.
   }
 }
 \value{
   \describe{
     \item{\code{get.mv.predicted}}{A numeric matrix with one row per
-      observation and columns for the response predictions, class
-      probabilities, or event-specific predictions.  A single prediction
-      column remains a matrix.}
-    \item{\code{get.mv.error}}{A named numeric vector by default, or a
-      response-named list when \code{pretty = FALSE}.  Without blocking,
-      each entry is the final stored error or final error row.  With
-      \code{block = TRUE}, list entries contain the stored block-error
-      sequences.  Returns \code{NULL} if all error components are absent.}
-    \item{\code{get.mv.error.block}}{A response-named list of block-error
-      vectors or matrices, or \code{NULL} when all are absent.}
-    \item{\code{get.mv.vimp}}{A numeric matrix by default, or a
-      response-named list of matrices when \code{pretty = FALSE}.
-      Returns \code{NULL} under the availability rule described above.}
-    \item{\code{get.mv.cserror}}{Case-specific error values for a single
-      response, retaining their stored vector or array dimensions, or a
-      response-named list for multiple responses.  Returns \code{NULL}
-      for survival families or under the availability rule above.}
-    \item{\code{get.mv.csvimp}}{A case-by-variable matrix for a single
-      response, or a response-named list of these matrices for multiple
-      responses.  Returns \code{NULL} for survival families or under
-      the availability rule above.}
+      observation and columns for response predictions, class
+      probabilities, or event-specific predictions.  A single-column
+      result is also a matrix.}
+    \item{\code{get.mv.error}}{A named numeric vector by default, or
+      a list named by response when \code{pretty = FALSE}.  Entries
+      contain the final error or error row.  With \code{block = TRUE},
+      the result is a list of block-error sequences.  Returns
+      \code{NULL} when no response has an error result.}
+    \item{\code{get.mv.error.block}}{A list of block-error vectors or
+      matrices named by response, or \code{NULL} when no response has
+      block errors.}
+    \item{\code{get.mv.vimp}}{A numeric matrix by default, or a list of
+      matrices named by response when \code{pretty = FALSE}.  Returns
+      \code{NULL} if the first response has no importance result.}
+    \item{\code{get.mv.cserror}}{Case-specific error values for one
+      response, with their original vector or array dimensions, or a
+      list named by response for multiple responses.  Returns
+      \code{NULL} for survival families or if the first response has
+      no case-specific error result.}
+    \item{\code{get.mv.csvimp}}{A case-by-variable matrix for one
+      response, or a list of these matrices named by response for
+      multiple responses.  Returns \code{NULL} for survival families
+      or if the first response has no case-specific VIMP result.}
     \item{\code{get.mv.formula}}{An R formula with the supplied response
       names on the left of \code{~} and a dot on the right.}
   }
@@ -230,7 +234,7 @@ print(get.mv.cserror(o.vimp))
 print(get.mv.csvimp(o.vimp))
 
 ## ------------------------------------------------------------
-## Mixed outcomes: retain class-specific entries
+## Mixed outcomes: include class-specific entries
 ## ------------------------------------------------------------
 f.mix <- get.mv.formula(c("Sepal.Length", "Species"))
 mix <- rfsrc(f.mix, data = iris, ntree = 100,

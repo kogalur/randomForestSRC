@@ -196,73 +196,81 @@ get.rfq.threshold(y)
     scheme.  Use a separate evaluation sample when OOB support is absent.
   }
   \subsection{Detailed performance summaries}{
-    \code{\link{get.imbalanced.performance}} accepts a fitted or predicted
-    forest object, or a two-level factor supplied as \code{obj} together
-    with \code{prob}.  For a forest object, it prefers
-    \code{predicted.oob} when that component exists and is not entirely
-    missing; otherwise it uses \code{predicted}.  A partially missing OOB
-    component is not filled with full-ensemble predictions.
+    \code{\link{get.imbalanced.performance}} calculates performance from
+    observed responses and predicted probabilities.
+    \describe{
+      \item{Probability inputs.}{Supply a grow or prediction object, or
+        a two-level response factor with \code{prob}.  With
+        \code{prob = NULL}, the helper uses \code{predicted.oob} when
+        present and not entirely missing; otherwise it uses
+        \code{predicted}.  When only some OOB predictions are missing,
+        those entries remain missing.
 
-    A numeric vector or one-column matrix or data frame represents
-    minority-class probabilities, with one value per response.  No column
-    name is needed for these inputs.  A two-column matrix or data frame
-    contains both class probabilities.  Named columns are matched to the
-    response factor levels; unnamed columns follow factor-level order.
-    The response and probability rows must already be aligned.
+        A numeric vector or one-column matrix or data frame supplies
+        minority-class probabilities; no column name is required.
+        Two-column inputs supply both class probabilities; named columns
+        are matched to factor levels, and unnamed columns
+        follow factor-level order.  Rows must align with the responses.}
 
-    Finite probabilities are restricted to \eqn{[0,1]} using the existing
-    clipping rule.  Finite two-column rows must sum to one within numerical
-    tolerance.  Rows with a missing response or a nonfinite probability are
-    excluded from scoring; both columns must be finite for a two-column
-    input.  Unavailable scores are returned as \code{NA}.  Class counts,
-    minority identity, and the default threshold are determined from all
-    observed evaluation responses before excluding unavailable predictions.
+      \item{Evaluation classes.}{All observed evaluation responses
+        determine class counts, the minority class, and its proportion,
+        before excluding unavailable predictions.  The first factor level
+        is the minority when counts tie.}
 
-    The helper determines the minority class and its proportion from the
-    response supplied for evaluation.  If the class counts tie, the first
-    factor level is selected.  The default \code{threshold = NULL} uses
-    this evaluation proportion for all forest methods.
+      \item{Probability checks.}{Finite probabilities below zero are set
+        to zero, and those above one are set to one.  Finite two-column
+        rows must sum to one within numerical tolerance.  Scoring excludes
+        rows with missing responses or nonfinite probabilities; both
+        columns must be finite for two-column inputs.  Unavailable scores
+        are \code{NA}.}
 
-    With \code{threshold = "auto"}, the saved \code{forest$rfq} flag
-    selects the cutoff: \code{TRUE} uses the same evaluation prevalence
-    as \code{NULL}, and otherwise the cutoff is \eqn{0.5}.  This applies
-    to both grow and prediction objects.  For RFQ test predictions the
-    prevalence is therefore calculated from the evaluation responses,
-    not substituted from the training responses.  Splitting rules and
-    \code{perf.type} do not determine whether the classifier is RFQ.
-    Direct response/probability inputs have no fitted-classifier flag,
-    so \code{"auto"} uses \eqn{0.5}.  Use \code{threshold = "bayes"}
-    to request \eqn{0.5} explicitly for any classifier.
+      \item{Classification threshold.}{An observation is assigned to the
+        minority class when its predicted minority-class probability is
+        at least the threshold, and to the majority class otherwise.
+        The \code{threshold} choices are:
+        \describe{
+          \item{\code{NULL}}{The evaluation minority proportion for
+            every method (default).}
+          \item{\code{"auto"}}{The evaluation minority proportion when
+            \code{forest$rfq} is \code{TRUE}; \eqn{0.5} otherwise,
+            including direct response/probability inputs.}
+          \item{\code{"bayes"}}{\eqn{0.5} for every method.}
+          \item{Numeric}{A single finite cutoff.  Values below zero are
+            set to zero, and values above one are set to one.}
+        }
+        For RFQ test predictions, \code{NULL} and \code{"auto"} use
+        evaluation prevalence, not training prevalence.  The RFQ flag,
+        rather than \code{splitrule} or \code{perf.type}, determines
+        the \code{"auto"} choice.  Changing the threshold preserves
+        the evaluation minority definition and the fitted forest.}
 
-    All settings threshold the probabilities rather than reading the
-    stored \code{class} component.  Supply a single finite numeric
-    \code{threshold} to examine a different cutoff; finite values outside
-    \eqn{[0,1]} are clipped to that interval.  Threshold ties are assigned
-    to the minority class.  A supplied threshold changes the cutoff, not
-    how the minority class is identified or how the forest was fitted.
+      \item{Performance measures.}{The summary includes sensitivity
+        (\code{sens}), specificity (\code{spec}), precision (\code{prec}),
+        negative predictive value (\code{npv}), G-mean, \code{misclass},
+        \code{brier}, \code{brier.norm}, \code{auc}, \code{logloss}, and
+        \code{pr.auc}.  For complementary binary probabilities,
+        \code{brier} is the mean squared error of the minority probability;
+        \code{brier.norm} is four times this value.  Log loss excludes
+        infinite losses without clipping zero probabilities.}
 
-    Besides the four rates \code{sens}, \code{spec}, \code{prec}, and
-    \code{npv}, the summary includes \code{misclass}, \code{brier},
-    \code{brier.norm}, \code{auc}, \code{logloss}, and \code{pr.auc}.
-    For complementary binary probabilities, \code{brier} is the mean
-    squared error of the minority probability and \code{brier.norm} is
-    four times this value.  The current log-loss helper excludes infinite
-    losses rather than clipping zero probabilities.
+      \item{F-measures.}{\code{F1} is the harmonic mean of precision and
+        sensitivity; \code{F1mod} is the harmonic mean of all four
+        classification rates.  \code{F1gmean} averages F1 and G-mean;
+        \code{F1modgmean} averages
+        F1mod and G-mean.  A harmonic mean is zero if any component rate
+        is zero and all are defined; it is \code{NA} if any required
+        rate is undefined.}
 
-    \code{F1} is the harmonic mean of precision and sensitivity;
-    \code{F1mod} is the harmonic mean of sensitivity, specificity,
-    precision, and negative predictive value.  \code{F1gmean} averages
-    F1 and G-mean; \code{F1modgmean} averages F1mod and G-mean.  A
-    harmonic mean is zero when all its component rates are defined and at
-    least one is zero.  It is \code{NA} when any required rate is undefined.
+      \item{Robust summaries.}{\code{robust = TRUE} adds one to each
+        diagonal confusion count when calculating the four rates and
+        their derived summaries.  Returned confusion counts,
+        misclassification error, and probability-based scores are unchanged.}
 
-    \code{robust = TRUE} adds one to the two diagonal counts when
-    calculating the four rates and their derived summaries.  It does not
-    change the returned confusion counts, misclassification error, or
-    probability-based scores.  Use \code{confusion = TRUE} to return the
-    confusion matrix in addition to the metrics.  Its rows are observed
-    classes and columns are predicted classes, with \code{0} denoting the
-    majority and \code{1} the minority.
+      \item{Confusion matrix.}{\code{confusion = TRUE} includes the
+        confusion matrix: rows are observed classes and columns are
+        predicted classes, with \code{0} denoting the majority and
+        \code{1} the minority.}
+    }
   }
   \subsection{Random-score reference}{
     The performance summary has a \code{"rand"} attribute containing

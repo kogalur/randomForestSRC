@@ -15,10 +15,6 @@
 }
 \examples{
 \donttest{
-## ------------------------------------------------------------
-## Standard analysis
-## ------------------------------------------------------------
-
 data(breast, package = "randomForestSRC")
 breast <- na.omit(breast)
 o <- rfsrc(status ~ ., data = breast, nsplit = 10)
