@@ -23,10 +23,10 @@ imbalanced.rfsrc <- function(formula, data, ntree = 3000,
   if (method == "rfq") {
     rfq.flag <- TRUE
   }
-  ## set default performance
+  ## use normalized Brier performance for RFQ and BRF
   if (is.null(perf.type)) {
     if (method == "brf" || method == "rfq") {
-      perf.type <- "gmean"
+      perf.type <- "brier"
     }
     else {
       perf.type <- "default"##equivalent to misclass

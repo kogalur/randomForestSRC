@@ -1,6 +1,20 @@
-# randomForestSRC 3.9.0
+# randomForestSRC 3.9.1
 
 ## Forest storage and imputation
+
+* Forests are much smaller when saved with `save()` or `saveRDS()`. The
+  stored sampling-size function (`$sampsize`, also in `$forest`) and the
+  formula kept in `$call` were closures that carried the environment they
+  were created in: the internal frame of `rfsrc()` (data, weights and other
+  working objects) for the default sampling size, or the calling function's
+  frame for a formula built inside a function (e.g. the learners of
+  `impute.learn()`). Both now keep only what they refer to, and data frames,
+  matrices and long vectors passed by value through `do.call()` are no
+  longer copied into `$call`. Predictions are unchanged. For example, a
+  regression forest on 5,000 rows now saves at a third of its former size,
+  and an `impute.learn()` bank kept in memory is about 20 times smaller.
+  A forest restored by `fast.load()` no longer holds a copy of itself inside
+  its `$sampsize` function.
 
 * Added optional `compact = TRUE` saving to `fast.save()` and
   `fast.save.list()`. Compact saves omit terminal-node information and

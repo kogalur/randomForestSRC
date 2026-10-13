@@ -1,3 +1,13 @@
+## Validate FST compression before any destination is changed.
+.fast.save.check.compress <- function(compress) {
+  if (!is.numeric(compress) || is.complex(compress) ||
+      length(compress) != 1L || !is.null(dim(compress)) ||
+      !is.finite(compress) || compress < 0 || compress > 100) {
+    stop("'compress' must be a single finite number between 0 and 100.",
+         call. = FALSE)
+  }
+  invisible(NULL)
+}
 ## Check compact-save eligibility before any destination is removed.
 ## The normal serializer and both loaders keep their existing format.
 .fast.save.check <- function(o, compact) {
@@ -46,7 +56,9 @@
   invisible(NULL)
 }
 ## o must be a list of forests!
-fast.save.list <- function(o, path=NULL, testing=FALSE, units="Mb", compact=FALSE) {
+fast.save.list <- function(o, path=NULL, testing=FALSE, units="Mb", compact=FALSE,
+                           compress=50) {
+  .fast.save.check.compress(compress)
   if (!is.logical(compact) || length(compact) != 1L || is.na(compact)) {
     stop("'compact' must be TRUE or FALSE.", call. = FALSE)
   }
@@ -64,7 +76,7 @@ fast.save.list <- function(o, path=NULL, testing=FALSE, units="Mb", compact=FALS
   dir.create(path, showWarnings=FALSE, recursive=TRUE)
   lapply(1:length(o), function(j) {
     fast.save(o[[j]], paste0(path, "/forest", j), testing=testing, units=units,
-              compact=compact)
+              compact=compact, compress=compress)
   })
 }
 ## o must be a list of forests!
@@ -80,14 +92,11 @@ fast.load.list <- function(directory, path = NULL, testing = FALSE, units="Mb") 
     fast.load(files[j], path, testing=testing, units=units)
   })
 }
-fast.save <- function(o, path=NULL, testing=TRUE, units="Mb", compact=FALSE) {
+fast.save <- function(o, path=NULL, testing=TRUE, units="Mb", compact=FALSE,
+                       compress=50) {
+  .fast.save.check.compress(compress)
   .fast.save.check(o, compact)
-  if (is.null(path)) {
-    path <- paste0(getwd(), "/forest")
-  }
-  unlink(path, recursive=TRUE)
-  dir.create(path, showWarnings=FALSE, recursive=TRUE)
-  ## extract the forest - hereafter this is what we work with
+  ## Work on a local forest copy; standalone saving remains self-contained.
   o <- o$forest
   ## Save an on-the-fly representation of the same fitted forest.
   ## Only this local copy is changed; keep all reconstruction metadata.
@@ -96,30 +105,59 @@ fast.save <- function(o, path=NULL, testing=TRUE, units="Mb", compact=FALSE) {
     o[["terminal.quants"]] <- FALSE
     o[["nativeArrayTNDS"]] <- NULL
   }
+  .fast.save.forest(o, path = path, testing = testing, units = units,
+                     compress = compress)
+}
+## Internal serializer also used by the imputer's shared-predictor writer.
+## xvar.reference is an integrity marker, not a replacement prediction input.
+.fast.save.forest <- function(o, path = NULL, testing = FALSE, units = "Mb",
+                               compress = 50, xvar.reference = NULL) {
+  .fast.save.check.compress(compress)
+  if (!is.list(o) || !inherits(o, "forest") || is.null(o$nativeArray)) {
+    stop("A fitted forest is required for serialization.", call. = FALSE)
+  }
+  if (!is.null(xvar.reference) &&
+      (inherits(o, "anonymous") || is.null(o$xvar))) {
+    stop("Shared serialization requires non-anonymous training predictors.", call. = FALSE)
+  }
+  if (is.null(path)) path <- paste0(getwd(), "/forest")
+  unlink(path, recursive = TRUE)
+  dir.create(path, showWarnings = FALSE, recursive = TRUE)
   ## nativeArrayTNDS
   check <- !sapply(o$nativeArrayTNDS, is.null)
   if (sum(check) > 0) {
     lapply(names(o$nativeArrayTNDS)[check], function(nm) {
-      fst::write_fst(data.table::data.table(o$nativeArrayTNDS[[nm]]), paste0(path, "/nativeArrayTDNS_", nm, ".rda"))
+      fst::write_fst(data.table::data.table(o$nativeArrayTNDS[[nm]]), paste0(path, "/nativeArrayTDNS_", nm, ".rda"),
+                       compress = compress)
     })
     o$nativeArrayTNDS[names(o$nativeArrayTNDS)[check]] <- NULL
   }
   ## nativeArray
-  fst::write_fst(data.table::data.table(o$nativeArray), paste0(path, "/nativeArray.rda"))
+  fst::write_fst(data.table::data.table(o$nativeArray), paste0(path, "/nativeArray.rda"),
+                   compress = compress)
   o$nativeArray <- NULL
   ## x and y
-  if (!is.null(o$xvar)) {
-    fst::write_fst(data.table::data.table(o$xvar), paste0(path, "/xvar.rda"))
+  if (!is.null(xvar.reference)) {
+    ## Do not write xvar and delete it afterward: avoid the duplicated I/O.
+    o$xvar <- NULL
+    o[[".impute.shared.xvar"]] <- xvar.reference
+  } else if (!is.null(o$xvar)) {
+    fst::write_fst(data.table::data.table(o$xvar), paste0(path, "/xvar.rda"),
+                     compress = compress)
     o$xvar <- NULL
   }
   if (!is.null(o$yvar)) {
-    fst::write_fst(data.frame(o$yvar), paste0(path, "/yvar.rda"))
+    fst::write_fst(data.frame(o$yvar), paste0(path, "/yvar.rda"),
+                     compress = compress)
     o$yvar <- NULL
   }
   ## misc.
-  fst::write_fst(data.frame(o$case.wt), paste0(path, "/case.wt.rda"))
-  fst::write_fst(data.frame(o$leafCount), paste0(path, "/leafCount.rda"))
-  fst::write_fst(data.frame(o$seed), paste0(path, "/seed.rda"))
+  fst::write_fst(data.frame(o$case.wt), paste0(path, "/case.wt.rda"),
+                   compress = compress)
+  fst::write_fst(data.frame(o$leafCount), paste0(path, "/leafCount.rda"),
+                   compress = compress)
+  fst::write_fst(data.frame(o$seed), paste0(path, "/seed.rda"),
+                   compress = compress)
   o$case.wt <- o$yvar <- o$leafCount <- o$seed <- NULL
   ## convert sample size to a number
   o$sampfrac <- o$sampsize(1)
@@ -128,7 +166,8 @@ fast.save <- function(o, path=NULL, testing=TRUE, units="Mb", compact=FALSE) {
   if (o$family == "surv" || o$family == "surv-CR") {
     check <- !sapply(o$event.info, is.null)
     lapply(names(o$event.info)[check], function(nm) {
-      fst::write_fst(data.table::data.table(o$event.info[[nm]]), paste0(path, "/event.info_", nm, ".rda"))
+      fst::write_fst(data.table::data.table(o$event.info[[nm]]), paste0(path, "/event.info_", nm, ".rda"),
+                       compress = compress)
     })
     o$event.info[names(o$event.info[check])] <- NULL
   }
@@ -142,6 +181,12 @@ fast.save <- function(o, path=NULL, testing=TRUE, units="Mb", compact=FALSE) {
   #cat("finished\n")
 }
 fast.load <- function(directory, path = NULL, testing = FALSE, units="Mb") {
+  .fast.load.forest(directory, path = path, testing = testing, units = units)
+}
+## The public loader does not follow imputer-owned references. Only the
+## imputer loader supplies a reconstruction callback for a complete bank.
+.fast.load.forest <- function(directory, path = NULL, testing = FALSE, units = "Mb",
+                               xvar.restore = NULL) {
   if (is.null(path)) {
     path <- paste0(getwd(), "/", directory)
   }
@@ -151,6 +196,17 @@ fast.load <- function(directory, path = NULL, testing = FALSE, units="Mb") {
   files <- list.files(path)
   ## forest
   o <- readRDS(paste0(path, "/forest.rda"))
+  shared <- o[[".impute.shared.xvar"]]
+  if (!is.null(shared) && is.null(xvar.restore)) {
+    stop("This learner uses shared imputer predictors. Load the complete bank with load.impute.learn().",
+         call. = FALSE)
+  }
+  if (is.null(shared) && !is.null(xvar.restore)) {
+    .impute.shared.stop("Expected a shared learner, but its reconstruction marker is missing.")
+  }
+  if (!is.null(shared) && "xvar.rda" %in% files) {
+    .impute.shared.stop("A shared learner also contains a conflicting xvar.rda file.")
+  }
   gc()
   ## nativeArrayTNDS
   if (any(grepl("nativeArrayTDNS", files))) {
@@ -164,7 +220,10 @@ fast.load <- function(directory, path = NULL, testing = FALSE, units="Mb") {
   ## nativeArrayTNDS
   o$nativeArray <- fst::read_fst(paste0(path, "/nativeArray.rda"))
   ## x and y
-  if (any(grepl("xvar.rda", files))) {
+  if (!is.null(shared)) {
+    o$xvar <- xvar.restore(o, shared)
+    o[[".impute.shared.xvar"]] <- NULL
+  } else if (any(grepl("xvar.rda", files))) {
     o$xvar <- fst::read_fst(paste0(path, "/xvar.rda"))
   }
   if (any(grepl("yvar.rda", files))) {
@@ -177,8 +236,9 @@ fast.load <- function(directory, path = NULL, testing = FALSE, units="Mb") {
   o$case.wt <- fst::read_fst(paste0(path, "/case.wt.rda"))[[1]]
   o$leafCount <- fst::read_fst(paste0(path, "/leafCount.rda"))[[1]]
   o$seed <- fst::read_fst(paste0(path, "/seed.rda"))[[1]]
-  ## sample size --- hard coded
-  o$sampsize <- function(x){x * o$sampfrac} 
+  ## sample size --- hard coded (a small closure: capturing o here would
+  ## put the whole forest inside its own sampsize function)
+  o$sampsize <- make.samplesize.function(o$sampfrac)
   ## survival
   if (any(grepl("event.info", files))) {
     target <- files[grepl("event.info", files)]

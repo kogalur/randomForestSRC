@@ -13,7 +13,8 @@
   classification.  RFQ changes the probability threshold used to assign
   class labels; BRF changes the sampling used to grow the trees.  The
   splitting rule, performance measure, and variable importance can be
-  specified separately.
+  specified separately.  RFQ and BRF use normalized Brier performance
+  by default for prediction error and variable importance.
 
   Companion helpers summarize performance, select a probability
   threshold, or extract the class-frequency threshold from response
@@ -48,7 +49,7 @@ get.rfq.threshold(y)
   \item{method}{Classification method.  \code{"rfq"}, the default, uses
     the RFQ decision rule of O'Brien and Ishwaran (2019).
     \code{"brf"} uses class-weighted sampling with replacement and a
-    reduced tree sample size.  \code{"standard"} uses ordinary random
+    reduced tree sample size.  \code{"standard"} uses random
     forest classification without enabling the RFQ rule.  See Details.}
 
   \item{splitrule}{Splitting rule passed to the forest grow function.
@@ -57,10 +58,13 @@ get.rfq.threshold(y)
     classification rules.  This setting is separate from
     \code{perf.type}.}
 
-  \item{perf.type}{Performance measure used by the forest and its
-    variable importance calculations.  The default is \code{"gmean"}
-    for RFQ and BRF, and \code{"default"} (misclassification error) for
-    standard classification.  Choices accepted by this wrapper are
+  \item{perf.type}{Performance measure used for the forest's prediction
+    error (\code{err.rate}), variable importance (VIMP), and downstream
+    inference based on these quantities.  With \code{NULL}, the default
+    is \code{"brier"} (normalized Brier score) for RFQ and BRF, and
+    \code{"default"} (misclassification error) for standard
+    classification.  Set \code{perf.type = "gmean"} to use the previous
+    RFQ/BRF default.  Choices accepted by this wrapper are
     \code{"none"}, \code{"default"}, \code{"standard"},
     \code{"misclass"}, \code{"brier"}, \code{"gmean"}, and the legacy
     spelling \code{"g.mean"}.  The latter is converted to
@@ -155,7 +159,7 @@ get.rfq.threshold(y)
     \eqn{\widehat p(x) \geq \pi}{p-hat(x) >= pi}.  The class-frequency
     threshold can identify minority observations whose predicted
     probability is below one half.  The standard method instead uses
-    ordinary class assignment based on the largest predicted probability.
+    class assignment based on the largest predicted probability.
     RFQ here is a classification rule, distinct from the continuous-response
     quantile estimation performed by \code{\link{quantreg}}.
 
@@ -166,19 +170,54 @@ get.rfq.threshold(y)
     \code{fast} and \code{ratio} are ignored in this branch.
   }
   \subsection{Performance and variable importance}{
-    G-mean is the geometric mean of minority sensitivity and majority
-    specificity, \eqn{\sqrt{\mathrm{sensitivity}\,
-    \mathrm{specificity}}}{sqrt(sensitivity * specificity)}.  Larger
-    values indicate better balance between the two class-specific rates.
-    Misclassification and Brier scores are error measures for which smaller
-    values are better.  Changing \code{perf.type} selects the forest
-    performance measure; it does not select the RFQ decision rule.
+    The default performance measure for RFQ and BRF is the normalized
+    Brier score, selected by \code{perf.type = "brier"}.  For binary
+    outcomes \eqn{Y_i \in \{0,1\}}, with \eqn{Y_i = 1} denoting the
+    minority class, and predicted minority-class probabilities
+    \eqn{\widehat p_i}{p-hat_i}, the overall score is
+    \deqn{\mathrm{BS}^{*} = \frac{4}{n}\sum_{i=1}^{n}
+      (Y_i - \widehat p_i)^2.}{BS* = 4 * mean((Y - p-hat)^2).}
+    The mean is taken over the observations being scored.  Smaller values
+    are better.  This is four times the binary Brier score; the
+    normalization does not reweight the classes or change VIMP rankings.
 
-    Request permutation VIMP explicitly with
-    \code{importance = "permute"}.  For comparisons, use a common
+    Brier performance responds to changes in predicted probabilities even
+    when the assigned classes stay the same.  This can improve the
+    separation of predictive variables from noise in difficult imbalanced
+    problems.  Request permutation VIMP with
+    \code{importance = "permute"}; it measures the increase in the
+    selected prediction error after a variable is permuted.
+
+    G-mean remains available with \code{perf.type = "gmean"}.  It is
+    the geometric mean of minority sensitivity and majority specificity,
+    \eqn{\sqrt{\mathrm{sensitivity}\,
+    \mathrm{specificity}}}{sqrt(sensitivity * specificity)}.
+    Larger G-mean values are better;
+    the forest uses one minus G-mean as overall prediction error.  Unlike Brier
+    performance, it depends on the class assignments.  Changing
+    \code{perf.type} changes the performance measure, while
+    \code{method} selects the classifier and \code{splitrule} selects
+    the splitting criterion.
+
+    The selected metric is used for \code{err.rate} and VIMP and is
+    inherited by prediction and VIMP calculations unless overridden.
+    \code{\link{subsample}} also uses the fitted forest's metric for
+    inference on VIMP and prediction error.  The helper
+    \code{get.imbalanced.performance} continues to report all its
+    performance measures, regardless of \code{perf.type}.  Selecting a
+    classification threshold with \code{get.imbalanced.optimize}
+    remains a separate operation; changing that threshold does not change
+    a Brier score calculated from the same probabilities.
+
+    For comparisons, use a common
     \code{perf.type}, splitting rule, and \code{block.size}, unless the
-    comparison is intended to study those settings.  Increase \code{ntree}
-    as needed to assess the stability of OOB performance and VIMP.
+    comparison is intended to study those settings.  To compare performance
+    metrics, \code{\link{vimp}} can score the same fitted forest under
+    each metric.  Compare recovery or ranking of predictive variables,
+    rather than raw VIMP magnitudes on different scales.  Increase
+    \code{ntree} as needed to assess the stability of OOB performance and
+    VIMP.  The simulation example compares Brier and G-mean VIMP using
+    known signal and noise variables.
   }
   \subsection{Sampling and missing values}{
     With \code{ratio = NULL}, the RFQ and standard branches pass
@@ -334,7 +373,11 @@ get.rfq.threshold(y)
   function.  Usual components include the class-probability matrices
   \code{predicted}
   and \code{predicted.oob}, class assignments \code{class} and
-  \code{class.oob}, and requested performance and importance values.
+  \code{class.oob}, prediction error \code{err.rate}, and requested
+  VIMP \code{importance}.  Prediction error and VIMP use the selected
+  \code{perf.type}; for RFQ and BRF the default is normalized Brier.
+  The first column of \code{err.rate} and \code{importance} contains
+  the overall error and VIMP, respectively.
   Availability depends on the selected grow interface and sampling
   options; see \code{\link{rfsrc}} and \code{\link{rfsrc.fast}}.
 
@@ -382,7 +425,8 @@ get.rfq.threshold(y)
 
 \seealso{
   \code{\link{rfsrc}}, \code{\link{rfsrc.fast}},
-  \code{\link{get.imbalanced.performance}}, \code{\link{subsample}}
+  \code{\link{get.imbalanced.performance}}, \code{\link{vimp}},
+  \code{\link{subsample}}
 }
 
 \examples{
@@ -394,19 +438,45 @@ data(breast, package = "randomForestSRC")
 dta <- na.omit(breast)
 f <- status ~ .
 
+## Use 300 trees for illustration; imbalanced() defaults to 3000.
 set.seed(19)
 rfq <- imbalanced(f, dta, ntree = 300)
 print(rfq)
 print(get.imbalanced.performance(rfq, confusion = TRUE))
 
+## Equivalent direct RFQ call using rfsrc().
+## RFQ uses equal case weights and sampling without replacement.
+set.seed(19)
+rfq.direct <- rfsrc(f, dta, ntree = 300,
+                    rfq = TRUE, splitrule = "auc", perf.type = "brier",
+                    block.size = NULL, bootstrap = "by.root",
+                    samptype = "swor", sampsize = function(n) n * .632,
+                    case.wt = NULL)
+print(all.equal(rfq$predicted.oob, rfq.direct$predicted.oob))
+
 ## Extract the class-frequency threshold from the observed responses.
 print(get.rfq.threshold(rfq$yvar))
 
+set.seed(20)
 brf <- imbalanced(f, dta, ntree = 300, method = "brf")
+
+## Equivalent direct BRF call using rfsrc().
+## Each class has equal total sampling weight; sampling is with replacement.
+class.frequency <- table(dta$status)
+case.wt <- min(class.frequency) /
+  as.numeric(class.frequency[as.character(dta$status)])
+set.seed(20)
+brf.direct <- rfsrc(f, dta, ntree = 300,
+                    rfq = FALSE, splitrule = "auc", perf.type = "brier",
+                    block.size = NULL, bootstrap = "by.root",
+                    samptype = "swr", sampsize = 2L * min(class.frequency),
+                    case.wt = case.wt)
+print(all.equal(brf$predicted.oob, brf.direct$predicted.oob))
+
 standard <- imbalanced(f, dta, ntree = 300, method = "standard")
 
 ## Compare all three using the helper's default evaluation rule.
-metrics <- c("sens", "spec", "gmean", "misclass", "brier", "auc")
+metrics <- c("sens", "spec", "gmean", "misclass", "brier.norm", "auc")
 comparison <- rbind(
   RFQ = as.numeric(get.imbalanced.performance(rfq)[metrics]),
   BRF = as.numeric(get.imbalanced.performance(brf)[metrics]),
@@ -474,6 +544,7 @@ print(head(selected.class))
 ## ------------------------------------------------------------
 ## Explicit permutation VIMP and blocking
 ## ------------------------------------------------------------
+## RFQ uses normalized Brier performance by default.
 rfq.vimp <- imbalanced(f, dta, ntree = 300,
                        importance = "permute", block.size = 1)
 rfq.block <- imbalanced(f, dta, ntree = 300,
@@ -487,12 +558,62 @@ print(extract.subsample(smp)$var.sel.Z)
 plot.subsample(smp, cex.axis = .7, alpha = .5)
 
 ## ------------------------------------------------------------
-## Optional sampling and grow-interface choices
+## Strong imbalance: probability signals and permutation VIMP
 ## ------------------------------------------------------------
-rfq.sample <- imbalanced(f, dta, ntree = 300, ratio = .25)
-print(get.imbalanced.performance(rfq.sample))
-rfq.fast <- imbalanced(f, dta, ntree = 300, fast = TRUE)
-print(get.imbalanced.performance(rfq.fast))
+## x1 identifies a small subgroup; x2 changes risk within it.
+## Both affect the outcome probability.  The other variables are noise.
+## Expected minority prevalence is .04 * (.15 + .5 / 2) = .016.
+## Within the subgroup, all true probabilities exceed this prevalence,
+## so the population RFQ class rule uses x1 alone.  Brier performance
+## can also detect the probability information supplied by x2.
+local({
+  ## One thread makes the blocked VIMP comparison reproducible.
+  old.options <- options(rf.cores = 1)
+  on.exit(options(old.options))
+
+  set.seed(47)
+  n <- 4000
+  p <- 20
+  x <- matrix(runif(n * p), ncol = p)
+  x[, 1] <- as.numeric(x[, 1] < .04)
+  colnames(x) <- paste0("x", seq_len(p))
+  prob <- x[, 1] * (.15 + .5 * x[, 2])
+  y <- factor(rbinom(n, 1, prob), levels = c(0, 1),
+              labels = c("majority", "minority"))
+  sim.data <- data.frame(y = y, x)
+
+  ## Grow one RFQ forest, then use the same trees for both metrics.
+  ## Brier is explicit here; it is also the RFQ default.
+  sim.fit <- imbalanced(y ~ ., sim.data, ntree = 500, mtry = p,
+                         splitrule = "auc", perf.type = "brier",
+                         block.size = 50, seed = -103)
+  brier <- vimp(sim.fit, importance = "permute", perf.type = "brier",
+                 block.size = 50, seed = -107)
+  gmean <- vimp(sim.fit, importance = "permute", perf.type = "gmean",
+                 block.size = 50, seed = -107)
+
+  counts <- table(y)
+  cat("\nClass counts and majority/minority ratio\n")
+  print(c(n.majority = unname(counts["majority"]),
+          n.minority = unname(counts["minority"]),
+          iratio = unname(counts["majority"] / counts["minority"])))
+
+  ## Compare signals with noise within each metric's own scale.
+  vimp.values <- cbind(Brier = brier$importance[, 1],
+                       Gmean = gmean$importance[, 1])
+  cat("\nPermutation VIMP: true signals and largest noise value\n")
+  print(rbind(vimp.values[1:2, , drop = FALSE],
+               largest.noise = apply(vimp.values[-(1:2), , drop = FALSE],
+                                     2, max)), digits = 5)
+
+  ## A smaller rank is better; the ideal ranks are 1 and 2.
+  vimp.ranks <- apply(vimp.values, 2, function(z) {
+    rank(-z, ties.method = "average")
+  })
+  cat("\nRanks of the two true signals among all 20 variables\n")
+  print(vimp.ranks[1:2, , drop = FALSE])
+})
+
 }
 }
 \keyword{classif}

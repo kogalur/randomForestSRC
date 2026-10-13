@@ -778,7 +778,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        prob.epsilon = prob.epsilon,
                        quantile.regr = quantile.regr,
                        rfq = rfq,
-                       sampsize = sampsize.function,
+                       sampsize = lean.function(sampsize.function),
                        samptype = samptype,
                        samp = samp,
                        subj = subj,
@@ -789,7 +789,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        terminal.quants = terminal.quants,
                        importance = importance.value,
                        vimp.threshold = vimp.threshold,
-                       version = "3.9.0")
+                       version = "3.9.1")
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -817,11 +817,11 @@ rfsrc <- function(formula, data, ntree = 500,
                        subj = subj,
                        subj.names = subj.names,
                        bootstrap = bootstrap,
-                       sampsize = sampsize.function,
+                       sampsize = lean.function(sampsize.function),
                        samptype = samptype,
                        samp = samp,
                        case.wt = case.wt,
-                       version = "3.9.0",
+                       version = "3.9.1",
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,
@@ -950,7 +950,7 @@ rfsrc <- function(formula, data, ntree = 500,
   }
   ## make the output object
   rfsrcOutput <- list(
-    call = my.call,
+    call = lean.call(my.call),
     family = family,
     n = n,
     ntree = ntree,

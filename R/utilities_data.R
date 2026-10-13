@@ -795,6 +795,77 @@ make.samplesize.function <- function(fraction = 1) {
   expr <- parse(text = f)
   function(x) eval(expr, list(x = x))
 }
+## a copy of function f whose environment holds only the objects its body
+## refers to.  A closure keeps its defining environment alive, so a
+## sampsize function created inside rfsrc() (the default argument, or one
+## passed in by rfsrc.fast, tune.rfsrc, impute.learn ...) would otherwise
+## carry the whole calling frame (data, weights, ...) into every forest and
+## into anything saved with save() or saveRDS().  Only the function's own
+## local frames are searched (up to the global environment or a package
+## namespace, which becomes the parent of the lean environment; both are
+## serialized by reference).  A function defined at top level or in a
+## package is returned unchanged.
+lean.function <- function(f, depth = 0) {
+  if (!is.function(f) || is.primitive(f)) {
+    return(f)
+  }
+  is.top <- function(env) {
+    identical(env, globalenv()) || identical(env, emptyenv()) || identical(env, baseenv()) ||
+      isNamespace(env) || !is.null(attr(env, "name"))
+  }
+  e <- environment(f)
+  if (is.null(e) || is.top(e)) {
+    return(f)
+  }
+  top <- e
+  while (!is.top(top)) top <- parent.env(top)
+  lean <- new.env(parent = top)
+  for (v in setdiff(all.names(body(f)), names(formals(f)))) {
+    env <- e
+    while (!is.top(env) && !exists(v, envir = env, inherits = FALSE)) env <- parent.env(env)
+    if (is.top(env)) next
+    val <- get(v, envir = env, inherits = FALSE)
+    if (is.function(val) && depth < 2) val <- lean.function(val, depth + 1)
+    assign(v, val, envir = lean)
+  }
+  environment(f) <- lean
+  f
+}
+## the call stored in a forest, without what it does not need to carry.
+## rfsrc() stores the evaluated formula in its call, and do.call() puts
+## argument values (data frames, functions) into the call itself, so the
+## call can hold the calling frame (through the formula's environment or a
+## function's closure) and a copy of the data.  Here a formula created in a
+## function gets the global environment (the formula is parsed against the
+## data, not evaluated in that frame), functions are made lean, and data
+## frames, matrices and long vectors are replaced by the argument's name.
+lean.call <- function(cl) {
+  if (!is.call(cl)) {
+    return(cl)
+  }
+  is.top <- function(env) {
+    identical(env, globalenv()) || identical(env, emptyenv()) || identical(env, baseenv()) ||
+      isNamespace(env) || !is.null(attr(env, "name"))
+  }
+  args <- as.list(cl)
+  nms <- names(args)
+  for (i in seq_along(args)[-1]) {
+    a <- args[[i]]
+    if (inherits(a, "formula")) {
+      e <- environment(a)
+      if (!is.null(e) && !is.top(e)) environment(a) <- globalenv()
+    }
+    else if (is.function(a)) {
+      a <- lean.function(a)
+    }
+    else if (!is.null(nms) && nzchar(nms[i]) &&
+             (is.data.frame(a) || is.matrix(a) || (is.atomic(a) && length(a) > 100))) {
+      a <- as.name(nms[i])
+    }
+    if (!is.null(a)) args[[i]] <- a
+  }
+  as.call(args)
+}
 make.holdout.array <- function(vtry = 0, p, ntree, ntree.allvars = NULL) {
   ##default is triggered by vtry = 0
   if (vtry == 0) {

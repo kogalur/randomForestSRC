@@ -13,11 +13,13 @@
   for a single forest or a list of forests.
 }
 \usage{
-fast.save(o, path = NULL, testing = TRUE, units = "Mb", compact = FALSE)
+fast.save(o, path = NULL, testing = TRUE, units = "Mb", compact = FALSE,
+          compress = 50)
 
 fast.load(directory, path = NULL, testing = FALSE, units = "Mb")
 
-fast.save.list(o, path = NULL, testing = FALSE, units = "Mb", compact = FALSE)
+fast.save.list(o, path = NULL, testing = FALSE, units = "Mb", compact = FALSE,
+               compress = 50)
 
 fast.load.list(directory, path = NULL, testing = FALSE, units = "Mb")
 }
@@ -45,6 +47,10 @@ fast.load.list(directory, path = NULL, testing = FALSE, units = "Mb")
     non-anonymous forest containing the training predictors and responses.
     If \code{FALSE} (default), save the forest with its available
     terminal-node information.  See \emph{Compact saving} below.}
+  \item{compress}{A single finite number between 0 and 100 specifying the
+    FST compression level.  The default is 50 for fast saving.  Use 100
+    for maximum compression when smaller files are more important than
+    saving speed.  This setting is independent of \code{compact}.}
 }
 \details{
   \subsection{Saving and loading a forest}{
@@ -64,6 +70,21 @@ fast.load.list(directory, path = NULL, testing = FALSE, units = "Mb")
     Keep the directory's files together and load the forest with
     \code{fast.load()}.
   }
+  \subsection{Compression}{
+    The \code{compress} setting is passed to every
+    \code{fst::write_fst()} call, including each forest saved by
+    \code{fast.save.list()}.  Higher compression can reduce file sizes
+    at the cost of slower saving; the reduction depends on the saved
+    components.  The remaining forest information in \file{forest.rda}
+    continues to use \code{saveRDS(..., compress = FALSE)}.
+
+    Compression changes the encoding of the saved components, not the
+    fitted forest or the choice of components.  It can be combined with
+    \code{compact = TRUE}.  Use the same \code{fast.load()} or
+    \code{fast.load.list()} call for any compression level; no compression
+    argument is needed when loading.  Invalid compression values are
+    rejected before the destination is deleted.
+  }
   \subsection{Compact saving}{
     With \code{compact = TRUE}, the saved forest includes the tree
     structure, factor-split information, training data, seeds, and other
@@ -81,6 +102,15 @@ fast.load.list(directory, path = NULL, testing = FALSE, units = "Mb")
     Use \code{compact = FALSE} for anonymous forests.  Compact saving
     includes the training data.  Eligibility checks run before the
     destination is deleted; for lists, every forest is checked first.
+  }
+  \subsection{Shared imputer banks}{
+    Standalone \code{fast.save()} always writes a self-contained forest.
+    Imputers fitted with \code{share.xvar = TRUE} use the same component
+    serializers but store their repeated training predictors once per
+    bank. Load those complete banks with \code{\link{load.impute.learn}}.
+    Direct \code{fast.load()} calls on shared learner subdirectories
+    stop because their predictors depend on the bank's common table
+    and reconstruction mappings.
   }
   \subsection{Directories}{
     \strong{Both save functions delete an existing destination directory

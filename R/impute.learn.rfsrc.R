@@ -28,7 +28,10 @@ impute.learn.rfsrc <- function(formula, data,
                                keep.ximp = FALSE,
                                save.on.fit = !is.null(out.dir),
                                save.ood = TRUE,
-                               weight = NULL) {
+                               weight = NULL,
+                               compress = 50,
+                               share.xvar = FALSE) {
+  .fast.save.check.compress(compress)
   ##------------------------------------------------------------------
   ## Resolve formula roles and the target-selection default
   ##------------------------------------------------------------------
@@ -81,11 +84,17 @@ impute.learn.rfsrc <- function(formula, data,
   if (!missing(blocks)) .impute.scalar(blocks, "blocks", lower = 1, whole = TRUE,
                                       upper = .Machine$integer.max)
   for (nm in c("fast", "anonymous", "wipe", "keep.models", "keep.ximp",
-               "save.on.fit", "save.ood", "verbose")) {
+               "save.on.fit", "save.ood", "verbose", "share.xvar")) {
     .impute.flag(get(nm), nm)
   }
   .impute.path.part(learner.root, "learner.root", nested = TRUE)
   .impute.path.part(learner.prefix, "learner.prefix")
+  if (isTRUE(share.xvar)) {
+    if (isTRUE(anonymous)) {
+      stop("'share.xvar = TRUE' requires 'anonymous = FALSE'.", call. = FALSE)
+    }
+    .impute.shared.check.root(learner.root)
+  }
   if (persist.on.fit) out.dir <- .impute.save.destination(out.dir)
   ## Normalize raw columns separately from supervised responses. Response
   ## columns are retained for the auxiliary forest, not as imputation targets.
@@ -407,11 +416,16 @@ impute.learn.rfsrc <- function(formula, data,
   ##------------------------------------------------------------------
   ## Prepare output storage and per-target bookkeeping
   ##------------------------------------------------------------------
+  shared.context <- if (isTRUE(share.xvar)) {
+    .impute.shared.new(augmented.ximp, learner.root)
+  } else NULL
   transaction <- NULL
   if (persist.on.fit) {
     transaction <- .impute.begin.save(out.dir, wipe = wipe)
     on.exit(try(.safe.unlink.dir(transaction$stage), silent = TRUE), add = TRUE)
     .safe.dir.create(file.path(transaction$stage, learner.root))
+    .impute.shared.prepare.stage(transaction, learner.root, enabled = share.xvar)
+    if (isTRUE(share.xvar)) .impute.shared.write(shared.context, transaction$stage, compress)
   }
   models <- setNames(vector("list", length(targets)), targets)
   learners <- setNames(vector("list", length(targets)), targets)
@@ -430,7 +444,8 @@ impute.learn.rfsrc <- function(formula, data,
     learner.path <- file.path(transaction$stage, learner.root, supervised.info$model.name)
     .msg("Saving supervised forest to ", learner.path, verbose = verbose)
     .impute.write.model(supervised.model, supervised.info$model.name,
-                         file.path(transaction$stage, learner.root), "supervised forest")
+                         file.path(transaction$stage, learner.root), "supervised forest",
+                         compress = compress)
   }
   .msg("Training final-sweep learner bank...", verbose = verbose)
   sweep.start <- proc.time()[[3]]
@@ -505,6 +520,11 @@ impute.learn.rfsrc <- function(formula, data,
     }
     learners[[yname]]$status <- "ok"
     learners[[yname]]$family <- grow$family
+    if (isTRUE(share.xvar)) {
+      learners[[yname]]$xvar.ref <- .impute.shared.reference(
+        shared.context, .resolve.predict.forest(grow), trn,
+        label = paste0("learner for `", yname, "`"))
+    }
     ## Final-learner OOB predictions provide the target reference. Embed the
     ## discrepancies into retained-row order, leaving originally missing
     ## target responses unscored. Earlier imputation is not re-run OOB.
@@ -540,7 +560,9 @@ impute.learn.rfsrc <- function(formula, data,
       .msg("      saving learner to ", learner.path, verbose = verbose)
       .impute.write.model(grow, learner.name,
                            file.path(transaction$stage, learner.root),
-                           paste0("learner for `", yname, "`"))
+                           paste0("learner for `", yname, "`"), compress = compress,
+                           xvar.ref = learners[[yname]]$xvar.ref,
+                           shared.context = shared.context)
     }
     if (!isTRUE(keep.models)) {
       rm(grow)
@@ -680,6 +702,10 @@ impute.learn.rfsrc <- function(formula, data,
     sweep.seconds = sweep.seconds,
     call = match.call()
   )
+  if (isTRUE(share.xvar)) {
+    manifest$spec.version <- 3L
+    manifest$shared.xvar <- shared.context$spec
+  }
   if (!isTRUE(keep.models) && isTRUE(supervised.info$enabled)) {
     rm(supervised.model)
     gc()
@@ -690,6 +716,7 @@ impute.learn.rfsrc <- function(formula, data,
     models = if (isTRUE(keep.models)) models else setNames(vector("list", length(targets)), targets),
     supervised.model = if (isTRUE(keep.models) && isTRUE(supervised.info$enabled)) supervised.model else NULL,
     ximp = if (isTRUE(keep.ximp)) ximp else NULL,
+    shared.xvar.data = if (isTRUE(share.xvar) && isTRUE(keep.models)) shared.context$data else NULL,
     path = if (persist.on.fit) normalizePath(out.dir, mustWork = FALSE) else NULL
   )
   class(object) <- c("impute.learn.rfsrc", "impute.learn")
@@ -705,7 +732,9 @@ impute.learn <- impute.learn.rfsrc
 ##------------------------------------------------------------------
 ## This method may reload lazy learners before writing them. The source and
 ## destination paths therefore both matter when deciding whether to wipe.
-save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE) {
+save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE,
+                                    compress = 50, share.xvar = NULL) {
+  .fast.save.check.compress(compress)
   if (!inherits(object, "impute.learn.rfsrc")) {
     stop("'object' must inherit from class 'impute.learn.rfsrc'.", call. = FALSE)
   }
@@ -714,12 +743,37 @@ save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE) {
   object$manifest <- .normalize.impute.learn.manifest(object$manifest)
   .impute.check.layout(object$manifest)
   learner.root <- object$manifest$learner.root %||% "learners"
+  if (is.null(share.xvar)) share.xvar <- !is.null(object$manifest$shared.xvar)
+  .impute.flag(share.xvar, "share.xvar")
+  if (isTRUE(share.xvar) && is.null(object$manifest$shared.xvar)) {
+    stop("Shared saving requires the training source and row mappings captured by ",
+         "impute.learn(..., share.xvar = TRUE). Existing independent banks remain loadable.",
+         call. = FALSE)
+  }
+  source.context <- .impute.shared.object.context(object)
+  if (isTRUE(share.xvar)) .impute.shared.data(source.context)
+  destination.manifest <- object$manifest
+  if (!isTRUE(share.xvar) && !is.null(destination.manifest$shared.xvar)) {
+    destination.manifest$shared.xvar <- NULL
+    destination.manifest$spec.version <- 2L
+    for (target in destination.manifest$targets) {
+      destination.manifest$learners[[target]]$xvar.ref <- NULL
+    }
+  }
   source.path <- if (is.null(object$path)) NULL else .impute.canonical.path(object$path)
   transaction <- .impute.begin.save(path, wipe = wipe, source.path = source.path,
                                     targets = object$manifest$targets)
   on.exit(try(.safe.unlink.dir(transaction$stage), silent = TRUE), add = TRUE)
   dest.root <- file.path(transaction$stage, learner.root)
   .safe.dir.create(dest.root)
+  .impute.shared.prepare.stage(transaction, learner.root, enabled = share.xvar)
+  destination.context <- NULL
+  if (isTRUE(share.xvar)) {
+    destination.context <- .impute.shared.context(
+      source.context$spec, data = .impute.shared.data(source.context))
+    .impute.shared.write(destination.context, transaction$stage, compress)
+    destination.manifest$shared.xvar <- destination.context$spec
+  }
   source.root <- if (is.null(source.path)) NULL else file.path(source.path, learner.root)
   if (.is.supervised.manifest(object$manifest)) {
     mdl <- object$supervised.model
@@ -733,7 +787,7 @@ save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE) {
     }
     .msg("Saving supervised forest...", verbose = verbose)
     .impute.write.model(mdl, object$manifest$supervised$model.name, dest.root,
-                         "supervised forest")
+                         "supervised forest", compress = compress)
     rm(mdl)
   }
   for (target in object$manifest$targets) {
@@ -745,14 +799,18 @@ save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE) {
         stop("Learner for `", target, "` is unavailable in memory and has no saved source.",
              call. = FALSE)
       }
-      mdl <- .fast.load.learner(target, info, source.root, strict = TRUE)
+      mdl <- .fast.load.learner(target, info, source.root, strict = TRUE,
+                                 shared.context = source.context)
     }
     .msg("Saving learner for `", target, "`...", verbose = verbose)
-    .impute.write.model(mdl, info$learner.name, dest.root, paste0("learner for `", target, "`"))
+    .impute.write.model(mdl, info$learner.name, dest.root,
+                         paste0("learner for `", target, "`"), compress = compress,
+                         xvar.ref = if (isTRUE(share.xvar)) info$xvar.ref else NULL,
+                         shared.context = destination.context)
     rm(mdl)
     if (is.null(object$models[[target]])) gc()
   }
-  .impute.commit.save(transaction, object$manifest)
+  .impute.commit.save(transaction, destination.manifest)
   .msg("Saved imputer to ", transaction$path, verbose = verbose)
   invisible(load.impute.learn.rfsrc(transaction$path, lazy = TRUE, verbose = FALSE))
 }
@@ -777,6 +835,9 @@ load.impute.learn.rfsrc <- function(path, targets = NULL, lazy = TRUE, verbose =
   }
   manifest <- .normalize.impute.learn.manifest(readRDS(manifest.path))
   .impute.check.layout(manifest)
+  if (!is.null(manifest$shared.xvar)) {
+    .impute.shared.file(manifest$shared.xvar, path)
+  }
   all.targets <- manifest$targets
   if (!is.null(targets)) {
     bad.targets <- setdiff(targets, all.targets)
@@ -803,10 +864,12 @@ load.impute.learn.rfsrc <- function(path, targets = NULL, lazy = TRUE, verbose =
     models = models,
     supervised.model = supervised.model,
     ximp = NULL,
+    shared.xvar.data = NULL,
     path = normalizePath(path, mustWork = TRUE)
   )
   class(object) <- c("impute.learn.rfsrc", "impute.learn")
   if (!isTRUE(lazy)) {
+    shared.context <- .impute.shared.object.context(object)
     learner.root <- file.path(path, manifest$learner.root)
     if (.is.supervised.manifest(manifest)) {
       .msg("Loading supervised forest into memory...", verbose = verbose)
@@ -823,7 +886,11 @@ load.impute.learn.rfsrc <- function(path, targets = NULL, lazy = TRUE, verbose =
       if (!identical(info$status, "ok")) next
       .msg("  loading `", target, "`", verbose = verbose)
       object$models[[target]] <- .fast.load.learner(target, info, learner.root,
-                                                    strict = TRUE)
+                                                    strict = TRUE, shared.context = shared.context)
+    }
+    if (!is.null(shared.context)) {
+      ## Eagerly loaded shared objects remain resaveable without their source directory.
+      object$shared.xvar.data <- .impute.shared.data(shared.context)
     }
   }
   object
@@ -982,7 +1049,8 @@ impute.ood.rfsrc <- function(object, newdata,
       record.issue(target, msg)
       next
     }
-    mdl.info <- .predict.get.model(object, target, cache.env = prep$cache.env)
+    mdl.info <- .predict.get.model(object, target, cache.env = prep$cache.env,
+                                   shared.context = prep$shared.context)
     mdl <- mdl.info$model
     if (isTRUE(mdl.info$loaded.from.disk)) {
       disk.load.targets <- c(disk.load.targets, target)
