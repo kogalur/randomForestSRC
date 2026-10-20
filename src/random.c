@@ -10,7 +10,7 @@
 
 #include "random.h"
 #include "nrutil.h"
-${trace.token} #include "error.h"
+#include <stdint.h>
 #define IA      16807
 #define IM      2147483647
 #define AM      (1.0/IM)
@@ -23,6 +23,8 @@ ${trace.token} #include "error.h"
 #define LCG_IM  714025
 #define LCG_IA  1366
 #define LCG_IC  150889
+#define LCG_WIDE_IM 2147483647U
+#define LCG_WIDE_IA 48271U
 int  *ran1A_iy;
 int **ran1A_iv;
 int  *ran1B_iy;
@@ -37,9 +39,6 @@ int      *seed1CValue;
 int      *seed1DValue;
 void randomStack(uint bSize, uint bnpSize) {
   uint b, p;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomStack() ENTRY ...\n");
-  ${trace.token}  }
   ran1A_iy = ivector(1, bSize);
   ran1A_iv = imatrix(1, bSize, 1, NTAB);
   ran1B_iy = ivector(1, bSize);
@@ -58,14 +57,8 @@ void randomStack(uint bSize, uint bnpSize) {
     }
     seed1DValue = ivector(1, bnpSize);
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomStack() EXIT ...\n");
-  ${trace.token}  }
 }
 void randomUnstack(uint bSize, uint bnpSize) {
-  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomUnstack() ENTRY ...\n");
-  ${trace.token}  }
   free_ivector(ran1A_iy, 1, bSize);
   free_imatrix(ran1A_iv, 1, bSize, 1, NTAB);
   free_ivector(ran1B_iy, 1, bSize);
@@ -77,56 +70,29 @@ void randomUnstack(uint bSize, uint bnpSize) {
     free_imatrix(ran1D_iv, 1, bnpSize, 1, NTAB);
     free_ivector(seed1DValue, 1, bnpSize);
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomUnstack() EXIT ...\n");
-  ${trace.token}  }
 }
 void randomSetChainParallel(uint b, int value) {
-  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomSetChainParallel():      %10d : %20d", b, value);
-  ${trace.token}  }
   seed1AValue[b] = value;
 }
 void randomSetUChainParallel(uint b, int value) {
-  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomSetUChainParallel():     %10d : %20d", b, value);
-  ${trace.token}  }
   seed1BValue[b] = value;
 }
 void randomSetUChainParallelVimp(uint b, int value) {
-  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomSetUChainParallelVimp():  %10d : %20d", b, value);
-  ${trace.token}  }
   seed1CValue[b] = value;
 }
 void randomSetChainParallelVimp(uint p, int value) {
-  ${trace.token}  if (getTraceFlag(p) & RAND_DEF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomSetChainParallelVimp():  %10d : %20d", p, value);
-  ${trace.token}  }
   seed1DValue[p] = value;
 }
 void randomSetChainSerial(uint b, int value) {
-  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomSetChainSerial():        %10d : %20d", b, value);
-  ${trace.token}  }
   seed1AValue[1] = value;
 }
 void randomSetUChainSerial(uint b, int value) {
-  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomSetUChainSerial():       %10d : %20d", b, value);
-  ${trace.token}  }
   seed1BValue[1] = value;
 }
 void randomSetUChainSerialVimp(uint b, int value) {
-  ${trace.token}  if (getTraceFlag(b) & RAND_DEF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomSetUChainSerialVimp():    %10d : %20d", b, value);
-  ${trace.token}  }
   seed1CValue[1] = value;
 }
 void randomSetChainSerialVimp(uint p, int value) {
-  ${trace.token}  if (getTraceFlag(p) & RAND_DEF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrandomSetUChainSerialVimp():    %10d : %20d", p, value);
-  ${trace.token}  }
   seed1DValue[1] = value;
 }
 int randomGetChainParallel(uint b) {
@@ -214,6 +180,34 @@ void lcgenerator(unsigned int *seed, unsigned char reset) {
   }
   else {
     *seed = (LCG_IA * (*seed) + LCG_IC) % LCG_IM;
+  }
+}
+void lcgeneratorWide(unsigned int *seed, unsigned char reset) {
+  if (reset) {
+    *seed %= LCG_WIDE_IM;
+    if (*seed == 0U) {
+      *seed = 1U;
+    }
+  }
+  else {
+    *seed = (unsigned int) (((uint64_t) LCG_WIDE_IA * (*seed)) % LCG_WIDE_IM);
+  }
+}
+void randomSeedHead(unsigned int *seed, unsigned char reset, unsigned char useWide) {
+  if (useWide) {
+    lcgeneratorWide(seed, reset);
+  }
+  else {
+    if (reset) {
+      lcgenerator(seed, TRUE);
+    }
+    else {
+      lcgenerator(seed, FALSE);
+      lcgenerator(seed, FALSE);
+      while (*seed == 0U) {
+        lcgenerator(seed, FALSE);
+      }
+    }
   }
 }
 float ran1_original(int *idum) {

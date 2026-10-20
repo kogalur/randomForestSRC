@@ -28,9 +28,6 @@ void updateEnsembleSurvival(char mode,
 #ifdef _OPENMP
   omp_lock_t   *lockDENptr;
 #endif
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\nupdateEnsembleSurvival() ENTRY ...\n");
-  ${trace.token}  }
   ensembleSRGnum = NULL;  
   ensembleCIFnum = NULL;  
   ensembleSRVnum = NULL;  
@@ -103,9 +100,6 @@ void updateEnsembleSurvival(char mode,
         if ((parent -> membrCount) > 0) {
         }
         else {
-          ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-          ${trace.token}    RF_nativePrint("\nSURV OUTC_TYPE case no predicted value:  %10d \n", ii);
-          ${trace.token}  }
           selectionFlag = FALSE;
         }
       }
@@ -156,120 +150,6 @@ void updateEnsembleSurvival(char mode,
 #endif
       }  
     }  
-    ${trace.token}    if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
-    ${trace.token}    uint obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
-    ${trace.token}      if (oobFlag == TRUE) {
-    ${trace.token}        RF_nativePrint("\nOOB Ensemble calculations follow: \n");
-    ${trace.token}      }
-    ${trace.token}      else {
-    ${trace.token}        if (fullFlag == TRUE) {
-    ${trace.token}          RF_nativePrint("\nFULL Ensemble calculations follow: \n");
-    ${trace.token}        }
-    ${trace.token}      }
-    ${trace.token}
-    ${trace.token}      if (!(RF_opt & OPT_COMP_RISK)) {
-    ${trace.token}        RF_nativePrint("\nEnsemble CHF:  \n");
-    ${trace.token}        RF_nativePrint("          ");
-    ${trace.token}        for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}          RF_nativePrint("%10d", n);
-    ${trace.token}        }
-    ${trace.token}        RF_nativePrint("\n");
-    ${trace.token}        for (uint k = 1; k <= RF_sortedTimeInterestSize; k++) {
-    ${trace.token}          RF_nativePrint("%10d", k);
-    ${trace.token}          for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}            RF_nativePrint("%10.4f", ensembleSRGnum[1][k][n]);
-    ${trace.token}          }
-    ${trace.token}          RF_nativePrint("\n");
-    ${trace.token}        }
-    ${trace.token}      }
-    ${trace.token}      else {
-    ${trace.token}        for (uint j = 1; j <= RF_eventTypeSize; j++) {
-    ${trace.token}          RF_nativePrint("\nEnsemble CSH:  Event %10d \n", j);
-    ${trace.token}          RF_nativePrint("          ");
-    ${trace.token}          for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}            RF_nativePrint("%10d", n);
-    ${trace.token}          }
-    ${trace.token}          RF_nativePrint("\n");
-    ${trace.token}          for (uint k = 1; k <= RF_sortedTimeInterestSize; k++) {
-    ${trace.token}            RF_nativePrint("%10d", k);
-    ${trace.token}            for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}              RF_nativePrint("%10.4f", ensembleSRGnum[j][k][n]);
-    ${trace.token}            }
-    ${trace.token}            RF_nativePrint("\n");
-    ${trace.token}          }
-    ${trace.token}        }
-    ${trace.token}      }
-    ${trace.token}      if (!(RF_opt & OPT_COMP_RISK)) {
-    ${trace.token}        RF_nativePrint("\nSRV Numerator calculation: \n");
-    ${trace.token}        RF_nativePrint("          ");
-    ${trace.token}        for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}          RF_nativePrint("%10d", n);
-    ${trace.token}        }
-    ${trace.token}        RF_nativePrint("\n");
-    ${trace.token}        for (uint k = 1; k <= RF_sortedTimeInterestSize; k++) {
-    ${trace.token}          RF_nativePrint("%10d", k);
-    ${trace.token}          for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}            RF_nativePrint("%10.4f", ensembleSRVnum[k][n]);
-    ${trace.token}          }
-    ${trace.token}          RF_nativePrint("\n");
-    ${trace.token}        }
-    ${trace.token}      }
-    ${trace.token}      else {
-    ${trace.token}        for (uint j = 1; j <= RF_eventTypeSize; j++) {
-    ${trace.token}          RF_nativePrint("\nEnsemble CIF:  Event %10d \n", (!(RF_opt & OPT_COMP_RISK)) ? 0: j);
-    ${trace.token}          RF_nativePrint("          ");
-    ${trace.token}          for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}            RF_nativePrint("%10d", n);
-    ${trace.token}          }
-    ${trace.token}          RF_nativePrint("\n");
-    ${trace.token}          for (uint k = 1; k <= RF_sortedTimeInterestSize; k++) {
-    ${trace.token}            RF_nativePrint("%10d", k);
-    ${trace.token}            for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}              RF_nativePrint("%10.4f", ensembleCIFnum[j][k][n]);
-    ${trace.token}            }
-    ${trace.token}            RF_nativePrint("\n");
-    ${trace.token}          }
-    ${trace.token}        }
-    ${trace.token}      }
-    ${trace.token}      if (!(RF_opt & OPT_COMP_RISK)) {
-    ${trace.token}        RF_nativePrint("\nEnsemble Mortality (numerator): \n");
-    ${trace.token}        RF_nativePrint("          ");
-    ${trace.token}        for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}          RF_nativePrint("%10d", n);
-    ${trace.token}        }
-    ${trace.token}        RF_nativePrint("\n");
-    ${trace.token}        RF_nativePrint("          ");
-    ${trace.token}        for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}          RF_nativePrint("%10.4f", ensembleMRTnum[1][n]);
-    ${trace.token}        }
-    ${trace.token}        RF_nativePrint("\n");
-    ${trace.token}      }
-    ${trace.token}      else {
-    ${trace.token}        for (uint j = 1; j <= RF_eventTypeSize; j ++) {
-    ${trace.token}          RF_nativePrint("\nEnsemble Mortality for event:  %10d \n", j);
-    ${trace.token}          RF_nativePrint("          ");
-    ${trace.token}          for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}            RF_nativePrint("%10d", n);
-    ${trace.token}          }
-    ${trace.token}          RF_nativePrint("\n");
-    ${trace.token}          RF_nativePrint("          ");
-    ${trace.token}          for (uint n = 1; n <= obsSize; n++) {
-    ${trace.token}            RF_nativePrint("%10.4f", ensembleMRTnum[j][n]);
-    ${trace.token}          }
-    ${trace.token}          RF_nativePrint("\n");
-    ${trace.token}        }
-    ${trace.token}      }
-    ${trace.token}      RF_nativePrint("\nEnsemble Denominator: \n");
-    ${trace.token}      RF_nativePrint("          ");
-    ${trace.token}      for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}        RF_nativePrint("%10d", i);
-    ${trace.token}      }
-    ${trace.token}      RF_nativePrint("\n          ");
-    ${trace.token}      for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}        RF_nativePrint("%10d", ensembleDen[i]);
-    ${trace.token}      }
-    ${trace.token}      RF_nativePrint("\n");
-    ${trace.token}    }
     if (outcomeFlag == TRUE) {
       outcomeFlag = FALSE;
     }
@@ -280,9 +160,6 @@ void updateEnsembleSurvival(char mode,
       fullFlag = FALSE;
     }
   }  
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\nupdateEnsembleSurvival() EXIT ...\n");
-  ${trace.token}  }
 }
 void getEnsembleMortalityCR(char      mode,
                             uint      treeID,
@@ -291,9 +168,6 @@ void getEnsembleMortalityCR(char      mode,
                             double   *ensembleDen,
                             double  **cMortality) {
   uint i, j;
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetEnsembleMortalityCR() ENTRY ...\n");
-  ${trace.token}  }
   for (i = 1; i <= obsSize; i++) {
     if (ensembleDen[i] != 0) {
       for (j = 1; j <= RF_eventTypeSize; j ++) {
@@ -306,24 +180,6 @@ void getEnsembleMortalityCR(char      mode,
       }
     }
   }
-  ${trace.token}    if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
-  ${trace.token}        for (j = 1; j <= RF_eventTypeSize; j ++) {
-  ${trace.token}          RF_nativePrint("\nEnsemble Mortality for event:  %10d \n", j);
-  ${trace.token}          RF_nativePrint("          ");
-  ${trace.token}          for (uint n = 1; n <= obsSize; n++) {
-  ${trace.token}            RF_nativePrint("%10d", n);
-  ${trace.token}          }
-  ${trace.token}          RF_nativePrint("\n");
-  ${trace.token}          RF_nativePrint("          ");
-  ${trace.token}          for (uint n = 1; n <= obsSize; n++) {
-  ${trace.token}            RF_nativePrint("%10.4f", cMortality[j][n]);
-  ${trace.token}          }
-  ${trace.token}          RF_nativePrint("\n");
-  ${trace.token}        }
-  ${trace.token}    }
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetEnsembleMortalityCR() EXIT ...\n");
-  ${trace.token}  }
 }
 void getEnsembleMortality(char      mode,
                           uint      treeID,
@@ -332,9 +188,6 @@ void getEnsembleMortality(char      mode,
                           double   *ensembleDen,
                           double   *mortality) {
   uint i;
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetEnsembleMortality() ENTRY ...\n");
-  ${trace.token}  }
   for (i = 1; i <= obsSize; i++) {
     if (ensembleDen[i] != 0) {
       mortality[i] = ensembleMRTptr[1][i] / ensembleDen[i];
@@ -343,22 +196,6 @@ void getEnsembleMortality(char      mode,
       mortality[i] = RF_nativeNaN;
     }
   }
-  ${trace.token}    if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
-  ${trace.token}        RF_nativePrint("\nEnsemble Mortality: \n");
-  ${trace.token}        RF_nativePrint("          ");
-  ${trace.token}        for (uint n=1; n <= obsSize; n++) {
-  ${trace.token}          RF_nativePrint("%10d", n);
-  ${trace.token}        }
-  ${trace.token}        RF_nativePrint("\n");
-  ${trace.token}        RF_nativePrint("          ");
-  ${trace.token}        for (uint n = 1; n <= obsSize; n++) {
-  ${trace.token}          RF_nativePrint("%10.4f", mortality[n]);
-  ${trace.token}        }
-  ${trace.token}        RF_nativePrint("\n");
-  ${trace.token}    }
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetEnsembleMortality() EXIT ...\n");
-  ${trace.token}  }
 }
 void getConditionalConcordanceArrays(uint     j,
                                      double  *timePtr,
@@ -374,9 +211,6 @@ void getConditionalConcordanceArrays(uint     j,
                                      double  *subsettedEnsembleDen,
                                      double  *subsettedWeight) {
   uint i;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConditionalConcordanceArrays() ENTRY ...\n");
-  ${trace.token}  }
   if (!(RF_opt & OPT_COMP_RISK)) {
     RF_nativePrint("\nRF-SRC:  *** ERROR *** ");
     RF_nativePrint("\nRF-SRC:  Attempt to update event type subsets in a non-CR analysis.");
@@ -394,9 +228,6 @@ void getConditionalConcordanceArrays(uint     j,
       subsettedWeight[i] = weight[eIndividual[j][i]];
     }
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConditionalConcordanceArrays() EXIT ...\n");
-  ${trace.token}  }
 }
 double getConcordanceIndex(int     fastAction,
                            uint    size, 
@@ -410,9 +241,6 @@ double getConcordanceIndex(int     fastAction,
   double *genericWeight;
   double  result;
   uint    i, j;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndex() ENTRY ...\n");
-  ${trace.token}  }
   getConcordanceIndexActual = NULL;  
   if (fastAction == 1) {
     fastFlag = TRUE;
@@ -473,9 +301,6 @@ double getConcordanceIndex(int     fastAction,
   else {
     free_dvector(genericWeight, 1, size);
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndex() EXIT ...\n");
-  ${trace.token}  }
   return result;
 }
 double getConcordanceIndexOriginal(uint    size,
@@ -487,9 +312,6 @@ double getConcordanceIndexOriginal(uint    size,
   double concordancePairCount;
   double concordanceCount;
   double result;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndexOriginal() ENTRY ...\n");
-  ${trace.token}  }
   concordancePairCount = concordanceCount = 0;
   for (i=1; i < size; i++) {
     for (j=i+1; j <= size; j++) {
@@ -532,24 +354,6 @@ double getConcordanceIndexOriginal(uint    size,
   else {
     result = 1.0 - (concordanceCount / concordancePairCount);
   }
-  ${trace.token}  if (getTraceFlag(0) & ENSB_HGH_TRACE) {
-  ${trace.token}    
-  ${trace.token}    RF_nativePrint("\nPredicted Outcome used in Concordance Index Calculations:  ");
-  ${trace.token}    RF_nativePrint("\n        count     OOBcount       Status         Time    Mortality");
-  ${trace.token}    for (i=1; i <= size; i++) {
-  ${trace.token}      RF_nativePrint("\n %12d %12d %12d %12.4f, %12.4f", i, (uint) denom[i], (uint) statusPtr[i], timePtr[i], predictedOutcome[i]);
-  ${trace.token}    }
-  ${trace.token}    RF_nativePrint("\n");
-  ${trace.token}    
-  ${trace.token}    RF_nativePrint("\nConcordance pair and error update complete:");
-  ${trace.token}    RF_nativePrint("\nCount of concordance pairs:         %20.0f", concordancePairCount);
-  ${trace.token}    RF_nativePrint("\nCount of pairs with worse outcome:  %20.0f", concordanceCount);
-  ${trace.token}    RF_nativePrint("\nResult:                             %20.4f", result);
-  ${trace.token}    RF_nativePrint("\n");
-  ${trace.token}  }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndexOriginal() EXIT() ...\n");
-  ${trace.token}  }
   return result;
 }
 double getConcordanceIndexUno(uint    size,
@@ -562,9 +366,6 @@ double getConcordanceIndexUno(uint    size,
   double concordanceWeight;
   double w;
   double result;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndexUno() ENTRY ...\n");
-  ${trace.token}  }
   concordancePairWeight = concordanceWeight = 0.0;
   for (i = 1; i < size; i++) {
     for (j = i + 1; j <= size; j++) {
@@ -630,9 +431,6 @@ double getConcordanceIndexUno(uint    size,
   else {
     result = 1.0 - (concordanceWeight / concordancePairWeight);
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndexUno() EXIT ...\n");
-  ${trace.token}  }
   return result;
 }
 static inline void rfsrc_bitAdd(uint *bit, uint m, uint idx, uint delta) {
@@ -670,9 +468,6 @@ double getConcordanceIndexFenwick(uint    size,
                                   double *denom) {
   uint i;
   double result;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndexFenwick() ENTRY ...\n");
-  ${trace.token}  }
   uint n = 0;
   for (i = 1; i <= size; i++) {
     if (denom[i] != 0) {
@@ -802,9 +597,6 @@ double getConcordanceIndexFenwick(uint    size,
   else {
     result = 1.0 - (concordanceCount / concordancePairCount);
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndexFenwick() EXIT ...\n");
-  ${trace.token}  }
   return result;
 }
 double getConcordanceIndexUnoFenwick(uint    size,
@@ -814,9 +606,6 @@ double getConcordanceIndexUnoFenwick(uint    size,
                                      double *weight) {
   uint i;
   double result;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndexUnoFenwick() ENTRY ...\n");
-  ${trace.token}  }
   uint n = 0;
   for (i = 1; i <= size; i++) {
     if (weight[i] != 0.0) {
@@ -967,9 +756,6 @@ double getConcordanceIndexUnoFenwick(uint    size,
   else {
     result = 1.0 - (concordanceWeight / concordancePairWeight);
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetConcordanceIndexFenwick() EXIT ...\n");
-  ${trace.token}  }
   return result;
 }
 double getCRConcordanceIndexIPCW_Fenwick(uint    size,
@@ -981,9 +767,6 @@ double getCRConcordanceIndexIPCW_Fenwick(uint    size,
                                          uint    eventType) {
   uint i;
   double result;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetCRConcordanceIndexIPCW_Fenwick() ENTRY() ...\n");
-  ${trace.token}  }
   uint n = 0;
   for (i = 1; i <= size; i++) {
     if ((denom[i] != 0.0) && (weight[i] != 0.0) &&
@@ -1178,9 +961,6 @@ double getCRConcordanceIndexIPCW_Fenwick(uint    size,
   else {
     result = 1.0 - (numerW / denomW);
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetCRConcordanceIndexIPCW_Fenwick() EXIT() ...\n");
-  ${trace.token}  }
   return result;
 }
 void getCRPerformance (char     mode,
@@ -1198,9 +978,6 @@ void getCRPerformance (char     mode,
   double *subsettedWeight;
   double concordanceIndex;
   uint j;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetCRPerformance() ENTRY() ...\n");
-  ${trace.token}  }
   if (!(RF_opt & OPT_COMP_RISK)) {
     RF_nativePrint("\nRF-SRC:  *** ERROR *** ");
     RF_nativePrint("\nRF-SRC:  Attempt at conditional performance updates in a non-CR analysis.");
@@ -1260,9 +1037,6 @@ void getCRPerformance (char     mode,
       subsettedWeight = NULL;
     }
     for (j = 1; j <= RF_eventTypeSize; j++) {
-      ${trace.token}    if (getTraceFlag(0) & SUMM_MED_TRACE) {
-      ${trace.token}      RF_nativePrint("\nConcordance Calculation for Event:  %10d", j);
-      ${trace.token}    }
       getConditionalConcordanceArrays(j,
                                       responsePtr[RF_timeIndex],
                                       responsePtr[RF_statusIndex],
@@ -1305,9 +1079,6 @@ void getCRPerformance (char     mode,
       free_dvector(subsettedWeight, 1, obsSize);
     }
   }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetCRPerformance() EXIT() ...\n");
-  ${trace.token}  }
 }
 uint getTimeInterestIndex(double *array, uint length, double value) {
   uint low, high, mid, result;

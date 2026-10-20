@@ -1,5 +1,16 @@
-# randomForestSRC 3.9.1
+# randomForestSRC 3.9.3
 
+## Random seed compatibility
+
+* New forests use a wider seed-head generator beginning with version
+  greater than 3.9.0.  Growing a forest with the same seed now
+  produces a different forest.  Restore, prediction, and partial
+  dependence select the legacy generator for older forests and the
+  wide generator for newer forests.  The per-tree random generator and
+  stored bootstrap/VIMP seeds are unchanged.
+
+# randomForestSRC 3.9.0
+  
 ## Forest storage and imputation
 
 * Forests are much smaller when saved with `save()` or `saveRDS()`. The

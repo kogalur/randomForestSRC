@@ -1,5 +1,6 @@
 #ifndef RF_RANDOM_H
 #define RF_RANDOM_H
+#define RF_RNG_WIDE_VERSION 3090001.0
 void randomStack(uint bSize, uint bnpSize);
 void randomUnstack(uint bSize, uint bnpSize);
 void randomSetChainParallel(uint b, int value);
@@ -28,5 +29,7 @@ float randomUChainSerialVimp(uint b);
 float randomChainSerialVimp(uint p);
 float ran1_generic(int *iy, int *iv, int *idum);
 void lcgenerator(unsigned int *seed, unsigned char reset);
+void lcgeneratorWide(unsigned int *seed, unsigned char reset);
+void randomSeedHead(unsigned int *seed, unsigned char reset, unsigned char useWide);
 float ran1_original(int *idum);
 #endif

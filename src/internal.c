@@ -178,6 +178,7 @@ uint     *RF_xMarginal;
 uint     *RF_xMarginalFlag;
 double   *RF_xWeight;
 uint      RF_ptnCount;
+double    RF_objectVersion;
 int       RF_numThreads;
 uint      RF_observationSize;
 uint      RF_ySize;

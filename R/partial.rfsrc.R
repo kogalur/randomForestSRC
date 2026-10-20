@@ -293,6 +293,7 @@ partial.rfsrc <- function(
                                        as.double(0)), ## Quantiles disabled.
                                   as.integer(get.tree),
                                   NULL,
+                                  as.double(get.version.code(object$version)),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})

@@ -100,5 +100,6 @@ SEXP rfsrcPredict(SEXP traceFlag,
                   SEXP quantileInfo,
                   SEXP getTree,
                   SEXP unoWeight,
+                  SEXP objectVersion,
                   SEXP numThreads);
 #endif

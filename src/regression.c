@@ -21,9 +21,6 @@ void getMeanResponse(uint       treeID,
   uint *membershipIndex;
   uint  membershipSize;
   uint i, j;
-  ${trace.token}  if (getTraceFlag(treeID) & ENSB_LOW_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetMeanResponse() ENTRY ...\n");
-  ${trace.token}  }
   membershipIndex = repMembrIndx;
   membershipSize = parent -> membrCount = repMembrSize;
   if (RF_optHigh & OPT_MEMB_INCG) {
@@ -91,23 +88,6 @@ void getMeanResponse(uint       treeID,
       (parent -> meanResponse)[j] = RF_TN_REGR_ptr[treeID][parent -> nodeID][j];
     }
   }
-  ${trace.token}  if (getTraceFlag(treeID) & ENSB_LOW_TRACE) {
-  ${trace.token}    if (getTraceFlag(treeID) & !TURN_OFF_TRACE) {
-  ${trace.token}    RF_nativePrint("\nMean response vector for (tree, leaf):  (%10d, %10d) \n", treeID, parent -> nodeID);
-  ${trace.token}    RF_nativePrint("Resp ->  ");
-  ${trace.token}    for (j=1; j <= RF_rNonFactorCount; j++) {
-  ${trace.token}      RF_nativePrint("%20d", RF_rNonFactorIndex[j]);
-  ${trace.token}    }
-  ${trace.token}    RF_nativePrint("\n");
-  ${trace.token}    RF_nativePrint("         ");
-  ${trace.token}    for (j=1; j <= RF_rNonFactorCount; j++) {
-  ${trace.token}      RF_nativePrint("%20.4f", (parent -> meanResponse)[j]);
-  ${trace.token}    }
-  ${trace.token}  }
-  ${trace.token}  }
-  ${trace.token}  if (getTraceFlag(treeID) & ENSB_LOW_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetMeanResponse() EXIT ...\n");
-  ${trace.token}  }
 }
 void updateEnsembleMean(char     mode,
                         uint     treeID,
@@ -123,9 +103,6 @@ void updateEnsembleMean(char     mode,
 #ifdef _OPENMP
   omp_lock_t   *lockDENptr;
 #endif
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\nupdateEnsembleMean() ENTRY ...\n");
-  ${trace.token}  }
   ensembleRGRnum = NULL;  
   ensembleDen    = NULL;  
   oobFlag = fullFlag = FALSE;
@@ -188,9 +165,6 @@ void updateEnsembleMean(char     mode,
         if ((parent -> membrCount) > 0) {
         }
         else {
-          ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-          ${trace.token}    RF_nativePrint("\nREGR OUTC_TYPE case no predicted value:  %10d \n", ii);
-          ${trace.token}  }
           selectionFlag = FALSE;
         }
       }
@@ -236,62 +210,6 @@ void updateEnsembleMean(char     mode,
 #endif
       }
     }  
-    ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
-    ${trace.token}    uint obsSize = (mode == RF_PRED) ? RF_fobservationSize : RF_observationSize;
-    ${trace.token}    if (oobFlag == TRUE) {
-    ${trace.token}      RF_nativePrint("\nOOB Ensemble calculations follow: \n");
-    ${trace.token}    }
-    ${trace.token}    else {
-    ${trace.token}      if (fullFlag == TRUE) {
-    ${trace.token}        RF_nativePrint("\nFULL Ensemble calculations follow: \n");
-    ${trace.token}      }
-    ${trace.token}    }
-    ${trace.token}    RF_nativePrint("\nREGR Numerator calculation: \n");
-    ${trace.token}    RF_nativePrint("                    ");
-    ${trace.token}    for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}      RF_nativePrint("%10d", i);
-    ${trace.token}    }
-    ${trace.token}    for (uint j = 1; j <= RF_rTargetNonFactorCount; j++) {
-    ${trace.token}      RF_nativePrint("\n");
-    ${trace.token}      RF_nativePrint("%20d", j);
-    ${trace.token}      for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}        RF_nativePrint("%10.4f", ensembleRGRnum[j][i]);
-    ${trace.token}      }
-    ${trace.token}      RF_nativePrint("\n");
-    ${trace.token}    }
-    ${trace.token}    RF_nativePrint("\nREGR Denominator calculation: \n");
-    ${trace.token}    RF_nativePrint("                    ");
-    ${trace.token}    for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}      RF_nativePrint("%10d", i);
-    ${trace.token}    }
-    ${trace.token}    RF_nativePrint("\n                    ");
-    ${trace.token}    for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}      RF_nativePrint("%10d", (uint) ensembleDen[i]);
-    ${trace.token}    }
-    ${trace.token}    RF_nativePrint("\n");
-    ${trace.token}    if (outcomeFlag == TRUE) {
-    ${trace.token}      if (RF_optHigh & OPT_CSE) {
-    ${trace.token}        RF_nativePrint("\nREGR CSE Denominator calculation: \n");
-    ${trace.token}        RF_nativePrint("                    ");
-    ${trace.token}        for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}          RF_nativePrint("%10d", i);
-    ${trace.token}        }
-    ${trace.token}        RF_nativePrint("\n                    ");
-    ${trace.token}        for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}          RF_nativePrint("%10d", RF_cseDENptr[i]);
-    ${trace.token}        }
-    ${trace.token}        RF_nativePrint("\nREGR CSE Numerator calculation: \n");
-    ${trace.token}        for (uint j = 1; j <= RF_rTargetNonFactorCount; j++) {
-    ${trace.token}          RF_nativePrint("\n");
-    ${trace.token}          RF_nativePrint("%20d", j);
-    ${trace.token}          for (uint i = 1; i <= obsSize; i++) {
-    ${trace.token}            RF_nativePrint("%10.4f", RF_cseNumRGRptr[j][i]);
-    ${trace.token}          }
-    ${trace.token}        }
-    ${trace.token}        RF_nativePrint("\n");
-    ${trace.token}      }
-    ${trace.token}    }
-    ${trace.token}  }
     if (outcomeFlag == TRUE) {
       outcomeFlag = FALSE;
     }
@@ -302,9 +220,6 @@ void updateEnsembleMean(char     mode,
         fullFlag = FALSE;
     }
   }  
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\nupdateEnsembleMean() EXIT ...\n");
-  ${trace.token}  }
 }
 double getMeanSquareError(uint    size,
                           double *responsePtr,
@@ -313,9 +228,6 @@ double getMeanSquareError(uint    size,
   uint i;
   uint cumDenomCount;
   double result;
-  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetMeanSquareError() ENTRY ...\n");
-  ${trace.token}  }
   cumDenomCount = 0;
   result = 0.0;
   for (i = 1; i <= size; i++) {
@@ -330,23 +242,6 @@ double getMeanSquareError(uint    size,
   else {
     result = result / (double) cumDenomCount;
   }
-  ${trace.token}  if (getTraceFlag(0) & ENSB_LOW_TRACE) {
-  ${trace.token}    
-  ${trace.token}    RF_nativePrint("\nPredicted Outcome used in Regression Index Calculations:  ");
-  ${trace.token}    RF_nativePrint("\n        index     OOBcount             Response              Outcome");
-  ${trace.token}    for (i=1; i <= size; i++) {
-  ${trace.token}      RF_nativePrint("\n %12d %12.0f %20.4f %20.4f", i, denomCount[i], responsePtr[i], predictedOutcome[i]);
-  ${trace.token}    }
-  ${trace.token}    RF_nativePrint("\n");
-  ${trace.token}    
-  ${trace.token}    RF_nativePrint("\nRegression and error update complete:  ");
-  ${trace.token}    RF_nativePrint("\nCount of cumulative OOB count:         %20d", cumDenomCount);
-  ${trace.token}    RF_nativePrint("\nResult:                                %20.4f", result);
-  ${trace.token}    RF_nativePrint("\n");
-  ${trace.token}  }
-  ${trace.token}  if (getTraceFlag(0) & SUMM_LOW_TRACE) {
-  ${trace.token}    RF_nativePrint("\ngetMeanSquareError() EXIT() ...\n");
-  ${trace.token}  }
   return result;
 }
 char getVarianceClassic(uint    repMembrSize,
@@ -393,11 +288,6 @@ char getVarianceClassic(uint    repMembrSize,
   }    
   if (mean != NULL) *mean = meanResult;
   if (variance != NULL) *variance = varResult;
-  ${trace.token}    if (getTraceFlag(0) & SPLT_LOW_TRACE) {
-  ${trace.token}      RF_nativePrint("\n  Node Specific Rep Cnt:    %20d",    genSize);
-  ${trace.token}      RF_nativePrint("\n  Node Specific Mean:       %20.2f", meanResult);
-  ${trace.token}      RF_nativePrint("\n  Node Specific Variance:   %20.2f", varResult);
-  ${trace.token}    }
   return(result);
 }
 char getVarianceClassicNoMiss(uint    repMembrSize,
@@ -434,11 +324,6 @@ char getVarianceClassicNoMiss(uint    repMembrSize,
   }    
   if (mean != NULL) *mean = meanResult;
   if (variance != NULL) *variance = varResult;
-  ${trace.token}    if (getTraceFlag(0) & SPLT_LOW_TRACE) {
-  ${trace.token}      RF_nativePrint("\n  Node Specific Rep Cnt:    %20d",    repMembrSize);
-  ${trace.token}      RF_nativePrint("\n  Node Specific Mean:       %20.2f", meanResult);
-  ${trace.token}      RF_nativePrint("\n  Node Specific Variance:   %20.2f", varResult);
-  ${trace.token}    }
   return(result);
 }
 char getVarianceDoublePass(uint    repMembrSize,
@@ -492,12 +377,6 @@ char getVarianceDoublePass(uint    repMembrSize,
     result = FALSE;
   }
   if (variance != NULL)  *variance = varResult;
-  ${trace.token}    if (getTraceFlag(0) & SPLT_LOW_TRACE) {
-  ${trace.token}      RF_nativePrint("\n  Node Specific Rep Cnt:    %20d", genSize);
-  ${trace.token}      RF_nativePrint("\n  Node Specific Den Cnt:    %20d", denom);
-  ${trace.token}      RF_nativePrint("\n  Node Specific Mean:       %20.2f", meanResult);
-  ${trace.token}      RF_nativePrint("\n  Node Specific Variance:   %20.2f", varResult);
-  ${trace.token}    }
   return(result);
 }
 char getVarianceSinglePass(uint    repMembrSize,
@@ -532,9 +411,6 @@ void restoreMeanResponse(uint treeID) {
   Terminal *parent;
   uint leaf;
   uint j;
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrestoreMeanResponse() ENTRY ...\n");
-  ${trace.token}  }
   leafLinkedPtr = RF_leafLinkedObjHead[treeID] -> fwdLink;
   while (leafLinkedPtr != NULL) {
     parent = leafLinkedPtr -> termPtr;
@@ -551,22 +427,7 @@ void restoreMeanResponse(uint treeID) {
       RF_nativeExit();
     }
     leafLinkedPtr = leafLinkedPtr -> fwdLink;
-    ${trace.token}  if (getTraceFlag(treeID) & SUMM_HGH_TRACE) {
-    ${trace.token}    RF_nativePrint("\nMean response vector for (tree, leaf):  (%10d, %10d) \n", treeID, leaf);
-    ${trace.token}    RF_nativePrint("Resp ->  ");
-    ${trace.token}    for (j=1; j <= RF_rNonFactorCount; j++) {
-    ${trace.token}      RF_nativePrint("%20d", RF_rNonFactorIndex[j]);
-    ${trace.token}    }
-    ${trace.token}    RF_nativePrint("\n");
-    ${trace.token}    RF_nativePrint("         ");
-    ${trace.token}    for (j=1; j <= RF_rNonFactorCount; j++) {
-    ${trace.token}      RF_nativePrint("%20.4f", (parent -> meanResponse)[j]);
-    ${trace.token}    }
-    ${trace.token}  }
   }
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\nrestoreMeanResponse() EXIT ...\n");
-  ${trace.token}  }
 }
 void updateQuantileStream(char     mode,
                           uint     treeID) {
@@ -582,9 +443,6 @@ void updateQuantileStream(char     mode,
 #ifdef _OPENMP
   omp_lock_t   *lockQNTptr;
 #endif
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\nupdateQuantileStream() ENTRY ...\n");
-  ${trace.token}  }
   oobFlag = fullFlag = FALSE;
   switch (mode) {
   case RF_PRED:
@@ -648,9 +506,6 @@ void updateQuantileStream(char     mode,
         if ((parent -> membrCount) > 0) {
         }
         else {
-          ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-          ${trace.token}    RF_nativePrint("\nREGR OUTC_TYPE case no predicted value:  %10d \n", ii);
-          ${trace.token}  }
           selectionFlag = FALSE;
         }
       }
@@ -658,21 +513,8 @@ void updateQuantileStream(char     mode,
 #ifdef _OPENMP
         omp_set_lock(&(lockQNTptr[ii]));
 #endif
-          ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
-          ${trace.token}    if (oobFlag == TRUE) {
-          ${trace.token}      RF_nativePrint("\nOOB Ensemble quantile update: \n");
-          ${trace.token}    }
-          ${trace.token}    else {
-          ${trace.token}      if (fullFlag == TRUE) {
-          ${trace.token}        RF_nativePrint("\nFULL Ensemble quantile update: \n");
-          ${trace.token}      }
-          ${trace.token}    }
-          ${trace.token}  }
         for (j = 1; j <= RF_rTargetNonFactorCount; j++) {
           for (k = 1; k <= parent -> membrCount; k++) { 
-          ${trace.token}  if (getTraceFlag(treeID) & ENSB_HGH_TRACE) {
-          ${trace.token}    RF_nativePrint("\n  indv, targ resp, membrIndx, membr) = (%10d, %10d, %10d, %10d) \n", i, j, k, parent -> membrStream[k]);
-          ${trace.token}  }
             insertQuantileObj(&quantileStreamSize[j][ii],
                               &quantileHead[j][ii],
                               &quantileTail[j][ii],
@@ -693,7 +535,4 @@ void updateQuantileStream(char     mode,
       fullFlag = FALSE;
     }
   }  
-  ${trace.token}  if (getTraceFlag(treeID) & SUMM_MED_TRACE) {
-  ${trace.token}    RF_nativePrint("\nupdateQuantileStream() EXIT ...\n");
-  ${trace.token}  }
 }
