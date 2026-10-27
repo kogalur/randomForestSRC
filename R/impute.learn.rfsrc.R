@@ -87,7 +87,7 @@ impute.learn.rfsrc <- function(formula, data,
                "save.on.fit", "save.ood", "verbose", "share.xvar")) {
     .impute.flag(get(nm), nm)
   }
-  .impute.path.part(learner.root, "learner.root", nested = TRUE)
+  .impute.check.learner.root(learner.root)
   .impute.path.part(learner.prefix, "learner.prefix")
   if (isTRUE(share.xvar)) {
     if (isTRUE(anonymous)) {
@@ -265,8 +265,9 @@ impute.learn.rfsrc <- function(formula, data,
       stop("The supervised forest returned predictor names that do not match the retained training predictors.",
            call. = FALSE)
     }
-    ## Start with supervised OOB predictions on the rows used to grow the
-    ## auxiliary forest, preserving their positions in the retained raw table.
+    ## Use supervised OOB predictions where available on the grow rows.
+    ## An absent OOB component falls back to ordinary predictions for these
+    ## auxiliary predictors only; final-target OOD references remain OOB.
     aux.used <- .align.supervised.aux(
       .supervised.materialize.aux(
         supervised.fit,
@@ -277,7 +278,7 @@ impute.learn.rfsrc <- function(formula, data,
       )
     )
     if (nrow(aux.used) != sum(response.rows)) {
-      stop("The supervised OOB prediction block produced ", nrow(aux.used),
+      stop("The supervised training prediction block produced ", nrow(aux.used),
            " row(s), but ", sum(response.rows),
            " training row(s) with observed supervised response were expected.",
            call. = FALSE)
@@ -430,6 +431,7 @@ impute.learn.rfsrc <- function(formula, data,
   models <- setNames(vector("list", length(targets)), targets)
   learners <- setNames(vector("list", length(targets)), targets)
   ood.delta <- if (isTRUE(save.ood)) setNames(vector("list", length(targets)), targets) else NULL
+  ood.metric <- if (isTRUE(save.ood)) setNames(vector("list", length(targets)), targets) else NULL
   ood.issues <- if (isTRUE(save.ood)) setNames(vector("list", length(targets)), targets) else NULL
   record.ood.issue <- function(target, message) {
     if (!isTRUE(save.ood)) return(invisible(NULL))
@@ -533,8 +535,10 @@ impute.learn.rfsrc <- function(formula, data,
         predicted = grow$predicted.oob,
         class = grow$class.oob
       )
-      delta.oob <- tryCatch(
-        .compute.ood.delta(yy, pred.oob, schema[[yname]]),
+      delta.oob <- tryCatch({
+        ood.metric[[yname]] <- .select.ood.metric(pred.oob, schema[[yname]])
+        .compute.ood.delta(yy, pred.oob, schema[[yname]], ood.metric[[yname]])
+      },
         error = function(e) e
       )
       if (inherits(delta.oob, "error")) {
@@ -603,6 +607,7 @@ impute.learn.rfsrc <- function(formula, data,
         next
       }
       target.reference[[yname]] <- .make.ood.reference(delta.y)
+      target.reference[[yname]]$metric <- ood.metric[[yname]]
       valid.ood.targets <- c(valid.ood.targets, yname)
     }
     if (length(valid.ood.targets) > 0L) {
@@ -728,10 +733,10 @@ impute.learn.rfsrc <- function(formula, data,
 }
 impute.learn <- impute.learn.rfsrc
 ##------------------------------------------------------------------
-## Save a bank from memory or from an attached on-disk source
+## Save a bank from memory or from an existing imputer directory
 ##------------------------------------------------------------------
-## This method may reload lazy learners before writing them. The source and
-## destination paths therefore both matter when deciding whether to wipe.
+## This method may reload lazy learners from the existing imputer directory
+## before writing them, so its path must remain available throughout saving.
 save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE,
                                     compress = 50, share.xvar = NULL) {
   .fast.save.check.compress(compress)
@@ -746,12 +751,12 @@ save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE,
   if (is.null(share.xvar)) share.xvar <- !is.null(object$manifest$shared.xvar)
   .impute.flag(share.xvar, "share.xvar")
   if (isTRUE(share.xvar) && is.null(object$manifest$shared.xvar)) {
-    stop("Shared saving requires the training source and row mappings captured by ",
+    stop("Shared saving requires the training predictors and row mappings captured by ",
          "impute.learn(..., share.xvar = TRUE). Existing independent banks remain loadable.",
          call. = FALSE)
   }
-  source.context <- .impute.shared.object.context(object)
-  if (isTRUE(share.xvar)) .impute.shared.data(source.context)
+  existing.context <- .impute.shared.object.context(object)
+  if (isTRUE(share.xvar)) .impute.shared.data(existing.context)
   destination.manifest <- object$manifest
   if (!isTRUE(share.xvar) && !is.null(destination.manifest$shared.xvar)) {
     destination.manifest$shared.xvar <- NULL
@@ -760,8 +765,8 @@ save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE,
       destination.manifest$learners[[target]]$xvar.ref <- NULL
     }
   }
-  source.path <- if (is.null(object$path)) NULL else .impute.canonical.path(object$path)
-  transaction <- .impute.begin.save(path, wipe = wipe, source.path = source.path,
+  existing.path <- if (is.null(object$path)) NULL else .impute.canonical.path(object$path)
+  transaction <- .impute.begin.save(path, wipe = wipe, existing.path = existing.path,
                                     targets = object$manifest$targets)
   on.exit(try(.safe.unlink.dir(transaction$stage), silent = TRUE), add = TRUE)
   dest.root <- file.path(transaction$stage, learner.root)
@@ -770,19 +775,19 @@ save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE,
   destination.context <- NULL
   if (isTRUE(share.xvar)) {
     destination.context <- .impute.shared.context(
-      source.context$spec, data = .impute.shared.data(source.context))
+      existing.context$spec, data = .impute.shared.data(existing.context))
     .impute.shared.write(destination.context, transaction$stage, compress)
     destination.manifest$shared.xvar <- destination.context$spec
   }
-  source.root <- if (is.null(source.path)) NULL else file.path(source.path, learner.root)
+  existing.root <- if (is.null(existing.path)) NULL else file.path(existing.path, learner.root)
   if (.is.supervised.manifest(object$manifest)) {
     mdl <- object$supervised.model
     if (is.null(mdl)) {
-      if (is.null(source.root)) {
-        stop("The supervised forest is unavailable in memory and has no saved source.",
+      if (is.null(existing.root)) {
+        stop("The supervised forest is unavailable in memory and has no saved imputer directory.",
              call. = FALSE)
       }
-      mdl <- .fast.load.named(object$manifest$supervised$model.name, source.root,
+      mdl <- .fast.load.named(object$manifest$supervised$model.name, existing.root,
                               label = "supervised forest", strict = TRUE)
     }
     .msg("Saving supervised forest...", verbose = verbose)
@@ -795,12 +800,12 @@ save.impute.learn.rfsrc <- function(object, path, wipe = TRUE, verbose = TRUE,
     if (is.null(info) || !identical(info$status, "ok")) next
     mdl <- object$models[[target]]
     if (is.null(mdl)) {
-      if (is.null(source.root)) {
-        stop("Learner for `", target, "` is unavailable in memory and has no saved source.",
+      if (is.null(existing.root)) {
+        stop("Learner for `", target, "` is unavailable in memory and has no saved imputer directory.",
              call. = FALSE)
       }
-      mdl <- .fast.load.learner(target, info, source.root, strict = TRUE,
-                                 shared.context = source.context)
+      mdl <- .fast.load.learner(target, info, existing.root, strict = TRUE,
+                                 shared.context = existing.context)
     }
     .msg("Saving learner for `", target, "`...", verbose = verbose)
     .impute.write.model(mdl, info$learner.name, dest.root,
@@ -889,7 +894,7 @@ load.impute.learn.rfsrc <- function(path, targets = NULL, lazy = TRUE, verbose =
                                                     strict = TRUE, shared.context = shared.context)
     }
     if (!is.null(shared.context)) {
-      ## Eagerly loaded shared objects remain resaveable without their source directory.
+      ## Eagerly loaded shared objects remain resaveable without the existing directory.
       object$shared.xvar.data <- .impute.shared.data(shared.context)
     }
   }
@@ -1004,6 +1009,10 @@ impute.ood.rfsrc <- function(object, newdata,
   if (length(use.targets) == 0L) {
     stop("No requested targets have a saved OOD reference.", call. = FALSE)
   }
+  target.metrics <- setNames(lapply(use.targets, function(target) {
+    .ood.reference.metric(ood.ref$target.reference[[target]],
+                          object$manifest$schema[[target]], target)
+  }), use.targets)
   weight <- .resolve.ood.weight(use.targets, weight, default = ood.ref$weight)
   completed.data <- prep$working.data
   n <- nrow(completed.data)
@@ -1066,7 +1075,8 @@ impute.ood.rfsrc <- function(object, newdata,
       pred.df <- .conform.x.to.forest(pred.df, mdl)
       pred <- predict(mdl, pred.df)
       observed <- prep$harmonized$data[[target]]
-      delta <- .compute.ood.delta(observed, pred, object$manifest$schema[[target]])
+      delta <- .compute.ood.delta(observed, pred, object$manifest$schema[[target]],
+                                  target.metrics[[target]])
       if (!is.numeric(delta) || !is.null(dim(delta)) || length(delta) != n) {
         stop("OOD discrepancy must have one value per deployment row.", call. = FALSE)
       }

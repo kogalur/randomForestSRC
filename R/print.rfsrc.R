@@ -31,6 +31,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
   }
   ## save before coercion
   family.pretty <- family.pretty(x)
+  if (!is.null(x$autoencoder)) {
+    family.pretty <- paste0(family.pretty, " (autoencoder)")
+  }
   family.org <- x$family
   yvar.dim <- if (!is.null(x$yvar)) ncol(as.data.frame(x$yvar)) else NA_integer_
   ## Keep the original quantile components before general multivariate coercion.
@@ -40,7 +43,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
   if (is.null(outcome.target) && !x$univariate) {
     ## Retain the existing mean-then-response summary.  Missing errors do
     ## not become an empty-vector mean or an apparent numerical result.
-    mv.err.rate <- as.numeric(get.mv.error(x, FALSE))
+    mv.err.rate <- as.numeric(get.mv.error(x, standardize = TRUE))
     if (length(mv.err.rate)) {
       mv.mean <- if (all(is.na(mv.err.rate))) NA_real_ else {
         mean(mv.err.rate, na.rm = TRUE)
@@ -81,7 +84,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
   crps.err <- crps.std.err <- NULL
   event.freq.txt <- NULL
   k.class <- NULL
-  brier.rand <- brier.norm.rand <- logloss.rand <- NULL
+  brier.rand <- brier.norm.rand <- logloss.rand <- pr.auc.rand <- NULL
   q.crps <- q.crps.std <- NULL
   q.pinball <- NULL
   ## ---- Classification block
@@ -120,6 +123,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
         auc.err <- perO$auc
         logloss.err <- perO$logloss
         pr.auc.err <- perO$pr.auc
+        pr.auc.rand <- perO$pr.auc.rand
         gmean.err <- perO$gmean
         ## if you want RFQ confusion, you could set conf.mat <- perO$confusion here
       }
@@ -190,6 +194,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
   }
   ## ---- Requested performance error (last row)
   err.rate <- NULL
+  err.label <- "Requested performance error"
   r.sq <- NULL
   if (!is.null(x$err.rate)) {
     er <- cbind(x$err.rate)
@@ -210,7 +215,12 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
   }
   ## Report the multivariate summary only when error components exist.
   if (is.null(outcome.target) && !x$univariate) {
-    err.rate <- if (length(mv.err.rate)) digits.pretty(mv.err.rate, 3) else NULL
+    err.label <- "Standardized performance error"
+    err.rate <- if (length(mv.err.rate)) digits.pretty(head(mv.err.rate, 8L), 3) else NULL
+    if (length(mv.err.rate) > 8L) {
+      err.rate <- paste0(err.rate, ", ...\n",
+                         "Use get.mv.error(object, standardize = TRUE) for all response errors.")
+    }
   }
   ## ensure nsplit exists
   if (is.null(x$nsplit)) x$nsplit <- 0
@@ -276,7 +286,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
       if (x$family == "surv" && !is.null(crps.std.err))
         cat("             (OOB) standardized CRPS: ", digits.pretty(crps.std.err, 8), "\n", sep = "")
       print.quantile.metrics()
-      cat("   (OOB) Requested performance error: ", err.rate, "\n\n", sep = "")
+      cat(sprintf("%36s: ", paste0("(OOB) ", err.label)), err.rate, "\n\n", sep = "")
     }
     if (x$family == "class" && !is.null(conf.mat)) {
       if (!is.null(x$predicted.oob) && any(is.na(x$predicted.oob))) {
@@ -291,7 +301,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
         cat("\nRandom-classifier baselines (uniform):\n",
             "   Brier: ", digits.pretty(brier.rand, 8),
             "   Normalized Brier: ", digits.pretty(brier.norm.rand, 8),
-            "   Log-loss: ", digits.pretty(logloss.rand, 8), "\n", sep = "")
+            "   Log-loss: ", digits.pretty(logloss.rand, 8),
+            if (!is.null(pr.auc.rand)) paste0("   PR-AUC: ", digits.pretty(pr.auc.rand, 8)),
+            "\n", sep = "")
       }
     }
   }
@@ -342,7 +354,7 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
       if (x$family == "surv" && !is.null(crps.std.err))
         cat("                     standardized CRPS: ", digits.pretty(crps.std.err, 8), "\n", sep = "")
       print.quantile.metrics()
-      cat("         Requested performance error: ", err.rate, "\n\n", sep = "")
+      cat(sprintf("%36s: ", err.label), err.rate, "\n\n", sep = "")
     }
     if (x$family == "class" && !is.null(conf.mat)) {
       if (!is.null(x$predicted.oob) && any(is.na(x$predicted.oob))) {
@@ -357,7 +369,9 @@ print.rfsrc <- function(x, outcome.target = NULL, ...,
         cat("\nRandom-classifier baselines (uniform):\n",
             "   Brier: ", digits.pretty(brier.rand, 8),
             "   Normalized Brier: ", digits.pretty(brier.norm.rand, 8),
-            "   Log-loss: ", digits.pretty(logloss.rand, 8), "\n", sep = "")
+            "   Log-loss: ", digits.pretty(logloss.rand, 8),
+            if (!is.null(pr.auc.rand)) paste0("   PR-AUC: ", digits.pretty(pr.auc.rand, 8)),
+            "\n", sep = "")
       }
     }
   }

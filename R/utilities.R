@@ -1,26 +1,15 @@
-get.version.code <- function(version) {
-  ## Integer-valued base-100 encoding, carried as a double to native code.
-  ## An optional fourth component occupies the final two digits.
+get.rng.version.code <- function(version) {
+  ## Protocol codes match RF_RNG_LEGACY and RF_RNG_WIDE in random.h.
+  ## Forests without RNG metadata use the legacy protocol.
   if (is.null(version)) {
-    return(0.0)
+    return(1L)
   }
   if (!is.character(version) || length(version) != 1L ||
-      is.na(version) ||
-      !grepl("\\A[0-9]+[.][0-9]+[.][0-9]+([.][0-9]+)?\\z", version, perl = TRUE)) {
-    stop("version must be a single 'major.minor.patch[.revision]' string")
+      !is.null(dim(version)) || is.na(version) ||
+      !(version %in% c("3.2.3", "3.10.0"))) {
+    stop("rng.version must be '3.2.3' or '3.10.0'", call. = FALSE)
   }
-  parts <- as.double(strsplit(version, ".", fixed = TRUE)[[1L]])
-  if (length(parts) == 3L) {
-    parts <- c(parts, 0.0)
-  }
-  if (any(!is.finite(parts)) || any(parts[2:4] > 99)) {
-    stop("version components must be finite; minor, patch, and revision must be in 0..99")
-  }
-  code <- parts[1] * 1000000 + parts[2] * 10000 + parts[3] * 100 + parts[4]
-  if (!is.finite(code) || code > 2^53 - 1) {
-    stop("encoded version exceeds the exact integer range of a double")
-  }
-  return(code)
+  return(match(version, c("3.2.3", "3.10.0")))
 }
 get.block.size.bits <- function (block.size, ntree) {
   ## Check for user silliness.

@@ -93,7 +93,9 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
 
 \arguments{
 
-  \item{formula}{A formula describing the model to fit. Interaction terms are not supported. If missing, unsupervised splitting is used.}
+  \item{formula}{A formula describing the model to fit. Interaction terms
+  are not supported. If omitted or \code{NULL}, unsupervised splitting is
+  used; add \code{splitrule = "auto"} to grow an autoencoder forest.}
 
   \item{data}{Data frame containing the response and predictor variables.}
 
@@ -101,13 +103,20 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
 
   \item{mtry}{Number of candidate variables randomly selected at each split. Defaults: regression uses \code{p/3}, others use \code{sqrt(p)}; rounded up.}
 
-  \item{ytry}{Number of pseudo-response variables randomly selected for unsupervised splitting. Default is 1.}
+  \item{ytry}{Number of responses sampled at each node in multivariate
+  forests; the default is all responses. For autoencoder forests, the
+  default is \code{p}, the number of retained variables; an integer from
+  \code{1} to \code{p} can be specified. For ordinary unsupervised
+  splitting, this is the number of pseudo-responses sampled for each
+  candidate predictor, with default \code{1}.}
 
   \item{nodesize}{Minimum terminal node size. Defaults: survival/competing risks (15), regression (5), classification (1), mixed/unsupervised (3).}
 
   \item{nodedepth}{Maximum tree depth. Ignored by default.}
 
-  \item{splitrule}{Splitting rule. See Details.}
+  \item{splitrule}{Splitting rule. With \code{formula} omitted or
+  \code{NULL}, \code{"auto"} regresses the variables in \code{data}
+  against themselves using an autoencoder forest. See Details.}
 
   \item{nsplit}{Number of random split points per variable. \code{0} uses all values (deterministic). Default is 10.}
 
@@ -163,7 +172,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
 
   \item{split.depth}{Return minimal depth of splits for each variable? Options: \code{FALSE}, \code{"all.trees"}, \code{"by.tree"}. See Details.}
 
-  \item{seed}{Integer seed for reproducibility (negative values only).}
+  \item{seed}{Integer seed for reproducibility (negative values only).
+    For reproducing or testing legacy behavior, see
+    \code{\link{rfsrc.RNGversion}}. Most users should use the default
+    wide generator without setting an RNG version.}
 
   \item{do.trace}{Print progress updates every \code{do.trace} seconds.}
 
@@ -181,7 +193,7 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
     \item Regression forests for continuous outcomes.
     \item Classification forests for factor outcomes.
     \item Multivariate forests for continuous, categorical, or mixed outcomes.
-    \item Unsupervised forests when no outcome is specified.
+    \item Unsupervised forests, including autoencoder forests, when no outcome is specified.
     \item Survival forests for right-censored time-to-event data.
     \item Competing risk forests for multi-event survival settings.
   }
@@ -232,7 +244,10 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
     }
 
     \item \strong{Unsupervised}
-    Splitting uses pseudo-outcomes and the composite rule. See \code{\link{sidClustering}} for advanced unsupervised analysis.
+    Ordinary unsupervised splitting uses pseudo-outcomes and the composite
+    rule. The \code{"auto"} option uses the usual multivariate splitting
+    rule on copies of the predictors as responses. See
+    \code{\link{sidClustering}} for advanced unsupervised analysis.
 
     \item \strong{Custom splitting}
     Custom rules can be defined using \code{splitCustom.c}. Up to 16 rules per family are allowed. Use \code{"custom"}, \code{"custom1"}, etc. Compilation required.
@@ -302,7 +317,35 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
   or
   \preformatted{rfsrc(Unsupervised(ytry) ~ ., data = X)}
 
-  Random subsets of \code{ytry} pseudo-responses are used for each \code{mtry} variable. No performance metrics are computed.
+  Random subsets of \code{ytry} pseudo-responses are used for each
+  candidate predictor. The default is \code{ytry = 1}. These forests do
+  not return response predictions, error rates, or VIMP.
+
+  To regress the variables against themselves, use an autoencoder forest:
+  \preformatted{rfsrc(data = X, splitrule = "auto")}
+
+  Leave \code{formula} omitted or \code{NULL}. Each variable is copied as
+  a response, while the original variables remain predictors. Continuous
+  variables, factors, and mixtures of both are supported. Entirely missing
+  variables are removed before making the copies; other missing values
+  follow \code{na.action}. By default, all retained variables are used as
+  responses for splitting (\code{ytry = p}); set a smaller \code{ytry} to
+  sample responses at each node.
+
+  Predictions reconstruct the input variables. OOB predictions, error
+  rates, and VIMP are available under the usual multivariate forest
+  options. Use \code{\link{get.mv.predicted}},
+  \code{\link{get.mv.error}}, and \code{\link{get.mv.vimp}} to extract
+  them. Each variable is also available as a predictor of its own response
+  copy, so VIMP measures a predictor's contribution to reconstruction.
+
+  Response copies are named \code{y.} followed by the original variable
+  name, with suffixes added when needed to keep names unique. The returned
+  \code{autoencoder} mapping identifies the original variables. The
+  object's \code{family} and \code{splitrule} record the underlying
+  regression, classification, or mixed forest and its resolved splitting
+  rule. For new observations, supply the original variables to
+  \code{\link{predict.rfsrc}}; response copies are created automatically.
 
   \item \emph{Survival, Competing Risks}
 
@@ -327,10 +370,15 @@ rfsrc.cart(formula, data, ntree = 1, mtry = ncol(data),
 }}
 
 \value{
-An object of class \code{(rfsrc, grow)} with the following components:
+An object with classes \code{"rfsrc"}, \code{"grow"}, and the fitted
+family. Autoencoder fits and their saved forests also have \code{"auto"}
+as the final class. The returned object has the following components:
 
 \describe{
   \item{call}{The original call to \code{rfsrc}.}
+  \item{formula}{(Autoencoder) The generated multivariate formula.}
+  \item{autoencoder}{(Autoencoder) Named character vector mapping response
+  copy names to original predictor names. Also stored in \code{forest}.}
   \item{family}{The family used in the analysis.}
   \item{n}{Sample size after applying \code{na.action}.}
   \item{ntree}{Number of trees grown.}
@@ -568,7 +616,7 @@ Values returned by the forest depend on the family:
 data(veteran, package = "randomForestSRC")
 v.obj <- rfsrc(Surv(time, status) ~ ., data = veteran, block.size = 1)
 
-## plot tree number 3
+## plot tree number 3 (see get.tree for details and more examples)
 plot(get.tree(v.obj, 3))
 
 ## print results of trained forest
@@ -628,26 +676,6 @@ print(rfsrc(Surv(days, status) ~ ., pbc, splitrule = "random",
             ntree = 25000, nodesize = 1, save.memory = TRUE))
 
 
-
-##------------------------------------------------------------
-## trees can be plotted for any family 
-## see get.tree for details and more examples
-##------------------------------------------------------------
-
-## survival where factors have many levels
-data(veteran, package = "randomForestSRC")
-vd <- veteran
-vd$celltype=factor(vd$celltype)
-vd$diagtime=factor(vd$diagtime)
-vd.obj <- rfsrc(Surv(time,status)~., vd, ntree = 100, nodesize = 5)
-plot(get.tree(vd.obj, 3))
-
-## classification
-iris.obj <- rfsrc(Species ~., data = iris)
-plot(get.tree(iris.obj, 25, class.type = "bayes"))
-plot(get.tree(iris.obj, 25, target = "setosa"))
-plot(get.tree(iris.obj, 25, target = "versicolor"))
-plot(get.tree(iris.obj, 25, target = "virginica"))
 
 ## ------------------------------------------------------------
 ## simple example of VIMP using iris classification
@@ -913,12 +941,18 @@ print(oqauc)
 print(get.imbalanced.performance(oqauc))
 
 ## ------------------------------------------------------------
-## unsupervised analysis
+## unsupervised analysis - including autoencoder example
 ## ------------------------------------------------------------
 
 ## two equivalent ways to implement unsupervised forests
 mtcars.unspv <- rfsrc(Unsupervised() ~., data = mtcars)
 mtcars2.unspv <- rfsrc(data = mtcars)
+
+## autoencoder: reconstruct each variable using the original variables
+mtcars.auto <- rfsrc(data = mtcars, splitrule = "auto", importance = TRUE)
+auto.pred <- get.mv.predicted(mtcars.auto)
+auto.vimp <- get.mv.vimp(mtcars.auto)
+print(mtcars.auto$autoencoder)
 
 
 ## illustration of sidClustering for the mtcars data

@@ -72,7 +72,7 @@
 }
 .impute.path.within <- function(path, parent) {
   ## Conservative comparisons on platforms with commonly case-insensitive
-  ## filesystems; false overlap is safer than deleting an aliased source.
+  ## filesystems; false overlap is safer than deleting an aliased imputer.
   if (.Platform$OS.type == "windows" || identical(Sys.info()[["sysname"]], "Darwin")) {
     path <- tolower(path)
     parent <- tolower(parent)
@@ -95,9 +95,18 @@
   }
   invisible(x)
 }
+.impute.check.learner.root <- function(learner.root) {
+  .impute.path.part(learner.root, "learner.root", nested = TRUE)
+  first <- strsplit(learner.root, "/", fixed = TRUE)[[1L]][1L]
+  if (tolower(first) == "manifest.rds") {
+    stop("'learner.root' cannot use the reserved 'manifest.rds' name.",
+         call. = FALSE)
+  }
+  invisible(learner.root)
+}
 .impute.check.layout <- function(manifest) {
   .impute.shared.check.manifest(manifest)
-  .impute.path.part(manifest$learner.root %||% "learners", "learner.root", nested = TRUE)
+  .impute.check.learner.root(manifest$learner.root %||% "learners")
   .impute.path.part(manifest$learner.prefix %||% "impute.learner.", "learner.prefix")
   saved.names <- character(0)
   for (target in manifest$targets) {
@@ -115,7 +124,43 @@
   }
   invisible(manifest)
 }
-.impute.save.destination <- function(path, source.path = NULL) {
+## A manifest identifies an imputer directory; unrelated files or a file
+## merely named manifest.rds are not enough to authorize its replacement.
+.impute.check.destination.contents <- function(path) {
+  if (!dir.exists(path)) return(invisible(NULL))
+  if (file.access(path, 4L) != 0L) {
+    stop("Cannot inspect the save destination: ", path, call. = FALSE)
+  }
+  entries <- list.files(path, all.files = TRUE, no.. = TRUE)
+  if (!length(entries)) return(invisible(NULL))
+  previous <- tryCatch({
+    manifest <- suppressWarnings(readRDS(file.path(path, "manifest.rds")))
+    if (!is.list(manifest) ||
+        !is.character(manifest$columns) || !length(manifest$columns) ||
+        anyNA(manifest$columns) || any(!nzchar(manifest$columns)) ||
+        anyDuplicated(manifest$columns) ||
+        !is.list(manifest$schema) ||
+        !identical(names(manifest$schema), manifest$columns) ||
+        !is.character(manifest$targets) || !length(manifest$targets) ||
+        anyNA(manifest$targets) || anyDuplicated(manifest$targets) ||
+        any(!manifest$targets %in% manifest$columns) ||
+        !is.list(manifest$learners) ||
+        any(!manifest$targets %in% names(manifest$learners)) ||
+        !is.list(manifest$predictor.map) ||
+        any(!manifest$targets %in% names(manifest$predictor.map))) {
+      stop("Invalid imputer manifest.", call. = FALSE)
+    }
+    manifest <- .normalize.impute.learn.manifest(manifest)
+    .impute.check.layout(manifest)
+    manifest
+  }, error = function(e) NULL)
+  if (is.null(previous)) {
+    stop("The save destination is nonempty and is not a recognized saved imputer: ",
+         path, ". Choose a new or empty directory.", call. = FALSE)
+  }
+  invisible(previous)
+}
+.impute.save.destination <- function(path, existing.path = NULL) {
   dest <- .impute.canonical.path(path)
   protected <- unique(c(.impute.canonical.path(getwd()),
                         .impute.canonical.path(path.expand("~"))))
@@ -127,31 +172,33 @@
   if (file.exists(dest) && !dir.exists(dest)) {
     stop("Save destination is not a directory: ", dest, call. = FALSE)
   }
-  if (!is.null(source.path)) {
-    source.path <- .impute.canonical.path(source.path)
-    same <- .impute.path.within(dest, source.path) &&
-      .impute.path.within(source.path, dest)
-    if (!same && (.impute.path.within(dest, source.path) ||
-                  .impute.path.within(source.path, dest))) {
-      stop("Source and destination imputer directories must not contain one another.",
+  if (!is.null(existing.path)) {
+    existing.path <- .impute.canonical.path(existing.path)
+    same <- .impute.path.within(dest, existing.path) &&
+      .impute.path.within(existing.path, dest)
+    if (!same && (.impute.path.within(dest, existing.path) ||
+                  .impute.path.within(existing.path, dest))) {
+      stop("The existing imputer directory and the save destination must not ",
+           "contain one another.",
            call. = FALSE)
     }
   }
+  .impute.check.destination.contents(dest)
   dest
 }
-.impute.begin.save <- function(path, wipe = TRUE, source.path = NULL,
+.impute.begin.save <- function(path, wipe = TRUE, existing.path = NULL,
                                 targets = NULL) {
   .impute.flag(wipe, "wipe")
-  dest <- .impute.save.destination(path, source.path)
-  if (!is.null(source.path)) {
-    source.path <- .impute.canonical.path(source.path)
-    same <- .impute.path.within(dest, source.path) &&
-      .impute.path.within(source.path, dest)
+  dest <- .impute.save.destination(path, existing.path)
+  if (!is.null(existing.path)) {
+    existing.path <- .impute.canonical.path(existing.path)
+    same <- .impute.path.within(dest, existing.path) &&
+      .impute.path.within(existing.path, dest)
     previous.manifest <- file.path(dest, "manifest.rds")
     if (same && file.exists(previous.manifest)) {
       previous <- readRDS(previous.manifest)
       if (!setequal(previous$targets, targets)) {
-        stop("A target-subset object cannot replace its source imputer in place. ",
+        stop("A target-subset object cannot replace the existing imputer in place. ",
              "Save the subset to a different directory.", call. = FALSE)
       }
     }
@@ -212,6 +259,7 @@
     stop("Staged manifest could not be read back.", call. = FALSE)
   }
   dest <- transaction$path
+  .impute.check.destination.contents(dest)
   backup <- NULL
   installed <- FALSE
   on.exit({
@@ -847,7 +895,9 @@
   x
 }
 ## Extract family-specific predictions into a numeric auxiliary block.
-## Training requests OOB slots; deployment requests ordinary prediction slots.
+## Training prefers OOB slots and falls back to ordinary predictions if a
+## slot is absent, as get.mv.predicted() does for multivariate responses.
+## This fallback is only for auxiliary predictors, never OOD references.
 .supervised.materialize.aux <- function(x, family, oob = FALSE,
                                         response.schema = NULL,
                                         yvar.names = NULL) {
@@ -867,7 +917,7 @@
       pred <- getter(x, oob = TRUE)
     }
     else {
-      pred <- x$predicted.oob
+      pred <- x$predicted.oob %||% x$predicted
     }
   }
   else {
@@ -955,7 +1005,7 @@
     .fast.load.forest(name, root, xvar.restore = restore),
     error = function(e) e
   )
-  ## A broken shared source invalidates the bank, not just one update.
+  ## A broken shared predictor table invalidates the bank, not just one update.
   if (inherits(out, "impute.shared.error")) stop(out)
   if (inherits(out, "error") && !is.null(xvar.ref)) {
     .impute.shared.stop("Failed to load shared ", label, ": ", conditionMessage(out))
@@ -1303,10 +1353,53 @@
   out[ok] <- abs(obs[ok] - checked$values[ok])
   out
 }
-## Use negative log probability of the observed class when probabilities are present.
-## Otherwise use misclassification or scaled ordered-level distance.
+## Choose one discrepancy rule from the training OOB output. The selected
+## rule is stored with its reference and reused for every deployment call.
+.select.ood.metric <- function(pred, target.schema) {
+  if (!isTRUE(target.schema$is.factor)) {
+    return(list(name = "absolute.error"))
+  }
+  if (!is.null(.extract.class.prob(pred, target.schema))) {
+    return(list(name = "negative.log.probability", prob.floor = 1e-12))
+  }
+  list(name = if (isTRUE(target.schema$ordered)) "rank.distance" else "misclassification")
+}
+## A legacy numeric reference has an unambiguous rule. A legacy factor
+## reference could have used probabilities or labels, so it must not be guessed.
+.ood.reference.metric <- function(ref, target.schema, target) {
+  metric <- ref$metric
+  if (is.null(metric)) {
+    if (isTRUE(target.schema$is.factor)) {
+      stop("The saved OOD reference for factor target `", target,
+           "` does not record its discrepancy rule. Refit the imputer with ",
+           "save.ood = TRUE before scoring this target.", call. = FALSE)
+    }
+    return(list(name = "absolute.error"))
+  }
+  choices <- if (isTRUE(target.schema$is.factor)) {
+    c("negative.log.probability", "misclassification", "rank.distance")
+  } else "absolute.error"
+  if (!is.list(metric) || !is.character(metric$name) ||
+      length(metric$name) != 1L || is.na(metric$name) ||
+      !(metric$name %in% choices) ||
+      (identical(metric$name, "rank.distance") && !isTRUE(target.schema$ordered))) {
+    stop("Invalid saved OOD discrepancy rule for target `", target, "`.", call. = FALSE)
+  }
+  if (identical(metric$name, "negative.log.probability") &&
+      (!is.numeric(metric$prob.floor) || length(metric$prob.floor) != 1L ||
+       !is.finite(metric$prob.floor) || metric$prob.floor <= 0 || metric$prob.floor >= 1)) {
+    stop("Invalid saved OOD probability floor for target `", target, "`.", call. = FALSE)
+  }
+  metric
+}
+## Apply the selected classification discrepancy without switching rules when
+## a prediction component is absent. Unavailable predictions remain missing.
 .ood.delta.classification <- function(observed, pred, target.schema,
-                                      prob.floor = 1e-12) {
+                                      prob.floor = 1e-12,
+                                      metric = NULL) {
+  if (is.null(metric)) metric <- .select.ood.metric(pred, target.schema)$name
+  metric <- match.arg(metric, c("negative.log.probability", "misclassification",
+                               "rank.distance"))
   if (!is.numeric(prob.floor) || length(prob.floor) != 1L ||
       !is.finite(prob.floor) || prob.floor <= 0 || prob.floor >= 1) {
     stop("'prob.floor' must satisfy 0 < prob.floor < 1.", call. = FALSE)
@@ -1314,8 +1407,9 @@
   y <- as.character(observed)
   out <- rep(NA_real_, length(y))
   missing.y <- is.na(y)
-  prob <- .extract.class.prob(pred, target.schema)
-  if (!is.null(prob)) {
+  if (identical(metric, "negative.log.probability")) {
+    prob <- .extract.class.prob(pred, target.schema)
+    if (is.null(prob)) return(out)
     if (!is.numeric(prob) || nrow(prob) != length(y) ||
         is.null(colnames(prob)) || anyNA(colnames(prob)) ||
         anyDuplicated(colnames(prob))) {
@@ -1339,7 +1433,7 @@
     return(out)
   }
   cls <- pred$class
-  if (is.null(cls) && !is.null(pred$predicted)) {
+  if (is.null(cls) && is.null(dim(pred$predicted))) {
     cls <- pred$predicted
   }
   if (is.null(cls)) return(out)
@@ -1351,7 +1445,7 @@
   if (!any(ok)) {
     return(out)
   }
-  if (isTRUE(target.schema$ordered)) {
+  if (identical(metric, "rank.distance")) {
     obs.code <- match(y[ok], target.schema$levels)
     cls.code <- match(cls[ok], target.schema$levels)
     denom <- max(1L, length(target.schema$levels) - 1L)
@@ -1363,9 +1457,12 @@
   out
 }
 ## Dispatch target discrepancy calculation using the raw target schema.
-.compute.ood.delta <- function(observed, pred, target.schema) {
+.compute.ood.delta <- function(observed, pred, target.schema, metric = NULL) {
+  if (is.null(metric)) metric <- .select.ood.metric(pred, target.schema)
   if (isTRUE(target.schema$is.factor)) {
-    .ood.delta.classification(observed, pred, target.schema = target.schema)
+    .ood.delta.classification(observed, pred, target.schema = target.schema,
+                              prob.floor = metric$prob.floor %||% 1e-12,
+                              metric = metric$name)
   }
   else {
     .ood.delta.regression(observed, pred, target.schema = target.schema)
@@ -2357,8 +2454,8 @@
   }
   file
 }
-## Laziness applies to both model payloads and the shared source. Even with
-## cache.learners='none', one operation reuses its shared source after first use.
+## Laziness applies to both model payloads and the shared predictor table.
+## Even with cache.learners='none', one operation reads that table only once.
 .impute.shared.data <- function(ctx) {
   if (is.null(ctx)) .impute.shared.stop("Shared predictor context is unavailable.")
   if (!is.null(ctx$data)) return(ctx$data)
@@ -2538,7 +2635,7 @@
   .impute.shared.check.ref(ref, ctx$spec)
   if (!identical(marker$source.md5, ctx$spec$md5) ||
       !identical(marker$reference.md5, .impute.shared.ref.hash(ref))) {
-    .impute.shared.stop("Shared learner does not match its source or reconstruction mapping.")
+    .impute.shared.stop("Shared learner does not match its shared predictors or reconstruction mapping.")
   }
   data <- .impute.shared.data(ctx)
   x <- .impute.shared.reconstruct(data, ref, ctx$spec)

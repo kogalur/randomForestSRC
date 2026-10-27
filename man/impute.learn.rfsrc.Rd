@@ -148,7 +148,7 @@ impute.ood.rfsrc(object, newdata,
     in \code{manifest$train.imputation}.}
 
   \item{eps}{Finite nonnegative convergence threshold. In \code{impute.learn} this
-    controls the initial training-data imputation. In
+    controls the initial \code{missForest} imputation. In
     \code{predict.impute.learn} and \code{impute.ood} it controls early
     stopping for the prediction-time sweep.}
 
@@ -238,7 +238,7 @@ impute.ood.rfsrc(object, newdata,
     learner root. \code{learner.root} must be a relative directory path
     within the imputer directory. \code{learner.prefix} must be a single
     file-name component. Absolute paths and parent-directory components
-    are not allowed.}
+    are not allowed. The top-level name \file{manifest.rds} is reserved.}
 
   \item{out.dir}{Optional output directory. If supplied and
     \code{save.on.fit = TRUE}, the manifest and the saved full-sweep
@@ -247,10 +247,10 @@ impute.ood.rfsrc(object, newdata,
     in FST format. If \code{supervised.formula} is supplied, the
     internal supervised forest is also saved there.}
 
-  \item{wipe}{If \code{TRUE}, replaces an existing output directory
+  \item{wipe}{If \code{TRUE}, replaces an existing saved-imputer directory
     after the new imputer has been written and verified. If \code{FALSE},
-    unrelated existing files are retained. Saving uses a temporary
-    bundle and requires additional disk space.}
+    other files already inside that directory are retained. Saving uses
+    a temporary bundle and requires additional disk space.}
 
   \item{keep.models}{If \code{TRUE}, keeps the fitted full-sweep
     learners in memory in the returned object. At least one storage mode
@@ -299,14 +299,13 @@ impute.ood.rfsrc(object, newdata,
   \item{object}{An object returned by \code{impute.learn} or
     \code{load.impute.learn}.}
 
-  \item{path}{Directory containing a saved imputer. Use a dedicated
-    directory rather than a filesystem root, home directory, working
-    directory, or an ancestor of these. A complete bank can be saved
-    back to its source path. Otherwise, source and destination directories
-    must not contain one another. An object loaded with a target subset
-    must be saved to a different directory. Save and load operations
-    require the \pkg{fst} package. Use \code{load.impute.learn} for a
-    complete imputer, including its shared predictors when present.}
+  \item{path}{For \code{save.impute.learn}, the destination directory.
+    For \code{load.impute.learn}, the directory containing the saved
+    imputer. Relative paths are resolved from the current working
+    directory. Saving restrictions are described in Details; they do
+    not apply to loading. Both operations require the \pkg{fst}
+    package. Use \code{load.impute.learn} to load the complete imputer,
+    including its shared predictors when present.}
 
   \item{targets}{Optional subset of target variables to load, update,
     or score. Unknown names are ignored with a warning. For
@@ -448,9 +447,9 @@ impute.ood.rfsrc(object, newdata,
         targets are updated one at a time. Other positive settings use
         the multivariate \code{missForest} generalization.
 
-        If \code{mf.q} is omitted, on-the-fly imputation is used when
-        \code{formula} is specified; otherwise default unsupervised
-        imputation is used. Complete training data with
+        If \code{mf.q} is omitted, on-the-fly imputation is used. It is
+        supervised when an initial-imputation formula is used, and
+        unsupervised otherwise. Complete training data with
         \code{target.mode = "all"} skip this stage.
 
       \item \strong{Fit the saved learners.} A full forest sweep is
@@ -489,6 +488,12 @@ impute.ood.rfsrc(object, newdata,
     saved target's predictor set. \code{deployment.xvars} restricts
     only the raw predictors; users do not need to supply auxiliary
     columns in new data.
+
+    Ordinary forest predictions fill unavailable auxiliary predictions,
+    including when the supervised forest has no OOB predictions, as
+    with \code{supervised.args = list(bootstrap = "none")}.
+    This fallback applies only to auxiliary predictors. OOD reference
+    discrepancies always use the final target learners' OOB predictions.
   }
 
   \subsection{Saving and loading}{
@@ -497,7 +502,21 @@ impute.ood.rfsrc(object, newdata,
     same serializers as \code{fast.save} and \code{fast.load}, so saving
     and loading require the \pkg{fst} package. The supervised forest, when used, is saved
     alongside the target learners. The explicit save method can save
-    learners from memory or load them from an attached saved path.
+    learners from memory or from the directory where the imputer is
+    already saved.
+
+    Each imputer has its own directory, which can be inside a project
+    directory; for example, \code{file.path(getwd(), "imputer")}.
+    Saving accepts a new directory, an empty directory, or a directory
+    recognized as a saved imputer by its manifest. Other nonempty
+    directories are rejected with either setting of \code{wipe}.
+
+    Saving cannot replace the current working directory, home directory,
+    filesystem root, or their ancestors. A complete imputer can be saved
+    back to the same directory. A different destination must neither
+    contain nor be inside the existing imputer directory. An object
+    loaded with a target subset must be saved to a different directory.
+    Loading has none of these location restrictions.
 
     Set \code{compress = 100} for stronger FST compression when saving
     a deployment bundle. Supply this directly to \code{impute.learn}
@@ -531,7 +550,7 @@ impute.ood.rfsrc(object, newdata,
     \code{terminal.quants}; their existing settings still apply.
     \code{keep.ximp} continues to control the returned raw completed
     table. An in-memory shared-capable fit separately holds the common
-    predictor source needed for deferred saving. Saved shared banks
+    predictor table needed for deferred saving. Saved shared banks
     and eagerly loaded shared objects can be saved again without
     reconstructing row identities from predictor values.
 
@@ -597,12 +616,24 @@ impute.ood.rfsrc(object, newdata,
     \itemize{
       \item Continuous and integer targets use absolute reconstruction
         error.
-      \item Factor targets use negative log predictive probabilities.
-        Unavailable or invalid probabilities give missing discrepancies;
-        zero probabilities are scored using the probability floor.
+      \item Factor targets use the negative log probability of the
+        observed class when OOB class probabilities are available.
+        If only OOB class labels are available, unordered factors use
+        misclassification error and ordered factors use scaled distance
+        between ordered levels.
     }
-    The references are stored in the manifest. Each learner entry records
-    \code{n.oob.finite} and \code{n.oob.nonfinite}.
+    Each target's discrepancy rule is saved with its reference and used
+    unchanged for new data. For probability-based discrepancies, the
+    saved probability floor is \code{1e-12}; finite zero probabilities
+    use this floor. Unavailable or invalid predictions give missing
+    discrepancies, without switching to another rule. Each learner entry
+    records \code{n.oob.finite} and \code{n.oob.nonfinite}.
+
+    OOB predictions come from the final target forests after training-data
+    imputation and auxiliary predictor construction. Those earlier steps
+    are not repeated for each OOB sample. Missing OOB predictions are
+    never replaced by ordinary training predictions when constructing
+    these references.
 
     The training-time row reference combines calibrated target scores
     using a weighted mean. If \code{weight} is omitted, all saved OOD
@@ -628,6 +659,10 @@ impute.ood.rfsrc(object, newdata,
 
     In supervised mode, the auxiliary variables are predictors for
     reconstruction; the supervised response is not used in new data.
+
+    Older saved imputers that do not record the factor discrepancy rule
+    must be refitted before OOD scoring those targets. They remain usable
+    for imputation and numeric-only OOD scoring.
   }
 
   \subsection{Row-level OOD scores}{
@@ -645,7 +680,8 @@ impute.ood.rfsrc(object, newdata,
         training reference rebuilt from the saved target-wise training
         OOD scores. The reference uses the requested target subset,
         weights, and row aggregate, so percentile calibration remains
-        available when any of these settings change.}
+        available when any of these settings change. It is not
+        conditioned on each new row's pattern of observed targets.}
     }
   }
 

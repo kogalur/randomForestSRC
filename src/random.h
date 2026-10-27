@@ -1,6 +1,7 @@
 #ifndef RF_RANDOM_H
 #define RF_RANDOM_H
-#define RF_RNG_WIDE_VERSION 3090001.0
+#define RF_RNG_LEGACY 1
+#define RF_RNG_WIDE   2
 void randomStack(uint bSize, uint bnpSize);
 void randomUnstack(uint bSize, uint bnpSize);
 void randomSetChainParallel(uint b, int value);

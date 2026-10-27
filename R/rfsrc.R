@@ -75,9 +75,19 @@ rfsrc <- function(formula, data, ntree = 500,
   if (!identical(class(data), "data.frame")) {
     data <- as.data.frame(data, optional = TRUE)
   }
+  ## Autoencoder forests use copies of X as genuine responses.
+  auto <- identical(splitrule, "auto")
+  autoencoder <- NULL
+  if (auto) {
+    if (!missing(formula) && !is.null(formula)) {
+      stop("'splitrule = \"auto\"' requires 'formula' to be omitted or NULL.",
+           call. = FALSE)
+    }
+    splitrule <- NULL
+  }
   ## conduct preliminary formula validation
   if (missing(formula) | (!missing(formula) && is.null(formula))) {
-    if (is.null(ytry)) {
+    if (is.null(ytry) || auto) {
       formula <- as.formula("Unsupervised() ~ .")
     }
     else {
@@ -114,6 +124,33 @@ rfsrc <- function(formula, data, ntree = 500,
   if (miss.flag == FALSE) {
     data.pass = TRUE
   }
+  ## Remove entirely missing original columns before creating responses.
+  if (auto) {
+    p <- ncol(data)
+    if (p < 1L || anyDuplicated(names(data))) {
+      stop("Autoencoder forests require at least one uniquely named variable.",
+           call. = FALSE)
+    }
+    if (is.null(ytry)) ytry <- p
+    if (!is.numeric(ytry) || length(ytry) != 1L || is.na(ytry) ||
+        !is.finite(ytry) || ytry != floor(ytry) || ytry < 1L || ytry > p) {
+      stop("For autoencoder forests, 'ytry' must be an integer from 1 to the number of retained variables.",
+           call. = FALSE)
+    }
+    response.names <- tail(make.unique(c(names(data), paste0("y.", names(data)))), p)
+    autoencoder <- setNames(names(data), response.names)
+    response <- data
+    names(response) <- response.names
+    data <- cbind(response, data)
+    formula <- as.formula(call("~", as.call(c(list(as.name("Multivar")),
+                          lapply(response.names, as.name))), as.name(".")),
+                          env = globalenv())
+    formulaPrelim <- parseFormula(formula, data, ytry)
+    ## Preserve the public call for update(), and the fitted formula for
+    ## routines that refit using the saved response and predictor columns.
+    my.call$formula <- NULL
+    remove(response)
+  }
   ## finalize the formula based on the pre-processed data
   formulaDetail <- finalizeFormula(formulaPrelim, data)
   ## coherence checks on option parameters
@@ -123,6 +160,9 @@ rfsrc <- function(formula, data, ntree = 500,
   if (!is.null(nodedepth)) nodedepth = round(nodedepth) else nodedepth = -1
   nimpute <- round(nimpute)
   if (nimpute < 1) stop("Invalid choice of 'nimpute'.  Cannot be less than 1.")
+  ## Record the RNG protocol used for this fit.
+  rng.version <- rfsrc.RNGversion()
+  rng.protocol <- get.rng.version.code(rng.version)
   ## initialize the seed
   seed <- get.seed(seed)
   ## save the family for convenient access
@@ -254,7 +294,7 @@ rfsrc <- function(formula, data, ntree = 500,
   ## will be appended, in the native code, to xvar.wt.  For example,
   ## sending in something like ywar.wt=c(0,2,0), and xvar.wt =
   ## rep(1, 17) will favour time over indigenous x-vars 2 to 1.
-  if (family == "unspv") {
+  if (family == "unsupv") {
     ## Override any incoming weights.
     yvar.wt <- NULL
   }
@@ -535,6 +575,7 @@ rfsrc <- function(formula, data, ntree = 500,
                                        if (is.null(prob.epsilon)) as.double(0) else as.double(prob.epsilon)),
                                   if (is.null(mahalanobis.sigma)) NULL else as.double(as.vector(mahalanobis.sigma)),
                                   if (is.null(uno.weights)) NULL else as.double(uno.weights$weight),
+                                  as.integer(rng.protocol),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -789,7 +830,8 @@ rfsrc <- function(formula, data, ntree = 500,
                        terminal.quants = terminal.quants,
                        importance = importance.value,
                        vimp.threshold = vimp.threshold,
-                       version = "3.9.3")
+                       rng.version = rng.version,
+                       version = "3.9.7")
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -798,6 +840,9 @@ rfsrc <- function(formula, data, ntree = 500,
     class(forest.out) <- c("rfsrc", "forest", family)
     if (big.data) {
       class(forest.out) <- c(class(forest.out), "bigdata")
+    }
+    if (auto) {
+      class(forest.out) <- c(class(forest.out), "auto")
     }
   }
   ## the forest is NULL (the user has requested not to save the forest)
@@ -821,7 +866,8 @@ rfsrc <- function(formula, data, ntree = 500,
                        samptype = samptype,
                        samp = samp,
                        case.wt = case.wt,
-                       version = "3.9.3",
+                       rng.version = rng.version,
+                       version = "3.9.7",
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,
@@ -830,6 +876,9 @@ rfsrc <- function(formula, data, ntree = 500,
                        prob = prob,
                        prob.epsilon = prob.epsilon,
                        block.size = block.size)
+  }
+  if (!is.null(autoencoder)) {
+    forest.out$autoencoder <- autoencoder
   }
   ## process the proximity matrix
   if (proximity != FALSE) {
@@ -992,6 +1041,11 @@ rfsrc <- function(formula, data, ntree = 500,
     ctime.internal = nativeOutput$cTimeInternal,
     ctime.external = ctime.external.stop - ctime.external.start
   )
+  if (!is.null(autoencoder)) {
+    rfsrcOutput$autoencoder <- autoencoder
+    rfsrcOutput$formula <- formula
+    attr(rfsrcOutput$call, "formula") <- formula
+  }
   ## memory management
   remove(yvar)
   remove(xvar)
@@ -1892,6 +1946,9 @@ rfsrc <- function(formula, data, ntree = 500,
     }
   }## BLOCK OF CODE IS NOT EXECUTED IN IMPUTE.ONLY
   class(rfsrcOutput) <- c("rfsrc", "grow", family)
+  if (auto) {
+    class(rfsrcOutput) <- c(class(rfsrcOutput), "auto")
+  }
   #if (big.data) {
   #  class(rfsrcOutput) <- c(class(rfsrcOutput), "bigdata")
   #}

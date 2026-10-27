@@ -68,15 +68,6 @@ matplot(svimp, xlab = "Genes/Diet/Genotype", ylab = "Standardized VIMP")
 
 
 ## ------------------------------------------------------------
-## plot some trees
-## ------------------------------------------------------------
-
-plot(get.tree(obj, 1))
-plot(get.tree(obj, 2))
-plot(get.tree(obj, 3))
-
-
-## ------------------------------------------------------------
 ##
 ## Compare above to (1) user specified covariance matrix
 ##                  (2) default composite (independent) splitting
@@ -103,6 +94,16 @@ imp <- data.frame(mahalanobis  = rowMeans(get.mv.vimp(obj,  standardize = TRUE))
                   default      = rowMeans(get.mv.vimp(obj3, standardize = TRUE)))
 
 print(head(100 * imp[order(imp$mahalanobis, decreasing = TRUE), ], 15))
+
+
+## ------------------------------------------------------------
+## unsupervised autoencoder on full data
+## ------------------------------------------------------------
+
+obj.auto <- rfsrc(data = data.frame(ydta, xdta), splitrule = "auto")
+print(obj.auto)
+print(rfsrc(data = data.frame(ydta, xdta), splitrule = "auto", nodesize = 1))
+
 
 }}
 \keyword{datasets}

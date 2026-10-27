@@ -29,7 +29,9 @@
 \arguments{
   \item{object}{An object of class \code{(rfsrc, grow)} or \code{(rfsrc, forest)}.}
   
-  \item{newdata}{Test data. If omitted, the original training data is used.}
+  \item{newdata}{Test data. If omitted, the original training data is used.
+  For an autoencoder forest, supply the original predictor variables;
+  absent response copies are created automatically.}
   
   \item{importance}{Method for computing variable importance (VIMP). See \code{\link{vimp}} for additional options including joint importance. See \code{\link{holdout.vimp}} for an alternative importance measure.}
   
@@ -60,10 +62,13 @@
   
   \item{var.used}{Record how many times each variable was used for splitting. Options are \code{FALSE} (default), \code{"all.trees"}, or \code{"by.tree"}.}
   
-  \item{split.depth}{Currently disabled in this prediction interface and
-    internally set to \code{FALSE}. To obtain split depths for the
-    training data, request \code{split.depth = "all.trees"} or
-    \code{split.depth = "by.tree"} in \code{\link{rfsrc}}.}
+  \item{split.depth}{Record each predictor's minimum split depth along
+    each training observation's path. Options are \code{FALSE} (default),
+    \code{"all.trees"} to average depths across trees, or \code{"by.tree"}
+    to retain individual-tree depths. Available only when \code{newdata}
+    is omitted. Requesting split depths forces full, non-JIT tree
+    restoration, overriding \code{jitt = TRUE} supplied via \code{...}.
+    When \code{newdata} is supplied, this option is set to \code{FALSE}.}
   
   \item{case.depth}{If \code{TRUE}, returns a matrix of the depth at which each case first splits in each tree.}
   
@@ -84,6 +89,17 @@
 Predicted values are obtained by "dropping" the test data down the trained forest-i.e., the forest grown using the training data. If the test data includes y-outcome values, performance metrics are also returned. Variable importance (VIMP), including joint VIMP, is returned if requested.
 
 If no test data is supplied, the function uses the original training data and enters "restore" mode. This allows users to extract outputs from the trained forest that were not requested during the original grow call.
+
+For an autoencoder forest grown with \code{rfsrc(data = X,
+splitrule = "auto")}, predictions reconstruct the input variables.
+Supply the original predictors in \code{newdata}. The saved
+\code{autoencoder} mapping is used to create any absent response copies;
+explicitly supplied response columns are retained. The resulting observed
+responses allow reconstruction error and, when requested, VIMP to be
+computed using the usual multivariate forest options. Missing values
+follow \code{na.action}. Use \code{\link{get.mv.predicted}},
+\code{\link{get.mv.error}}, and \code{\link{get.mv.vimp}} to extract
+results.
 
 When \code{newdata} is supplied, non-hybrid proximity and distance matrices
 compare test observations with one another. Setting either option to
@@ -106,10 +122,14 @@ with \code{object} and \code{newdata}. Its helpers include
 }
 
 \value{
-An object of class \code{(rfsrc, predict)}, which is a list with the following components:
+An object with classes \code{"rfsrc"}, \code{"predict"}, and the fitted
+family. Autoencoder predictions also have \code{"auto"} as the final
+class. The returned object is a list with the following components:
 
 \describe{
   \item{call}{The prediction call.}
+  \item{autoencoder}{(Autoencoder) Named character vector mapping response
+    copy names to original predictor names.}
   \item{family}{The family used in the analysis.}
   \item{n}{Sample size of the test data (after handling missing values).}
   \item{ntree}{Number of trees in the trained forest.}
@@ -131,8 +151,10 @@ An object of class \code{(rfsrc, predict)}, which is a list with the following c
   \item{var.used}{Number of times each variable was used in splitting.}
   \item{imputed.indv}{Indices of test observations with missing values.}
   \item{imputed.data}{Imputed version of the test data. Columns are ordered with responses first, followed by predictors.}
-  \item{split.depth}{\code{NULL}; split-depth calculations are currently
-    disabled in this prediction interface.}
+  \item{split.depth}{When restoring the training data, a matrix of
+    observations by predictors for \code{"all.trees"}, or an array of
+    observations by predictors by trees for \code{"by.tree"}.
+    \code{NULL} when not requested or when \code{newdata} is supplied.}
   \item{err.rate}{Prediction error, if y-outcomes are present. For ordinary prediction with \code{newdata}, this is test error; restoring the training data uses OOB error.}
   \item{importance}{Variable importance (VIMP) for the test data. May be \code{NULL}.}
   \item{predicted}{Predicted values for the test data.}
@@ -220,6 +242,17 @@ veteran.grow <- rfsrc(Surv(time, status) ~ ., veteran[train, ])
 veteran.pred <- predict(veteran.grow, veteran[-train, ])
 print(veteran.grow)
 print(veteran.pred)
+
+## ------------------------------------------------------------
+## autoencoder prediction using the original predictor columns
+## ------------------------------------------------------------
+
+auto.grow <- rfsrc(data = mtcars[1:24, ], splitrule = "auto")
+auto.test <- predict(auto.grow, newdata = mtcars[25:32, ],
+                     importance = TRUE)
+auto.pred <- get.mv.predicted(auto.test)
+auto.error <- get.mv.error(auto.test)
+auto.vimp <- get.mv.vimp(auto.test)
 
 ## ------------------------------------------------------------
 ## hybrid proximity and distance

@@ -120,8 +120,12 @@ generic.predict.rfsrc <-
   if (var.used == "FALSE") var.used <- FALSE
   split.depth <- match.arg(as.character(split.depth),  c("FALSE", "all.trees", "by.tree"))
   if (split.depth == "FALSE") split.depth <- FALSE
-  ## Currently we do not support split.depth for test data. TBD2
-  split.depth = FALSE
+  ## Split depths describe training cases and require full tree restoration.
+  if (!missing(newdata)) {
+    split.depth <- FALSE
+  } else if (split.depth != FALSE) {
+    jitt <- FALSE
+  }
   ## initialize the seed
   seed <- get.seed(seed)
   ## REDUCES THE OBJECT TO THE FOREST -- REDUCTION STARTS HERE
@@ -140,6 +144,8 @@ generic.predict.rfsrc <-
       big.data <- TRUE
     }
   }
+  ## Resolve the saved RNG protocol before entering native code.
+  rng.protocol <- get.rng.version.code(object[["rng.version"]])
   ## confirm version coherence
   if (is.null(object$version)) {
     cat("\n  This function only works with objects created with the following minimum version of the package:")
@@ -152,7 +158,7 @@ generic.predict.rfsrc <-
   }
     else {
       object.version <- as.integer(unlist(strsplit(object$version, "[.]")))
-      installed.version <- as.integer(unlist(strsplit("3.9.3", "[.]")))
+      installed.version <- as.integer(unlist(strsplit("3.9.7", "[.]")))
       minimum.version <- as.integer(unlist(strsplit("2.3.0", "[.]")))
       object.version.adj <- object.version[1] + (object.version[2]/10) + (object.version[3]/100)
       installed.version.adj <- installed.version[1] + (installed.version[2]/10) + (installed.version[3]/100)
@@ -287,6 +293,18 @@ generic.predict.rfsrc <-
     ## Normalize data-frame subclasses before base extraction semantics are used.
     if (!identical(class(newdata), "data.frame")) {
       newdata <- as.data.frame(newdata, optional = TRUE)
+    }
+    ## Reconstruct autoencoder responses from the original predictors.
+    ## Retain any response columns supplied explicitly in newdata.
+    if (!is.null(object$autoencoder)) {
+      response.names <- setdiff(names(object$autoencoder), names(newdata))
+      predictor.names <- unname(object$autoencoder[response.names])
+      if (!all(predictor.names %in% names(newdata))) {
+        stop("x-variables in test data do not match original training data")
+      }
+      if (length(response.names) > 0L) {
+        newdata[response.names] <- newdata[, predictor.names, drop = FALSE]
+      }
     }
     ## Filter the test data based on the formula
     newdata <- newdata[, is.element(names(newdata), c(yvar.names, xvar.names)), drop = FALSE]
@@ -702,7 +720,7 @@ generic.predict.rfsrc <-
                                        if (is.null(prob.assign$prob.epsilon)) as.double(0) else as.double(prob.assign$prob.epsilon)),
                                   as.integer(get.tree),
                                   if (is.null(uno.weights.test)) NULL else as.double(uno.weights.test),
-                                  as.double(get.version.code(object$version)),
+                                  as.integer(rng.protocol),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})
@@ -933,6 +951,9 @@ generic.predict.rfsrc <-
     ctime.internal = nativeOutput$cTimeInternal,
     ctime.external = ctime.external.stop - ctime.external.start
   )
+  if (!is.null(object$autoencoder)) {
+    rfsrcOutput$autoencoder <- object$autoencoder
+  }
   ## memory management
   nativeOutput$leafCount <- NULL
   remove(object)
@@ -1530,5 +1551,8 @@ generic.predict.rfsrc <-
       }
     }
   class(rfsrcOutput) <- c("rfsrc", "predict",   family)
+  if (!is.null(rfsrcOutput$autoencoder)) {
+    class(rfsrcOutput) <- c(class(rfsrcOutput), "auto")
+  }
   return(rfsrcOutput)
 }

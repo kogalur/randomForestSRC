@@ -46,6 +46,8 @@ partial.rfsrc <- function(
   else {
     ## object is already a forest.
   }
+  ## Resolve the saved RNG protocol before entering native code.
+  rng.protocol <- get.rng.version.code(object[["rng.version"]])
   ## convert oob to ensemble
   if (!is.logical(oob) || length(oob) != 1L || is.na(oob)) {
     stop("'oob' must be TRUE or FALSE")
@@ -293,7 +295,7 @@ partial.rfsrc <- function(
                                        as.double(0)), ## Quantiles disabled.
                                   as.integer(get.tree),
                                   NULL,
-                                  as.double(get.version.code(object$version)),
+                                  as.integer(rng.protocol),
                                   as.integer(get.rf.cores()))}, error = function(e) {
                                     print(e)
                                     NULL})

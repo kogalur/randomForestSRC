@@ -303,15 +303,7 @@ void rfsrc(char mode, int seedValue) {
   bnpSize = getVimpRecoverySeedDimension(mode, RF_opt);
   char useWideSeed = FALSE;
   
-  if (mode == RF_GROW) {
-    useWideSeed = TRUE;
-  }
-  else if (RF_objectVersion >= RF_RNG_WIDE_VERSION) {
-    useWideSeed = TRUE;
-  }
-  else {
-    useWideSeed = FALSE;
-  }
+  useWideSeed = (RF_rngProtocol == RF_RNG_WIDE);
   
   ran1A = &randomChainParallel;
   ran1B = &randomUChainParallel;

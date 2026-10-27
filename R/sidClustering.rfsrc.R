@@ -37,6 +37,49 @@ sidClustering.rfsrc <- function(data,
   else {
     stop("method not set correctly:", method)
   }
+  ## Handle missing values before reduction and SID transformation.
+  if (methodClass == 1) {
+    dots <- list(...)
+    na.action <- match.arg(dots$na.action, c("na.omit", "na.impute"))
+    sid.names <- names(data)
+    sid.data <- data
+    separate.x <- !is.null(x.no.sid) && !is.character(x.no.sid)
+    if (separate.x) {
+      x.no.sid <- data.frame(x.no.sid)
+      if (nrow(x.no.sid) != nrow(data) ||
+          any(names(x.no.sid) %in% sid.names)) {
+        stop("'x.no.sid' must have the same rows as 'data' and distinct column names.",
+             call. = FALSE)
+      }
+      sid.data <- cbind(data, x.no.sid)
+    }
+    if (anyNA(sid.data)) {
+      if (na.action == "na.omit") {
+        sid.data <- na.omit(sid.data)
+      }
+      else {
+        impute.args <- dots[intersect(names(dots),
+                                     c("nodesize", "nsplit", "nimpute", "seed"))]
+        imputed <- do.call(generic.impute.rfsrc,
+                           c(list(data = sid.data, ntree = ntree, fast = fast),
+                             impute.args))
+        if (is.null(imputed) || anyNA(imputed$data)) {
+          stop("Imputation did not produce complete data for SID transformation.",
+               call. = FALSE)
+        }
+        sid.data <- imputed$data
+      }
+      if (nrow(sid.data) < 2 || sum(sid.names %in% names(sid.data)) < 2) {
+        stop("SID requires at least two rows and two data variables after missing-data processing.",
+             call. = FALSE)
+      }
+      data <- sid.data[, intersect(sid.names, names(sid.data)), drop = FALSE]
+      if (separate.x) {
+        x.no.sid <- sid.data[, intersect(names(x.no.sid), names(sid.data)), drop = FALSE]
+      }
+    }
+    rm(sid.data)
+  }
   ## set k if user has not provided a value
   if (is.null(k)) {
     k <- 1:max(1, min(10, nrow(data) - 1))

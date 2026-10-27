@@ -100,6 +100,16 @@ impute.rfsrc <- function(formula, data,
     variable.names = all.var.names
   )
   mforest <- method$mforest
+  ## 'auto' constructs temporary responses for unsupervised OTFI. Consume
+  ## the option here so missForest takes precedence and uses its usual rule.
+  auto <- identical(dots$splitrule, "auto")
+  if (auto) {
+    dots$splitrule <- NULL
+    if (!mforest && !missing(formula)) {
+      stop("'splitrule = \"auto\"' requires 'formula' to be omitted.",
+           call. = FALSE)
+    }
+  }
   ## set the number of blocks used to subdivide the data
   if (!missing(blocks)) {
     blocks <- cv.folds(nrow(data), max(1, blocks))
@@ -112,10 +122,19 @@ impute.rfsrc <- function(formula, data,
   ##--------------------------------------------------------------
   if (!mforest) {
     if (missing(formula)) {
-      if (is.null(ytry)) {
-        ytry <- min(p - 1, max(25, ceiling(sqrt(p))))
+      if (auto) {
+        if (is.null(ytry)) ytry <- p
+        .impute.scalar(ytry, "ytry", lower = 1, upper = p, whole = TRUE)
+        response.names <- tail(make.unique(c(all.var.names,
+          paste0(".impute.auto.response.", seq_len(p)))), p)
+        dots$ytry <- ytry
       }
-      dots$formula <- as.formula(paste("Unsupervised(", ytry, ") ~ ."))
+      else {
+        if (is.null(ytry)) {
+          ytry <- min(p - 1, max(25, ceiling(sqrt(p))))
+        }
+        dots$formula <- as.formula(paste("Unsupervised(", ytry, ") ~ ."))
+      }
       dots$splitrule <- NULL
     }
     else {
@@ -125,13 +144,25 @@ impute.rfsrc <- function(formula, data,
     ## onto their retained row/column positions in the enclosing data table.
     nullBlocks <- lapply(blocks, function(blk) {
       dta <- data[blk,, drop = FALSE]
+      block.dots <- dots
+      if (auto) {
+        ## Preserve missingness in both copies. Only the original predictor
+        ## columns are copied back below, before any optional final sweep.
+        ## A block cannot use an entirely missing variable as a response.
+        available <- colSums(!is.na(dta)) > 0L
+        response <- dta[, available, drop = FALSE]
+        names(response) <- response.names[available]
+        block.dots$formula <- .impute.formula(names(response))
+        block.dots$ytry <- min(ytry, ncol(response))
+        dta <- cbind(response, dta)
+      }
       retO <- tryCatch({do.call("generic.impute.rfsrc",
                       c(list(data = dta,
                              ntree = ntree,
                              nodesize = nodesize,
                              nsplit = nsplit,
                              nimpute = nimpute,
-                             fast = fast), dots))}, error = function(e) {NULL})
+                             fast = fast), block.dots))}, error = function(e) {NULL})
       if (!is.null(retO)) {
         if (length(retO$missing$row) > 0L) {
           blk <- blk[-retO$missing$row]

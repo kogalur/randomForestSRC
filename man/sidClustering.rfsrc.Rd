@@ -71,6 +71,18 @@ sid.perf.metric(truth, cluster, mode = c("entropy", "gini"))
 
 Given an unsupervised dataset, random forests is used to compute a distance matrix measuring dissimilarity between all pairs of observations. By default, hierarchical clustering is applied to this distance matrix, although users may apply any other clustering algorithm. See the examples below for alternative workflows.
 
+For \code{method = "sid"}, missing values are handled before variable
+reduction and SID transformation. The \code{na.action} argument in
+\code{...} defaults to \code{"na.omit"}, which removes incomplete rows
+jointly from \code{data} and a separately supplied \code{x.no.sid}.
+With \code{na.action = "na.impute"}, an initial unsupervised forest imputes
+these inputs jointly. This additional forest uses \code{ntree} and
+\code{fast}, and accepts \code{nodesize}, \code{nsplit}, \code{nimpute},
+and \code{seed} from \code{...}. Entirely missing rows and columns are
+removed by the imputation preprocessing. At least two rows and two
+variables in \code{data} must remain. Clustering is performed on the
+retained rows, in their original order.
+
 The default method, \code{method = "sid"}, implements SID clustering (sidClustering). The algorithm begins by enhancing the original feature space using Staggered Interaction Data (SID). This transformation creates:
 
 \itemize{

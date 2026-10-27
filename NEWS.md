@@ -1,16 +1,27 @@
-# randomForestSRC 3.9.3
+# randomForestSRC 3.9.7
 
 ## Random seed compatibility
 
-* New forests use a wider seed-head generator beginning with version
-  greater than 3.9.0.  Growing a forest with the same seed now
-  produces a different forest.  Restore, prediction, and partial
-  dependence select the legacy generator for older forests and the
-  wide generator for newer forests.  The per-tree random generator and
-  stored bootstrap/VIMP seeds are unchanged.
+* Starting with version 3.10.0, new forests use the wider seed-head
+  generator by default. Growing with the same seed as an earlier release
+  can produce a different forest. The per-tree random generator and the
+  storage formats for bootstrap and VIMP seeds are unchanged.
 
-# randomForestSRC 3.9.0
-  
+* Added `rfsrc.RNGversion()` to query or select the RNG protocol for
+  subsequent fits in the current R session. Most users should keep the
+  recommended wide default (`"3.10.0"`) without calling this function.
+  Use `rfsrc.RNGversion("3.2.3")` only to reproduce or test legacy
+  behavior; the legacy generator is not recommended for new analyses.
+  Calling with no argument queries the selection, and supplying `NULL`
+  resets it to the wide default. Selecting the legacy protocol does not
+  undo other algorithm changes or guarantee identical historical results.
+
+* New forests record the protocol in `fit$forest$rng.version`.
+  Restoration, prediction, partial dependence, and VIMP on an existing
+  forest follow its saved protocol, independently of the current session
+  setting. Forests without this metadata use the legacy protocol
+  (`"3.2.3"`); the package version is not used to infer the protocol.
+
 ## Forest storage and imputation
 
 * Forests are much smaller when saved with `save()` or `saveRDS()`. The
@@ -26,6 +37,33 @@
   and an `impute.learn()` bank kept in memory is about 20 times smaller.
   A forest restored by `fast.load()` no longer holds a copy of itself inside
   its `$sampsize` function.
+
+* Added `compress` to `fast.save()`, `fast.save.list()`,
+  `impute.learn()`, and `save.impute.learn()` to control FST compression
+  from 0 to 100 (default 50). Higher values can reduce file sizes at the
+  cost of saving speed. Compression is independent of `compact`, and
+  invalid values are rejected before an existing destination is removed.
+  Loading requires no compression argument.
+
+* Added optional `share.xvar = TRUE` to `impute.learn()` to reduce disk
+  duplication by saving the completed training predictor table once per
+  learner bank. Each target learner's predictors are reconstructed when
+  loading. Shared storage requires `anonymous = FALSE`; load the complete
+  bank with `load.impute.learn()`. Existing independent learner banks remain
+  supported, and saving a shared bank with `share.xvar = FALSE` writes
+  self-contained learners. The default remains `share.xvar = FALSE`.
+
+## Imbalanced classification
+
+* `imbalanced()` now uses normalized Brier score by default for RFQ and
+  BRF prediction error and variable importance. This changes `err.rate`,
+  VIMP, and inference based on these quantities. Set `perf.type = "gmean"`
+  to use the previous default. Expanded the documentation and examples
+  to explain metric selection and compare Brier and G-mean VIMP.
+
+# randomForestSRC 3.9.0
+
+## Forest storage and imputation
 
 * Added optional `compact = TRUE` saving to `fast.save()` and
   `fast.save.list()`. Compact saves omit terminal-node information and
