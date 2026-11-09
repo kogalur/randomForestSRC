@@ -831,7 +831,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        importance = importance.value,
                        vimp.threshold = vimp.threshold,
                        rng.version = rng.version,
-                       version = "3.9.7")
+                       version = "3.10.0")
     ## family specific additions to the forest object
     if (grepl("surv", family)) {
       forest.out$time.interest <- event.info$time.interest
@@ -867,7 +867,7 @@ rfsrc <- function(formula, data, ntree = 500,
                        samp = samp,
                        case.wt = case.wt,
                        rng.version = rng.version,
-                       version = "3.9.7",
+                       version = "3.10.0",
                        na.action = na.action,
                        perf.type = perf.type,
                        rfq = rfq,

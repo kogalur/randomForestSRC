@@ -1,9 +1,9 @@
-# randomForestSRC 3.9.7
+# randomForestSRC 3.10.0
 
 ## Random seed compatibility
 
-* Starting with version 3.10.0, new forests use the wider seed-head
-  generator by default. Growing with the same seed as an earlier release
+* New forests now use the wider seed-head generator by default.
+  Growing with the same seed as an earlier release
   can produce a different forest. The per-tree random generator and the
   storage formats for bootstrap and VIMP seeds are unchanged.
 
@@ -22,6 +22,20 @@
   setting. Forests without this metadata use the legacy protocol
   (`"3.2.3"`); the package version is not used to infer the protocol.
 
+## Autoencoder forests
+
+* Added `rfsrc(data = X, splitrule = "auto")` to reconstruct the input
+  variables using copies as multivariate responses. Continuous variables,
+  factors, and mixtures are supported. Reconstruction predictions, OOB
+  errors, and VIMP use the usual multivariate interfaces. `ytry` defaults
+  to all retained variables. Prediction accepts the original predictor
+  columns and creates response copies automatically.
+
+* Added `splitrule = "auto"` to unsupervised on-the-fly imputation with
+  `impute()`, with the formula omitted. Temporary response copies are
+  discarded after imputation. The missForest method takes precedence
+  when selected.
+
 ## Forest storage and imputation
 
 * Forests are much smaller when saved with `save()` or `saveRDS()`. The
@@ -32,8 +46,9 @@
   frame for a formula built inside a function (e.g. the learners of
   `impute.learn()`). Both now keep only what they refer to, and data frames,
   matrices and long vectors passed by value through `do.call()` are no
-  longer copied into `$call`. Predictions are unchanged. For example, a
-  regression forest on 5,000 rows now saves at a third of its former size,
+  longer copied into `$call`. These storage changes do not affect
+  predictions. For example, a regression forest on 5,000 rows now saves
+  at a third of its former size,
   and an `impute.learn()` bank kept in memory is about 20 times smaller.
   A forest restored by `fast.load()` no longer holds a copy of itself inside
   its `$sampsize` function.
@@ -53,6 +68,21 @@
   supported, and saving a shared bank with `share.xvar = FALSE` writes
   self-contained learners. The default remains `share.xvar = FALSE`.
 
+* Learned-imputer saving now rejects nonempty destinations that are not
+  recognized saved-imputer directories. Reserved manifest and shared
+  predictor paths are checked before replacing an existing bank.
+
+* OOD scoring now saves each target's discrepancy rule with its training
+  reference and reuses that rule for new data. Missing prediction
+  components no longer cause a switch between probability-based and
+  class-label discrepancies. Older imputers without factor discrepancy
+  metadata must be refitted before OOD scoring those targets; they remain
+  usable for imputation and numeric-only OOD scoring.
+
+* Supervised imputation now falls back to ordinary training predictions
+  for auxiliary predictors when the OOB prediction component is absent.
+  Final-target OOD references continue to use only OOB predictions.
+
 ## Imbalanced classification
 
 * `imbalanced()` now uses normalized Brier score by default for RFQ and
@@ -60,6 +90,36 @@
   VIMP, and inference based on these quantities. Set `perf.type = "gmean"`
   to use the previous default. Expanded the documentation and examples
   to explain metric selection and compare Brier and G-mean VIMP.
+
+## Prediction and printing
+
+* Restored `split.depth` output in `predict()` when `newdata` is omitted.
+  Both `"all.trees"` and `"by.tree"` are supported. Requests force full
+  tree restoration, overriding `jitt = TRUE`; split depths remain
+  unavailable for test data.
+
+* Multivariate printing now reports standardized response errors and
+  limits long displays to the first eight responses. Binary-classification
+  summaries also include the random-classifier PR-AUC baseline.
+
+## Bug fixes
+
+* Fixed missing-value row-count errors in `sidClustering()` by applying
+  `na.action` before variable reduction and SID transformation. The default
+  omits incomplete rows; `na.action = "na.impute"` imputes first.
+  Separately supplied `x.no.sid` data remain aligned with the retained
+  rows. See [GitHub #470](https://github.com/kogalur/randomForestSRC/issues/470).
+
+* Corrected the unsupervised-family check for `yvar.wt`, so unsupervised
+  response weights reach native code as `NULL` rather than a zero-length
+  numeric vector. This avoids the undefined pointer arithmetic reported
+  by UBSAN. See [GitHub #477](https://github.com/kogalur/randomForestSRC/issues/477).
+
+## Documentation
+
+* Further revised help and examples for imputation and OOD scoring,
+  quantile regression and plotting, autoencoder forests, prediction,
+  and forest storage.
 
 # randomForestSRC 3.9.0
 
